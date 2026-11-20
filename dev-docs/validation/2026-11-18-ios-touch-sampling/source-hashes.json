@@ -1,0 +1,34 @@
+[
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+    "sha256": "6d2e0ac3712ad0a68b0ad9081f3172248adcb23726ba425761974dff9c4a9be4"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchInputDiagnostics.swift",
+    "sha256": "9a3f6df3136494c064d7f21be456a86dd178729401c72634233be047954f30b2"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchSampleBatch.swift",
+    "sha256": "1388b051577d631edeb8af8856638c6a58700fc79d836aabae863a3914d87e7b"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutRecorder.swift",
+    "sha256": "3a6e081d5fff52110b21d72ff558689089fd407fda9fa9b7750cd4e146aba2cd"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+    "sha256": "b8cda362ee94444b532df74e3dc251b8a24faf916af5efbeb879a28d584f721a"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutPlaygroundView.swift",
+    "sha256": "6d67a862bb8ebea70dc8cb0641fb1395eb569538382983114747f42d12456aef"
+  },
+  {
+    "path": "iosapp/XBXRCTests/TouchLayoutTests.swift",
+    "sha256": "dcad2ce5d8fc52ec36ae9cd64096caf6b19677ae5b55f5d716daf0c7e6a2b8dc"
+  },
+  {
+    "path": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "sha256": "25541aabe9a5013356e3003611612a9c13e6c8aa2143623c1f1241cc15bc495f"
+  }
+]

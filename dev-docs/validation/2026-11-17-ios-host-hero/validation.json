@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-17",
+  "task": "2026-11-17-ios-host-hero",
+  "layout_count": 14,
+  "captured_host_states": [
+    "On",
+    "ConnectedStandby",
+    "Off"
+  ],
+  "runs": {
+    "final_phone_and_layout": {
+      "passedTests": 2,
+      "failedTests": 0,
+      "totalTestCount": 2,
+      "testFailures": [],
+      "result": "Passed"
+    },
+    "ipad_side_by_side_interaction": {
+      "passedTests": 1,
+      "failedTests": 0,
+      "totalTestCount": 1,
+      "testFailures": [],
+      "result": "Passed"
+    },
+    "phone_installed_regression": {
+      "passedTests": 3,
+      "failedTests": 0,
+      "totalTestCount": 3,
+      "testFailures": [],
+      "result": "Passed"
+    },
+    "ipad_installed_regression": {
+      "passedTests": 4,
+      "failedTests": 0,
+      "totalTestCount": 4,
+      "testFailures": [],
+      "result": "Passed"
+    }
+  },
+  "build_logs": [
+    "/tmp/xbxrc-ios-host-subtle-build.log",
+    "/tmp/xbxrc-ios-host-subtle-device-build.log"
+  ],
+  "static_checks": [
+    "swift-format lint --strict",
+    "pnpm lint:fix",
+    "git diff --check"
+  ],
+  "sources": [
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+      "sha256": "b82aa4939f89626ec3ac908ac28d107664983b1b9d8a57afbccceb4d1739f783"
+    },
+    {
+      "path": "iosapp/XBXRC/App/PCPageUITestFixtures.swift",
+      "sha256": "ee26e07fd834f4337a8a08ce8d90d2554049182375741c15b4894f38502ea0e7"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+      "sha256": "2a681e2bf1fbf45127fa44b0cac621dbb9a140bc0bbd9ca8aa394a1ea7b994e6"
+    },
+    {
+      "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "sha256": "1e7f1583929e2c32abeb9ab0b3cfec10a8dd5645fbb8ab470e9517a25afacc1a"
+    },
+    {
+      "path": "iosapp/XBXRC/Resources/Localizable.xcstrings",
+      "sha256": "66e7641dcd42d41b7988b693035a23bbe1e7a14ac6edbde04779266065757528"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "e608f8784854470b1a767fef702eaff06944c5950cf4d2f0f7e93f11253ec49b"
+    }
+  ],
+  "user_annotations": [
+    {
+      "path": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-54d3238b-b2df-4519-8e5d-cc324874d2c3.png",
+      "sha256": "b2d5b7998046d5aa6122d5b25580383f92c1cd051d99191d76d496c65dea220c"
+    },
+    {
+      "path": "/tmp/xbxrc-ios-host-hero-phone-attachments/563D76BF-1ABF-4875-8CC7-90D9291CE4BD.png",
+      "sha256": "9d3b99df3f2b4aba270b1d78f2d12b97c53b1380020a7acd9a0dde8db2ba0438"
+    },
+    {
+      "path": "/tmp/xbxrc-ios-host-hero-side-phone-attachments/C15889AB-E39D-439C-835F-0D638AB947C5.png",
+      "sha256": "c6d8a7cceb1215953674fb280210fe4032948f098cc2cd1be331649d508e9006"
+    },
+    {
+      "path": "/tmp/xbxrc-host-subtle-baseline/preview.jpg",
+      "sha256": "64015fc6aa6b34d5c1690c29d442715be33e4e0d1b46ae8f700d7d4eb5ee10f0",
+      "clarification": "顶部保留已开机状态，主机串流的开启提示与它重复；按钮采用更素的透明图标。"
+    }
+  ],
+  "presentation": {
+    "normal_streaming_status": "represented_by_play_action",
+    "exception_streaming_status": "visible",
+    "action_surface": "transparent",
+    "action_icon_points": 18,
+    "action_touch_target_points": 44
+  },
+  "final_review": {
+    "date": "2026-11-17",
+    "result": "Passed",
+    "source_hashes_verified": true,
+    "screenshot_hashes_verified": 17,
+    "layout_screenshots_reviewed": 14,
+    "focused_sizes": [
+      "320pt narrow",
+      "390pt accessibility3"
+    ],
+    "preview": {
+      "file": "preview.jpg",
+      "sha256": "891a1434e4d05c3146709243409f515d557772f09efe57e3ca5b223006b77927"
+    }
+  },
+  "archiveCleanup": {
+    "date": "2026-11-18",
+    "retainedScreenshots": 3,
+    "preview": "preview.jpg",
+    "policy": "保留开机、待机、离线三状态与总览；14档布局运行结果与源码校验信息保持历史记录。"
+  }
+}

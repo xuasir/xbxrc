@@ -1,0 +1,2 @@
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift:1680: error: -[XBXRCTests.XBXRCTests testInteractiveLoginPersistsSessionAndProfile] : XCTAssertEqual failed: ("4") is not equal to ("1")
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift:1916: error: -[XBXRCTests.XBXRCTests testXboxDataStoreKeepsLibraryWhenPlaytimeFails] : XCTAssertEqual failed: ("nil") is not equal to ("Optional("游戏已载入，游玩时长暂时无法更新")")

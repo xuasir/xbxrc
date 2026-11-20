@@ -1,0 +1,114 @@
+[
+  {
+    "file": "fixture-diagnostics-session.png",
+    "sourceAttachment": "phone-diagnostics-session",
+    "test": "StreamingControlsStateTests/testStreamingPanelsRenderPhoneTabletAndEnglishLayouts()",
+    "device": "iPhone 17e",
+    "fixture": true
+  },
+  {
+    "file": "fixture-diagnostics-recovery.png",
+    "sourceAttachment": "phone-diagnostics-recovery",
+    "test": "StreamingControlsStateTests/testStreamingPanelsRenderPhoneTabletAndEnglishLayouts()",
+    "device": "iPhone 17e",
+    "fixture": true
+  },
+  {
+    "file": "fixture-diagnostics-display.png",
+    "sourceAttachment": "phone-diagnostics-display",
+    "test": "StreamingControlsStateTests/testStreamingPanelsRenderPhoneTabletAndEnglishLayouts()",
+    "device": "iPhone 17e",
+    "fixture": true
+  },
+  {
+    "file": "fixture-diagnostics-network.png",
+    "sourceAttachment": "phone-diagnostics-network",
+    "test": "StreamingControlsStateTests/testStreamingPanelsRenderPhoneTabletAndEnglishLayouts()",
+    "device": "iPhone 17e",
+    "fixture": true
+  },
+  {
+    "file": "fixture-ipad-landscape-touch.png",
+    "sourceAttachment": "ipad-streaming-standard-touch",
+    "test": "StreamingControlsStateTests/testStreamingPanelsRenderPhoneTabletAndEnglishLayouts()",
+    "device": "iPhone 17e",
+    "fixture": true
+  },
+  {
+    "file": "sampling-pressure-replay.json",
+    "sourceAttachment": "sampling-pressure-replay",
+    "test": "TouchLayoutTests/testHighRateStickThrottleAndShortTapReplayPreservesEdges()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-portrait-diagnostics-menu.png",
+    "sourceAttachment": "actual-portrait-diagnostics-floating-menu",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-portrait-touch.png",
+    "sourceAttachment": "actual-portrait-standard-touch-lower-half",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-landscape-metrics-hidden.png",
+    "sourceAttachment": "actual-streaming-metrics-hidden",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-landscape-diagnostics-session.png",
+    "sourceAttachment": "actual-streaming-diagnostic-session",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-landscape-diagnostics-menu.png",
+    "sourceAttachment": "actual-streaming-diagnostics-menu",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "phone-landscape-touch.png",
+    "sourceAttachment": "actual-streaming-standard-touch",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPhone 17e",
+    "fixture": false
+  },
+  {
+    "file": "ipad-portrait-diagnostics-menu.png",
+    "sourceAttachment": "actual-portrait-diagnostics-floating-menu",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "device": "iPad Pro 11-inch (M5)",
+    "fixture": false
+  },
+  {
+    "file": "ipad-portrait-touch.png",
+    "sourceAttachment": "actual-portrait-standard-touch-lower-half",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "device": "iPad Pro 11-inch (M5)",
+    "fixture": false
+  },
+  {
+    "file": "ipad-landscape-diagnostics-session.png",
+    "sourceAttachment": "actual-streaming-diagnostic-session",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPad Pro 11-inch (M5)",
+    "fixture": false
+  },
+  {
+    "file": "ipad-landscape-diagnostics-menu.png",
+    "sourceAttachment": "actual-streaming-diagnostics-menu",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "device": "iPad Pro 11-inch (M5)",
+    "fixture": false
+  }
+]

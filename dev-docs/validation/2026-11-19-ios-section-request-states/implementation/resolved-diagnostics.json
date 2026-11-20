@@ -1,0 +1,45 @@
+[
+  {
+    "round": "phone.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:585: error: -[XBXRCTests.CapabilityMigrationTests testPartialInstalledRefreshPreservesGamesAndStorageWithNotice] : XCTAssertEqual failed: (\"nil\") is not equal to (\"Optional(\"internal\")\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:586: error: -[XBXRCTests.CapabilityMigrationTests testPartialInstalledRefreshPreservesGamesAndStorageWithNotice] : XCTAssertEqual failed: (\"Optional([])\") is not equal to (\"Optional([\"retry\"])\")"
+    ],
+    "resolution": "本轮最终构建及定向回归通过。"
+  },
+  {
+    "round": "phone-final.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift:345:75: error: value of optional type 'Int?' must be unwrapped to a value of type 'Int'",
+      "     |                                                                           |- error: value of optional type 'Int?' must be unwrapped to a value of type 'Int'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift:346:79: error: value of optional type 'Int?' must be unwrapped to a value of type 'Int'",
+      "     |                                                                               |- error: value of optional type 'Int?' must be unwrapped to a value of type 'Int'"
+    ],
+    "resolution": "本轮最终构建及定向回归通过。"
+  },
+  {
+    "round": "phone-final2.log",
+    "errors": [
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'WebRTC-product' from project 'XBXRCWebRTC')",
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'XBXRC' from project 'XBXRC')",
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'XBXRC' from project 'XBXRC')"
+    ],
+    "resolution": "本轮最终构建及定向回归通过。"
+  },
+  {
+    "round": "device-build.log",
+    "errors": [
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'WebRTC-product' from project 'XBXRCWebRTC')",
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'XBXRC' from project 'XBXRC')",
+      "error: There is no XCFramework found at '/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages/artifacts/webrtc/WebRTC/WebRTC.xcframework'. (in target 'XBXRC' from project 'XBXRC')"
+    ],
+    "resolution": "本轮最终构建及定向回归通过。"
+  },
+  {
+    "round": "r3/phone-summary",
+    "errors": [
+      "xcresulttool 初次访问 TestReport 缓存受文件权限限制。"
+    ],
+    "resolution": "授权后导出测试摘要成功，29项全部通过。"
+  }
+]

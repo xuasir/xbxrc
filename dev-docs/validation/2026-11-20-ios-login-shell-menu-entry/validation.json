@@ -1,0 +1,29 @@
+{
+  "task": "2026-11-20-ios-login-shell-menu-entry",
+  "date": "2026-11-20",
+  "accepted": {
+    "phone": 6,
+    "ipad": 2,
+    "total": 8
+  },
+  "executions": {
+    "r1-phone": 5,
+    "r1-ipad": 2,
+    "r2-phone": 2,
+    "r2-ipad": 1,
+    "failed": 0,
+    "superseded": 2
+  },
+  "acceptedScope": "r1串流菜单/手势/设置回归 + r2最新品牌/按钮布局/已登录根页；r1旧登录布局已由r2替换。",
+  "checks": {
+    "frontendLintFix": "passed",
+    "swiftChangedLineFormattingAndParse": "passed",
+    "loginViewStrictSwiftLint": "passed",
+    "streamingBoundary": "passed",
+    "gitDiffCheck": "passed",
+    "stagingPreserved": true,
+    "existingLocalizationPreserved": true
+  },
+  "limitations": "菜单验证使用正式控制视图及本地串流夹具；真实串流点按响应接续用户实机验收。",
+  "screenshots": 11
+}

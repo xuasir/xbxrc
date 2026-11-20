@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/latest/layout.json",
+  "content": {
+    "left": {
+      "inner": [
+        {
+          "type": "joystick",
+          "axis": {
+            "input": "axisXY",
+            "output": "leftJoystick"
+          },
+          "relative": true
+        }
+      ],
+      "outer": [
+        {
+          "type": "button",
+          "action": "leftBumper"
+        },
+        {
+          "type": "button",
+          "action": "leftTrigger"
+        },
+        null,
+        null,
+        {
+          "type": "button",
+          "action": "leftThumb"
+        },
+        null,
+        [
+          {
+            "type": "directionalPad",
+            "interaction": {
+              "activationType": "allowNeighboring"
+            }
+          },
+          null
+        ]
+      ]
+    },
+    "right": {
+      "inner": [
+        {
+          "type": "button",
+          "action": "gamepadB"
+        },
+        {
+          "type": "button",
+          "action": "gamepadA"
+        },
+        {
+          "type": "button",
+          "action": "gamepadX"
+        },
+        {
+          "type": "button",
+          "action": "gamepadY"
+        }
+      ],
+      "outer": [
+        {
+          "type": "button",
+          "action": "rightBumper"
+        },
+        {
+          "type": "button",
+          "action": "rightTrigger"
+        },
+        {
+          "type": "button",
+          "action": "rightThumb"
+        },
+        null,
+        [
+          {
+            "type": "joystick",
+            "axis": {
+              "input": "axisXY",
+              "output": "rightJoystick"
+            },
+            "relative": true
+          },
+          null
+        ],
+        null,
+        null
+      ]
+    },
+    "upper": {
+      "right": [
+        {
+          "type": "button",
+          "action": "menu"
+        },
+        {
+          "type": "button",
+          "action": "view"
+        }
+      ]
+    },
+    "lower": {
+      "center": {
+        "type": "button",
+        "action": "guide"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "auditAt": "2026-11-20T15:58:06.426446+08:00",
+  "scope": "read-only Swift trace / streaming instrumentation / analyzer audit",
+  "existingTests": {
+    "baseAnalyzer": {
+      "passed": 3
+    },
+    "streamingCoreGate": {
+      "passed": 14
+    }
+  },
+  "probes": {
+    "writer": {
+      "passed": true,
+      "terminalReason": "runtime.failed",
+      "fixtureRootCleanedBeforeFinalRun": true
+    },
+    "telemetry": {
+      "passed": true,
+      "sourceTypesExtractedUnmodified": true
+    },
+    "analyzerAdversarial": {
+      "passed": true
+    }
+  },
+  "sourceVerification": {
+    "baselineFiles": 109,
+    "auditedSourceFilesUnchanged": 14,
+    "concurrentChangesPreserved": [
+      "iosapp/XBXRC/App/AppRootView.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+      "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+      "iosapp/XBXRCTests/StreamingControlsStateTests.swift"
+    ]
+  },
+  "build": "Swift 6 DEBUG host harness using original diagnostic sources; no complete App rebuild",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-trace-audit-20261120",
+  "exportWorkflow": "existing Advanced Diagnostics export to runtime-logs/ios",
+  "realSessionEvidence": "Complete current xHome JSONL export still pending; prior system event names only",
+  "priorSystemLogPreserved": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json"
+}

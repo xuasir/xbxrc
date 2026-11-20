@@ -1,0 +1,107 @@
+{
+  "logs": [
+    {
+      "source": "m6-phone-final.log",
+      "path": "diagnostics/phone-tests.log",
+      "sha256": "69c11f4fb26590946f7bd212746b17bcfa360d8a9b2fd0b9a91094b5734c61dd",
+      "bytes": 187256
+    },
+    {
+      "source": "m6-ipad-final.log",
+      "path": "diagnostics/ipad-tests.log",
+      "sha256": "e646c734c6ad0e9b71de693c1797fa4f8e8994ea692f5b174084c53fbe6d7945",
+      "bytes": 187247
+    },
+    {
+      "source": "m6-pc-final-r2.log",
+      "path": "diagnostics/pc-tests.log",
+      "sha256": "2d48025a038bd8be6294c22404c8b38ccf15d3c87a4800dd7ba1f1ddba57c64c",
+      "bytes": 226
+    },
+    {
+      "source": "m6-rust-final-r2.log",
+      "path": "diagnostics/rust-tests.log",
+      "sha256": "047c3b618ff152640e92cc5d10c3f51f5b1a3cf48631c23edba536f26ad7cc2f",
+      "bytes": 25059
+    },
+    {
+      "source": "m6-device-build.log",
+      "path": "diagnostics/device-build.log",
+      "sha256": "2bbc0b1ee7416fc94ccafe81a15afdaa1becaebd0f96dd93222133bfd1dbdd0b",
+      "bytes": 163134
+    },
+    {
+      "source": "m6-pc-build.log",
+      "path": "diagnostics/pc-build.log",
+      "sha256": "a73eb62ae2d3070408a3c752800cc88ddca99f391ec22240ae9c6d87dc84663f",
+      "bytes": 7138
+    },
+    {
+      "source": "m6-tauri-check.log",
+      "path": "diagnostics/tauri-check.log",
+      "sha256": "0cbe43ad0c17654730556ed8893c82dcf9ee336426b77ce632e85c66ff2fb1f9",
+      "bytes": 1775
+    },
+    {
+      "source": "m6-bindings-final.log",
+      "path": "diagnostics/bindings.log",
+      "sha256": "4f158ca81e6b031f2a5989bcf8d5b6f595fd03f5dec6f11a5718e7fd4ba73f55",
+      "bytes": 1572
+    },
+    {
+      "source": "m6-lint-final-r3.log",
+      "path": "diagnostics/lint.log",
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237",
+      "bytes": 19
+    },
+    {
+      "source": "m6-typecheck-final-r2.log",
+      "path": "diagnostics/typecheck.log",
+      "sha256": "aacdfedc485449151e8f0cedfb8264a7d15047256a7b3c3a4a9e848e28e7b178",
+      "bytes": 19
+    },
+    {
+      "source": "m6-trace-tests.log",
+      "path": "diagnostics/trace-analyzer-tests.log",
+      "sha256": "252d7231af920fa962cc126cebf263ce4a3097f6917c6bb29efd6bd9f9a768b4",
+      "bytes": 101
+    },
+    {
+      "source": "m6-parity-replay.log",
+      "path": "diagnostics/shared-replay.log",
+      "sha256": "e79366d0eba8b4ee07db3c3bbb15bc85b1a330851bd8a8523bcbf9c3c7099861",
+      "bytes": 482
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "phone/settings-PC-options.png",
+      "device": "iPhone 17e",
+      "testIdentifier": "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable()",
+      "timestamp": 1795073298.109,
+      "sha256": "564bb8bbc3ce41521b3959d788b8964dfeddbe64fbb3914fa6ec90fa19d10f22"
+    },
+    {
+      "path": "phone/controller-inline-recording.png",
+      "device": "iPhone 17e",
+      "testIdentifier": "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline()",
+      "timestamp": 1795073323.534,
+      "sha256": "1e1176dd79cea2353f72703258d9a8e9ea4ca47fc4d6d5ea5bb60273fc34b6d6"
+    },
+    {
+      "path": "ipad/settings-PC-options.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "testIdentifier": "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable()",
+      "timestamp": 1795073514.68,
+      "sha256": "58036025b3a52638990481d02ab5c3c4c824df86c5d17d7a0991199aceae34bd"
+    },
+    {
+      "path": "ipad/controller-inline-recording.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "testIdentifier": "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline()",
+      "timestamp": 1795073557.84,
+      "sha256": "6174a1e49f98f9a166b0f49c178407cfab0c8be4be6dab654f51b1765db09413"
+    }
+  ],
+  "rawTraceFiles": 12
+}

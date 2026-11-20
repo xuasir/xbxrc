@@ -1,0 +1,7 @@
+phone r2: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testControllerPagesExposeTouchAndExternalGamepadControls]' passed (36.977 seconds).
+phone r2: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testInternalLayoutSelectionPressDragAndReset]' passed (67.266 seconds).
+phone r2: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (40.565 seconds).
+phone r4: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments]' passed (58.145 seconds).
+phone r6: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft]' passed (31.588 seconds).
+ipad r7: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments]' passed (64.310 seconds).
+ipad r7: Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft]' passed (32.279 seconds).

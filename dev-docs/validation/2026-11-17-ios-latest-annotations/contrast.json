@@ -1,0 +1,50 @@
+{
+  "method": "WCAG relative luminance; conservative simultaneous maximum gradient opacity, normal surface top tint; artwork and video verified separately",
+  "source": "AppThemePalette + AppSurfaceModifier",
+  "values": [
+    {
+      "background": "canvas",
+      "rgb": [
+        43,
+        61,
+        52
+      ],
+      "primaryContrast": 11.54,
+      "secondaryContrast": 10.72,
+      "actionContrast": 7.94
+    },
+    {
+      "background": "maximum ambient blend",
+      "rgb": [
+        79,
+        111,
+        102
+      ],
+      "primaryContrast": 5.51,
+      "secondaryContrast": 5.12,
+      "actionContrast": 3.79
+    },
+    {
+      "background": "maximum normal surface blend",
+      "rgb": [
+        86,
+        119,
+        108
+      ],
+      "primaryContrast": 4.93,
+      "secondaryContrast": 4.58,
+      "actionContrast": 3.39
+    },
+    {
+      "background": "reduce transparency panel",
+      "rgb": [
+        65,
+        93,
+        78
+      ],
+      "primaryContrast": 7.24,
+      "secondaryContrast": 6.73,
+      "actionContrast": 4.98
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "files": {
+    "crates/xbox-ios-bridge/src/streaming.rs": {
+      "sha256": "5710f6e7dabf7adb7c5fc06e5e5bf21831a17b82864f79a121a88b31e7b058b0",
+      "modifiedAt": "2026-11-20T10:55:05.346031+08:00"
+    },
+    "crates/xbox-ios-bridge/src/streaming/stack_tests.rs": {
+      "sha256": "1e82027661d5a74100a2a46cd697680643b7018be1484c75ed49ffbfe695b7c3",
+      "modifiedAt": "2026-11-20T11:31:34.162545+08:00"
+    }
+  },
+  "deviceBinary": {
+    "pathAtBuild": "/private/tmp/xbxrc-ios-streaming-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib",
+    "sha256": "accc940a5a24112a0dfe1e344cb374c9c7aca913fecd8cffd9243f721fdca856",
+    "modifiedAt": "2026-11-20T11:23:59.328570+08:00",
+    "platform": "iPhoneOS arm64",
+    "configuration": "Debug",
+    "codeSigningAllowed": false
+  },
+  "adjacentModuleMatchesBaseline": {
+    "crates/xbox-ios-bridge/src/streaming/credentials.rs": true,
+    "crates/xbox-ios-bridge/src/streaming/home_context.rs": true,
+    "crates/xbox-streaming/src/session/startup.rs": true,
+    "crates/xbox-streaming/src/session/operation.rs": true
+  }
+}

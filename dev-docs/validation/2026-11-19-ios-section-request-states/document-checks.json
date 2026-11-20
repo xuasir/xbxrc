@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-19",
+  "scope": "design-and-static-checks",
+  "linksChecked": 20,
+  "missingLinks": [],
+  "previewBytes": 17394,
+  "variantNames": [
+    "安装库局部失败",
+    "游戏历史分页失败"
+  ],
+  "javascriptSyntax": "passed",
+  "staticClassReferences": "passed",
+  "uniqueIDs": "passed",
+  "externalRequests": 0,
+  "runtimeAndBrowserValidation": "planned-for-implementation",
+  "temporaryArtifacts": [],
+  "sha256": {
+    "note": "fa938397ea47d8e521d1d801ae8f5c5eb36a00b9f732faf4389c3e9256c24592",
+    "preview": "2d0d029addb343f3f41bbe5678f480f5f2440250be7c43a3fc70cd2d6b419a52"
+  }
+}

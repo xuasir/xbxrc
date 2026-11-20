@@ -1,0 +1,14 @@
+{
+  "beforeWrappedFrameBytes": 477280,
+  "afterWrappedFrameBytes": 13136,
+  "frameReductionPercent": 97.248,
+  "constructorFrameBytes": {
+    "rust_future_new": 3408,
+    "RustFuture_new": 3472,
+    "WrappedFuture_new": 13136,
+    "exported_entry": 3328
+  },
+  "constructorChainFrameBytes": 23344,
+  "crashSymbolsMatched": true,
+  "scope": "实际 Debug iPhoneOS arm64 链接产物；相同哈希的 UniFFI 构造函数与原 ips 对照"
+}

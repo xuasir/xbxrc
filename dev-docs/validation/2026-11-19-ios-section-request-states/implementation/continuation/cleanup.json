@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-20",
+  "round": "r4",
+  "status": "Completed",
+  "processesConfirmedEnded": true,
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-section-states-20261119/r4"
+  ],
+  "removedFileCount": 4023,
+  "removedAllocatedBytes": 507039744,
+  "removedAllocatedGiB": 0.472,
+  "totalTaskRemovedAllocatedBytes": 1941573632,
+  "totalTaskRemovedAllocatedGiB": 1.808,
+  "availableBytesBefore": 64716800000,
+  "availableBytesAfter": 65126400000,
+  "availableIncreaseGiB": 0.381,
+  "remainingTargets": [],
+  "temporaryTaskRootExists": false,
+  "preservedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-section-states-packages",
+  "dependencyArtifactsAvailable": true,
+  "stagedChangesPreserved": true,
+  "preservedScreenshots": 19
+}

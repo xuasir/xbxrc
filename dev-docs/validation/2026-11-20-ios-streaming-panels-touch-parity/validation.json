@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-20",
+  "task": "2026-11-20-ios-streaming-panels-touch-parity",
+  "iphone": {
+    "unitTests": 83,
+    "uiTests": 3,
+    "result": "Passed",
+    "device": "iPhone 17e / iOS 27 Simulator"
+  },
+  "ipad": {
+    "uiTests": 2,
+    "result": "Passed",
+    "device": "iPad Pro 11-inch (M5) / iOS 27 Simulator"
+  },
+  "deviceBuild": {
+    "target": "generic/platform=iOS",
+    "minimumDeploymentTarget": "26.0",
+    "result": "BUILD SUCCEEDED",
+    "signed": false
+  },
+  "checks": {
+    "swiftFormat": "Passed",
+    "frontendLintFix": "Passed",
+    "streamingBoundary": "Passed",
+    "gitDiffCheck": "Passed"
+  },
+  "screenshots": 15,
+  "manualAcceptance": "重建后使用真机复测本地串流和云游戏的动态读数、首帧和触控手感"
+}

@@ -1,0 +1,10 @@
+{
+  "failedTests": 0,
+  "failures": [],
+  "source": [
+    "r1-phone-summary.json",
+    "r1-ipad-summary.json",
+    "r2-phone-summary.json",
+    "r2-ipad-summary.json"
+  ]
+}

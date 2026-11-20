@@ -1,6 +1,8 @@
 //! Xbox 公共串流线协议与远端场景合同。
+mod frame_feedback;
 mod remote_profile;
 mod stream_data_channel;
+pub use frame_feedback::*;
 pub use remote_profile::*;
 pub use stream_data_channel::*;
 

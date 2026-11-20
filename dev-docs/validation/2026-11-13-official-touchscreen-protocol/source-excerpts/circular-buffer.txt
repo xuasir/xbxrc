@@ -1,0 +1,31 @@
+// 来源 2091.34346f46.chunk.js；原文 SHA-256 4ab75f6ff4399496657055a8820aa317208714b1ee9faee384ee359e9a211bd0
+const CircularBuffer = class {
+    constructor(e) { this.maxLength = e, this.list = Array(this.maxLength), this.bufferLength = 0, this.startIndex = 0; }
+    get length() { return this.bufferLength; }
+    initialize(e) { this.defaultValueStr = JSON.stringify(e); for (let t = 0; t < this.maxLength; t++)
+        this.list[t] = JSON.parse(this.defaultValueStr); }
+    initializeWithFunc(e) { this.creatorFunc = e; for (let t = 0; t < this.maxLength; t++)
+        this.list[t] = e(); }
+    getNextAvailableElem() { let e; return this.bufferLength === this.maxLength ? (e = this.list[this.startIndex], this.startIndex = (this.startIndex + 1) % this.maxLength) : (e = this.list[(this.startIndex + this.bufferLength) % this.maxLength], this.bufferLength = this.bufferLength + 1), e; }
+    getLastAddedElement() { if (0 !== this.bufferLength)
+        return this.list[(this.startIndex + this.bufferLength - 1) % this.maxLength]; }
+    getElemAtIndex(e) { if (e >= this.bufferLength)
+        throw new Error(`[CircularBuffer] getElemAtIndex() => index ${e} out of bounds of buffer with length ${this.bufferLength}`); return this.list[(this.startIndex + e) % this.maxLength]; }
+    shift() { const e = this.getElemAtIndex(0); return this.slice(1), e; }
+    slice(e) { if (e > this.bufferLength)
+        throw new Error("[CircularBuffer] slice(start) => start index out of bounds"); this.startIndex = (this.startIndex + e) % this.maxLength, this.bufferLength -= e; }
+    trim(e) { if (e > this.bufferLength)
+        throw new Error("[CircularBuffer] trim(firstIndexToTrim) => firstIndexToTrim index out of bounds"); this.bufferLength = e; }
+    reset() { this.startIndex = 0, this.bufferLength = 0; }
+    resize(e) { if (e < this.maxLength)
+        throw new Error("[CircularBuffer] resize(newSize) => newSize smaller than current size"); let t = this.list.slice(this.startIndex, this.maxLength); for (let r = 0; r < this.startIndex; r++)
+        t.push(this.list[r]); const n = e - this.maxLength; if (void 0 !== this.creatorFunc)
+        for (let r = 0; r < n; r++)
+            t.push(this.creatorFunc());
+    else {
+        if (void 0 === this.defaultValueStr)
+            throw new Error("[CircularBuffer] resize(newSize) => buffer must be initialized first before resizing");
+        for (let e = 0; e < n; e++)
+            t.push(JSON.parse(this.defaultValueStr));
+    } this.startIndex = 0, this.maxLength = e, this.list = t; }
+};

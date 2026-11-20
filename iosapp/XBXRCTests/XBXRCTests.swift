@@ -1,12 +1,365 @@
 import AVFoundation
+import Combine
+import CoreVideo
+import Metal
+import UIKit
+@preconcurrency import WebRTC
 import XCTest
+
 @testable import XBXRC
 
-#if canImport(WebRTC)
-@preconcurrency import WebRTC
-#endif
+private struct StreamingNativeFrameDelivery: @unchecked Sendable {
+    let renderer: any RTCVideoRenderer
+    let frame: RTCVideoFrame
+
+    func deliver() {
+        renderer.setSize(CGSize(width: 64, height: 64))
+        renderer.renderFrame(frame)
+    }
+}
+
+@MainActor
+private final class StreamingPublicationRecorder {
+    var states: [(UInt64, StreamingFeatureState)] = []
+    var context: StreamingPresentationTraceContext?
+}
+
+final class StreamingDisplayCallbackTests: XCTestCase {
+    private func makeFrame(_ mailbox: StreamingLatestFrameMailbox) throws
+        -> StreamingDecodedFrameRef
+    {
+        var buffer: CVPixelBuffer?
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault, 16, 16, kCVPixelFormatType_32BGRA, nil, &buffer),
+            kCVReturnSuccess)
+        return mailbox.makeFrame(
+            storage: .pixelBuffer(try XCTUnwrap(buffer)), width: 16, height: 16,
+            rotationDegrees: 0, isFullRange: true, traceContext: nil)
+    }
+
+    @MainActor
+    func testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact() async throws {
+        let mailbox = StreamingLatestFrameMailbox()
+        let telemetry = StreamingDisplayTelemetry()
+        let first = try makeFrame(mailbox)
+        let second = try makeFrame(mailbox)
+        _ = mailbox.submit(first)
+        XCTAssertEqual(mailbox.beginRender().frame?.identifier, first.identifier)
+        _ = telemetry.recordSubmit(identifier: first.identifier, timestampMilliseconds: 100)
+        _ = mailbox.submit(second)
+        let hasPending = await Task.detached {
+            mailbox.finishRender(identifier: first.identifier, requeueAsLatest: false)
+        }.value
+        XCTAssertTrue(hasPending)
+        XCTAssertFalse(mailbox.snapshotDrawableBusy())
+        // 主线程尚未记账第一帧时，下一次显示 tick 已可取得第二帧。
+        XCTAssertEqual(mailbox.beginRender().frame?.identifier, second.identifier)
+        let oldCompletion = telemetry.recordPresent(
+            identifier: first.identifier, timestampMilliseconds: 102,
+            drawableBusy: mailbox.snapshotDrawableBusy())
+        XCTAssertTrue(oldCompletion.snapshot.currentDrawableBusy)
+        XCTAssertEqual(oldCompletion.snapshot.submitToPresentP95Milliseconds, 2)
+        _ = mailbox.finishRender(identifier: second.identifier, requeueAsLatest: false)
+    }
+
+    func testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission() throws {
+        let mailbox = StreamingLatestFrameMailbox()
+        let old = try makeFrame(mailbox)
+        _ = mailbox.submit(old)
+        _ = mailbox.beginRender()
+        mailbox.reset()
+        let current = try makeFrame(mailbox)
+        XCTAssertGreaterThan(current.identifier, old.identifier)
+        _ = mailbox.submit(current)
+        _ = mailbox.beginRender()
+        for _ in 0..<2 {
+            _ = mailbox.finishRender(identifier: old.identifier, requeueAsLatest: false)
+            XCTAssertTrue(mailbox.snapshotDrawableBusy())
+            XCTAssertTrue(mailbox.beginRender().drawableBusy)
+        }
+        _ = mailbox.finishRender(identifier: current.identifier, requeueAsLatest: false)
+        XCTAssertFalse(mailbox.snapshotDrawableBusy())
+    }
+
+    func testFailedCompletionRetriesFrameAndPrefersNewerCandidate() throws {
+        let mailbox = StreamingLatestFrameMailbox()
+        let first = try makeFrame(mailbox)
+        _ = mailbox.submit(first)
+        _ = mailbox.beginRender()
+        XCTAssertTrue(mailbox.finishRender(identifier: first.identifier, requeueAsLatest: true))
+        XCTAssertEqual(mailbox.beginRender().frame?.identifier, first.identifier)
+        let second = try makeFrame(mailbox)
+        _ = mailbox.submit(second)
+        XCTAssertTrue(mailbox.finishRender(identifier: first.identifier, requeueAsLatest: true))
+        XCTAssertEqual(mailbox.snapshotOverwriteCount(), 1)
+        XCTAssertEqual(mailbox.beginRender().frame?.identifier, second.identifier)
+    }
+
+    func testHealthBurstPreservesLatestCountersAndFlushesTailOnce() throws {
+        let context = StreamingPresentationTraceContext(
+            attemptID: "burst", generation: 1, peerEpoch: 1)
+        var coalescer = StreamingDisplayHealthCoalescer()
+        XCTAssertNotNil(coalescer.offer(context: context, snapshot: .zero))
+        let telemetry = StreamingDisplayTelemetry()
+        var latest = StreamingDisplayHealthSnapshot.zero
+        for identifier in 1...600 {
+            _ = telemetry.recordSubmit(
+                identifier: UInt64(identifier), timestampMilliseconds: Double(identifier))
+            latest =
+                telemetry.recordPresent(
+                    identifier: UInt64(identifier), timestampMilliseconds: Double(identifier) + 0.5
+                ).snapshot
+            XCTAssertNil(coalescer.offer(context: context, snapshot: latest))
+        }
+        guard case .displayHealth(let observedContext, let snapshot) = coalescer.flush() else {
+            return XCTFail("缺少尾部健康快照")
+        }
+        XCTAssertEqual(observedContext, context)
+        XCTAssertEqual(snapshot.submitCount, 600)
+        XCTAssertEqual(snapshot.presentCount, 600)
+        XCTAssertEqual(snapshot.latencySampleCount, 240)
+        XCTAssertEqual(snapshot, latest)
+        XCTAssertNil(coalescer.flush())
+        XCTAssertNil(coalescer.offer(context: context, snapshot: latest))
+        XCTAssertNil(coalescer.pending)
+    }
+
+    func testHealthContextChangeAndResetDiscardOldPendingSnapshot() {
+        let first = StreamingPresentationTraceContext(
+            attemptID: "first", generation: 1, peerEpoch: 1)
+        let second = StreamingPresentationTraceContext(
+            attemptID: "second", generation: 2, peerEpoch: 2)
+        var coalescer = StreamingDisplayHealthCoalescer()
+        _ = coalescer.offer(context: first, snapshot: .zero)
+        let busy = StreamingDisplayTelemetry().setDrawableBusy(true)
+        _ = coalescer.offer(context: first, snapshot: busy)
+        guard
+            case .displayHealth(let context, let snapshot) = coalescer.offer(
+                context: second, snapshot: .zero)
+        else {
+            return XCTFail("新代次应立即报告健康基线")
+        }
+        XCTAssertEqual(context, second)
+        XCTAssertEqual(snapshot, .zero)
+        XCTAssertNil(coalescer.flush())
+        _ = coalescer.offer(context: second, snapshot: busy)
+        coalescer.reset()
+        XCTAssertNil(coalescer.flush())
+        XCTAssertNotNil(coalescer.offer(context: second, snapshot: .zero))
+    }
+
+    func testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction() {
+        let timing = StreamingGpuCompletionTiming(
+            completedAtMs: 100, slotReleasedAtMs: 100.1, mainActorEnteredAtMs: 150,
+            feedbackFinishedAtMs: 151, telemetryFinishedAtMs: 153)
+        let payload = timing.tracePayload(recordedAtMs: 154)
+        XCTAssertEqual(payload["gpuToMainActorMs"], .double(50))
+        XCTAssertEqual(payload["frameFeedbackWorkMs"], .double(1))
+        XCTAssertEqual(payload["displayTelemetryWorkMs"], .double(2))
+        XCTAssertEqual(payload["mainActorWorkBeforeTraceMs"], .double(4))
+        XCTAssertEqual(payload["gpuToTraceRecordMs"], .double(54))
+        for profile in [IOSRuntimeTraceProfile.dev, .production] {
+            XCTAssertEqual(
+                IOSRuntimeTraceRedactor.redact(
+                    payload: payload, profile: profile, fingerprintSalt: "test"),
+                payload)
+        }
+    }
+
+    func testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters() {
+        let telemetry = StreamingDisplayTelemetry()
+        _ = telemetry.setDrawableBusy(true)
+        _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: 100)
+        let snapshot = telemetry.cancelPendingSubmissions()
+        XCTAssertEqual(snapshot.submitCount, 1)
+        XCTAssertFalse(snapshot.currentDrawableBusy)
+        _ = telemetry.recordPresent(identifier: 1, timestampMilliseconds: 101)
+        _ = telemetry.recordSubmit(identifier: 2, timestampMilliseconds: 200)
+        let resumed = telemetry.recordPresent(identifier: 2, timestampMilliseconds: 202).snapshot
+        XCTAssertEqual(resumed.submitCount, 2)
+        XCTAssertEqual(resumed.presentCount, 2)
+        XCTAssertEqual(resumed.latencySampleCount, 1)
+        XCTAssertEqual(resumed.submitToPresentP95Milliseconds, 2)
+    }
+
+    @MainActor
+    func testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let publication = StreamingPublicationRecorder()
+        let session = StreamSessionActor(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder))
+        for generation: UInt64 in 1...2 {
+            try await session.start(
+                request: StreamingLaunchRequest(
+                    streamTitleID: "test-title", accessHandle: "test-access",
+                    accountGeneration: 1, sessionGeneration: generation),
+                stateSink: { publication.states.append(($0, $1)) },
+                videoSink: { _, track in publication.context = track?.traceContext },
+                diagnosticsSink: { _, _ in })
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while publication.context?.generation != generation {
+                guard ContinuousClock.now < deadline else { return XCTFail("缺少当前视频代次") }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let context = try XCTUnwrap(publication.context)
+            await session.displayPipelineReady(context: context)
+            await session.firstFrameAcceptedToMailbox(context: context)
+            await session.firstFrameSubmitted(context: context)
+            await session.firstFramePresented(context: context)
+            for _ in 0..<600 {
+                await session.displayHealthUpdated(context: context, snapshot: .zero)
+            }
+            XCTAssertEqual(
+                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 1)
+            await session.setVisible(false, generation: generation)
+            await session.setVisible(false, generation: generation)
+            XCTAssertEqual(
+                publication.states.filter { $0.0 == generation && $0.1 == .suspending }.count, 1)
+            await session.setVisible(true, generation: generation)
+            let now = StreamingFrameFeedbackClock.nowMilliseconds
+            let telemetry = StreamingDisplayTelemetry()
+            _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: now)
+            let fresh = telemetry.recordPresent(identifier: 1, timestampMilliseconds: now).snapshot
+            await session.displayHealthUpdated(context: context, snapshot: fresh)
+            XCTAssertEqual(
+                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 2)
+            await session.stop(generation: generation)
+            XCTAssertEqual(
+                publication.states.filter { $0.0 == generation && $0.1 == .idle }.count, 1)
+        }
+    }
+}
 
 final class XBXRCTests: XCTestCase {
+    @MainActor
+    func testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 320, height: 180)
+        let controller = UIViewController()
+        window.rootViewController = controller
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let surface = StreamingMetalVideoSurfaceView(frame: window.bounds, device: device)
+        controller.view.addSubview(surface)
+        let context = StreamingPresentationTraceContext(
+            attemptID: UUID().uuidString, generation: 1, peerEpoch: 1)
+        surface.updateTraceContext(context)
+        var didPresent = false
+        var healthReports: [(Double, StreamingDisplayHealthSnapshot)] = []
+        surface.presentationEventSink = { event in
+            if case .firstFramePresented(let observed) = event, observed == context {
+                didPresent = true
+            }
+            if case .displayHealth(let observed, let snapshot) = event, observed == context {
+                healthReports.append((StreamingFrameFeedbackClock.nowMilliseconds, snapshot))
+            }
+        }
+        window.isHidden = false
+        controller.view.layoutIfNeeded()
+        defer {
+            surface.shutdown()
+            window.isHidden = true
+        }
+        var pixelBuffer: CVPixelBuffer?
+        let attributes =
+            [
+                kCVPixelBufferMetalCompatibilityKey: true,
+                kCVPixelBufferIOSurfacePropertiesKey: [:],
+            ] as CFDictionary
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault, 64, 64, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                attributes, &pixelBuffer), kCVReturnSuccess)
+        let buffer = try XCTUnwrap(pixelBuffer)
+        CVPixelBufferLockBaseAddress(buffer, [])
+        for plane in 0..<CVPixelBufferGetPlaneCount(buffer) {
+            if let bytes = CVPixelBufferGetBaseAddressOfPlane(buffer, plane) {
+                memset(
+                    bytes, plane == 0 ? 16 : 128,
+                    CVPixelBufferGetBytesPerRowOfPlane(buffer, plane)
+                        * CVPixelBufferGetHeightOfPlane(buffer, plane))
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        let delivery = StreamingNativeFrameDelivery(
+            renderer: surface.renderer,
+            frame: RTCVideoFrame(
+                buffer: RTCCVPixelBuffer(pixelBuffer: buffer),
+                rotation: ._0, timeStampNs: 0))
+        await Task.detached { delivery.deliver() }.value
+        for _ in 0..<150 {
+            if didPresent { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(didPresent)
+        healthReports.removeAll()
+        for _ in 0..<30 {
+            await Task.detached { delivery.deliver() }.value
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let tail = try XCTUnwrap(healthReports.last?.1)
+        XCTAssertGreaterThan(tail.presentCount, 10)
+        XCTAssertEqual(tail.submitCount, tail.presentCount)
+        XCTAssertLessThan(healthReports.count, Int(tail.presentCount))
+        for (previous, next) in zip(healthReports, healthReports.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(next.0 - previous.0, 90)
+        }
+    }
+
+    func testSdpDiagnosticSummaryKeepsPayloadsScopedToMediaSections() {
+        // PC 现有协商样本在两个 media section 中复用 payload 96。
+        let sdp = """
+            v=0
+            m=audio 9 RTP/SAVPF 96
+            a=rtpmap:96 opus/48000/2
+            m=video 9 RTP/SAVPF 96 97
+            a=rtpmap:96 H264/90000
+            a=rtpmap:97 rtx/90000
+            a=fmtp:96 profile-level-id=42e01f;packetization-mode=1
+            m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+            """
+        guard case .object(let summary) = StreamingRuntimeDiagnostics.sdpSummaryPayload(sdp) else {
+            return XCTFail("missing SDP summary")
+        }
+        XCTAssertEqual(summary["audioCodecs"], .array([.string("opus")]))
+        XCTAssertEqual(summary["videoCodecs"], .array([.string("H264"), .string("rtx")]))
+    }
+
+    func testSdpDiagnosticSummaryHandlesRepeatedMappingsAndMissingMedia() {
+        let sdp = "m=audio 9 RTP/SAVPF 111\na=rtpmap:111 opus/48000/2\na=rtpmap:111 opus/48000/2\n"
+        guard case .object(let summary) = StreamingRuntimeDiagnostics.sdpSummaryPayload(sdp) else {
+            return XCTFail("missing SDP summary")
+        }
+        XCTAssertEqual(summary["audioCodecs"], .array([.string("opus")]))
+        XCTAssertEqual(summary["videoCodecs"], .array([]))
+    }
+
+    func testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes() async throws {
+        for preventResolutionDrops in [false, true] {
+            let runtime = LibWebRTCPeerRuntimeFactory().makeRuntime(eventSink: { _ in })
+            do {
+                let signaling = StreamingPreparedSignaling(
+                    iceServers: [],
+                    webRtcPlan: StreamingWebRtcPlan(
+                        preventResolutionDrops: preventResolutionDrops)
+                )
+                let offer = try await runtime.makeOffer(configuration: signaling, iceRestart: false)
+                XCTAssertTrue(offer.contains("m=audio "))
+                XCTAssertTrue(offer.contains("m=video "))
+                XCTAssertTrue(offer.contains("H264/90000"))
+                XCTAssertTrue(offer.contains("m=application "))
+            } catch {
+                await runtime.closeTransport()
+                throw error
+            }
+            await runtime.closeTransport()
+        }
+    }
+
     @MainActor
     func testAppOrientationGeometryTargetsStreamingAndApplicationModes() {
         XCTAssertEqual(
@@ -240,7 +593,7 @@ final class XBXRCTests: XCTestCase {
 
     func testIOSStreamInputPacketMatchesXboxGamepadWireLayout() {
         let packet = IOSStreamInputPacketEncoder.encodeGamepad(
-            sequence: 0x01020304,
+            sequence: 0x0102_0304,
             timestampMilliseconds: 1_000,
             state: IOSStreamGamepadState(
                 buttonMask: 0xA55A,
@@ -254,23 +607,25 @@ final class XBXRCTests: XCTestCase {
         )
         let bytes = [UInt8](packet)
 
-        XCTAssertEqual(bytes, [
-            2, 0,
-            4, 3, 2, 1,
-            0, 0, 0, 0, 0, 64, 143, 64,
-            1,
-            0,
-            90, 165,
-            0, 64,
-            0, 192,
-            1, 128,
-            255, 127,
-            0, 64,
-            255, 255,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-        ])
-        XCTAssertEqual(Array(bytes[0 ..< 6]), [2, 0, 4, 3, 2, 1])
+        XCTAssertEqual(
+            bytes,
+            [
+                2, 0,
+                4, 3, 2, 1,
+                0, 0, 0, 0, 0, 64, 143, 64,
+                1,
+                0,
+                90, 165,
+                0, 64,
+                0, 192,
+                1, 128,
+                255, 127,
+                0, 64,
+                255, 255,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+            ])
+        XCTAssertEqual(Array(bytes[0..<6]), [2, 0, 4, 3, 2, 1])
         XCTAssertEqual(bytes[14], 1)
         XCTAssertEqual(bytes[15], 0)
         XCTAssertEqual(readUInt16LE(bytes, at: 16), 0xA55A)
@@ -280,7 +635,7 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(readInt16LE(bytes, at: 24), 32_767)
         XCTAssertEqual(readUInt16LE(bytes, at: 26), 16_384)
         XCTAssertEqual(readUInt16LE(bytes, at: 28), 65_535)
-        XCTAssertEqual(Array(bytes[30 ..< 38]), Array(repeating: UInt8(0), count: 8))
+        XCTAssertEqual(Array(bytes[30..<38]), Array(repeating: UInt8(0), count: 8))
     }
 
     func testIOSStreamInputPacketClampsAxesTriggersAndEncodesNeutral() {
@@ -321,40 +676,46 @@ final class XBXRCTests: XCTestCase {
         XCTAssertFalse(gate.shouldSend(state: pressed, bufferedAmount: 0, nowMilliseconds: 200))
         XCTAssertTrue(gate.shouldSend(state: pressed, bufferedAmount: 0, nowMilliseconds: 260))
 
-        XCTAssertFalse(gate.shouldSend(
-            state: .neutral,
-            bufferedAmount: IOSStreamInputSendGate.highWatermarkBytes,
-            nowMilliseconds: 300
-        ))
+        XCTAssertFalse(
+            gate.shouldSend(
+                state: .neutral,
+                bufferedAmount: IOSStreamInputSendGate.highWatermarkBytes,
+                nowMilliseconds: 300
+            ))
         XCTAssertTrue(gate.blocked)
-        XCTAssertFalse(gate.shouldSend(
-            state: .neutral,
-            bufferedAmount: IOSStreamInputSendGate.lowWatermarkBytes + 1,
-            nowMilliseconds: 310
-        ))
-        XCTAssertTrue(gate.shouldSend(
-            state: .neutral,
-            bufferedAmount: IOSStreamInputSendGate.lowWatermarkBytes,
-            nowMilliseconds: 320
-        ))
+        XCTAssertFalse(
+            gate.shouldSend(
+                state: .neutral,
+                bufferedAmount: IOSStreamInputSendGate.lowWatermarkBytes + 1,
+                nowMilliseconds: 310
+            ))
+        XCTAssertTrue(
+            gate.shouldSend(
+                state: .neutral,
+                bufferedAmount: IOSStreamInputSendGate.lowWatermarkBytes,
+                nowMilliseconds: 320
+            ))
         XCTAssertFalse(gate.blocked)
     }
 
     func testIOSStreamInputDrainPolicyWaitsForLowWatermarkAndHasFixedUpperBound() {
         let policy = IOSStreamInputDrainPolicy.standard
 
-        XCTAssertFalse(policy.shouldEnqueueNeutral(
-            bufferedAmount: policy.lowWatermarkBytes + 1,
-            elapsedMilliseconds: policy.maximumWaitMilliseconds - 1
-        ))
-        XCTAssertTrue(policy.shouldEnqueueNeutral(
-            bufferedAmount: policy.lowWatermarkBytes,
-            elapsedMilliseconds: 0
-        ))
-        XCTAssertTrue(policy.shouldEnqueueNeutral(
-            bufferedAmount: UInt64.max,
-            elapsedMilliseconds: policy.maximumWaitMilliseconds
-        ))
+        XCTAssertFalse(
+            policy.shouldEnqueueNeutral(
+                bufferedAmount: policy.lowWatermarkBytes + 1,
+                elapsedMilliseconds: policy.maximumWaitMilliseconds - 1
+            ))
+        XCTAssertTrue(
+            policy.shouldEnqueueNeutral(
+                bufferedAmount: policy.lowWatermarkBytes,
+                elapsedMilliseconds: 0
+            ))
+        XCTAssertTrue(
+            policy.shouldEnqueueNeutral(
+                bufferedAmount: UInt64.max,
+                elapsedMilliseconds: policy.maximumWaitMilliseconds
+            ))
         XCTAssertEqual(
             policy.maximumTotalMilliseconds,
             policy.maximumWaitMilliseconds + policy.postNeutralGraceMilliseconds
@@ -411,9 +772,11 @@ final class XBXRCTests: XCTestCase {
             for: effect,
             supportedRoutes: [.leftHandle, .rightHandle, .leftTrigger, .rightTrigger]
         )
-        XCTAssertEqual(fourRoutes.map(\.route), [
-            .leftHandle, .rightHandle, .leftTrigger, .rightTrigger,
-        ])
+        XCTAssertEqual(
+            fourRoutes.map(\.route),
+            [
+                .leftHandle, .rightHandle, .leftTrigger, .rightTrigger,
+            ])
 
         let grouped = IOSStreamHapticsRouter.pulses(
             for: effect,
@@ -443,7 +806,7 @@ final class XBXRCTests: XCTestCase {
             ),
             supportedRoutes: [.leftHandle]
         )
-        XCTAssertEqual(minimumDuration.first?.durationMilliseconds, 10)
+        XCTAssertEqual(minimumDuration.first?.durationMilliseconds, 1)
 
         let stop = IOSStreamRumbleEffect(
             gamepadIndex: 0,
@@ -454,10 +817,11 @@ final class XBXRCTests: XCTestCase {
             durationMilliseconds: 0,
             format: .betterXcloud
         )
-        XCTAssertTrue(IOSStreamHapticsRouter.pulses(
-            for: stop,
-            supportedRoutes: Set(IOSStreamHapticsRoute.allCases)
-        ).isEmpty)
+        XCTAssertTrue(
+            IOSStreamHapticsRouter.pulses(
+                for: stop,
+                supportedRoutes: Set(IOSStreamHapticsRoute.allCases)
+            ).isEmpty)
     }
 
     func testIOSStreamHapticsTransitionStopsRoutesMissingFromNextEffect() {
@@ -492,7 +856,7 @@ final class XBXRCTests: XCTestCase {
                     intensity: 1,
                     sharpness: 1,
                     durationMilliseconds: 100
-                ),
+                )
             ],
             stopAll: true
         )
@@ -552,11 +916,13 @@ final class XBXRCTests: XCTestCase {
         ]
 
         for sdp in rejected {
-            XCTAssertNil(StreamingNativeIceCandidateAdapter.adapt(StreamingIceCandidate(
-                sdp: sdp,
-                sdpMid: "0",
-                sdpMLineIndex: 0
-            )))
+            XCTAssertNil(
+                StreamingNativeIceCandidateAdapter.adapt(
+                    StreamingIceCandidate(
+                        sdp: sdp,
+                        sdpMid: "0",
+                        sdpMLineIndex: 0
+                    )))
         }
     }
 
@@ -762,7 +1128,9 @@ final class XBXRCTests: XCTestCase {
         )
         XCTAssertNil(
             StreamingRemoteMessageClassifier.terminalReason(
-                Data(#"{"type":"Message","target":"/streaming/characteristics/dimensionschanged"}"#.utf8)
+                Data(
+                    #"{"type":"Message","target":"/streaming/characteristics/dimensionschanged"}"#
+                        .utf8)
             )
         )
     }
@@ -896,9 +1264,11 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(recent?.games.count, 10)
         XCTAssertEqual(recent?.homeGames.count, 8)
         XCTAssertEqual(recent?.homeGames.map(\.id), Array(recent?.games.prefix(8).map(\.id) ?? []))
-        XCTAssertEqual(LibraryPresentation.heroGames(from: games).map(\.id), [
-            "game-9", "game-8", "game-7", "game-6", "game-5",
-        ])
+        XCTAssertEqual(
+            LibraryPresentation.heroGames(from: games).map(\.id),
+            [
+                "game-9", "game-8", "game-7", "game-6", "game-5",
+            ])
     }
 
     func testLibraryPresentationKeepsAllGamesAndHidesEmptyOptionalCollections() {
@@ -931,7 +1301,7 @@ final class XBXRCTests: XCTestCase {
 
         XCTAssertEqual(
             LibraryPresentation.metadata(for: game, kind: .newlyAdded),
-            "Game Pass 新入库"
+            "Game Pass 新入库 · Action"
         )
         XCTAssertEqual(
             LibraryPresentation.metadata(
@@ -1294,7 +1664,7 @@ final class XBXRCTests: XCTestCase {
         let writer = IOSRuntimeTraceWriter(
             rootDirectory: rootDirectory,
             profile: .dev,
-            budgetOverride: IOSRuntimeTraceBudget(maxFileBytes: 900, maxFiles: 2)
+            budgetOverride: IOSRuntimeTraceBudget(maxFileBytes: 1_800, maxFiles: 2)
         )
 
         for index in 0..<24 {
@@ -1324,8 +1694,9 @@ final class XBXRCTests: XCTestCase {
         }
 
         XCTAssertEqual(files.count, 2)
-        XCTAssertTrue(fileSizes.allSatisfy { $0 <= 900 })
+        XCTAssertTrue(fileSizes.allSatisfy { $0 <= 1_800 })
         XCTAssertFalse(envelopes.isEmpty)
+        XCTAssertTrue(envelopes.contains { $0.event == "sample" })
         XCTAssertEqual(envelopes.map(\.seq), envelopes.map(\.seq).sorted())
         XCTAssertEqual(Set(envelopes.map(\.seq)).count, envelopes.count)
         XCTAssertTrue(envelopes.contains { $0.event == "fileOpened" })
@@ -1493,8 +1864,9 @@ final class XBXRCTests: XCTestCase {
         let scope = CloudCatalogScope(
             accountID: "xid",
             regionHost: "region.example.com",
-            language: "zh-CN",
-            market: "CN"
+            language: CloudLibraryStore.catalogLanguage(
+                preferredLanguage: Locale.preferredLanguages.first),
+            market: "US"
         )
         let cachedGame = makeCloudGame(id: "cached")
         let remoteGame = makeCloudGame(id: "remote")
@@ -1660,8 +2032,12 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(store.profile, Self.profile)
         XCTAssertEqual(savedSession?.webTokenJSON, "web-token")
         XCTAssertEqual(webAuthentication.lastPrefersEphemeralSession, true)
-        let profileRequestCount = await recorder.profileRequestCount()
-        XCTAssertEqual(profileRequestCount, 1)
+        let profileSourceRequests = await recorder.profileSourceRequestCounts()
+        XCTAssertEqual(
+            profileSourceRequests, [.identity: 1, .social: 1, .friends: 1, .presence: 1])
+        for source in profileSourceRequests.keys {
+            XCTAssertEqual(store.profileSectionStates[source]?.phase, .loaded)
+        }
     }
 
     @MainActor
@@ -1814,10 +2190,11 @@ final class XBXRCTests: XCTestCase {
             await store.powerOn(host: host)
         }
         try await waitUntil {
-            store.hostPowerCommandState == .executing(
-                hostID: host.id,
-                command: .powerOn
-            )
+            store.hostPowerCommandState
+                == .executing(
+                    hostID: host.id,
+                    command: .powerOn
+                )
         }
         await store.powerOff(host: host)
         await powerTask.value
@@ -1886,7 +2263,7 @@ final class XBXRCTests: XCTestCase {
     }
 
     @MainActor
-    func testXboxDataStoreKeepsLibraryWhenPlaytimeFails() async {
+    func testXboxDataStoreKeepsLibraryWhenPlaytimeFails() async throws {
         let store = XboxDataStore(
             client: MockXboxDataClient(games: [Self.game], failsPlaytime: true)
         )
@@ -1896,7 +2273,13 @@ final class XBXRCTests: XCTestCase {
 
         XCTAssertEqual(store.libraryPhase, .loaded)
         XCTAssertEqual(store.games, [Self.game])
-        XCTAssertEqual(store.libraryErrorMessage, "游戏已载入，游玩时长暂时无法更新")
+        XCTAssertNotNil(store.libraryUpdatedAt)
+        XCTAssertNil(store.libraryFailure)
+        XCTAssertNil(store.libraryErrorMessage)
+        let playtimeState = try XCTUnwrap(store.historyPlaytimeStates["self"])
+        XCTAssertEqual(playtimeState.phase, .failed)
+        XCTAssertEqual(playtimeState.failure?.kind, .unknown)
+        XCTAssertFalse(playtimeState.isRefreshing)
     }
 
     @MainActor
@@ -2068,6 +2451,7 @@ final class XBXRCTests: XCTestCase {
         }
 
         try await waitUntil { store.videoTrack?.traceContext != nil }
+        try await waitUntil { store.state == .waitingForFirstFrame }
         let currentContext = try XCTUnwrap(store.videoTrack?.traceContext)
         store.handlePresentationEvent(
             .displayPipelineReady(
@@ -2089,20 +2473,24 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(snapshot.streamTitleIDs, ["1234abcd"])
         XCTAssertEqual(snapshot.offers, ["local-offer"])
         XCTAssertEqual(snapshot.answersApplied, ["remote-answer"])
-        XCTAssertEqual(snapshot.localCandidates, [
-            StreamingIceCandidate(
-                sdp: "candidate:local",
-                sdpMid: "0",
-                sdpMLineIndex: 0
-            ),
-        ])
-        XCTAssertEqual(snapshot.remoteCandidatesApplied, [
-            StreamingIceCandidate(
-                sdp: "candidate:remote",
-                sdpMid: "0",
-                sdpMLineIndex: 0
-            ),
-        ])
+        XCTAssertEqual(
+            snapshot.localCandidates,
+            [
+                StreamingIceCandidate(
+                    sdp: "candidate:local",
+                    sdpMid: "0",
+                    sdpMLineIndex: 0
+                )
+            ])
+        XCTAssertEqual(
+            snapshot.remoteCandidatesApplied,
+            [
+                StreamingIceCandidate(
+                    sdp: "candidate:remote",
+                    sdpMid: "0",
+                    sdpMLineIndex: 0
+                )
+            ])
         XCTAssertEqual(snapshot.markConnectedCalls, 1)
         XCTAssertEqual(snapshot.localIceCompletions, 1)
         XCTAssertNotNil(store.videoTrack)
@@ -2110,6 +2498,16 @@ final class XBXRCTests: XCTestCase {
         XCTAssertFalse(traceContext.attemptID.isEmpty)
         XCTAssertGreaterThan(traceContext.generation, 0)
         XCTAssertGreaterThan(traceContext.peerEpoch, 0)
+        var notifications: [StreamingFeatureState] = []
+        let observation = store.$state.sink { notifications.append($0) }
+        for _ in 0..<600 {
+            store.handlePresentationEvent(.displayHealth(traceContext, .zero))
+        }
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(notifications, [.playing])
+        observation.cancel()
+        store.stop()
+        try await waitUntil { store.state == .idle }
     }
 
     @MainActor
@@ -2164,11 +2562,16 @@ final class XBXRCTests: XCTestCase {
         }
 
         try await waitUntil {
-            if case let .failed(message, retryable) = store.state {
+            if case .failed(let message, let retryable) = store.state {
                 return retryable
-                    && message == StreamingRuntimeError.remoteDescriptionTimedOut.localizedDescription
+                    && message
+                        == StreamingRuntimeError.remoteDescriptionTimedOut.localizedDescription
             }
             return false
+        }
+        // 终态先解除画面归属，资源清理随后完成；等待最后一步再核对释放次数。
+        try await waitUntilAsync {
+            (await recorder.snapshot()).releasedAccessHandles == ["access-answer-timeout"]
         }
         let snapshot = await recorder.snapshot()
         XCTAssertEqual(snapshot.answersApplied, ["remote-answer"])
@@ -2197,7 +2600,7 @@ final class XBXRCTests: XCTestCase {
         }
 
         try await waitUntil {
-            if case let .failed(_, retryable) = store.state {
+            if case .failed(_, let retryable) = store.state {
                 return retryable
             }
             return false
@@ -2215,7 +2618,7 @@ final class XBXRCTests: XCTestCase {
             "m=audio 9 UDP/TLS/RTP/SAVPF 111",
             "a=rtpmap:111 opus/48000/2",
             "a=fmtp:111 minptime=10;useinbandfec=1",
-            "m=video 9 UDP/TLS/RTP/SAVPF 96 97 98",
+            "m=video 9 UDP/TLS/RTP/SAVPF 96 97 98 99",
             "a=rtpmap:96 H264/90000",
             "a=fmtp:96 profile-level-id=640032;packetization-mode=0",
             "a=rtpmap:97 H264/90000",
@@ -2241,7 +2644,10 @@ final class XBXRCTests: XCTestCase {
         XCTAssertTrue(output.contains("m=video 9 UDP/TLS/RTP/SAVPF 97 96 98 99"))
         XCTAssertTrue(output.contains("b=AS:128"))
         XCTAssertTrue(output.contains("b=AS:12000"))
-        XCTAssertTrue(output.contains("a=fmtp:97 profile-level-id=4d0032;packetization-mode=1;level-asymmetry-allowed=1;max-fs=3600;max-fr=60;x-google-min-bitrate=4000;x-google-start-bitrate=8000;x-google-max-bitrate=12000"))
+        XCTAssertTrue(
+            output.contains(
+                "a=fmtp:97 profile-level-id=4d0032;packetization-mode=1;level-asymmetry-allowed=1;max-fs=3600;max-fr=60;x-google-min-bitrate=4000;x-google-start-bitrate=8000;x-google-max-bitrate=12000"
+            ))
         XCTAssertTrue(output.contains("a=fmtp:111 minptime=10;useinbandfec=1;stereo=1"))
         XCTAssertTrue(output.contains("a=rtcp-fb:97 transport-cc"))
         XCTAssertTrue(output.contains("a=rtcp-fb:97 nack pli"))
@@ -2266,7 +2672,6 @@ final class XBXRCTests: XCTestCase {
         )
     }
 
-    #if canImport(WebRTC)
     func testStreamingAudioConfigurationsAreIndependentAndDirectionComplete() {
         let receiveOnly = StreamingAudioLifecycleCoordinator.makeConfiguration(
             for: .receiveOnly
@@ -2286,7 +2691,6 @@ final class XBXRCTests: XCTestCase {
             [.allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay]
         )
     }
-    #endif
 
     func testStreamingIceCandidatePolicyFiltersAndOrdersDeterministically() {
         let candidates = [
@@ -2329,7 +2733,7 @@ final class XBXRCTests: XCTestCase {
     }
 
     @MainActor
-    func testStreamingDisconnectedPerformsIceRestartWithinSameSession() async throws {
+    func testStreamingFailedPerformsIceRestartWithinSameSession() async throws {
         let recorder = StreamingRuntimeRecorder()
         let store = StreamingFeatureStore(
             controlFactory: StreamingTestControlFactory(
@@ -2338,7 +2742,7 @@ final class XBXRCTests: XCTestCase {
             ),
             peerFactory: StreamingTestPeerFactory(
                 recorder: recorder,
-                transientDisconnectAfterConnect: true
+                terminalStateAfterConnect: .failed
             )
         )
 
@@ -2365,7 +2769,7 @@ final class XBXRCTests: XCTestCase {
         let recorder = StreamingRuntimeRecorder()
         let peerFactory = StreamingTestPeerFactory(
             recorder: recorder,
-            transientDisconnectAfterConnect: true,
+            terminalStateAfterConnect: .failed,
             failIceRestart: true
         )
         let store = StreamingFeatureStore(
@@ -2400,7 +2804,7 @@ final class XBXRCTests: XCTestCase {
         let recorder = StreamingRuntimeRecorder()
         let peerFactory = StreamingTestPeerFactory(
             recorder: recorder,
-            transientDisconnectAfterConnect: true,
+            terminalStateAfterConnect: .failed,
             failIceRestart: true,
             suspendFirstPeerStop: true
         )
@@ -2429,9 +2833,12 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(snapshot.peerStops, 1)
         XCTAssertEqual(snapshot.controlCloses, 1)
         XCTAssertEqual(snapshot.releasedAccessHandles, ["access-retiring-stop"])
-        XCTAssertEqual(snapshot.cleanupEvents, [
-            "inputStopped", "hapticsStopped", "peerClosed", "remoteSessionClosed", "accessReleased",
-        ])
+        XCTAssertEqual(
+            snapshot.cleanupEvents,
+            [
+                "inputStopped", "hapticsStopped", "peerClosed", "remoteSessionClosed",
+                "accessReleased",
+            ])
     }
 
     @MainActor
@@ -2446,7 +2853,7 @@ final class XBXRCTests: XCTestCase {
             controlFactory: StreamingTestControlFactory(session: control, recorder: recorder),
             peerFactory: StreamingTestPeerFactory(
                 recorder: recorder,
-                transientDisconnectAfterConnect: true
+                terminalStateAfterConnect: .failed
             )
         )
 
@@ -2468,43 +2875,127 @@ final class XBXRCTests: XCTestCase {
             let current = await recorder.snapshot()
             return current.iceRestartOffers == [false, true]
                 && current.localCandidateSubmitFinishes == 2
-                && current.localIceCompletions == 1
-                && current.markConnectedCalls == 2
+                && current.localIceCompletions == 2
+                && current.markConnectedCalls >= 1
         }
         snapshot = await recorder.snapshot()
         XCTAssertEqual(snapshot.localCandidateSubmitStarts, 2)
         XCTAssertEqual(snapshot.localCandidateSubmitFinishes, 2)
-        XCTAssertEqual(snapshot.localIceCompletions, 1)
+        XCTAssertEqual(snapshot.localIceCompletions, 2)
+        // 协商期间的 connected 可由初次连接或恢复连接确认，旧候选提交始终完成后再开始新协商。
+        XCTAssertGreaterThanOrEqual(snapshot.markConnectedCalls, 1)
     }
 
     @MainActor
-    func testStreamingFailedAndClosedUseIndependentTerminalRetryability() async throws {
-        for (terminal, expectedRetryable) in [
-            (StreamingPeerConnectionState.failed, true),
-            (.closed, false),
-        ] {
+    func testHomeTurnFallbackUsesDirectFirstThenOneReplacement() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let stun = StreamingIceServer(
+            urls: ["stun:fixture.invalid:3478"], username: nil, credential: nil)
+        let turn = StreamingIceServer(
+            urls: ["turn:fixture.invalid:3478"], username: "fixture", credential: "fixture")
+        let prepared = StreamingPreparedSignaling(
+            iceServers: [stun], fallbackIceServers: [stun, turn])
+        let factory = StreamingTestPeerFactory(recorder: recorder, connectsFirstRuntime: false)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder, prepared: prepared),
+                recorder: recorder),
+            peerFactory: factory, initialConnectionTimeout: .milliseconds(30))
+        store.startHome(targetID: "fixture-console") {
+            Self.streamingHomeAccess(handle: "fallback-access")
+        }
+        try await waitUntilAsync {
+            let snapshot = await recorder.snapshot()
+            return factory.runtimesCreated == 2 && snapshot.markConnectedCalls == 1
+        }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        let counts = await recorder.peerIceServerCounts()
+        XCTAssertEqual(counts, [1, 2])
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(snapshot.iceRestartOffers, [false, false])
+        XCTAssertEqual(snapshot.peerStops, 1)
+        XCTAssertEqual(snapshot.controlCloses, 0)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testInitialConnectionDeadlineWithoutFallbackClosesOnce() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let factory = StreamingTestPeerFactory(recorder: recorder, connectsFirstRuntime: false)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: factory, initialConnectionTimeout: .milliseconds(30))
+        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "deadline-access") }
+        try await waitUntil { store.canRetry }
+        try await waitUntilAsync {
+            let snapshot = await recorder.snapshot()
+            return snapshot.controlCloses == 1
+                && snapshot.releasedAccessHandles == ["deadline-access"]
+        }
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(factory.runtimesCreated, 1)
+        XCTAssertEqual(snapshot.controlCloses, 1)
+        XCTAssertEqual(snapshot.releasedAccessHandles, ["deadline-access"])
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testStreamingTemporaryDisconnectRetainsPeerAndAcceptsAutonomousRecovery() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let factory = StreamingTestPeerFactory(
+            recorder: recorder, transientDisconnectAfterConnect: true)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: factory)
+        store.start(streamTitleID: "1234abcd") {
+            Self.streamingAccess(handle: "temporary-disconnect")
+        }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        try await Task.sleep(for: .milliseconds(100))
+        factory.emitConnection(.connected)
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(snapshot.iceRestartOffers, [false])
+        XCTAssertEqual(snapshot.peerStops, 0)
+        XCTAssertEqual(snapshot.controlCloses, 0)
+        XCTAssertEqual(store.state, .playing)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testStreamingFailedAndClosedRecoverWithinRemoteSessionAndCleanupOnce() async throws {
+        for terminal in [StreamingPeerConnectionState.failed, .closed] {
             let recorder = StreamingRuntimeRecorder()
+            let factory = StreamingTestPeerFactory(
+                recorder: recorder, terminalStateAfterConnect: terminal)
             let store = StreamingFeatureStore(
                 controlFactory: StreamingTestControlFactory(
-                    session: StreamingTestControlSession(recorder: recorder),
-                    recorder: recorder
-                ),
-                peerFactory: StreamingTestPeerFactory(
-                    recorder: recorder,
-                    terminalStateAfterConnect: terminal
-                )
-            )
+                    session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+                peerFactory: factory)
             store.start(streamTitleID: "1234abcd") {
                 Self.streamingAccess(handle: "access-\(terminal.rawValue)")
             }
-
-            try await waitUntil {
-                if case let .failed(_, retryable) = store.state {
-                    return retryable == expectedRetryable
-                }
-                return false
+            try await waitUntilAsync {
+                await recorder.snapshot().iceRestartOffers == [false, true]
             }
-            let snapshot = await recorder.snapshot()
+            try await markCurrentVideoSurfaceReady(store)
+            try await waitUntil { store.state == .playing }
+            // 新帧观察事务期间重复事实共用同一个恢复动作。
+            factory.emitConnection(terminal)
+            factory.emitConnection(terminal)
+            try await Task.sleep(for: .milliseconds(50))
+            var snapshot = await recorder.snapshot()
+            XCTAssertEqual(snapshot.iceRestartOffers, [false, true])
+            XCTAssertEqual(snapshot.controlCloses, 0)
+            store.stop()
+            try await waitUntil { store.state == .idle }
+            snapshot = await recorder.snapshot()
             XCTAssertEqual(snapshot.peerStops, 1)
             XCTAssertEqual(snapshot.controlCloses, 1)
             XCTAssertEqual(snapshot.releasedAccessHandles, ["access-\(terminal.rawValue)"])
@@ -2618,14 +3109,19 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(snapshot.peerStops, 1)
         XCTAssertEqual(snapshot.controlCloses, 1)
         XCTAssertEqual(snapshot.releasedAccessHandles, ["access-stop"])
-        XCTAssertEqual(snapshot.cleanupEvents, [
-            "inputStopped", "hapticsStopped", "peerClosed", "remoteSessionClosed", "accessReleased",
-        ])
+        XCTAssertEqual(
+            snapshot.cleanupEvents,
+            [
+                "inputStopped", "hapticsStopped", "peerClosed", "remoteSessionClosed",
+                "accessReleased",
+            ])
         XCTAssertNil(store.videoTrack)
     }
 
     @MainActor
-    func testStreamingFeatureStoreBackgroundPhaseClosesActiveSession() async throws {
+    func testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()
+        async throws
+    {
         let recorder = StreamingRuntimeRecorder()
         let store = StreamingFeatureStore(
             controlFactory: StreamingTestControlFactory(
@@ -2641,12 +3137,143 @@ final class XBXRCTests: XCTestCase {
         try await waitUntil { store.state == .playing }
 
         store.handleScenePhase(.background)
-        try await waitUntil { store.state == .idle }
+        try await waitUntil { store.state == .suspending }
+        XCTAssertTrue(store.input.isSuppressed)
+        XCTAssertFalse(store.presentationActive)
 
         let snapshot = await recorder.snapshot()
-        XCTAssertEqual(snapshot.peerStops, 1)
-        XCTAssertEqual(snapshot.controlCloses, 1)
-        XCTAssertEqual(snapshot.releasedAccessHandles, ["access-background"])
+        XCTAssertEqual(snapshot.peerStops, 0)
+        XCTAssertEqual(snapshot.controlCloses, 0)
+        XCTAssertEqual(snapshot.releasedAccessHandles, [])
+        store.handleScenePhase(.active)
+        try await waitUntil { store.state == .waitingForFirstFrame }
+        let context = try XCTUnwrap(store.videoTrack?.traceContext)
+        let now = ProcessInfo.processInfo.systemUptime * 1_000
+        store.handlePresentationEvent(
+            .displayHealth(
+                context,
+                StreamingDisplayHealthSnapshot(
+                    submitCount: 2, presentCount: 2, lastSubmitAtMilliseconds: now,
+                    lastPresentAtMilliseconds: now, submitToPresentP50Milliseconds: 1,
+                    submitToPresentP95Milliseconds: 2, displayedFrameDelta: 1,
+                    mailboxOverwriteCount: 0,
+                    dropCountByReason: [:], currentDrawableBusy: false)))
+        try await waitUntil { store.state == .playing }
+        XCTAssertTrue(store.presentationActive)
+        XCTAssertFalse(store.input.isSuppressed)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+        let closed = await recorder.snapshot()
+        XCTAssertEqual(closed.peerStops, 1)
+        XCTAssertEqual(closed.controlCloses, 1)
+        XCTAssertEqual(closed.releasedAccessHandles, ["access-background"])
+    }
+
+    @MainActor
+    func testMicrophoneAndMuteRestoreAfterPeerReplacement() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let factory = StreamingTestPeerFactory(recorder: recorder, failIceRestart: true)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: factory)
+        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "audio-rebuild") }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        store.setAudioMuted(true)
+        store.setMicrophoneEnabled(true)
+        try await waitUntil { store.microphoneEnabled && !store.microphonePending }
+        factory.emitConnection(.failed)
+        try await waitUntilAsync {
+            let offers = await recorder.snapshot().offers
+            return factory.runtimesCreated == 2
+                && offers.filter { $0 == "chat:microphone-on" }.count == 2
+        }
+        try await waitUntil { store.microphoneEnabled && !store.microphonePending }
+        let muted = await recorder.audioMutedStates()
+        XCTAssertEqual(muted, [false, true, true])
+        XCTAssertTrue(store.audioMuted)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+        XCTAssertFalse(store.microphoneEnabled)
+    }
+
+    @MainActor
+    func testNativeQualityActionConsumesSharedDecisionAndChatKeepsSamePeer() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let control = StreamingTestControlSession(recorder: recorder)
+        await control.setSupervisionDecision { sample in
+            var decision = StreamingSupervisionDecision.unavailable
+            decision.fresh = true
+            decision.quality = .init(
+                state: "congested", reason: "transportLoss",
+                action:
+                    sample.qualityCompletion == nil
+                    ? .init(id: 1, level: 1, reason: "sustainedCongestion") : nil)
+            return decision
+        }
+        let factory = StreamingTestPeerFactory(recorder: recorder)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(session: control, recorder: recorder),
+            peerFactory: factory)
+        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "quality-consumer") }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        try await waitUntilAsync {
+            await recorder.snapshot().offers.contains("quality:quality-15000")
+        }
+        store.setMicrophoneEnabled(true)
+        try await waitUntil { store.microphoneEnabled }
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(
+            snapshot.offers, ["local-offer", "quality:quality-15000", "chat:microphone-on"])
+        XCTAssertEqual(factory.runtimesCreated, 1)
+        XCTAssertEqual(snapshot.iceRestartOffers, [false])
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testFirstFrameGuardRequestsKeyframeAfterFourSeconds() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(
+                recorder: recorder, emitsFirstVideoFrameAutomatically: false))
+        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "first-frame-guard") }
+        try await waitUntil { store.state == .waitingForFirstFrame }
+        try await waitUntilAsync(timeout: .seconds(5)) {
+            await recorder.snapshot().offers.contains("keyframeRequest")
+        }
+        XCTAssertEqual(store.state, .waitingForFirstFrame)
+        let offers = await recorder.snapshot().offers
+        XCTAssertEqual(offers.filter { $0 == "keyframeRequest" }.count, 1)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testMicrophoneUsesChatNegotiationAndRetainsTheCurrentPeer() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder))
+        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "access-microphone") }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        for enabled in [true, false] {
+            store.setMicrophoneEnabled(enabled)
+            try await waitUntil { !store.microphonePending }
+            XCTAssertEqual(store.microphoneEnabled, enabled)
+        }
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(
+            snapshot.offers, ["local-offer", "chat:microphone-on", "chat:microphone-off"])
+        XCTAssertEqual(snapshot.peerStops, 0)
+        store.stop()
+        try await waitUntil { store.state == .idle }
     }
 
     @MainActor
@@ -2790,6 +3417,190 @@ final class XBXRCTests: XCTestCase {
     }
 }
 
+extension XBXRCTests {
+    @MainActor
+    func testCloudLaunchUsesFreshlyResolvedStreamIdentity() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let resolver = StreamingIdentityTestResolver()
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder),
+            cloudLaunchResolver: resolver
+        )
+        store.startCloudGame(productID: "fixture-product") {
+            Self.streamingAccess(handle: "resolved-access")
+        }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        let snapshot = await recorder.snapshot()
+        let requests = await resolver.requests
+        XCTAssertEqual(snapshot.streamTitleIDs, ["resolved-1"])
+        XCTAssertEqual(requests.map(\.productID), ["fixture-product"])
+        XCTAssertEqual(requests.map(\.accessHandle), ["resolved-access"])
+        store.stop()
+        try await waitUntil { store.state == .idle }
+        let stopped = await recorder.snapshot()
+        XCTAssertEqual(stopped.releasedAccessHandles, ["resolved-access"])
+    }
+
+    @MainActor
+    func testCloudLaunchRejectsMissingEntitlementAndInvalidIdentityBeforeSessionCreation()
+        async throws
+    {
+        for invalid in StreamingIdentityTestResolver.InvalidIdentity.allCases {
+            let recorder = StreamingRuntimeRecorder()
+            let resolver = StreamingIdentityTestResolver(invalid: invalid)
+            let store = StreamingFeatureStore(
+                controlFactory: StreamingTestControlFactory(
+                    session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+                peerFactory: StreamingTestPeerFactory(recorder: recorder),
+                cloudLaunchResolver: resolver
+            )
+            store.startCloudGame(productID: "fixture-product") {
+                Self.streamingAccess(handle: "invalid-access")
+            }
+            try await waitUntil {
+                if case .failed = store.state { return true }
+                return false
+            }
+            let snapshot = await recorder.snapshot()
+            XCTAssertTrue(snapshot.streamTitleIDs.isEmpty)
+            XCTAssertEqual(snapshot.releasedAccessHandles, ["invalid-access"])
+            XCTAssertEqual(snapshot.controlCloses, 0)
+            store.stop()
+            try await waitUntil { store.state == .idle }
+        }
+    }
+
+    @MainActor
+    func testCloudCancellationDuringIdentityLookupReleasesLateAccessThroughInjectedFactory()
+        async throws
+    {
+        let recorder = StreamingRuntimeRecorder()
+        let gate = StreamingAsyncGate()
+        let resolver = StreamingIdentityTestResolver(gate: gate)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder),
+            cloudLaunchResolver: resolver
+        )
+        store.startCloudGame(productID: "fixture-product") {
+            Self.streamingAccess(handle: "late-identity-access")
+        }
+        try await waitUntilAsync { await resolver.requests.count == 1 }
+        XCTAssertEqual(store.startupProgress?.phase, "checkingGame")
+        store.stop()
+        try await waitUntil { store.state == .idle }
+        await gate.open()
+        try await waitUntilAsync { await recorder.snapshot().releasedAccessHandles.count == 1 }
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(snapshot.releasedAccessHandles, ["late-identity-access"])
+        XCTAssertTrue(snapshot.streamTitleIDs.isEmpty)
+        XCTAssertEqual(store.state, .idle)
+        XCTAssertNil(store.startupProgress)
+    }
+
+    @MainActor
+    func testCloudRetryRepeatsIdentityAndRegionResolution() async throws {
+        let suite = "XBXRC.CloudIdentityRetry.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettingsStore(defaults: defaults)
+        settings.mobile.cloudServerRegion = "auto"
+        let recorder = StreamingRuntimeRecorder()
+        let resolver = StreamingIdentityTestResolver(rejectFirst: true)
+        let store = StreamingFeatureStore(
+            settingsProvider: settings,
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder),
+            cloudLaunchResolver: resolver
+        )
+        store.startCloudGame(productID: "fixture-product") {
+            Self.streamingAccess(handle: "retry-access")
+        }
+        try await waitUntil { store.canRetry }
+        settings.mobile.cloudServerRegion = "westus2"
+        store.retry()
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        let requests = await resolver.requests
+        XCTAssertEqual(requests.map(\.serverRegion), ["auto", "westus2"])
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(snapshot.streamTitleIDs, ["resolved-2"])
+        XCTAssertEqual(snapshot.releasedAccessHandles, ["retry-access"])
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testStartupQueueProgressIsVisibleAndLateProgressIsDiscardedAfterStop() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let gate = StreamingAsyncGate()
+        let progress = StreamingStartupProgress(
+            phase: "waitingSessionReady", streamState: "Queued",
+            totalWaitSeconds: 90, allocationWaitSeconds: 20, provisioningWaitSeconds: 10,
+            retryCount: 1,
+            retryLimit: 3)
+        let control = StreamingTestControlSession(
+            recorder: recorder, prepareGate: gate, progress: progress)
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(session: control, recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder)
+        )
+        store.startHome(targetID: "fixture-console") {
+            Self.streamingHomeAccess(handle: "queue-access")
+        }
+        try await waitUntil { store.startupProgress == progress }
+        XCTAssertEqual(store.statusText, "正在排队等待串流会话")
+        XCTAssertEqual(store.startupDetailText, "预计等待 90 秒 · 分配 20 秒 · 准备 10 秒 · 重试 1/3")
+        store.stop()
+        try await waitUntil { store.state == .idle }
+        await control.setStartupProgress(StreamingStartupProgress(phase: "ready"))
+        await gate.open()
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertNil(store.startupProgress)
+        XCTAssertEqual(store.state, .idle)
+        let snapshot = await recorder.snapshot()
+        XCTAssertEqual(snapshot.releasedAccessHandles, ["queue-access"])
+        XCTAssertEqual(snapshot.controlCloses, 1)
+    }
+}
+
+private actor StreamingIdentityTestResolver: CloudGameLaunchResolving {
+    enum InvalidIdentity: CaseIterable { case noEntitlement, wrongProduct, emptyTitle }
+    struct Request: Sendable {
+        let accessHandle: String
+        let productID: String
+        let serverRegion: String
+    }
+    private let gate: StreamingAsyncGate?
+    private let rejectFirst: Bool
+    private let invalid: InvalidIdentity?
+    private(set) var requests: [Request] = []
+    init(
+        gate: StreamingAsyncGate? = nil, rejectFirst: Bool = false, invalid: InvalidIdentity? = nil
+    ) {
+        self.gate = gate
+        self.rejectFirst = rejectFirst
+        self.invalid = invalid
+    }
+    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+        -> CloudStreamingIdentity
+    {
+        requests.append(
+            Request(accessHandle: accessHandle, productID: productID, serverRegion: serverRegion))
+        let count = requests.count
+        if let gate { await gate.wait() }
+        return CloudStreamingIdentity(
+            productID: invalid == .wrongProduct ? "another-product" : productID,
+            streamTitleID: invalid == .emptyTitle ? "   " : "resolved-\(count)",
+            hasEntitlement: invalid == .noEntitlement || (rejectFirst && count == 1) ? false : true)
+    }
+}
+
 private actor StreamingAsyncGate {
     private var isOpen = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -2836,6 +3647,8 @@ private actor StreamingRuntimeRecorder {
     private var streamTitleIDs: [String] = []
     private var settings: [StreamingSessionSettingsSnapshot] = []
     private var offers: [String] = []
+    private var mutedStates: [Bool] = []
+    private var iceServerCounts: [Int] = []
     private var answersApplied: [String] = []
     private var localCandidates: [StreamingIceCandidate] = []
     private var remoteCandidatesApplied: [StreamingIceCandidate] = []
@@ -2854,6 +3667,10 @@ private actor StreamingRuntimeRecorder {
     func recordTitleID(_ value: String) { streamTitleIDs.append(value) }
     func recordSettings(_ value: StreamingSessionSettingsSnapshot) { settings.append(value) }
     func recordOffer(_ value: String) { offers.append(value) }
+    func recordAudioMuted(_ muted: Bool) { mutedStates.append(muted) }
+    func recordIceServers(_ count: Int) { iceServerCounts.append(count) }
+    func peerIceServerCounts() -> [Int] { iceServerCounts }
+    func audioMutedStates() -> [Bool] { mutedStates }
     func recordAnswer(_ value: String) { answersApplied.append(value) }
     func recordCandidate(_ value: StreamingIceCandidate) { localCandidates.append(value) }
     func recordRemoteCandidates(_ values: [StreamingIceCandidate]) {
@@ -2897,7 +3714,8 @@ private struct StreamingTestControlFactory: StreamingControlSessionFactory {
     let session: StreamingTestControlSession
     let recorder: StreamingRuntimeRecorder
 
-    func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession {
+    func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession
+    {
         await recorder.recordTarget(request.target)
         await recorder.recordTitleID(request.streamTitleID)
         await recorder.recordSettings(request.settings)
@@ -2913,26 +3731,68 @@ private struct StreamingTestControlFactory: StreamingControlSessionFactory {
 private actor StreamingTestControlSession: StreamingControlSession {
     let recorder: StreamingRuntimeRecorder
     private let firstLocalCandidateSubmitGate: StreamingAsyncGate?
+    private let prepareGate: StreamingAsyncGate?
+    private var progress: StreamingStartupProgress?
     private var localCandidateSubmitCount = 0
+    private let prepared: StreamingPreparedSignaling
+    private var recoveryActions = 0
+    private var supervisionDecision:
+        (@Sendable (StreamingSupervisionSample) -> StreamingSupervisionDecision)?
+
+    func setSupervisionDecision(
+        _ decision: @escaping @Sendable (StreamingSupervisionSample) -> StreamingSupervisionDecision
+    ) {
+        supervisionDecision = decision
+    }
 
     init(
         recorder: StreamingRuntimeRecorder,
-        firstLocalCandidateSubmitGate: StreamingAsyncGate? = nil
+        firstLocalCandidateSubmitGate: StreamingAsyncGate? = nil,
+        prepareGate: StreamingAsyncGate? = nil,
+        progress: StreamingStartupProgress? = nil,
+        prepared: StreamingPreparedSignaling = .init(iceServers: [])
     ) {
         self.recorder = recorder
         self.firstLocalCandidateSubmitGate = firstLocalCandidateSubmitGate
+        self.prepareGate = prepareGate
+        self.progress = progress
+        self.prepared = prepared
     }
 
     func prepareSignaling() async throws -> StreamingPreparedSignaling {
-        return StreamingPreparedSignaling(
-            iceServers: []
-        )
+        if let prepareGate { await prepareGate.wait() }
+        return prepared
     }
 
     func exchangeOffer(_ sdp: String) async throws -> String {
         await recorder.recordOffer(sdp)
         return "remote-answer"
     }
+
+    func supervise(_ sample: StreamingSupervisionSample) async throws
+        -> StreamingSupervisionDecision
+    {
+        if let supervisionDecision { return supervisionDecision(sample) }
+        var decision = StreamingSupervisionDecision.unavailable
+        decision.connectionRecoveryAllowed =
+            sample.requestConnectionRecovery
+            && !sample.connectionRecoveryActionCompleted && recoveryActions < 2
+        if decision.connectionRecoveryAllowed { recoveryActions += 1 }
+        decision.connectionRecoveryActive = recoveryActions > 0
+        decision.connectionRecoveryExhausted =
+            sample.requestConnectionRecovery
+            && !sample.connectionRecoveryActionCompleted && recoveryActions >= 2
+            && !decision.connectionRecoveryAllowed
+        return decision
+    }
+
+    func exchangeMediaOffer(_ sdp: String, kind: String) async throws -> String {
+        await recorder.recordOffer(kind + ":" + sdp)
+        return "remote-answer"
+    }
+
+    func startupProgress() async -> StreamingStartupProgress? { progress }
+    func setStartupProgress(_ progress: StreamingStartupProgress) { self.progress = progress }
 
     func submitLocalCandidates(_ candidates: [StreamingIceCandidate]) async throws {
         localCandidateSubmitCount += 1
@@ -2957,7 +3817,7 @@ private actor StreamingTestControlSession: StreamingControlSession {
                     sdp: "candidate:remote",
                     sdpMid: "0",
                     sdpMLineIndex: 0
-                ),
+                )
             ],
             endOfCandidates: true
         )
@@ -2987,6 +3847,7 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
     let emitsFirstVideoFrameAutomatically: Bool
     let firstPeerStopGate: StreamingAsyncGate?
     private(set) var runtimesCreated = 0
+    private let connectsFirstRuntime: Bool
     private var latestEventSink: (@Sendable (StreamingPeerEvent) -> Void)?
 
     init(
@@ -2997,9 +3858,11 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
         suspendAnswerApply: Bool = false,
         emitsControlReadyAutomatically: Bool = true,
         emitsFirstVideoFrameAutomatically: Bool = true,
-        suspendFirstPeerStop: Bool = false
+        suspendFirstPeerStop: Bool = false,
+        connectsFirstRuntime: Bool = true
     ) {
         self.recorder = recorder
+        self.connectsFirstRuntime = connectsFirstRuntime
         self.transientDisconnectAfterConnect = transientDisconnectAfterConnect
         self.terminalStateAfterConnect = terminalStateAfterConnect
         self.failIceRestart = failIceRestart
@@ -3024,9 +3887,16 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
             suspendAnswerApply: suspendAnswerApply && isFirstRuntime,
             emitsControlReadyAutomatically: emitsControlReadyAutomatically,
             emitsFirstVideoFrameAutomatically: emitsFirstVideoFrameAutomatically,
-            stopGate: isFirstRuntime ? firstPeerStopGate : nil
+            stopGate: isFirstRuntime ? firstPeerStopGate : nil,
+            emitsConnectedAutomatically: connectsFirstRuntime || !isFirstRuntime
         )
     }
+
+    func emitConnection(_ state: StreamingPeerConnectionState) {
+        latestEventSink?(.connectionStateChanged(state))
+    }
+
+    func emitStats(_ stats: StreamingPeerStats) { latestEventSink?(.stats(stats)) }
 
     func emitFirstVideoFrame() {
         latestEventSink?(.firstVideoFrame)
@@ -3052,6 +3922,9 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
     private let emitsFirstVideoFrameAutomatically: Bool
     private let stopGate: StreamingAsyncGate?
     private var offerCount = 0
+    private var answerCount = 0
+    private var qualityCap = 20_000
+    private let emitsConnectedAutomatically: Bool
 
     init(
         eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void,
@@ -3062,7 +3935,8 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
         suspendAnswerApply: Bool,
         emitsControlReadyAutomatically: Bool,
         emitsFirstVideoFrameAutomatically: Bool,
-        stopGate: StreamingAsyncGate?
+        stopGate: StreamingAsyncGate?,
+        emitsConnectedAutomatically: Bool = true
     ) {
         self.eventSink = eventSink
         self.recorder = recorder
@@ -3073,13 +3947,15 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
         self.emitsControlReadyAutomatically = emitsControlReadyAutomatically
         self.emitsFirstVideoFrameAutomatically = emitsFirstVideoFrameAutomatically
         self.stopGate = stopGate
+        self.emitsConnectedAutomatically = emitsConnectedAutomatically
     }
 
     func makeOffer(
-        configuration _: StreamingPreparedSignaling,
+        configuration: StreamingPreparedSignaling,
         iceRestart: Bool
     ) async throws -> String {
         offerCount += 1
+        await recorder.recordIceServers(configuration.iceServers.count)
         await recorder.recordIceRestartOffer(iceRestart)
         if iceRestart, failIceRestart {
             throw StreamingRuntimeError.peerConnectionFailed
@@ -3099,29 +3975,35 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
 
     func applyAnswer(_ sdp: String) async throws {
         await recorder.recordAnswer(sdp)
+        answerCount += 1
         if suspendAnswerApply {
             try await Task.sleep(for: .seconds(60))
         }
-        if offerCount == 1 {
+        if answerCount == 1 {
             eventSink(.dataChannelEvent(label: "all", event: "profilesCreated"))
             eventSink(.dataChannelEvent(label: "message", event: "handshakeAcked"))
             if emitsControlReadyAutomatically {
                 eventSink(.dataChannelEvent(label: "control", event: "ready"))
             }
         }
-        eventSink(.videoTrack(StreamingVideoTrackHandle(rawValue: NSObject())))
+        let trackFactory = RTCPeerConnectionFactory()
+        let videoTrack = trackFactory.videoTrack(
+            with: trackFactory.videoSource(), trackId: "test-video")
+        eventSink(.videoTrack(StreamingVideoTrackHandle(rawValue: videoTrack)))
         eventSink(.audioTrackReady)
-        eventSink(.connectionStateChanged(.connected))
-        eventSink(.connectionStateChanged(.connected))
+        if emitsConnectedAutomatically {
+            eventSink(.connectionStateChanged(.connected))
+            eventSink(.connectionStateChanged(.connected))
+        }
         if emitsFirstVideoFrameAutomatically {
             eventSink(.firstVideoFrame)
         }
-        if offerCount == 1, transientDisconnectAfterConnect {
+        if answerCount == 1, transientDisconnectAfterConnect {
             Task { [eventSink] in
                 try? await Task.sleep(for: .milliseconds(1))
                 eventSink(.connectionStateChanged(.disconnected))
             }
-        } else if offerCount == 1, let terminalStateAfterConnect {
+        } else if answerCount == 1, let terminalStateAfterConnect {
             eventSink(.connectionStateChanged(terminalStateAfterConnect))
             eventSink(.connectionStateChanged(terminalStateAfterConnect))
         }
@@ -3162,7 +4044,19 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
         )
     }
 
-    func setAudioMuted(_: Bool) async throws {}
+    func setAudioMuted(_ muted: Bool) async throws { await recorder.recordAudioMuted(muted) }
+    func requestVideoKeyframe() async -> Bool {
+        await recorder.recordOffer("keyframeRequest")
+        return true
+    }
+    func remoteVideoBitrateCapKbps() async -> Int? { qualityCap }
+    func makeQualityOffer(maxVideoBitrateKbps: Int) async throws -> String {
+        qualityCap = maxVideoBitrateKbps
+        return "quality-\(qualityCap)"
+    }
+    func makeMicrophoneOffer(enabled: Bool) async throws -> String {
+        "microphone-" + (enabled ? "on" : "off")
+    }
 
     func stopInputAndHaptics() async {
         await recorder.recordPeerInputStopStarted()
@@ -3364,7 +4258,14 @@ private struct MockXboxAuthClient: XboxAuthClient {
 
     func loadProfile(webTokenJSON _: String) async throws -> XboxProfile {
         await recorder?.recordProfileRequest()
-        profile
+        return profile
+    }
+
+    func loadProfileSource(webTokenJSON _: String, source: XboxProfileSource) async throws
+        -> XboxProfile
+    {
+        await recorder?.recordProfileRequest(source: source)
+        return profile
     }
 }
 
@@ -3372,6 +4273,7 @@ private actor RegionRoutingRecorder {
     private var finishRegionIP: String?
     private var renewRegionIP: String?
     private var profileRequests = 0
+    private var profileSourceRequests: [XboxProfileSource: Int] = [:]
 
     func recordFinish(_ value: String) {
         finishRegionIP = value
@@ -3381,8 +4283,9 @@ private actor RegionRoutingRecorder {
         renewRegionIP = value
     }
 
-    func recordProfileRequest() {
+    func recordProfileRequest(source: XboxProfileSource? = nil) {
         profileRequests += 1
+        if let source { profileSourceRequests[source, default: 0] += 1 }
     }
 
     func lastRenewRegionIP() -> String? {
@@ -3391,6 +4294,10 @@ private actor RegionRoutingRecorder {
 
     func profileRequestCount() -> Int {
         profileRequests
+    }
+
+    func profileSourceRequestCounts() -> [XboxProfileSource: Int] {
+        profileSourceRequests
     }
 }
 
@@ -3477,7 +4384,7 @@ private struct MockXboxDataClient: XboxDataClient {
                 try await Task.sleep(for: libraryDelay)
             }
         }
-        games
+        return games
     }
 
     func loadPlaytimes(

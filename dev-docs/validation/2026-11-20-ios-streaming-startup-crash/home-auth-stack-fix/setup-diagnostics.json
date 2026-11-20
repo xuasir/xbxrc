@@ -1,0 +1,24 @@
+{
+  "httpFixtureSandbox": {
+    "reason": "loopback bind denied by sandbox",
+    "resolution": "authorized outside-sandbox regression passed"
+  },
+  "deviceBuildSandbox": {
+    "reason": "SwiftPM manifest cache write denied by sandbox",
+    "resolution": "authorized unsigned device build passed"
+  },
+  "liveDebugger": {
+    "state": "user exited",
+    "completeBacktrace": false,
+    "vmRegionsAndRegisters": false,
+    "cuaRead": "Timed out"
+  },
+  "cachedProduct": {
+    "path": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib",
+    "sha256ObservedEarlier": "5f89dff26ce9208d6c43ad95c699cfea10789e531ab7fbf8d6ba1bd79f538823",
+    "availableAtFinalization": false,
+    "symbolSnapshot": "cached-device-symbols.txt",
+    "screenshotProviderSymbolCount": 0,
+    "note": "cached product disappeared before cleanup; only prior symbol snapshot retained"
+  }
+}

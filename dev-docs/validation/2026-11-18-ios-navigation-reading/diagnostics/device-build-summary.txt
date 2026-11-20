@@ -1,0 +1,25 @@
+2026-11-18 14:34:59.930 appintentsnltrainingprocessor[19570:3016890] Parsing options for appintentsnltrainingprocessor
+2026-11-18 14:34:59.930 appintentsnltrainingprocessor[19570:3016890] Starting AppIntents SSU YAML Generation
+2026-11-18 14:34:59.931 appintentsnltrainingprocessor[19570:3016890] No AppShortcuts found - Skipping.
+
+RegisterExecutionPolicyException /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-RegisterExecutionPolicyException /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app
+
+Validate /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-validationUtility /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    /usr/bin/touch -c /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Products/Debug-iphoneos/XBXRC.app
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-navigation-reading-20261118/r4/device-derived/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+note: Run script build phase 'Build Rust bridge' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'XBXRC' from project 'XBXRC')
+** BUILD SUCCEEDED **
+

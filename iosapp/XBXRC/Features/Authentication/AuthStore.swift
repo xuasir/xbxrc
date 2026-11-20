@@ -24,6 +24,12 @@ final class AuthStore: ObservableObject {
     @Published private(set) var session: StoredAuthSession?
     @Published private(set) var ownerGeneration: UInt64 = 0
     @Published var errorMessage: String?
+    @Published private(set) var needsDataSignIn = false
+    @Published private(set) var profileSectionStates: [XboxProfileSource: XboxSingleDataState<XboxProfile>] = [:]
+    private var profileSourceRequests: [XboxProfileSource: UUID] = [:]
+    private var dataRenewalTask: Task<String?, Never>?
+    private var dataRenewalFailure: SectionRequestFailure?
+
 
     private let client: any XboxAuthClient
     private let cloudClient: any XboxCloudDataClient
@@ -118,6 +124,9 @@ final class AuthStore: ObservableObject {
             }
             guard credentialCoordinator.isCurrent(requestRevision) else { return }
             profile = nil
+            profileSectionStates = [:]
+            profileSourceRequests = [:]
+            needsDataSignIn = false
             IOSRuntimeTrace.decision(
                 domain: "auth",
                 event: "authRestoreSessionFound",
@@ -151,7 +160,7 @@ final class AuthStore: ObservableObject {
             guard credentialCoordinator.isCurrent(requestRevision) else { return }
             phase = .failed
             recoveryAction = .signIn
-            errorMessage = error.localizedDescription
+            errorMessage = SectionRequestFailure(error: error).message
             IOSRuntimeTrace.event(
                 domain: "auth",
                 event: "authRestoreFailed",
@@ -219,6 +228,11 @@ final class AuthStore: ObservableObject {
                 self.ownerGeneration &+= 1
                 self.profileInitialRefreshGeneration = nil
                 self.profile = nil
+                self.profileSectionStates = [:]
+                self.profileSourceRequests = [:]
+                self.needsDataSignIn = false
+                self.dataRenewalTask?.cancel()
+                self.dataRenewalTask = nil
                 self.phase = .signedIn
                 self.recoveryAction = .refreshProfile
             }
@@ -256,7 +270,7 @@ final class AuthStore: ObservableObject {
             else { return }
             phase = .failed
             recoveryAction = .signIn
-            errorMessage = error.localizedDescription
+            errorMessage = SectionRequestFailure(error: error).message
             IOSRuntimeTrace.event(
                 domain: "auth",
                 event: "authSignInFailed",
@@ -335,69 +349,103 @@ final class AuthStore: ObservableObject {
     }
 
     private func performRefreshProfile(reason: AuthProfileRefreshReason) async {
-        guard let session else { return }
-        let operationID = UUID().uuidString
-        let startedAt = Date()
-        let requestGeneration = ownerGeneration
-        let requestToken = session.webTokenJSON
+        guard session != nil else { return }
         phase = .refreshing
-        errorMessage = nil
-        IOSRuntimeTrace.event(
-            domain: "auth",
-            event: "profileRefreshStarted",
-            payload: [
-                "reason": .string(reason.rawValue),
-                "ownerGeneration": .integer(Int64(requestGeneration)),
-            ],
-            dimension: .network,
-            importance: .debug,
-            operationID: operationID
-        )
-        do {
-            let loadedProfile = try await client.loadProfile(webTokenJSON: requestToken)
-            guard requestGeneration == ownerGeneration else {
-                IOSRuntimeTrace.decision(
-                    domain: "auth",
-                    event: "profileRefreshDiscarded",
-                    payload: ["reason": "ownerChanged"],
-                    dimension: .lifecycle,
-                    importance: .debug,
-                    operationID: operationID
-                )
-                return
+        let owner = ownerGeneration
+        await withTaskGroup(of: Void.self) { group in
+            for source in [XboxProfileSource.identity, .social, .friends, .presence] {
+                group.addTask { await self.refreshProfileSource(source) }
             }
-            profile = loadedProfile
-            phase = .signedIn
-            recoveryAction = .refreshProfile
-            IOSRuntimeTrace.state(
-                domain: "auth",
-                event: "profileRefreshSucceeded",
-                payload: [
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                ],
-                dimension: .network,
-                importance: .debug,
-                operationID: operationID
-            )
-        } catch {
-            guard requestGeneration == ownerGeneration else { return }
-            phase = .signedIn
-            recoveryAction = .refreshProfile
-            errorMessage = error.localizedDescription
-            IOSRuntimeTrace.event(
-                domain: "auth",
-                event: "profileRefreshFailed",
-                payload: CloudLibraryDiagnostics.errorPayload(
-                    error,
-                    extra: [
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                    ]
-                ),
-                dimension: .network,
-                importance: .key,
-                operationID: operationID
-            )
         }
+        if owner == ownerGeneration && !needsDataSignIn { phase = .signedIn }
+    }
+
+    func refreshProfileSource(_ source: XboxProfileSource) async {
+        guard let session, profileSourceRequests[source] == nil else { return }
+        let request = UUID()
+        let owner = ownerGeneration
+        profileSourceRequests[source] = request
+        var state = profileSectionStates[source] ?? XboxSingleDataState()
+        state.beginRequest()
+        profileSectionStates[source] = state
+        do {
+            let patch: XboxProfile
+            do { patch = try await client.loadProfileSource(webTokenJSON: session.webTokenJSON, source: source) }
+            catch {
+                guard SectionRequestFailure(error: error).kind == .authentication,
+                    let token = try await recoverDataToken(rejectedToken: session.webTokenJSON) else { throw error }
+                patch = try await client.loadProfileSource(webTokenJSON: token, source: source)
+            }
+            try Task.checkCancellation()
+            guard owner == ownerGeneration, profileSourceRequests[source] == request else { return }
+            state.value = patch; state.phase = .loaded; state.updatedAt = .now
+            mergeProfile(patch, source: source)
+        } catch {
+            guard owner == ownerGeneration, profileSourceRequests[source] == request else { return }
+            state.failRequest(error)
+            if state.failure?.kind == .authentication { requireDataSignIn() }
+        }
+        guard owner == ownerGeneration, profileSourceRequests[source] == request else { return }
+        state.isRefreshing = false
+        profileSectionStates[source] = state
+        profileSourceRequests[source] = nil
+    }
+
+    func requireDataSignIn() {
+        needsDataSignIn = true
+        recoveryAction = .signIn
+    }
+
+    func recoverDataToken(rejectedToken: String) async throws -> String? {
+        guard let stored = session else { return nil }
+        if stored.webTokenJSON != rejectedToken { return stored.webTokenJSON }
+        if let dataRenewalTask {
+            let token = await dataRenewalTask.value
+            if let dataRenewalFailure { throw dataRenewalFailure }
+            return token
+        }
+        dataRenewalFailure = nil
+        let owner = ownerGeneration
+        let task = Task { @MainActor [weak self] () -> String? in
+            guard let self else { return nil }
+            let disposition = await self.refreshSession(stored)
+            guard owner == self.ownerGeneration else { return nil }
+            if disposition == .renewed {
+                self.needsDataSignIn = false
+                self.dataRenewalFailure = nil
+                return self.session?.webTokenJSON
+            }
+            if disposition == .rejected {
+                self.needsDataSignIn = true
+                self.recoveryAction = .signIn
+                self.dataRenewalFailure = SectionRequestFailure(kind: .authentication)
+            } else if disposition == .stale { return nil }
+            else { self.dataRenewalFailure = self.dataRenewalFailure ?? SectionRequestFailure(kind: .serviceUnavailable) }
+            return nil
+        }
+        dataRenewalTask = task
+        let token = await task.value
+        if owner == ownerGeneration { dataRenewalTask = nil }
+        else { throw CancellationError() }
+        if let dataRenewalFailure { throw dataRenewalFailure }
+        return token
+    }
+
+    private func mergeProfile(_ patch: XboxProfile, source: XboxProfileSource) {
+        let old = profile
+        profile = XboxProfile(
+            xuid: patch.xuid ?? old?.xuid,
+            gamertag: source == .identity ? patch.gamertag : old?.gamertag ?? "",
+            displayName: source == .identity ? patch.displayName : old?.displayName ?? "",
+            gamerScore: source == .identity ? patch.gamerScore : old?.gamerScore ?? "",
+            displayPictureUrl: source == .identity ? patch.displayPictureUrl : old?.displayPictureUrl ?? "",
+            presenceState: source == .presence ? patch.presenceState : old?.presenceState,
+            presenceDevice: source == .presence ? patch.presenceDevice : old?.presenceDevice,
+            currentTitleName: source == .presence ? patch.currentTitleName : old?.currentTitleName,
+            richPresence: source == .presence ? patch.richPresence : old?.richPresence,
+            followersCount: source == .social ? patch.followersCount : old?.followersCount,
+            followingCount: source == .social ? patch.followingCount : old?.followingCount,
+            friendCount: source == .friends ? patch.friendCount : old?.friendCount)
     }
 
     func prepareCloudAccess() async throws -> PreparedCloudAccess {
@@ -550,6 +598,44 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func persistStreamingAuthUpdate(
+        _ update: XboxStreamingAuthUpdate,
+        expectedOwnerGeneration: UInt64
+    ) async throws -> StreamingAuthCommitResult {
+        let commit = try await credentialCoordinator.perform(advancesRevision: true) { [weak self] revision in
+            guard let self, self.canCommitAccess(revision: revision, ownerGeneration: expectedOwnerGeneration),
+                let current = self.session,
+                Self.streamingAccountID(current) == update.accountId
+            else { throw AuthStoreError.staleOperation }
+            if current.refreshToken == update.authSession.refreshToken { return StreamingAuthCommitResult.committed }
+            // 其他认证入口已提交更近的凭据时，会话沿同一账户同步它。
+            if current.refreshToken != update.previousRefreshToken {
+                return .synchronize(AuthSession(refreshToken: current.refreshToken, seedJson: current.seedJSON,
+                    webTokenJson: current.webTokenJSON, appLevel: current.appLevel))
+            }
+            let refreshed = StoredAuthSession(bridgeSession: update.authSession,
+                cloudAccountID: current.cloudAccountID, cloudRegionHost: current.cloudRegionHost)
+            try await self.keychain.save(refreshed)
+            guard self.canCommitAccess(revision: revision, ownerGeneration: expectedOwnerGeneration) else {
+                throw AuthStoreError.staleOperation
+            }
+            self.session = refreshed
+            return .committed
+        }
+        return commit.value
+    }
+
+    private static func streamingAccountID(_ session: StoredAuthSession) -> String? {
+        guard let data = session.webTokenJSON.data(using: .utf8),
+            let token = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return session.cloudAccountID }
+        let root = token["data"] as? [String: Any] ?? token
+        guard let claims = root["DisplayClaims"] as? [String: Any],
+            let users = claims["xui"] as? [[String: Any]], let user = users.first
+        else { return session.cloudAccountID }
+        return user["xid"] as? String ?? session.cloudAccountID ?? user["uhs"] as? String
+    }
+
     private func performAccessPreparation<Result: Sendable>(
         ownerGeneration requestOwnerGeneration: UInt64,
         prepare: @escaping @MainActor (StoredAuthSession) async throws -> Result,
@@ -679,13 +765,18 @@ final class AuthStore: ObservableObject {
                 }
                 self.session = nil
                 self.profile = nil
+                self.profileSectionStates = [:]
+                self.profileSourceRequests = [:]
+                self.needsDataSignIn = false
+                self.dataRenewalTask?.cancel()
+                self.dataRenewalTask = nil
                 self.phase = .signedOut
                 self.recoveryAction = .signIn
             }
         } catch {
             guard credentialCoordinator.isCurrent(signOutRevision), !AuthStoreError.isStale(error)
             else { return }
-            errorMessage = error.localizedDescription
+            errorMessage = SectionRequestFailure(error: error).message
             phase = .failed
             recoveryAction = .signOut
             IOSRuntimeTrace.event(
@@ -766,7 +857,8 @@ final class AuthStore: ObservableObject {
                     else {
                         throw AuthStoreError.staleOperation
                     }
-                    self.errorMessage = CloudLibraryDiagnostics.safeError(error)
+                    self.errorMessage = SectionRequestFailure(error: error).message
+                    self.dataRenewalFailure = SectionRequestFailure(error: error)
                     let failureDisposition = AuthRenewalFailureDisposition(error: error)
                     IOSRuntimeTrace.decision(
                         domain: "auth",
@@ -831,7 +923,7 @@ final class AuthStore: ObservableObject {
             return .renewed
         } catch {
             guard !AuthStoreError.isStale(error) else { return .stale }
-            errorMessage = CloudLibraryDiagnostics.safeError(error)
+            errorMessage = SectionRequestFailure(error: error).message
             phase = .failed
             recoveryAction = .signIn
             return .rejected

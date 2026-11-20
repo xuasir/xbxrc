@@ -1,0 +1,12 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-controller-scope-20261120/r1",
+  "cleanupScope": [
+    "/private/tmp/xbxrc-ios-controller-scope-20261120/r1"
+  ],
+  "preserved": [
+    "Xcode共享SourcePackages/WebRTC缓存",
+    "仓库target/ios Rust编译缓存",
+    "/private/tmp/xbxrc-settings-swift-format.json既有格式配置"
+  ],
+  "diskFreeBeforeBytes": 65126400000
+}

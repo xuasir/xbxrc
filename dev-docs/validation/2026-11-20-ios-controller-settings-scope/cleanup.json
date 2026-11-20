@@ -1,0 +1,16 @@
+{
+  "removedRoot": "/private/tmp/xbxrc-ios-controller-scope-20261120/r1",
+  "removedRootExists": false,
+  "emptyParentRemoved": true,
+  "removedEntries": 6070,
+  "removedLogicalBytes": 553026392,
+  "removedAllocatedBytes": 571285504,
+  "diskFreeBeforeCleanupBytes": 65536000000,
+  "diskFreeAfterCleanupBytes": 65945600000,
+  "diskFreeDeltaBytes": 409600000,
+  "preserved": [
+    "Xcode共享SourcePackages/WebRTC缓存",
+    "仓库target/ios Rust编译缓存",
+    "既有临时目录与格式配置"
+  ]
+}

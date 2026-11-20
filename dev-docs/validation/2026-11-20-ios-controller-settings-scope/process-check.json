@@ -1,0 +1,6 @@
+{
+  "checkedAt": "2026-11-20T05:15:46.705Z",
+  "activeRelatedProcesses": [],
+  "rawOutput": "49081 /bin/zsh         /bin/zsh -c ps -axo pid=,comm=,args= | rg 'xcodebuild|xcresulttool|XBXRCUITests-Runner'\n49083 rg               rg xcodebuild|xcresulttool|XBXRCUITests-Runner\n"
+}
+

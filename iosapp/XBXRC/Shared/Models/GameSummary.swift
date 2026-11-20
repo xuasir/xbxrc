@@ -9,6 +9,9 @@ struct GameSummary: Identifiable, Equatable, Hashable, Sendable {
     let lastPlayedAt: Date?
     let playtimeMinutes: Int?
     let achievementProgress: AchievementProgress?
+    let description: String?
+    let productID: String?
+    let scid: String?
 
     init(
         id: String,
@@ -18,7 +21,8 @@ struct GameSummary: Identifiable, Equatable, Hashable, Sendable {
         heroURL: URL? = nil,
         lastPlayedAt: Date? = nil,
         playtimeMinutes: Int?,
-        achievementProgress: AchievementProgress?
+        achievementProgress: AchievementProgress?,
+        description: String? = nil, productID: String? = nil, scid: String? = nil
     ) {
         self.id = id
         self.titleID = titleID
@@ -28,6 +32,17 @@ struct GameSummary: Identifiable, Equatable, Hashable, Sendable {
         self.lastPlayedAt = lastPlayedAt
         self.playtimeMinutes = playtimeMinutes
         self.achievementProgress = achievementProgress
+        self.description = description
+        self.productID = productID
+        self.scid = scid
+    }
+
+    func replacingPlaytime(_ minutes: Int?) -> GameSummary {
+        GameSummary(
+            id: id, titleID: titleID, name: name, artworkURL: artworkURL,
+            heroURL: heroURL, lastPlayedAt: lastPlayedAt, playtimeMinutes: minutes,
+            achievementProgress: achievementProgress, description: description,
+            productID: productID, scid: scid)
     }
 }
 
@@ -49,10 +64,12 @@ struct AchievementProgress: Equatable, Hashable, Sendable {
         self.totalCount = totalCount
         self.earnedGamerscore = earnedGamerscore
         self.totalGamerscore = totalGamerscore
-        self.percentage = percentage ?? Self.resolvePercentage(
-            earned: earnedGamerscore,
-            total: totalGamerscore
-        )
+        self.percentage =
+            percentage
+            ?? Self.resolvePercentage(
+                earned: earnedGamerscore,
+                total: totalGamerscore
+            )
     }
 
     private static func resolvePercentage(earned: Int, total: Int) -> Int {
@@ -74,6 +91,16 @@ struct AchievementSummary: Identifiable, Equatable, Hashable, Sendable {
     let gamerscore: Int
     let progressPercentage: Int?
     let unlockedAt: Date?
+    var scid: String? = nil
+    var lockedDescription: String? = nil
+    var requirements: [AchievementRequirementSummary] = []
+    var queryIdentity: String { "\(scid ?? ""):\(id)" }
+}
+
+struct AchievementRequirementSummary: Equatable, Hashable, Sendable {
+    let id: String
+    let current: String?
+    let target: String?
 }
 
 enum DataLoadPhase: Equatable, Sendable {

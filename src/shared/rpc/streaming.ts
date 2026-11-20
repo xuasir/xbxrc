@@ -353,6 +353,10 @@ export interface StreamingCloseSessionResult {
 
 export type StreamingRuntimeFact
   = | {
+    type: 'supervision'
+    sample: StreamingRuntimeSupervisionSample
+  }
+  | {
     type: 'transportConnectionState'
     connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
   }
@@ -373,4 +377,88 @@ export interface StreamingDecideRecoveryParams {
 export interface StreamingDecideRecoveryResult {
   shouldReconnect: boolean
   reason?: 'network-lost' | 'ice-failed' | 'media-stalled'
+  supervision?: StreamingRuntimeSupervisionDecision
+}
+
+export interface StreamingRuntimeObservationWindow {
+  receivedCoverageMs?: number
+  decodeCoverageMs?: number
+  videoCoverageMs?: number
+  inboundFpsAvg?: number
+  decodeFpsAvg?: number
+  videoPresentFpsAvg?: number
+  lossCoverageMs?: number
+  lossAvg?: number
+  rttCoverageMs?: number
+  rttMsAvg?: number
+  jitterCoverageMs?: number
+  jitterMsAvg?: number
+  jitterBufferCoverageMs?: number
+  jitterBufferMsFirst?: number
+  jitterBufferMsLast?: number
+  repairPacketsPerSecondAvg?: number
+}
+
+export interface StreamingRuntimeSupervisionSample {
+  nowMs: number
+  sampledAtMs?: number
+  sampleId?: string
+  observationFresh: boolean
+  visible: boolean
+  isClosing: boolean
+  connectionState: string
+  controlChannelState: string
+  connectedElapsedMs: number
+  inactivityElapsedMs: number
+  frameIntervalMs?: number
+  inboundBytesTotal?: number
+  inboundVideoPacketCountTotal?: number
+  inboundVideoFps?: number
+  decodeFps?: number
+  videoPresentAgeMs?: number
+  packetAgeMs?: number
+  peerGeneration: number
+  videoGeneration: number
+  warmupUntilMs: number
+  previousActionAtMs?: number
+  eligibleSinceMs: number
+  short: StreamingRuntimeObservationWindow
+  long: StreamingRuntimeObservationWindow
+  rttBaselineMs?: number
+  rttMs?: number
+  pathId?: string
+  qualityLevel?: number
+  qualitySupported?: boolean
+  qualityCompletion?: { id: number, result: 'applied' | 'failed' | 'unsupported', previousLevel: number, completedAtMs: number }
+  probe?: {
+    action: string
+    startedAtMs: number
+    observeMs: number
+    requiredObserveMs: number
+    sampleId?: string
+    videoGeneration?: number
+    peerGeneration?: number
+    baseline: { decodeFps?: number, videoFps?: number }
+  }
+}
+
+export interface StreamingRuntimeSupervisionDecision {
+  fresh: boolean
+  duplicate: boolean
+  stallThresholdMs: number
+  hasInboundProgress: boolean
+  decodeRecoveryEligible: boolean
+  decodePressureSustainedMs: number
+  healthyEpisodeComplete: boolean
+  mediaConnectionEligible: boolean
+  networkPressure: 'stable' | 'warning' | 'congested' | 'unknown'
+  probeEffect?: { result: 'improved' | 'neutral' | 'degraded' | 'unknown', reason: string, score?: number | null } | null
+  quality?: {
+    state: 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
+    reason: string
+    rttBaselineMs?: number | null
+    rttDeltaMs?: number | null
+    effect?: 'improved' | 'neutral' | 'degraded' | 'unknown' | null
+    action?: { id: number, level: number, reason: string } | null
+  }
 }

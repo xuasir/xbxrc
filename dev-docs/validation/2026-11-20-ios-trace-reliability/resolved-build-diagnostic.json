@@ -1,0 +1,12 @@
+{
+  "scope": "并发修改的测试文件编译诊断",
+  "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "errors": [
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:910:29: error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "    |                             `- error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:911:29: error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "    |                             `- error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "** TEST FAILED **"
+  ],
+  "resolution": "收口重跑前当前源码已有 self.measure；本任务保留该并发修复，11项定向测试通过。"
+}

@@ -1,0 +1,318 @@
+   Compiling xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+   Compiling xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.30s
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_ios_bridge-2f5037d452e2afe7)
+
+running 76 tests
+test cloud_access::tests::expiry_is_bounded_even_when_token_duration_is_long ... ok
+test cloud_access::tests::lease_expiry_discards_context_and_retains_non_sensitive_tombstone ... ok
+test cloud_access::tests::bound_session_survives_lease_expiry_and_observes_explicit_revocation ... ok
+test cloud_access::tests::new_owner_generation_revokes_stale_lease ... ok
+test cloud_access::tests::scoped_lease_rejects_target_and_cross_account_mismatch ... ok
+test cloud_access::tests::replacing_expired_lease_revokes_bound_session_by_owner_generation ... ok
+test cloud_access::tests::lease_release_discards_context_and_is_idempotent ... ok
+test cloud_catalog::tests::cloud_catalog_rejects_home_access_target ... ok
+test cloud_access::tests::missing_cloud_token_is_rejected ... ok
+test cloud_catalog::tests::locale_parts_use_bounded_defaults ... ok
+test cloud_catalog::tests::non_empty_trims_values ... ok
+test data::tests::maps_console_power_result_for_uniffi ... ok
+test data::tests::maps_achievement_details ... ok
+test data::tests::maps_nested_hosts_and_storage_variants ... ok
+test data::tests::maps_top_level_and_group_playtime_variants ... ok
+test data::tests::validates_and_normalizes_console_command_identity ... ok
+test cloud_access::tests::web_token_not_after_caps_streaming_lease_expiry ... ok
+test data::tests::maps_game_history_and_filters_apps ... ok
+test cloud_catalog::tests::initial_hydration_keeps_first_page_bounded ... ok
+test data::tests::maps_home_identity_capability_and_console_addresses ... ok
+test query_failure::tests::classifications_keep_transport_facts_and_discard_raw_payloads ... ok
+test data::tests::deduplicates_and_validates_playtime_title_ids ... ok
+test data::tests::power_commands_reject_invalid_console_identity_before_network_access ... ok
+test cloud_access::tests::resolves_home_access_from_xhome_token ... ok
+test cloud_access::tests::resolves_default_region_and_stable_xid ... ok
+test streaming::home_context::tests::discovered_stream_identity_keeps_smartglass_command_and_power_facts ... ok
+test streaming::credentials::tests::scope_and_account_changes_are_rejected_before_commit ... ok
+test streaming::credentials::tests::cleanup_retry_reuses_last_resource_token_and_releases_update_publication ... ok
+test streaming::stack_tests::credential_operations_preserve_stack_headroom ... ok
+test streaming::stack_tests::boxed_startup_stages_preserve_stack_headroom ... ok
+test streaming::credentials::tests::pending_update_preserves_persistence_base_until_exact_revision_ack ... ok
+test streaming::credentials::tests::acknowledgement_rebases_a_newer_update_created_during_host_save ... ok
+test streaming::stack_tests::exported_async_futures_stay_within_stack_budget ... ok
+test streaming::credentials::tests::retryable_failure_keeps_credentials_and_revocation_rejects_late_result ... ok
+test streaming::credentials::tests::concurrent_rejections_share_one_renewal_and_reuse_latest_bearer ... ok
+test streaming::credentials::tests::expiring_credentials_renew_proactively_and_host_sync_preserves_owner ... ok
+test streaming::startup::tests::queue_projection_keeps_only_safe_state_and_timing ... ok
+test streaming::startup::tests::observer_discards_old_generation_and_ignores_details ... ok
+test streaming::tests::console_text_is_trimmed_and_bounded_before_network_use ... ok
+test streaming::tests::control_plan_builds_home_target_with_desktop_profile ... ok
+test streaming::tests::control_plan_projects_consumed_cloud_streaming_settings ... ok
+test streaming::tests::clarity_preference_reaches_shared_input_and_ios_runtime_projection ... ok
+test streaming::stack_tests::home_and_cloud_provider_credentials_poll_on_device_stack ... ok
+test streaming::tests::control_plan_projects_consumed_home_streaming_settings ... ok
+test streaming::tests::control_plan_uses_domain_compiler_and_desktop_headers ... ok
+test streaming::tests::explicit_remote_ice_end_is_projected_with_fresh_candidates ... ok
+test streaming::tests::failed_restart_offer_keeps_rebuild_on_same_restart_generation ... ok
+test streaming::tests::custom_turn_is_validated_and_overrides_home_fallback ... ok
+test streaming::tests::home_plan_rejects_explicitly_disabled_streaming_capability ... ok
+test streaming::tests::home_plan_projects_fallback_turn_into_ice_servers ... ok
+test streaming::tests::ios_snapshot_implements_domain_runtime_binding ... ok
+test streaming::tests::ios_pc_ranges_reach_shared_plan_for_home_1440_and_zero_auto_bitrates ... ok
+test streaming::tests::home_wake_is_an_explicit_setting_with_the_pc_default ... ok
+test streaming::tests::monitor_terminal_projection_rejects_stale_session_callbacks ... ok
+test streaming::tests::official_stun_is_platform_default ... ok
+test streaming::tests::provider_passes_shared_auth_generation_and_checks_recovery_scope ... ok
+test streaming::tests::remote_ice_preserves_shared_candidate_binding_source_and_end_marker ... ok
+test streaming::tests::remote_ice_completion_uses_connected_and_current_configuration_facts ... ok
+test streaming::tests::remote_session_terminal_ignores_ready_and_recovering_states ... ok
+test streaming::tests::remote_session_terminal_maps_timeout_and_terminal_states_without_server_text ... ok
+test streaming::tests::second_offer_starts_restart_generation_and_resets_remote_ice ... ok
+test streaming::tests::target_id_is_trimmed_and_validated ... ok
+test tests::maps_profile_settings ... ok
+test streaming::tests::web_rtc_plan_projects_receive_only_audio_codec_feedback_and_ice_policy ... ok
+test tests::normalizes_configured_force_region_ip ... ok
+test tests::normalizes_empty_force_region_ip ... ok
+test tests::resolves_web_token_identity ... ok
+test tests::validates_xal_callback_destination ... ok
+
+running 1 test
+
+running 1 test
+test streaming::tests::mark_connected_is_idempotent ... ok
+test streaming::tests::cancel_invalidates_generation ... ok
+test streaming::tests::cloud_and_home_share_the_same_rust_session_flow_adapter ... ok
+test streaming::stack_tests::ffi_start_cancels_a_pending_poll_and_frees_on_device_stack ... ok
+test streaming::stack_tests::ffi_start_returns_credential_error_and_frees_on_device_stack ... ok
+test streaming::stack_tests::ffi_start_free_drops_a_pending_operation_on_device_stack ... ok
+stack_fixture_request POST /v5/sessions/cloud/play HTTP/1.1
+stack_fixture_request GET /v5/sessions/cloud/stack-fixture/state HTTP/1.1
+stack_fixture_request DELETE /v5/sessions/cloud/stack-fixture HTTP/1.1
+test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 1.03s
+
+test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... ok
+test streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 1.79s
+
+test streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.81s
+
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_streaming-1fdce5e6e2fd9df4)
+
+running 178 tests
+test policy::compiler::tests::auto_input_prefers_native_mkb_when_supported ... ok
+test policy::compiler::tests::codec_preference_maps_h264_profiles ... ok
+test policy::compiler::tests::render_compile_trims_empty_video_format ... ok
+test policy::compiler::tests::explicit_native_mkb_errors_when_unavailable ... ok
+test policy::compiler::tests::input_config_capabilities_override_fallback_touch_fact ... ok
+test policy::compiler::tests::runtime_auto_prefers_browser_then_rust_owned ... ok
+test policy::config::tests::parses_resolution_preferences_from_raw_values ... ok
+test policy::compiler::tests::runtime_unavailable_returns_error ... ok
+test policy::runtime::compiler::tests::runtime_remote_profile_follows_shared_contract_baseline ... ok
+test policy::compiler::tests::pick_region_prefers_force_region_ip ... ok
+test policy::runtime::compiler::tests::rust_owned_cloud_aligns_video_pipeline_but_keeps_sidecar_recovery_profile ... ok
+test policy::runtime::compiler::tests::rust_owned_home_keeps_low_latency_sidecar_profile ... ok
+test policy::session::compiler::tests::explicit_region_precedes_legacy_and_automatic_consumes_default ... ok
+test policy::compiler::tests::resolve_session_access_output_wraps_access ... ok
+test policy::negotiation::console::tests::binds_bundle_master_and_preserves_unbundled_transports ... ok
+test policy::negotiation::console::tests::invalid_port_retains_compatibility_address_and_invalid_ip_is_rejected ... ok
+test policy::session::compiler::tests::schedule_does_not_wake_console_for_cloud ... ok
+test policy::compiler::tests::compile_builds_home_plan_with_console_addrs_and_fallback_turn ... ok
+test policy::session::compiler::tests::home_session_headers_include_user_agent_and_follow_home_resolution ... ok
+test policy::session::compiler::tests::cloud_session_headers_keep_custom_image ... ok
+test policy::compiler::tests::compile_builds_cloud_plan_with_fallback_turn_when_enabled ... ok
+test policy::session::compiler::tests::home_session_display_target_is_dynamic_for_1440_profile ... ok
+test policy::compiler::tests::configuration_facts_override_remote_play_fallback_capability ... ok
+test policy::session::compiler::tests::schedule_is_explicitly_compiled_for_home_with_power_on ... ok
+test policy::negotiation::console::tests::parses_only_media_addresses_and_labels_compatibility_ports ... ok
+test session::access::tests::parse_session_access_context_reads_gs_token_and_regions ... ok
+test session::access::tests::resolve_session_access_from_token_selects_default_region ... ok
+test session::api::session::tests::configuration_empty_body_is_pending ... ok
+test session::access::tests::service_regions_drop_invalid_origins_and_deduplicate_stable_names ... ok
+test policy::session::compiler::tests::home_resolution_is_isolated_from_cloud_profile_across_all_tiers ... ok
+test session::flow::tests::build_session_progress_snapshot_uses_session_ready_for_started_session ... ok
+test session::flow::tests::cleanup_terminal_state_only_accepts_closed_or_failed ... ok
+test session::discovery::tests::empty_and_network_failure_continue_but_auth_returns ... ok
+test session::discovery::tests::target_search_continues_past_other_consoles ... ok
+test session::flow::tests::closed_fails_after_recovery_window_expires ... ok
+test session::flow::tests::closed_is_treated_as_transient_when_recovering_signal_is_recent ... ok
+test session::flow::tests::closed_with_reconnect_signal_stays_transient_within_window ... ok
+test session::discovery::tests::per_region_timeout_allows_next_region ... ok
+test session::flow::tests::cleanup_retry_task_releases_the_service_while_waiting_for_connectivity ... ok
+test session::flow::tests::cleanup_revokes_local_resources_before_access_failure_and_can_retry_the_remote_stop ... ok
+test session::flow::tests::concurrent_close_and_a_dropped_caller_share_one_independent_cleanup ... ok
+test session::flow::tests::connected_standby_retries_wake_after_cooldown ... ok
+test session::flow::tests::configuration_deadline_releases_end_marker_and_records_fallback_reason ... ok
+test session::flow::tests::concurrent_failed_closes_share_one_result_and_a_later_retry_uses_fresh_access ... ok
+test session::flow::tests::automatic_recreate_cleanup_preserves_startup_but_user_close_revokes_it ... ok
+test session::flow::tests::failed_progress_server_registration_signal_carries_structured_hint ... ok
+test session::flow::tests::failed_progress_unknown_error_defaults_to_runtime_hint ... ok
+test session::flow::tests::failed_server_never_registered_error_code_is_exhausted_immediately ... ok
+test session::flow::tests::failed_server_registration_error_is_retryable_once ... ok
+test session::flow::tests::close_cancels_pending_sdp_and_does_not_wait_for_the_signal_lock ... ok
+test session::flow::tests::failed_cleanup_is_reclaimed_after_access_recovers_without_user_retry ... ok
+test session::flow::tests::connect_token_auth_failure_terminates_and_network_failure_retries_on_the_next_tick ... ok
+test session::api::session::request_tests::creation_request_preserves_compiled_resolution_and_home_cloud_isolation ... ok
+test session::flow::tests::home_provisioning_stall_timeout_no_longer_triggers_recreate ... ok
+test session::flow::tests::home_provisioning_startup_timeout_no_longer_triggers_recreate ... ok
+test session::flow::tests::home_server_registration_retry_exhausted_is_terminal_host_issue ... ok
+test session::flow::tests::home_server_registration_wait_timeout_only_triggers_after_threshold ... ok
+test session::flow::tests::home_server_registration_wait_timeout_resets_after_state_progresses ... ok
+test session::flow::tests::home_waiting_for_server_registration_is_exhausted_in_provisioning ... ok
+test session::flow::tests::home_configuration_late_after_end_marker_supplies_current_transport_once ... ok
+test session::flow::tests::keepalive_credential_failure_publishes_auth_or_preserves_a_temporary_failure ... ok
+test session::flow::tests::keepalive_renews_rejected_credentials_once_and_retains_the_active_session ... ok
+test session::flow::tests::discovered_region_drives_creation_configuration_signaling_and_cleanup_origin ... ok
+test session::flow::tests::ice_snapshot_dedup_preserves_new_end_markers_across_restart ... ok
+test session::flow::tests::late_ice_from_a_replaced_session_cannot_write_signaling_state ... ok
+test session::flow::tests::non_home_provisioning_timeout_is_not_retryable ... ok
+test session::flow::tests::non_provisioning_state_is_not_retryable ... ok
+test session::flow::tests::missing_create_result_blocks_a_new_post_for_the_same_target ... ok
+test session::flow::tests::playback_survives_180_seconds_of_remote_preparation_regression_then_closes_on_terminal_state ... ok
+test session::flow::tests::poll_ice_returns_empty_for_duplicate_snapshot ... ok
+test session::flow::tests::poll_ice_returns_end_of_candidates_batch_without_blocking ... ok
+test session::flow::tests::keepalive_status_classes_preserve_transient_failures_and_publish_real_terminal_facts ... ok
+test session::flow::tests::progress_without_error_has_no_structured_hint ... ok
+test session::flow::tests::recovering_phase_refreshes_recovery_signal_timestamp ... ok
+test session::flow::tests::recovering_progress_network_signal_maps_network_hint ... ok
+test session::flow::tests::recreate_reused_session_only_fails_when_cleanup_did_not_settle ... ok
+test session::flow::tests::remote_console_not_ready_error_carries_structured_hint ... ok
+test session::flow::tests::remote_console_ready_reason_requires_explicit_registration_signal ... ok
+test session::flow::tests::remote_console_ready_requires_registration_signal_after_wake ... ok
+test session::flow::tests::remote_console_ready_signal_reason_prefers_remote_management ... ok
+test session::flow::tests::remote_console_ready_signal_reason_rejects_console_addrs_without_registration ... ok
+test session::flow::tests::remote_console_wake_circuit_open_message_is_detected ... ok
+test session::flow::tests::restart_offer_filter_ignores_previous_answer_snapshot ... ok
+test session::flow::tests::retry_backoff_reuses_last_entry_after_sequence_is_exhausted ... ok
+test session::flow::tests::runtime_starting_waits_for_provisioned_after_connect_token ... ok
+test session::flow::tests::server_never_registered_message_is_treated_as_registration_signal ... ok
+test session::flow::tests::home_initial_preparation_can_wake_without_ready_gate ... ok
+test session::flow::tests::home_initial_preparation_skips_console_when_policy_disables_both_gates ... ok
+test session::flow::tests::cloud_initial_preparation_never_wakes_or_polls_console ... ok
+test session::discovery::tests::total_budget_revocation_and_auth_stop_the_scan ... ok
+test session::flow::tests::started_player_state_maps_to_session_ready_phase ... ok
+test session::flow::tests::startup_timeout_error_carries_structured_hint ... ok
+test session::flow::tests::waiting_for_server_registration_http_error_is_retryable_for_home ... ok
+test session::flow::tests::waiting_for_server_registration_message_matches_non_http_error_text ... ok
+test session::flow::tests::waiting_for_server_registration_retry_does_not_apply_to_cloud ... ok
+test session::flow::tests::waiting_for_server_registration_retry_signal_is_retryable_once_bounded_retry ... ok
+test session::lifecycle::tests::close_semantics_only_treats_404_as_not_found ... ok
+test session::lifecycle::tests::parse_session_id_from_path_extracts_id ... ok
+test session::lifecycle::tests::parse_session_id_from_path_reports_missing_id ... ok
+test session::lifecycle::tests::resolve_active_target_type_uses_default_when_missing_or_empty ... ok
+test session::monitor::tests::apply_monitor_tick_to_record_updates_record_fields ... ok
+test session::monitor::tests::closed_after_provisioned_still_drives_phase ... ok
+test session::monitor::tests::empty_state_after_provisioned_keeps_playback_phase ... ok
+test session::monitor::tests::provisioning_after_provisioned_does_not_regress_to_pending ... ok
+test session::monitor::tests::provisioning_timeout_marks_failed_and_stops ... ok
+test session::monitor::tests::ready_to_connect_after_provisioned_does_not_fail_playback ... ok
+test session::monitor::tests::ready_to_connect_requests_connect_token ... ok
+test session::flow::tests::signaling_regression::queued_ice_requests_cannot_consume_or_submit_into_a_new_negotiation ... ok
+test session::monitor::tests::waiting_for_resources_sets_queued_state_and_queue_snapshot ... ok
+test session::operation::stack_tests::operation_wrappers_bound_large_future_layout ... ok
+test session::operation::tests::a_cancelled_remote_create_keeps_ownership_until_its_response_settles ... ok
+test session::flow::tests::signaling_regression::chat_and_quality_offers_preserve_the_media_ice_generation ... ok
+test session::flow::tests::signaling_regression::restart_posts_preserve_snapshot_dedup_across_multiple_local_batches ... ok
+test session::operation::tests::cancellation_before_registration_is_absorbing ... ok
+test session::operation::tests::healthy_cloud_queue_preserves_preparation_budget_across_180_seconds ... ok
+test session::operation::tests::cancellation_wakes_an_in_flight_wait_and_is_replayed_to_late_waiters ... ok
+test session::operation::tests::shutdown_cancels_tracked_public_operations_and_blocks_new_entries ... ok
+test session::operation::tests::unknown_create_keeps_target_ownership_after_attempt_finishes ... ok
+test session::operation::tests::startup_deadline_revokes_the_scope_and_absorbs_late_work ... ok
+test session::operation::tests::virtual_time_progress_is_independent_across_runtime_instances ... ok
+test session::recovery::supervision::tests::connection_arbiter_matches_fact_reason_window_and_observation_barrier ... ok
+test session::recovery::supervision::tests::connection_episode_budget_survives_peer_replacement_and_resets_after_new_frames ... ok
+test session::recovery::supervision::tests::gap_visibility_and_old_peer_preserve_evidence_boundaries ... ok
+test session::recovery::supervision::tests::inbound_progress_separates_transport_loss_from_local_decode_stall ... ok
+test session::recovery::supervision::tests::ineffective_quality_returns_to_previous_level_and_missing_supply_is_unknown ... ok
+test session::recovery::supervision::tests::missing_native_decode_counter_keeps_decode_pressure_unknown ... ok
+test session::recovery::supervision::tests::native_counters_have_continuous_windows_and_clear_on_regression ... ok
+test session::recovery::supervision::tests::network_pressure_uses_loss_and_growth_with_full_coverage ... ok
+test session::recovery::supervision::tests::quality_reservation_is_once_and_success_uses_post_action_network_supply ... ok
+test session::recovery::supervision::tests::recovery_effect_requires_fresh_coverage_and_correct_generations ... ok
+test session::operation::tests::active_operations_are_bounded_and_completed_tombstones_preserve_live_resources ... ok
+test session::recovery::supervision::tests::shared_thresholds_preserve_pc_startup_default_and_frame_interval_limits ... ok
+test session::recovery::supervision::tests::unsupported_quality_retains_level_and_does_not_repeat_requests ... ok
+test session::recovery::tests::decide_runtime_recovery_ignores_media_health_before_grace_or_threshold ... ok
+test session::recovery::tests::decide_runtime_recovery_ignores_unknown_transport_state ... ok
+test session::recovery::tests::decide_runtime_recovery_maps_media_stalled_event ... ok
+test session::recovery::tests::decide_runtime_recovery_uses_media_health_threshold ... ok
+test session::recovery::tests::decide_transport_recovery_maps_failed_and_closed ... ok
+test session::recovery::tests::decide_transport_recovery_respects_closing_flag ... ok
+test session::scheduler::tests::monitor_remains_active_after_session_ready ... ok
+test session::scheduler::tests::monitor_stops_for_remote_terminal_phases ... ok
+test session::signaling::ice::tests::normalize_can_expand_teredo_candidates_when_explicitly_enabled ... ok
+test session::signaling::ice::tests::normalize_does_not_append_end_marker_when_input_lacks_it ... ok
+test session::signaling::ice::tests::normalize_does_not_expand_teredo_candidates_by_default ... ok
+test session::recovery::supervision::tests::continuous_decode_pressure_requires_new_covered_samples_and_action_cooling ... ok
+test session::signaling::ice::tests::normalize_filters_invalid_and_preserves_existing_end_marker ... ok
+test session::signaling::ice::tests::normalize_ipv6_only_affects_same_candidate_kind ... ok
+test session::signaling::ice::tests::normalize_keeps_foundation_and_priority_while_normalizing_protocol_case ... ok
+test session::signaling::ice::tests::normalize_keeps_type_priority_host_srflx_relay_unknown ... ok
+test session::signaling::ice::tests::normalize_prefers_ipv4_when_ipv6_preference_disabled ... ok
+test session::signaling::ice::tests::normalize_prefers_ipv6_when_enabled ... ok
+test session::signaling::logic::tests::has_usable_candidates_ignores_end_marker ... ok
+test session::signaling::logic::tests::ice_poll_returns_completed_when_usable_candidates_exist ... ok
+test session::signaling::logic::tests::keepalive_error_policy_matches_legacy_behavior ... ok
+test session::signaling::logic::tests::offer_poll_returns_completed_when_answer_available ... ok
+test session::signaling::logic::tests::offer_poll_returns_missing_when_session_gone ... ok
+test session::signaling::state::tests::accepts_reused_address_with_current_ufrag_and_preserves_end_marker ... ok
+test session::signaling::state::tests::filters_untagged_baseline_and_accepts_new_untagged_endpoint ... ok
+test session::signaling::state::tests::config_can_supply_empty_ice_and_rebind_after_restart ... ok
+test session::signaling::state::tests::pending_end_markers_keep_each_current_unbundled_transport ... ok
+test session::signaling::state::tests::permits_same_candidates_when_fresh_answer_reuses_remote_credentials ... ok
+test session::signaling::state::tests::rejects_end_marker_with_explicit_old_remote_credentials ... ok
+test session::signaling::state::tests::rejects_old_credentials_and_end_marker_even_when_snapshot_changes ... ok
+test session::signaling::state::tests::uses_candidate_extension_ufrag_when_json_field_is_absent ... ok
+test session::signaling::state::tests::remote_endpoint_wins_dedup_and_config_budget_releases_end_marker ... ok
+test session::signaling::state::tests::withholds_end_marker_from_a_mixed_generation_snapshot ... ok
+test session::signaling::turn::tests::parses_turn_server_value ... ok
+test session::signaling::turn::tests::rejects_invalid_turn_server_value ... ok
+test session::store::tests::stale_record_cannot_resurrect_or_remove_reused_session_id ... ok
+test session::store::tests::upsert_preserves_cancel_token_for_same_session ... ok
+test session::flow::tests::cancelled_create_owns_its_late_response_and_closes_it_without_starting_loops ... ok
+test session::recovery::supervision::tests::same_facts_replay_pc_decode_and_network_baseline ... ok
+test session::operation::stack_tests::large_nested_operations_poll_cancel_timeout_and_drop_on_small_stack ... ok
+test session::flow::tests::shutdown_waits_for_a_late_create_and_closes_its_remote_resource ... ok
+test session::flow::tests::fifty_create_close_cycles_leave_remote_and_local_resources_empty ... ok
+test session::flow::tests::home_initial_preparation_wakes_standby_console_then_waits_for_ready ... ok
+test session::flow::tests::signaling_regression::new_peer_and_restart_wait_for_current_sdp_and_filter_previous_ice ... ok
+test session::flow::tests::pending_answer_has_a_total_deadline_and_keeps_the_session_available_for_cleanup ... ok
+
+test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_streaming_protocol-54c7972eb120012b)
+
+running 10 tests
+test frame_feedback::tests::clarity_policy_preserves_observations_and_render_delay_at_thresholds ... ok
+test remote_profile::tests::cloud_target_overrides_transport_path ... ok
+test remote_profile::tests::dynamic_subprofile_string_contract_is_stable ... ok
+test remote_profile::tests::home_target_defaults_to_home_lan_without_transport_path ... ok
+test frame_feedback::tests::timestamps_wrap_after_adjustment_and_invalid_facts_are_rejected ... ok
+test remote_profile::tests::effective_profile_label_composes_baseline_and_dynamic ... ok
+test remote_profile::tests::home_target_uses_relay_path_as_refinement ... ok
+test frame_feedback::tests::metadata_precedes_gamepad_and_preserves_sequence_and_release_payload ... ok
+test stream_data_channel::tests::handshake_ack_parser_and_dimensions_are_bounded ... ok
+test stream_data_channel::tests::profile_and_bootstrap_payloads_match_xbox_contract ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xbox_ios_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xbox_streaming
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xbox_streaming_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

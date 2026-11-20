@@ -1,0 +1,34 @@
+{
+  "phone-login.png": {
+    "source": "attachments-phone-layout/EFE0AA71-BFB7-4822-BE2C-386DDE1FFC01.png",
+    "sha256": "ce9a461b0074e6d190d51c3ca494d4e16843db903ecf4b5860a54330f7fdd35d"
+  },
+  "phone-rails-landscape.png": {
+    "source": "attachments-phone-accepted/79F8A6B4-01EC-4ED7-838B-550073C3C1F5.png",
+    "sha256": "6e7507ffaaf6dcc843b163d6bc45772dbab36b95ad37b566e48caa07c3252a54"
+  },
+  "phone-rails-portrait.png": {
+    "source": "attachments-phone-layout/B17F7421-D7B3-4533-8FE2-D95E49A14519.png",
+    "sha256": "deca882b88653277fb649ab9e77160f13486ca85930080a440cadde9e614f8ef"
+  },
+  "phone-diagnostics.png": {
+    "source": "attachments-phone-accepted/53D896F8-DF66-48EC-9ABA-B4B0BED94429.png",
+    "sha256": "598ce41974dd77aaa59a02fa84c8cabecb73cc1cdef3b7f059bb85e2578189fb"
+  },
+  "phone-picture-sheet.png": {
+    "source": "attachments-phone-accepted/064E5221-A5EA-4843-8996-B9EAADA71486.png",
+    "sha256": "405e06f89a98ac45c806f6abbeb3a109302b4419a24ca6c3262b7138117de161"
+  },
+  "phone-two-finger.png": {
+    "source": "attachments-phone-accepted/5E2AE63E-8829-47E7-BB86-0FA2CB94F292.png",
+    "sha256": "aecf2ac8a7e5fe99845fe7b0ffbd0eb5131386b488fd1d2abcc2646d9e339053"
+  },
+  "ipad-rails.png": {
+    "source": "attachments-ipad/FDDEEB15-BA71-429F-BBA3-F7DF4064B364.png",
+    "sha256": "ba434bd4241561f95a0dbd84853cfa25ce26b8e093ca072d0650de17a990b018"
+  },
+  "ipad-diagnostics.png": {
+    "source": "attachments-ipad/26A0DF92-9043-4EBF-9F7E-0C1EC6F57AA8.png",
+    "sha256": "40dde69f39a3eb75807fb19c810ff614e792d3d9d860372fdb8926d42de740c0"
+  }
+}

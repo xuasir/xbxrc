@@ -1,0 +1,403 @@
+{
+  "source": "macOS unified log; app-owned event names only",
+  "runTarget": "My Mac (Designed for iPad)",
+  "systemRows": 54036,
+  "systemTimeRange": [
+    "2026-11-20 15:17:29.370623+0800",
+    "2026-11-20 15:22:28.504212+0800"
+  ],
+  "runtimeTraceRows": 1180,
+  "runtimeTraceTimeRange": [
+    "2026-11-20 15:21:34.826046+0800",
+    "2026-11-20 15:22:28.304473+0800"
+  ],
+  "processIds": [
+    90119
+  ],
+  "eventCounts": {
+    "ios-streaming/streamingStateChanged": 605,
+    "ios-streaming/displayPresent": 126,
+    "ios-streaming/videoFrameDropped": 93,
+    "ios-streaming/videoFrameAcceptedToMailbox": 126,
+    "ios-streaming/displaySubmit": 126,
+    "ios-streaming/receiverTrackDiscovered": 6,
+    "ios-streaming/rtcHealthSnapshot": 6,
+    "ios-streaming/displayHealthSnapshot": 6,
+    "ios-streaming/videoSurfaceAttached": 6,
+    "ios-streaming/runtimeSupervisionSnapshot": 4,
+    "ios-streaming/inputFrameSent": 2,
+    "ios-streaming/audioPlayoutGlitchDetected": 3,
+    "ios-streaming/sessionTerminal": 1,
+    "ios-streaming/terminalSelected": 1,
+    "ios-streaming/presentationDetached": 1,
+    "ios-streaming/inputStopped": 1,
+    "ios-streaming/hapticsStopped": 1,
+    "ios-streaming/iceTasksCancelled": 1,
+    "ios-streaming/peerClosed": 1,
+    "ios-streaming/remoteSessionClosed": 1,
+    "ios-streaming/accessReleased": 1,
+    "library-ui/libraryActivationRequested": 2,
+    "cloud-library/catalogActivationStarted": 2,
+    "cloud-library/cacheRestoreStarted": 2,
+    "cloud-library/catalogActivationRefreshRequired": 1,
+    "library-ui/libraryPageAppeared": 1,
+    "library-ui/contentPresented": 2,
+    "image/imageCandidatesExhausted": 13,
+    "cloud-library/catalogRefreshStarted": 1,
+    "auth/cloudAccessBoundaryStarted": 1,
+    "auth/cloudAccessUniFFIBoundaryStarted": 1,
+    "cloud-library/catalogActivationSkipped": 1,
+    "library-ui/libraryActivationCompleted": 1,
+    "xbox-data/libraryRefreshStarted": 1,
+    "xbox-data/libraryContentCommitted": 1,
+    "auth/cloudAccessUniFFIBoundarySucceeded": 1,
+    "cloud-library/activityOverlayCommitted": 3,
+    "xbox-data/dataSessionBound": 1,
+    "auth/cloudAccessBoundarySucceeded": 1,
+    "cloud-library/catalogRequestBoundaryStarted": 1,
+    "cloud-library/catalogRequestBoundarySucceeded": 1,
+    "cloud-library/catalogRemoteSnapshotReceived": 1,
+    "cloud-library/catalogRefreshCommitted": 1,
+    "cloud-library/metadataHydrationStarted": 1,
+    "cloud-library/metadataPageCommitted": 20,
+    "ios-app/scenePhaseChanged": 1
+  },
+  "selectedEvents": [
+    {
+      "timestamp": "2026-11-20 15:21:35.011178+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:35.011482+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:35.772367+0800",
+      "event": "ios-streaming/runtimeSupervisionSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:36.023131+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:36.023350+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:36.908412+0800",
+      "event": "ios-streaming/runtimeSupervisionSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:37.023754+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:37.023980+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.024624+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.024915+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.413674+0800",
+      "event": "ios-streaming/audioPlayoutGlitchDetected",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.415600+0800",
+      "event": "ios-streaming/audioPlayoutGlitchDetected",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.416758+0800",
+      "event": "ios-streaming/audioPlayoutGlitchDetected",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:38.459421+0800",
+      "event": "ios-streaming/runtimeSupervisionSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:39.025700+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:39.025913+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:39.969780+0800",
+      "event": "ios-streaming/runtimeSupervisionSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.034100+0800",
+      "event": "ios-streaming/rtcHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.034338+0800",
+      "event": "ios-streaming/displayHealthSnapshot",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.401034+0800",
+      "event": "ios-streaming/sessionTerminal",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.401126+0800",
+      "event": "ios-streaming/terminalSelected",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.402397+0800",
+      "event": "ios-streaming/presentationDetached",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.402623+0800",
+      "event": "ios-streaming/inputStopped",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.402734+0800",
+      "event": "ios-streaming/hapticsStopped",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.402898+0800",
+      "event": "ios-streaming/iceTasksCancelled",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:40.759642+0800",
+      "event": "ios-streaming/peerClosed",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:41.121664+0800",
+      "event": "ios-streaming/remoteSessionClosed",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:21:41.126819+0800",
+      "event": "ios-streaming/accessReleased",
+      "processId": 90119
+    },
+    {
+      "timestamp": "2026-11-20 15:22:00.985776+0800",
+      "event": "cloud-library/catalogRemoteSnapshotReceived",
+      "processId": 90119
+    }
+  ],
+  "errorGroups": [
+    {
+      "subsystem": "com.apple.coreanimation",
+      "category": "API",
+      "message": "cannot add handler to 0 from 0 - dropping",
+      "count": 133,
+      "first": "2026-11-20 15:17:31.205464+0800",
+      "last": "2026-11-20 15:22:21.870979+0800"
+    },
+    {
+      "subsystem": "com.apple.SwiftUI",
+      "category": "Invalid Configuration",
+      "message": "onChange(of: ReceiverData) action tried to update multiple times per frame.",
+      "count": 10,
+      "first": "2026-11-20 15:17:31.095777+0800",
+      "last": "2026-11-20 15:21:57.075992+0800"
+    },
+    {
+      "subsystem": "com.apple.launchservices",
+      "category": "default",
+      "message": "LSPrefs: could not find untranslocated node for <FSNode [address]> { isDir = ?, path = '/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/X/[id]/d/Wrapper/XBXRC.app' }, proceeding on the assumption it is not translocated: Error Domain=NSPOSIXErrorDomain Code=1 \"Operation not permitted\"",
+      "count": 4,
+      "first": "2026-11-20 15:17:29.870567+0800",
+      "last": "2026-11-20 15:17:30.440061+0800"
+    },
+    {
+      "subsystem": "com.apple.appintents",
+      "category": "Connection",
+      "message": "Unable to get synchronousRemoteObjectProxy, error: Error Domain=NSCocoaErrorDomain Code=4097 \"connection to service named com.apple.linkd.autoShortcut\" UserInfo={NSDebugDescription=connection to service named com.apple.linkd.autoShortcut}",
+      "count": 4,
+      "first": "2026-11-20 15:17:29.925829+0800",
+      "last": "2026-11-20 15:17:29.929468+0800"
+    },
+    {
+      "subsystem": "com.apple.coremedia",
+      "category": "",
+      "message": "(Fig) signalled err=-12029 at <>:63",
+      "count": 4,
+      "first": "2026-11-20 15:19:27.104229+0800",
+      "last": "2026-11-20 15:21:31.173779+0800"
+    },
+    {
+      "subsystem": "com.apple.appintents",
+      "category": "Connection",
+      "message": "Unable to re-register with Process Instance Registry, error: Error Domain=NSCocoaErrorDomain Code=4097 \"connection to service named com.apple.linkd.autoShortcut\" UserInfo={NSDebugDescription=connection to service named com.apple.linkd.autoShortcut}",
+      "count": 3,
+      "first": "2026-11-20 15:17:29.927391+0800",
+      "last": "2026-11-20 15:17:29.929492+0800"
+    },
+    {
+      "subsystem": "com.apple.coreanimation",
+      "category": "API",
+      "message": "cannot add handler to 4 from 0 - dropping",
+      "count": 2,
+      "first": "2026-11-20 15:18:08.752518+0800",
+      "last": "2026-11-20 15:21:41.181582+0800"
+    },
+    {
+      "subsystem": "com.apple.launchservices",
+      "category": "cas",
+      "message": "CLIENT: Failure to determine if this machine is in the process of shutting down, err=1/Operation not permitted",
+      "count": 1,
+      "first": "2026-11-20 15:17:29.787609+0800",
+      "last": "2026-11-20 15:17:29.787609+0800"
+    },
+    {
+      "subsystem": "com.apple.AppKit",
+      "category": "Application",
+      "message": "Error registering app with intents framework: Error Domain=NSCocoaErrorDomain Code=4097 \"connection to service named com.apple.linkd.autoShortcut\" UserInfo={NSDebugDescription=connection to service named com.apple.linkd.autoShortcut}",
+      "count": 1,
+      "first": "2026-11-20 15:17:29.926446+0800",
+      "last": "2026-11-20 15:17:29.926446+0800"
+    },
+    {
+      "subsystem": "com.apple.appintents",
+      "category": "Connection",
+      "message": "Will NOT re-try to establish the connection",
+      "count": 1,
+      "first": "2026-11-20 15:17:29.929429+0800",
+      "last": "2026-11-20 15:17:29.929429+0800"
+    },
+    {
+      "subsystem": "com.apple.BaseBoard",
+      "category": "Common",
+      "message": "Unable to obtain a task name port right for pid 425: (os/kern) failure ([address])",
+      "count": 1,
+      "first": "2026-11-20 15:17:31.663855+0800",
+      "last": "2026-11-20 15:17:31.663855+0800"
+    },
+    {
+      "subsystem": "com.apple.TextInputUI",
+      "category": "CursorUI",
+      "message": "ViewBridge to RemoteViewService Terminated: Error Domain=com.apple.ViewBridge.error Code=18 \"(null)\" UserInfo={com.apple.ViewBridge.error.hint=this process disconnected remote view controller -- benign unless unexpected, com.apple.ViewBridge.error.description=NSViewBridgeErrorCanceled}",
+      "count": 1,
+      "first": "2026-11-20 15:18:07.237814+0800",
+      "last": "2026-11-20 15:18:07.237814+0800"
+    },
+    {
+      "subsystem": "com.apple.CFBundle",
+      "category": "plugin",
+      "message": "AddInstanceForFactory: No factory registered for id <CFUUID [address]> [id]",
+      "count": 1,
+      "first": "2026-11-20 15:18:39.248836+0800",
+      "last": "2026-11-20 15:18:39.248836+0800"
+    },
+    {
+      "subsystem": "com.apple.coreaudio",
+      "category": "as_client",
+      "message": "AVAudioNotificationCenter.mm:184   Failed to configure notification center: (null)",
+      "count": 1,
+      "first": "2026-11-20 15:18:44.340055+0800",
+      "last": "2026-11-20 15:18:44.340055+0800"
+    },
+    {
+      "subsystem": "com.apple.coreaudio",
+      "category": "KeystrokeSuppressor",
+      "message": "KeystrokeSuppressorCore.cpp:45    ERROR: KeystrokeSuppressor initialization was unsuccessful. Invalid or no plist was provided. AU will be bypassed.",
+      "count": 1,
+      "first": "2026-11-20 15:18:44.427938+0800",
+      "last": "2026-11-20 15:18:44.427938+0800"
+    },
+    {
+      "subsystem": "com.apple.coreaudio",
+      "category": "vp",
+      "message": "     vpStrategyManager.mm:561   Error code 2003332927 reported at GetProperty",
+      "count": 1,
+      "first": "2026-11-20 15:18:44.639115+0800",
+      "last": "2026-11-20 15:18:44.639115+0800"
+    },
+    {
+      "subsystem": "com.apple.SwiftUI",
+      "category": "Invalid Configuration",
+      "message": "Update NavigationRequestObserver tried to update multiple times per frame.",
+      "count": 1,
+      "first": "2026-11-20 15:18:48.055968+0800",
+      "last": "2026-11-20 15:18:48.055968+0800"
+    },
+    {
+      "subsystem": "com.apple.SwiftUI",
+      "category": "Invalid Configuration",
+      "message": "Update NavigationAuthority bound path tried to update multiple times per frame.",
+      "count": 1,
+      "first": "2026-11-20 15:18:48.056038+0800",
+      "last": "2026-11-20 15:18:48.056038+0800"
+    },
+    {
+      "subsystem": "com.apple.Gestures",
+      "category": "Critical",
+      "message": "[!] <UIKitHoverGestureRecognizer: [address]; id = 87; cid = 2; phase = possible> has been in possible phase for 49.825569083 seconds",
+      "count": 1,
+      "first": "2026-11-20 15:18:57.188981+0800",
+      "last": "2026-11-20 15:18:57.188981+0800"
+    },
+    {
+      "subsystem": "com.apple.Gestures",
+      "category": "Critical",
+      "message": "[!] <UIKitHoverGestureRecognizer: [address]; id = 9; cid = 2; phase = possible> has been in possible phase for 49.825567208 seconds",
+      "count": 1,
+      "first": "2026-11-20 15:18:57.189306+0800",
+      "last": "2026-11-20 15:18:57.189306+0800"
+    },
+    {
+      "subsystem": "com.apple.Gestures",
+      "category": "Critical",
+      "message": "[!] <UIKitHoverGestureRecognizer: [address]; id = 76; cid = 2; phase = possible> has been in possible phase for 49.82557825 seconds",
+      "count": 1,
+      "first": "2026-11-20 15:18:57.189324+0800",
+      "last": "2026-11-20 15:18:57.189324+0800"
+    },
+    {
+      "subsystem": "com.apple.Gestures",
+      "category": "Critical",
+      "message": "[!] <UIKitHoverGestureRecognizer: [address]; id = 216; cid = 2; phase = possible> has been in possible phase for 34.328813 seconds",
+      "count": 1,
+      "first": "2026-11-20 15:20:02.492160+0800",
+      "last": "2026-11-20 15:20:02.492160+0800"
+    },
+    {
+      "subsystem": "com.apple.audioanalytics",
+      "category": "carc",
+      "message": "Reporter disconnected or already stopped. { func=stop, reporterID=387058157748226 }",
+      "count": 1,
+      "first": "2026-11-20 15:21:40.438817+0800",
+      "last": "2026-11-20 15:21:40.438817+0800"
+    }
+  ],
+  "limits": [
+    "RuntimeTrace payload/seq/sessionId absent from unified log",
+    "startup event lane missing before persisted buffer",
+    "media counters and per-frame metrics require exported JSONL"
+  ]
+}

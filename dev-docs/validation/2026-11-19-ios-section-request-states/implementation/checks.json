@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-19",
+  "finalRound": "r3",
+  "phone": 29,
+  "ipad": 3,
+  "rust": 67,
+  "allPassed": true,
+  "deviceBuild": "Passed",
+  "pnpmLintFix": "Passed",
+  "cargoFmtCheck": "Passed",
+  "swiftFormat": "Passed",
+  "streamingBoundary": "Passed",
+  "diffCheck": "Passed",
+  "screenshots": 19,
+  "visual": "透明分区提示，整行44pt点击；主机图文下方全宽；首次/刷新/页尾恢复；大字号主机信息纵排及容量宽度适配。",
+  "dynamicType": {
+    "standard": ".large 为系统标准字号，320pt中英文样例与390pt中文样例。",
+    "accessibility": ".accessibility3 为测试主动启用的无障碍字号，独立归档。"
+  },
+  "localization": "旧内容说明的中英文及时间格式回归通过。",
+  "stagedChangesPreserved": true,
+  "retainedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-section-states-packages",
+  "manualValidation": "真实账户服务覆盖、实际登录恢复、访问受限及设备长期使用由实机验收覆盖。",
+  "cleanup": "Completed",
+  "removedAllocatedGiB": 1.336,
+  "continuation": {
+    "date": "2026-11-20",
+    "round": "r4",
+    "result": "Passed",
+    "phoneSupplementalTests": 3,
+    "localizedNoticeKeys": 26,
+    "otherTestEditsPreserved": true,
+    "stagedChangesPreserved": true,
+    "cleanup": "Completed",
+    "removedAllocatedGiB": 0.472,
+    "totalTaskRemovedAllocatedGiB": 1.808,
+    "evidence": "continuation/checks.json",
+    "concurrentUpdatePreserved": true,
+    "verifiedTestScopeUnchanged": true
+  }
+}

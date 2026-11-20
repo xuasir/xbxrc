@@ -1,0 +1,45 @@
+{
+  "completedAt": "2026-11-20T14:50:40.653567+08:00",
+  "processCheck": {
+    "command": "ps -axo pid,etime,comm | rg 'xcodebuild|swift-frontend|swift-package|cargo|rustc|XBXRC\\.app/|XBXRCUITests-Runner\\.app/'",
+    "exitCode": 1,
+    "matches": [],
+    "state": "build/test/export/app processes finished"
+  },
+  "targets": [
+    {
+      "path": "/private/tmp/xbxrc-ios-home-auth-stack-fix-20261120",
+      "files": 3631,
+      "logicalBytes": 423977551,
+      "allocatedBytes": 433754112,
+      "existsAfter": false
+    },
+    {
+      "path": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-20-11_14-16-0013.xcresult",
+      "files": 7,
+      "logicalBytes": 2662,
+      "allocatedBytes": 28672,
+      "existsAfter": false
+    }
+  ],
+  "removedAllocatedBytes": 433782784,
+  "removedLogicalBytes": 423980213,
+  "diskFreeBeforeBytes": 65536000000,
+  "diskFreeAfterBytes": 65945600000,
+  "observedFreeDeltaBytes": 409600000,
+  "deviceBinaryHashVerifiedBeforeRemoval": true,
+  "preserved": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-20-ios-streaming-startup-crash/home-auth-stack-fix",
+      "purpose": "required screenshot, baseline failure, final tests, source hashes, device prologues and review notes"
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/browser",
+      "purpose": "shared Rust cache"
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "purpose": "fixed WebRTC SDK/package cache"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift": "65246e3bedd60cef8731a9102c72205943317bcd2d7590a588b0853e48d6e10c",
+  "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift": "dc687466c416966563b2121eceddffd9560ac65282e16b0dd0f89009cb254c00",
+  "iosapp/XBXRC/Features/Settings/MobilePreferences.swift": "6f5c5fd85f4e153e5b9c73a65ac12d8e538a22165c26f4f0bf706511d87dafc8",
+  "iosapp/XBXRC/Resources/Localizable.xcstrings": "103309e046d5128e085c6d380a00c5306b77cf01009190183500c44c8ded9cf9",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "7eeb642672c96b1a8fe2817d850ebf4701cabf0b7bddfede3f9b5cf31a977ae7",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": "001a8d93be78a3fbff5bbb551019b85955c3554826745440d61eb0d98de4066b",
+  "iosapp/XBXRC.xcodeproj/project.pbxproj": "5670dc7f9f2f31421f5a914304ca12ec2586764f06b4f059e062383f0e3ff82a",
+  "crates/xbox-ios-bridge/src/streaming.rs": "94cf435603088cb5d908f4dcdd094999277a22391ffa67c59d94add61a7863e5",
+  "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift": "464de5123ad2b56f4a5554d3ebd030cbc58dfa6f80dee57cc03d171d42aed09d",
+  "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "e808c4678a6c3c3e12c086056daee5d07374ee8aa751cbeb54ee3d1ac00b789d",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "45985c6681dd9b76b0f205fc860e7eb32f6b32fc520d2189da246e92d6bbee7e"
+}

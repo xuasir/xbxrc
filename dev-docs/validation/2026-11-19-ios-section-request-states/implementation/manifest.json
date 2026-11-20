@@ -1,0 +1,211 @@
+[
+  {
+    "path": "phone/section-errors-page-en-accessibility.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      320,
+      800
+    ],
+    "sha256": "f9c89239c123dca9926f12f184cea61d4456c5118634fe54141ffe9ebfa1bb80",
+    "dynamicType": "accessibility3"
+  },
+  {
+    "path": "phone/section-errors-ipad-en-light.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1024,
+      1024
+    ],
+    "sha256": "e09967465b17df76363811433955b12a409be58ddcef579790806e00658a28fb",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-phone-en-accessibility.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      390,
+      844
+    ],
+    "sha256": "14b6e7d3560c97f81a82a0e75e15a7d63cc9385dc06816cfd7acfcbd54ef3d89",
+    "dynamicType": "accessibility3"
+  },
+  {
+    "path": "phone/section-errors-phone-zh-dark.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      390,
+      844
+    ],
+    "sha256": "2335d495cb7c3c428397d6bd27fee6cf261f2bceac49e0807f55187ebd406f38",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-phone-narrow-en-light.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      320,
+      800
+    ],
+    "sha256": "54dfd21a62b9842faa3d8003167bfa4adadf4eff3a9a228203bb8baf79fc2387",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-phone-narrow-zh-light.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      320,
+      800
+    ],
+    "sha256": "487a79da6bcc2a35280f3fae1a9b6e12dc5a313e094f51e7fdab9569994062a2",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-cloud-recovered.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "3f64ec5784e58fefb6fbc4c5088ec9496a89acbae2d3652b3c6a17d53d1edc58",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-cloud-source.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "1f03ee2225c419da7e64539a36d634101260cb49ee03e3771c7a091e0f76b2cd",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-friends-recovered.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "5be00e5378633a5d646daf17efd2cec2200ab60127dcde9bd1405021a82794aa",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-friends-initial.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "e7aa1d0b229b7fbc9b293274fba3fd619b2a078ec3879ec58727a32e425e6acb",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-installed-recovered.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "adc36e30b7c378e454bbb99ae2e7bc1ca90842cf79e2cecdb258cc6815ee4d97",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "phone/section-errors-installed-storage.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPhone 18 Pro",
+    "size": [
+      1206,
+      2622
+    ],
+    "sha256": "2299e63efabf524cbb7a3d46b7abb026c05ad53e74b9c4c34653ddc659e42a98",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-ipad-en-light.png",
+    "test": "CapabilityMigrationTests/testSectionErrorsRenderAcrossWidthLanguageAndTextSizes()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1024,
+      1024
+    ],
+    "sha256": "7108ce572fc9fbcefb2ba3bc52a44d851a03574e1c82a494f63ba428df5a6973",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-cloud-recovered.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "ad6708073fb4e6fe7d4eeb67a5154ae3faf27c07995a4a85a92f14ca1c02a0d3",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-cloud-source.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "dfb622100613d9a565e1cdd77432f4c930d8a079e0df770ee25b487b7fe44a2b",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-friends-recovered.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "8d7fba96e51c8bdd6b15603498707f80b57488ee15fe4dd29ad4f39a551333c0",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-friends-initial.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "999df845480aeb97438a2f6dd95a0211bd45713ea0562b2e862e0c9c89041196",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-installed-recovered.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "6a1d7a094cb3b83472854f4979e3446d41f4a6624f18e2f4318628b70ce06fbe",
+    "dynamicType": "large (system default)"
+  },
+  {
+    "path": "ipad/section-errors-installed-storage.png",
+    "test": "PCPageInteractionTests/testSectionNoticesUseFullWidthAndWholeRowRetries()",
+    "device": "iPad Pro 11-inch (M5)",
+    "size": [
+      1668,
+      2420
+    ],
+    "sha256": "f74e066b98e231eec9accfe531940b5cb9237f9729cde58e8c7ef45057ade711",
+    "dynamicType": "large (system default)"
+  }
+]

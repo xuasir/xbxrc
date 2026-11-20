@@ -1,0 +1,16 @@
+{
+  "removedRoot": "/private/tmp/xbxrc-ios-filter-segmented-20261120",
+  "removed": true,
+  "allocatedBytesBefore": 1486077952,
+  "allocatedGiBBefore": 1.384,
+  "freeBytesBefore": 64716800000,
+  "freeBytesAfter": 65945600000,
+  "freeBytesIncrease": 1228800000,
+  "processesBeforeCleanup": [],
+  "retained": [
+    "dev-docs/validation/2026-11-20-ios-filter-segmented-style",
+    "target/ios",
+    "target/ios-webrtc/137.7151.04/SourcePackages"
+  ],
+  "temporaryTestSourcesRestored": true
+}

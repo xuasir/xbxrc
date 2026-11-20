@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "finalLayoutCounts": {
+    "phone": {
+      "information": 192,
+      "settingsAndShell": 200
+    },
+    "ipad": {
+      "information": 192,
+      "settingsAndShell": 200
+    }
+  },
+  "saved": [
+    {
+      "file": "final-phone-narrow-accessibility-settings-general.png",
+      "device": "phone",
+      "name": "phone-narrow-accessibility-settings-general",
+      "source": "/tmp/xbxrc-ios-annotations-final-phone-attachments/2A25A146-D732-48EE-8B42-E7925B3AD451.png",
+      "sha256": "25513c134dc3500393b085bf89e80038d3d5c7b4ebc236c9ba170c098ef93c79"
+    },
+    {
+      "file": "final-ipad-accessibility-settings-picture.png",
+      "device": "ipad",
+      "name": "ipad-accessibility-settings-picture",
+      "source": "/tmp/xbxrc-ios-annotations-final-ipad-attachments/299F3C14-63AD-42A7-945C-FCCDA890907D.png",
+      "sha256": "3b93b1fd7e9ffcecf01118b34f17f42dddb8a14ef592b781b953a27af6a9ecc0"
+    },
+    {
+      "file": "final-ipad-tablet-large-settings-general.png",
+      "device": "ipad",
+      "name": "ipad-tablet-large-settings-general",
+      "source": "/tmp/xbxrc-ios-annotations-final-ipad-attachments/78B3738B-3E40-4AFF-A4F1-6431476FECCA.png",
+      "sha256": "1eb01b89e9198e1f3c8cc6248aba3e0d08abebfc2873b695a82f3eb22cd3beab"
+    },
+    {
+      "file": "phone-final-dark-annotations-my-sign-out-confirmation.png",
+      "device": "phone",
+      "source": "/tmp/xbxrc-ios-annotations-final-my-dark-attachments/59B33337-3133-453D-BB4D-3F0DEAA58D56.png",
+      "test": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+      "sha256": "b11ecf20e9a0e00a03f816caf56233fae6e93ba05738b0d45622b9276888bba4",
+      "version": "final source, calibrated dark theme"
+    },
+    {
+      "file": "phone-final-dark-annotations-my-overview.png",
+      "device": "phone",
+      "source": "/tmp/xbxrc-ios-annotations-final-my-dark-attachments/9E323F78-E160-4106-909F-54AE6B202FB1.png",
+      "test": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+      "sha256": "1408ae8511b8feeaf9215d4262ec3ac0317a431e4b2bf3938a97a9eab02e2012",
+      "version": "final source, calibrated dark theme"
+    }
+  ],
+  "savedCount": 5,
+  "comparisons": [
+    "batch-1-comparison.jpg",
+    "batch-2-comparison.jpg",
+    "batch-3-comparison.jpg",
+    "additions-comparison.jpg",
+    "dark-theme-comparison.jpg"
+  ],
+  "preview": "preview.jpg",
+  "archiveCleanup": {
+    "date": "2026-11-18",
+    "previousSavedCount": 119,
+    "policy": "保留最终关键界面、用户原图、分批对照与测试摘要；完整布局矩阵按 README 的历史运行次数记录。"
+  }
+}

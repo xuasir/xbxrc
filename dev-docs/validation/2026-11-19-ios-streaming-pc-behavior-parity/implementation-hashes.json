@@ -1,0 +1,10 @@
+{
+  "crates/xbox-ios-bridge/src/streaming.rs": "18cd8085b39de4310ad57f179db4f607a91ced833feb05365696b3620126b45d",
+  "crates/xbox-streaming/src/session/recovery/supervision.rs": "4557d41ff24d0893a88d14c010fb6b8c560a8821457917c41f736d69823c41bd",
+  "crates/xbox-streaming/src/session/recovery/quality.rs": "4a856704688294564745e5abe9af853079bc3f137031853e99ec12adb579ac27",
+  "crates/xbox-streaming/src/session/recovery/observation.rs": "28bbf0f9e57d6473e235e152d9a6f8c2ce399deab7176b075165a9e2fba8efb7",
+  "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "5f449087cfd2b91c5aa1c6f2ce9dc8c66d206b84faf209a1e4b1aa90b7f7e35e",
+  "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": "3a6fa1f65cfab5db12f80413748f825f2162e3b03f03eae8554b0162799afd3c",
+  "src/streaming/runtime/browser-runtime.ts": "ab36e66bde07c79e7c85383c10a51433e9807c22b193433f6b3c12325ec29446",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "71165b2293d7f9d34c8867b3d7f97fa67ef53c120b2138dc8135ab80b9e00eb8"
+}

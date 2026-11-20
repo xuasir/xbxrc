@@ -1,9 +1,102 @@
-import Foundation
 import AVFoundation
+import Foundation
+@preconcurrency import WebRTC
 
 enum StreamingLaunchTarget: String, Equatable, Sendable {
     case cloud
     case home
+}
+
+struct CloudStreamingIdentity: Equatable, Sendable {
+    let productID: String
+    let streamTitleID: String
+    let hasEntitlement: Bool?
+}
+
+protocol CloudGameLaunchResolving: Sendable {
+    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+        -> CloudStreamingIdentity
+}
+
+struct RustCloudGameLaunchResolver: CloudGameLaunchResolving {
+    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+        -> CloudStreamingIdentity
+    {
+        guard
+            let game = try await resolveCloudGame(
+                accessHandle: accessHandle, productId: productID, serverRegion: serverRegion),
+            let title = game.streamTitleId, !title.isEmpty
+        else { throw StreamingRuntimeError.cloudGameUnavailable }
+        return CloudStreamingIdentity(
+            productID: game.productId, streamTitleID: title, hasEntitlement: game.hasEntitlement)
+    }
+}
+
+struct StreamingStartupProgress: Equatable, Sendable {
+    let phase: String
+    var status = "entered"
+    var streamState: String?
+    var totalWaitSeconds: UInt64?
+    var allocationWaitSeconds: UInt64?
+    var provisioningWaitSeconds: UInt64?
+    var retryCount: UInt8 = 0
+    var retryLimit: UInt8 = 0
+
+    var statusText: String {
+        switch phase {
+        case "checkingGame": "正在验证游戏的云端身份与访问权限"
+        case "preparingConsole": "正在唤醒并准备 Xbox 主机"
+        case "resolvingContext": "正在准备串流会话环境"
+        case "creatingSession": "正在创建串流会话"
+        case "waitingSessionReady":
+            if streamState == "Queued" || totalWaitSeconds != nil {
+                "正在排队等待串流会话"
+            } else if streamState == "Provisioning" {
+                "正在准备串流环境"
+            } else {
+                "正在等待会话就绪"
+            }
+        case "ready": "串流会话已就绪"
+        case "failed": "串流会话准备失败"
+        default: "正在准备串流连接"
+        }
+    }
+    var detailText: String? {
+        var parts: [String] = []
+        if let totalWaitSeconds { parts.append("预计等待 \(totalWaitSeconds) 秒") }
+        if let allocationWaitSeconds { parts.append("分配 \(allocationWaitSeconds) 秒") }
+        if let provisioningWaitSeconds { parts.append("准备 \(provisioningWaitSeconds) 秒") }
+        if retryCount > 0 { parts.append("重试 \(retryCount)/\(retryLimit)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    func localizedDetailText(locale: Locale) -> String? {
+        var parts: [String] = []
+        if let totalWaitSeconds {
+            parts.append(
+                appLocalizedFormat(
+                    "预计等待 %@ 秒", locale: locale, totalWaitSeconds.formatted(.number.locale(locale)))
+            )
+        }
+        if let allocationWaitSeconds {
+            parts.append(
+                appLocalizedFormat(
+                    "分配 %@ 秒", locale: locale,
+                    allocationWaitSeconds.formatted(.number.locale(locale))))
+        }
+        if let provisioningWaitSeconds {
+            parts.append(
+                appLocalizedFormat(
+                    "准备 %@ 秒", locale: locale,
+                    provisioningWaitSeconds.formatted(.number.locale(locale))))
+        }
+        if retryCount > 0 {
+            parts.append(
+                appLocalizedFormat(
+                    "重试 %@/%@", locale: locale, String(retryCount), String(retryLimit)))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }
 
 enum StreamingFeatureState: Equatable, Sendable {
@@ -33,7 +126,7 @@ enum StreamingFeatureState: Equatable, Sendable {
         case .playing: "串流中"
         case .suspending: "正在挂起串流"
         case .stopping: "正在结束串流"
-        case let .failed(message, _): message
+        case .failed(let message, _): message
         }
     }
 
@@ -54,7 +147,7 @@ enum StreamingFeatureState: Equatable, Sendable {
     }
 
     var traceRetryable: Bool? {
-        guard case let .failed(_, retryable) = self else { return nil }
+        guard case .failed(_, let retryable) = self else { return nil }
         return retryable
     }
 }
@@ -145,13 +238,26 @@ enum StreamingAudioPermissionCoordinator {
         case .denied:
             throw StreamingRuntimeError.microphonePermissionDenied
         case .undetermined:
-            let granted = await withCheckedContinuation { continuation in
-                AVAudioApplication.requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
+            let gate = RemoteAnswerApplyGate()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    gate.install(continuation)
+                    let request = Task {
+                        AVAudioApplication.requestRecordPermission { granted in
+                            gate.resolve(
+                                granted
+                                    ? .success(())
+                                    : .failure(StreamingRuntimeError.microphonePermissionDenied))
+                        }
+                    }
+                    let timeout = Task {
+                        do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                        gate.resolve(.failure(StreamingRuntimeError.microphoneUnavailable))
+                    }
+                    gate.installTasks(operationTask: request, timeoutTask: timeout)
                 }
-            }
-            guard granted else {
-                throw StreamingRuntimeError.microphonePermissionDenied
+            } onCancel: {
+                gate.resolve(.failure(CancellationError()))
             }
         @unknown default:
             throw StreamingRuntimeError.microphonePermissionDenied
@@ -161,7 +267,7 @@ enum StreamingAudioPermissionCoordinator {
 
 /// WebRtcDirect negotiation 的 iOS 可消费投影，由 Rust plan 生成并保留桌面默认 fixture。
 struct StreamingWebRtcPlan: Equatable, Sendable {
-    let audioDirection: StreamingMediaDirection
+    var audioDirection: StreamingMediaDirection
     let videoDirection: StreamingMediaDirection
     let videoCodecMimeType: String
     let targetVideoWidth: Int
@@ -172,15 +278,16 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
     let h264LevelAsymmetryAllowed: Bool
     let maxFrameSize: Int
     let maxFrameRate: Int
-    let minVideoBitrateKbps: Int?
-    let startVideoBitrateKbps: Int?
-    let maxVideoBitrateKbps: Int?
+    var minVideoBitrateKbps: Int?
+    var startVideoBitrateKbps: Int?
+    var maxVideoBitrateKbps: Int?
     let stereoAudio: Bool
     let requiredVideoRtcpFeedback: [String]
     let allowedCandidateTypes: [String]
     let iceTransportPolicy: String
     let preferIPv6: Bool
     let normalizeEndOfCandidates: Bool
+    let preventResolutionDrops: Bool
 
     static let desktopWebRtcDirect = StreamingWebRtcPlan()
 
@@ -206,7 +313,8 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
         allowedCandidateTypes: [String] = ["host", "srflx", "relay"],
         iceTransportPolicy: String = "all",
         preferIPv6: Bool = false,
-        normalizeEndOfCandidates: Bool = true
+        normalizeEndOfCandidates: Bool = true,
+        preventResolutionDrops: Bool = false
     ) {
         self.audioDirection = audioDirection
         self.videoDirection = videoDirection
@@ -228,19 +336,32 @@ struct StreamingWebRtcPlan: Equatable, Sendable {
         self.iceTransportPolicy = iceTransportPolicy
         self.preferIPv6 = preferIPv6
         self.normalizeEndOfCandidates = normalizeEndOfCandidates
+        self.preventResolutionDrops = preventResolutionDrops
+    }
+
+    func withVideoBitrateCap(_ bitrateKbps: Int) -> Self {
+        var plan = self
+        let cap = max(0, bitrateKbps)
+        plan.maxVideoBitrateKbps = cap
+        plan.minVideoBitrateKbps = minVideoBitrateKbps.map { min($0, cap) }
+        plan.startVideoBitrateKbps = startVideoBitrateKbps.map { min($0, cap) }
+        return plan
     }
 }
 
 struct StreamingPreparedSignaling: Equatable, Sendable {
-    let iceServers: [StreamingIceServer]
-    let webRtcPlan: StreamingWebRtcPlan
+    var iceServers: [StreamingIceServer]
+    var webRtcPlan: StreamingWebRtcPlan
+    var fallbackIceServers: [StreamingIceServer]?
 
     init(
         iceServers: [StreamingIceServer],
-        webRtcPlan: StreamingWebRtcPlan = .desktopWebRtcDirect
+        webRtcPlan: StreamingWebRtcPlan = .desktopWebRtcDirect,
+        fallbackIceServers: [StreamingIceServer]? = nil
     ) {
         self.iceServers = iceServers
         self.webRtcPlan = webRtcPlan
+        self.fallbackIceServers = fallbackIceServers
     }
 }
 
@@ -248,17 +369,28 @@ struct StreamingIceCandidate: Equatable, Sendable {
     let sdp: String
     let sdpMid: String?
     let sdpMLineIndex: Int32
+    var usernameFragment: String? = nil
+    var source: String? = nil
 }
 
 struct StreamingRemoteIceBatch: Equatable, Sendable {
     let candidates: [StreamingIceCandidate]
     let endOfCandidates: Bool
+    var configurationPending: Bool = false
 }
 
 /// Rust opaque session 的窄桥接面。Swift 负责 libwebrtc 输入输出，所有远端会话策略留在 Rust。
 protocol StreamingControlSession: Sendable {
+    func pendingAuthUpdate() async -> XboxStreamingAuthUpdate?
+    func acknowledgeAuthUpdate(revision: UInt64) async
+    func synchronizeAuthSession(revision: UInt64, session: AuthSession) async throws
     func prepareSignaling() async throws -> StreamingPreparedSignaling
+    func startupProgress() async -> StreamingStartupProgress?
     func exchangeOffer(_ sdp: String) async throws -> String
+    func exchangeMediaOffer(_ sdp: String, kind: String) async throws -> String
+    func validateResume() async throws
+    func supervise(_ sample: StreamingSupervisionSample) async throws
+        -> StreamingSupervisionDecision
     func submitLocalCandidates(_ candidates: [StreamingIceCandidate]) async throws
     func completeLocalIceGathering() async throws
     func nextRemoteIceBatch() async throws -> StreamingRemoteIceBatch
@@ -266,6 +398,25 @@ protocol StreamingControlSession: Sendable {
     func sendText(_ text: String) async throws -> Bool
     func powerOffConsole() async throws -> Bool
     func close() async
+}
+
+extension StreamingControlSession {
+    func exchangeMediaOffer(_ sdp: String, kind: String) async throws -> String {
+        try await exchangeOffer(sdp)
+    }
+    func validateResume() async throws {}
+    func supervise(_ sample: StreamingSupervisionSample) async throws
+        -> StreamingSupervisionDecision
+    { .unavailable }
+    func pendingAuthUpdate() async -> XboxStreamingAuthUpdate? { nil }
+    func acknowledgeAuthUpdate(revision: UInt64) async {}
+    func synchronizeAuthSession(revision: UInt64, session: AuthSession) async throws {}
+    func startupProgress() async -> StreamingStartupProgress? { nil }
+}
+
+enum StreamingAuthCommitResult: Sendable {
+    case committed
+    case synchronize(AuthSession)
 }
 
 protocol StreamingControlSessionFactory: Sendable {
@@ -304,6 +455,11 @@ struct StreamingPeerStats: Equatable, Sendable {
     let firstMediaAtMilliseconds: Double?
     let lastMediaAtMilliseconds: Double?
     let frameSupplyDelta: Int64?
+    var observedAtMilliseconds: Double? = nil
+    var framesReceived: UInt64? = nil
+    var observedFramesDecoded: UInt64? = nil
+    var videoPacketsLost: Int64? = nil
+    var selectedCandidatePairID: String? = nil
 
     init(
         inboundVideoBytes: UInt64,
@@ -377,18 +533,23 @@ struct StreamingPresentationTraceContext: Equatable, Sendable {
     let attemptID: String
     let generation: UInt64
     let peerEpoch: UInt64
+    var videoGeneration: UInt64 = 0
 }
 
 final class StreamingVideoTrackHandle: @unchecked Sendable {
-    let rawValue: AnyObject
+    // libwebrtc 轨道保持原生身份，精确配对 renderer 的挂载与解绑。
+    let rawValue: RTCVideoTrack
     let traceContext: StreamingPresentationTraceContext?
+    let frameFeedback: StreamingFrameFeedbackSession?
 
     init(
-        rawValue: AnyObject,
-        traceContext: StreamingPresentationTraceContext? = nil
+        rawValue: RTCVideoTrack,
+        traceContext: StreamingPresentationTraceContext? = nil,
+        frameFeedback: StreamingFrameFeedbackSession? = nil
     ) {
         self.rawValue = rawValue
         self.traceContext = traceContext
+        self.frameFeedback = frameFeedback
     }
 }
 
@@ -465,7 +626,7 @@ enum StreamingTerminalReason: Equatable, Sendable {
         case .remoteError: "remote.error"
         case .iceFailed: "ice.failed"
         case .peerClosed: "peer.closed"
-        case let .dataChannelClosed(label): "dataChannel.closed.\(label.rawValue)"
+        case .dataChannelClosed(let label): "dataChannel.closed.\(label.rawValue)"
         case .runtimeFailure: "runtime.failed"
         }
     }
@@ -473,10 +634,10 @@ enum StreamingTerminalReason: Equatable, Sendable {
     var retryable: Bool {
         switch self {
         case .userStop, .backgroundStop, .superseded, .authRevoked,
-             .sessionClosed, .remoteKickClosedGame, .remoteClosed, .peerClosed:
+            .sessionClosed, .remoteKickClosedGame, .remoteClosed, .peerClosed:
             false
         case .sessionFailed, .remoteError, .iceFailed,
-             .dataChannelClosed, .runtimeFailure:
+            .dataChannelClosed, .runtimeFailure:
             true
         }
     }
@@ -494,7 +655,7 @@ enum StreamingTerminalReason: Equatable, Sendable {
         case .remoteError: "Xbox 返回了串流错误"
         case .iceFailed: "WebRTC 网络连接失败"
         case .peerClosed: "WebRTC 连接已经关闭"
-        case let .dataChannelClosed(label): "Xbox 串流通道已关闭（\(label.rawValue)）"
+        case .dataChannelClosed(let label): "Xbox 串流通道已关闭（\(label.rawValue)）"
         case .runtimeFailure: "Xbox 串流运行失败"
         }
     }
@@ -520,8 +681,8 @@ enum StreamingTerminalReason: Equatable, Sendable {
 enum StreamingRemoteMessageClassifier {
     static func isHandshakeAck(_ data: Data) -> Bool {
         guard let object = try? JSONSerialization.jsonObject(with: data),
-              let dictionary = object as? [String: Any],
-              let type = dictionary["type"] as? String
+            let dictionary = object as? [String: Any],
+            let type = dictionary["type"] as? String
         else { return false }
         return type == "HandshakeAck"
     }
@@ -569,7 +730,7 @@ enum StreamingRemoteMessageClassifier {
         if let string = value as? String {
             var result = [string.lowercased()]
             if let nestedData = string.data(using: .utf8),
-               let nested = try? JSONSerialization.jsonObject(with: nestedData)
+                let nested = try? JSONSerialization.jsonObject(with: nestedData)
             {
                 result.append(contentsOf: messageCatalog(nested))
             }
@@ -670,50 +831,50 @@ struct StreamingDataChannelStateMachine: Sendable {
         guard terminalReason == nil, inFlightAction == nil else { return nil }
         let action: StreamingDataChannelBootstrapAction?
         if !handshakeAcknowledged,
-                  preHandshakeControlBootstrapSentCount < controlBootstrapCount,
-                  phases[.control] == .open
+            preHandshakeControlBootstrapSentCount < controlBootstrapCount,
+            phases[.control] == .open
         {
             action = .sendControlBootstrap(
                 stage: .preHandshake,
                 index: preHandshakeControlBootstrapSentCount
             )
         } else if !handshakeAcknowledged,
-                  !preHandshakeInputMetadataSent,
-                  phases[.input] == .open
+            !preHandshakeInputMetadataSent,
+            phases[.input] == .open
         {
             action = .sendInputMetadata(stage: .preHandshake)
         } else if phases[.message] == .open, !handshakeSent {
             action = .sendMessageHandshake
         } else if handshakeAcknowledged,
-                  postHandshakeSentCount < postHandshakeCount,
-                  phases[.message] == .open
+            postHandshakeSentCount < postHandshakeCount,
+            phases[.message] == .open
         {
             action = .sendPostHandshake(index: postHandshakeSentCount)
         } else if handshakeAcknowledged, postHandshakeSentCount == postHandshakeCount,
-                  postHandshakeControlBootstrapSentCount < controlBootstrapCount,
-                  phases[.control] == .open
+            postHandshakeControlBootstrapSentCount < controlBootstrapCount,
+            phases[.control] == .open
         {
             action = .sendControlBootstrap(
                 stage: .postHandshake,
                 index: postHandshakeControlBootstrapSentCount
             )
         } else if handshakeAcknowledged, postHandshakeSentCount == postHandshakeCount,
-                  postHandshakeControlBootstrapSentCount == controlBootstrapCount,
-                  !controlReady, phases[.control] == .open
+            postHandshakeControlBootstrapSentCount == controlBootstrapCount,
+            !controlReady, phases[.control] == .open
         {
             action = .announceControlReady
         } else if handshakeAcknowledged, postHandshakeSentCount == postHandshakeCount,
-                  !postHandshakeInputMetadataSent,
-                  phases[.input] == .open
+            !postHandshakeInputMetadataSent,
+            phases[.input] == .open
         {
             action = .sendInputMetadata(stage: .postHandshake)
         } else if controlReady, postHandshakeInputMetadataSent,
-                  !gamepadAnnouncementScheduled,
-                  phases[.control] == .open, phases[.input] == .open
+            !gamepadAnnouncementScheduled,
+            phases[.control] == .open, phases[.input] == .open
         {
             action = .scheduleGamepadAnnouncement
         } else if gamepadAnnouncementScheduled, !inputStarted,
-                  phases[.control] == .open, phases[.input] == .open
+            phases[.control] == .open, phases[.input] == .open
         {
             action = .startInput
         } else {
@@ -728,9 +889,9 @@ struct StreamingDataChannelStateMachine: Sendable {
         switch action {
         case .sendMessageHandshake:
             handshakeSent = true
-        case let .sendPostHandshake(index) where index == postHandshakeSentCount:
+        case .sendPostHandshake(let index) where index == postHandshakeSentCount:
             postHandshakeSentCount += 1
-        case let .sendControlBootstrap(stage, index):
+        case .sendControlBootstrap(let stage, let index):
             switch stage {
             case .preHandshake where index == preHandshakeControlBootstrapSentCount:
                 preHandshakeControlBootstrapSentCount += 1
@@ -743,7 +904,7 @@ struct StreamingDataChannelStateMachine: Sendable {
             default:
                 break
             }
-        case let .sendInputMetadata(stage):
+        case .sendInputMetadata(let stage):
             switch stage {
             case .preHandshake:
                 preHandshakeInputMetadataSent = true
@@ -778,8 +939,27 @@ protocol StreamingPeerRuntime: AnyObject, Sendable {
     func addRemoteCandidates(_ candidates: [StreamingIceCandidate]) async throws
     func debugSnapshot() async -> StreamingPeerDebugSnapshot
     func setAudioMuted(_ muted: Bool) async throws
+    func makeMicrophoneOffer(enabled: Bool) async throws -> String
+    func stopMicrophoneCapture() async
+    func rollbackMediaNegotiation() async throws
+    func requestVideoKeyframe() async -> Bool
+    func makeQualityOffer(maxVideoBitrateKbps: Int) async throws -> String
+    func remoteVideoBitrateCapKbps() async -> Int?
     func stopInputAndHaptics() async
     func closeTransport() async
+}
+
+extension StreamingPeerRuntime {
+    func makeMicrophoneOffer(enabled: Bool) async throws -> String {
+        throw StreamingRuntimeError.microphoneUnavailable
+    }
+    func stopMicrophoneCapture() async {}
+    func rollbackMediaNegotiation() async throws {}
+    func requestVideoKeyframe() async -> Bool { false }
+    func makeQualityOffer(maxVideoBitrateKbps: Int) async throws -> String {
+        throw StreamingRuntimeError.superseded
+    }
+    func remoteVideoBitrateCapKbps() async -> Int? { nil }
 }
 
 protocol StreamingPeerRuntimeFactory: AnyObject, Sendable {
@@ -790,28 +970,147 @@ protocol StreamingPeerRuntimeFactory: AnyObject, Sendable {
 
 enum StreamingRuntimeError: LocalizedError, Equatable {
     case invalidStreamTitleID
+    case cloudGameUnavailable
+    case cloudEntitlementRequired
     case superseded
-    case webRTCUnavailable
     case peerConnectionCreationFailed
     case missingLocalDescription
     case missingRemoteDescription
     case remoteDescriptionTimedOut
     case microphonePermissionDenied
+    case microphoneUnavailable
+    case mediaNegotiationBusy
     case peerConnectionFailed
     case peerConnectionClosed
 
     var errorDescription: String? {
         switch self {
         case .invalidStreamTitleID: "串流目标标识无效"
+        case .cloudGameUnavailable: "当前云目录暂未提供此游戏的可用启动身份"
+        case .cloudEntitlementRequired: "当前账户需要此游戏的云游戏访问权限"
         case .superseded: "串流请求已被新的请求替代"
-        case .webRTCUnavailable: "当前构建缺少 WebRTC 运行时"
         case .peerConnectionCreationFailed: "创建 WebRTC 连接失败"
         case .missingLocalDescription: "WebRTC 本地协商描述缺失"
         case .missingRemoteDescription: "Xbox 远端协商描述缺失"
         case .remoteDescriptionTimedOut: "应用 Xbox 远端协商描述超时"
         case .microphonePermissionDenied: "麦克风权限未授权"
+        case .microphoneUnavailable: "当前设备无法使用麦克风"
+        case .mediaNegotiationBusy: "音视频协商正在进行"
         case .peerConnectionFailed: "WebRTC 连接已经失败"
         case .peerConnectionClosed: "WebRTC 连接已经关闭"
         }
     }
+}
+
+/// 原生仅投影事实与执行结果；窗口、压力、冷却和效果由公共 Rust 判定。
+struct StreamingSupervisionSample: Encodable, Sendable {
+    var nowMs: UInt64
+    var sampledAtMs: UInt64?
+    var sampleId: String?
+    var observationFresh = false
+    var visible = true
+    var isClosing = false
+    var connectionState = "connected"
+    var controlChannelState = "unknown"
+    var connectedElapsedMs: UInt64 = 0
+    var inactivityElapsedMs: UInt64 = 0
+    var frameIntervalMs: Double?
+    var inboundBytesTotal: UInt64?
+    var inboundVideoPacketCountTotal: UInt64?
+    var videoPresentAgeMs: Double?
+    var packetAgeMs: Double?
+    var peerGeneration: UInt64 = 0
+    var videoGeneration: UInt64 = 0
+    var warmupUntilMs: UInt64 = 0
+    var previousActionAtMs: UInt64?
+    var eligibleSinceMs: UInt64 = 0
+    var short: [String: Double] = [:]
+    var long: [String: Double] = [:]
+    var counters: StreamingMediaCounters?
+    var rttMs: Double?
+    var jitterMs: Double?
+    var pathId: String?
+    var qualityLevel: Int = 0
+    var qualitySupported = false
+    var requestConnectionRecovery = false
+    var connectionRecoveryFollowup = false
+    var connectionRecoveryActionCompleted = false
+    var connectionRecoveryFactKey: String?
+    var qualityCompletion: StreamingQualityCompletion?
+    var probe: StreamingRecoveryProbe?
+}
+
+struct StreamingMediaCounters: Encodable, Sendable {
+    var received: UInt64?
+    var decoded: UInt64?
+    var presented: UInt64?
+    var packetsReceived: UInt64?
+    var packetsLost: Int64?
+}
+
+struct StreamingObservationWindow: Codable, Equatable, Sendable {
+    var inboundFpsAvg: Double?
+    var decodeFpsAvg: Double?
+    var videoPresentFpsAvg: Double?
+}
+
+struct StreamingRecoveryProbe: Codable, Sendable {
+    struct Baseline: Codable, Sendable {
+        var decodeFps: Double?
+        var videoFps: Double?
+    }
+    var action: String
+    var startedAtMs: UInt64
+    var observeMs: UInt64
+    var requiredObserveMs: UInt64
+    var sampleId: String?
+    var videoGeneration: UInt64?
+    var peerGeneration: UInt64?
+    var baseline: Baseline
+}
+
+struct StreamingQualityAction: Codable, Equatable, Sendable {
+    var id: UInt64
+    var level: Int
+    var reason: String
+}
+struct StreamingQualityCompletion: Encodable, Sendable {
+    var id: UInt64
+    var result: String
+    var previousLevel: Int
+    var completedAtMs: UInt64
+}
+struct StreamingQualityDecision: Decodable, Equatable, Sendable {
+    var state: String
+    var reason: String
+    var rttBaselineMs: Double?
+    var rttDeltaMs: Double?
+    var effect: String?
+    var action: StreamingQualityAction?
+}
+struct StreamingRecoveryEffect: Decodable, Equatable, Sendable {
+    var result: String
+    var reason: String
+    var score: Double?
+}
+struct StreamingSupervisionDecision: Decodable, Equatable, Sendable {
+    var fresh: Bool
+    var duplicate: Bool
+    var stallThresholdMs: UInt64
+    var hasInboundProgress: Bool
+    var decodeRecoveryEligible: Bool
+    var decodePressureSustainedMs: UInt64
+    var healthyEpisodeComplete: Bool
+    var mediaConnectionEligible: Bool
+    var networkPressure: String
+    var probeEffect: StreamingRecoveryEffect?
+    var short: StreamingObservationWindow
+    var quality: StreamingQualityDecision?
+    var connectionRecoveryAllowed = false
+    var connectionRecoveryExhausted = false
+    var connectionRecoveryActive = false
+    static let unavailable = Self(
+        fresh: false, duplicate: false, stallThresholdMs: 5000, hasInboundProgress: false,
+        decodeRecoveryEligible: false, decodePressureSustainedMs: 0, healthyEpisodeComplete: false,
+        mediaConnectionEligible: false, networkPressure: "unknown", short: .init())
 }

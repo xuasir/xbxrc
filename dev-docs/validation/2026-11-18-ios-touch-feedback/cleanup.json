@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-18",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-touch-feedback-20261118/r1",
+  "removed": [
+    "attachments",
+    "derived",
+    "phone-final.log",
+    "phone-final.xcresult",
+    "phone.log",
+    "phone.xcresult",
+    "swift-format.json"
+  ],
+  "processesEnded": [
+    "phone xcodebuild exit 0",
+    "phone-final xcodebuild exit 0",
+    "xcresulttool export completed"
+  ],
+  "allocatedBytesRemoved": 496721920,
+  "rootExistsAfter": false,
+  "freeBytesBefore": 80281600000,
+  "freeBytesAfter": 80691200000,
+  "preserved": [
+    "final evidence screenshots and summaries",
+    "existing WebRTC SourcePackages",
+    "target/ios shared Rust cache"
+  ]
+}

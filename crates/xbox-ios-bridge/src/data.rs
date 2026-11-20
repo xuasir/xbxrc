@@ -5,7 +5,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use tokio::task::JoinSet;
 use xbox_streaming::{HostAddr, RemoteConsoleSnapshot};
 use xbox_webapi::{
-    AchievementsApi, ConsoleApi, ConsolePowerResponse, SmartglassApi, TitleHubApi, UserStatsApi,
+    parse_minutes_played, validate_minutes_played_response, AchievementsApi, ConsoleApi,
+    ConsolePowerResponse, SmartglassApi, TitleHubApi, UserStatsApi,
+    USERSTATS_MAX_TITLES_PER_REQUEST,
 };
 
 const ACHIEVEMENTS_PAGE_SIZE: u32 = 200;
@@ -39,8 +41,16 @@ pub struct XboxPlaytime {
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
+pub struct XboxAchievementRequirement {
+    pub id: String,
+    pub current: Option<String>,
+    pub target: Option<String>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct XboxAchievement {
     pub id: String,
+    pub scid: Option<String>,
     pub title_id: String,
     pub name: String,
     pub description: String,
@@ -51,6 +61,7 @@ pub struct XboxAchievement {
     pub gamerscore: u32,
     pub progress_percentage: Option<u32>,
     pub unlocked_at: Option<String>,
+    pub requirements: Vec<XboxAchievementRequirement>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -97,7 +108,8 @@ pub async fn fetch_hosts(web_token_json: String) -> Result<Vec<XboxHost>, XboxBr
             replace_home_host_facts(&account_id, extract_home_host_facts(&response))?;
             Ok(hosts)
         }
-        Ok(Err(_)) | Err(_) => Ok(Vec::new()),
+        Ok(Err(error)) => Err(crate::query_failure::query_error(error)),
+        Err(_) => Err(XboxBridgeError::Data("主机查询超时，请重试".into())),
     }
 }
 
@@ -135,7 +147,7 @@ async fn send_console_power_command(
         ConsolePowerCommand::PowerOn => api.power_on(&console_id).await,
         ConsolePowerCommand::PowerOff => api.power_off(&console_id).await,
     }
-    .map_err(|error| XboxBridgeError::Data(error.to_string()))?;
+    .map_err(|error| crate::query_failure::query_error(error))?;
 
     Ok(map_console_power_response(response))
 }
@@ -164,7 +176,7 @@ pub async fn fetch_game_library(web_token_json: String) -> Result<Vec<XboxGame>,
     let response = TitleHubApi::new(claims.uhs, claims.token)
         .get_title_history(xuid)
         .await
-        .map_err(|error| XboxBridgeError::Data(error.to_string()))?;
+        .map_err(|error| crate::query_failure::query_error(error))?;
 
     Ok(extract_games(&response))
 }
@@ -175,49 +187,39 @@ pub async fn fetch_playtimes(
     title_ids: Vec<String>,
 ) -> Result<Vec<XboxPlaytime>, XboxBridgeError> {
     let claims = claims_from_json(&web_token_json)?;
-    let xuid = require_xuid(&claims.xuid)?;
+    let xuid = require_xuid(&claims.xuid)?.to_string();
     let title_ids = normalize_title_ids(title_ids)?;
     let api = UserStatsApi::new(claims.uhs, claims.token);
-    let xuid = xuid.to_string();
-    let mut resolved = HashMap::new();
+    let batches = title_ids
+        .chunks(USERSTATS_MAX_TITLES_PER_REQUEST)
+        .map(|batch| batch.to_vec())
+        .collect::<Vec<_>>();
+    let mut batches = batches.into_iter();
     let mut tasks = JoinSet::new();
-    let mut next_index = 0;
-
-    while next_index < title_ids.len() && tasks.len() < MAX_CONCURRENT_PLAYTIME_REQUESTS {
-        spawn_playtime_request(
-            &mut tasks,
-            api.clone(),
-            xuid.clone(),
-            title_ids[next_index].clone(),
-        );
-        next_index += 1;
-    }
-
-    while let Some(result) = tasks.join_next().await {
-        match result {
-            Ok((_, Err(error))) if error.to_status_code() == Some(400) => {}
-            Ok((_, Err(error))) => return Err(XboxBridgeError::Data(error.to_string())),
-            Ok((title_id, Ok(response))) => {
-                resolved.extend(extract_playtimes(&response, Some(&title_id)))
-            }
-            Err(error) => {
-                return Err(XboxBridgeError::Data(format!(
-                    "playtime request task failed: {error}"
-                )))
+    let mut resolved = HashMap::new();
+    loop {
+        while tasks.len() < MAX_CONCURRENT_PLAYTIME_REQUESTS {
+            let Some(batch) = batches.next() else { break };
+            let api = api.clone();
+            let xuid = xuid.clone();
+            tasks.spawn(async move {
+                let response = api.get_minutes_played_batch(&xuid, &batch).await?;
+                validate_minutes_played_response(&response)?;
+                Ok::<_, xbox_webapi::WebApiError>((batch, response))
+            });
+        }
+        let Some(result) = tasks.join_next().await else {
+            break;
+        };
+        let (batch, response) = result
+            .map_err(|_| XboxBridgeError::InvalidData("playtime query interrupted".into()))?
+            .map_err(|error| crate::query_failure::query_error(error))?;
+        for title in batch {
+            if let Some(minutes) = parse_minutes_played(&response, &title) {
+                resolved.insert(title, minutes);
             }
         }
-
-        if next_index < title_ids.len() {
-            spawn_playtime_request(
-                &mut tasks,
-                api.clone(),
-                xuid.clone(),
-                title_ids[next_index].clone(),
-            );
-            next_index += 1;
-        }
     }
-
     Ok(title_ids
         .into_iter()
         .map(|title_id| XboxPlaytime {
@@ -225,18 +227,6 @@ pub async fn fetch_playtimes(
             title_id,
         })
         .collect())
-}
-
-fn spawn_playtime_request(
-    tasks: &mut JoinSet<(String, Result<Value, xbox_webapi::WebApiError>)>,
-    api: UserStatsApi,
-    xuid: String,
-    title_id: String,
-) {
-    tasks.spawn(async move {
-        let result = api.get_minutes_played(&xuid, &title_id).await;
-        (title_id, result)
-    });
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -263,7 +253,7 @@ pub async fn fetch_achievements(
                 Some(ACHIEVEMENTS_PAGE_SIZE),
             )
             .await
-            .map_err(|error| XboxBridgeError::Data(error.to_string()))?;
+            .map_err(|error| crate::query_failure::query_error(error))?;
 
         for achievement in extract_achievements(&response, &title_id) {
             if seen_ids.insert(achievement.id.clone()) {
@@ -634,6 +624,7 @@ fn map_achievement(raw: &Value, title_id: &str) -> Option<XboxAchievement> {
 
     Some(XboxAchievement {
         id,
+        scid: optional_string(raw.get("serviceConfigId")),
         title_id: title_id.to_string(),
         name,
         description: optional_string(raw.get("description")).unwrap_or_default(),
@@ -667,6 +658,18 @@ fn map_achievement(raw: &Value, title_id: &str) -> Option<XboxAchievement> {
         } else {
             None
         },
+        requirements: progression
+            .and_then(|value| value.get("requirements"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(index, value)| XboxAchievementRequirement {
+                id: optional_string(value.get("id")).unwrap_or_else(|| index.to_string()),
+                current: optional_string(value.get("current")),
+                target: optional_string(value.get("target")),
+            })
+            .collect(),
     })
 }
 
@@ -703,68 +706,6 @@ fn continuation_token(response: &Value) -> Option<String> {
         .get("pagingInfo")
         .and_then(|value| value.get("continuationToken"))
         .and_then(|value| optional_string(Some(value)))
-}
-
-fn extract_playtimes(response: &Value, requested_title_id: Option<&str>) -> HashMap<String, u64> {
-    let root = root(response);
-    let mut values = HashMap::new();
-
-    if let Some(stats) = root.get("statlistscollection").and_then(Value::as_array) {
-        for collection in stats {
-            record_playtime(collection, requested_title_id, &mut values);
-            if let Some(nested_stats) = collection.get("stats").and_then(Value::as_array) {
-                for stat in nested_stats {
-                    record_playtime(stat, requested_title_id, &mut values);
-                }
-            }
-        }
-    }
-
-    if let Some(groups) = root.get("groups").and_then(Value::as_array) {
-        for group in groups {
-            let group_title_id = group
-                .get("titleid")
-                .or_else(|| group.get("titleId"))
-                .and_then(value_string);
-            let Some(collections) = group.get("statlistscollection").and_then(Value::as_array)
-            else {
-                continue;
-            };
-            for collection in collections {
-                let Some(stats) = collection.get("stats").and_then(Value::as_array) else {
-                    continue;
-                };
-                for stat in stats {
-                    record_playtime(stat, group_title_id.as_deref(), &mut values);
-                }
-            }
-        }
-    }
-
-    values
-}
-
-fn record_playtime(
-    stat: &Value,
-    fallback_title_id: Option<&str>,
-    output: &mut HashMap<String, u64>,
-) {
-    let is_minutes_played = stat
-        .get("name")
-        .and_then(Value::as_str)
-        .is_some_and(|value| value.eq_ignore_ascii_case("MinutesPlayed"));
-    if !is_minutes_played {
-        return;
-    }
-    let title_id = stat
-        .get("titleid")
-        .or_else(|| stat.get("titleId"))
-        .and_then(value_string)
-        .or_else(|| fallback_title_id.map(str::to_string));
-    let minutes = stat.get("value").and_then(value_u64);
-    if let (Some(title_id), Some(minutes)) = (title_id, minutes) {
-        output.insert(title_id, minutes);
-    }
 }
 
 fn root(value: &Value) -> &Value {
@@ -821,8 +762,8 @@ fn value_f64(value: Option<&Value>) -> Option<f64> {
 mod tests {
     use super::{
         extract_achievements, extract_games, extract_home_host_facts, extract_hosts,
-        extract_playtimes, map_console_power_response, normalize_console_id, normalize_title_ids,
-        power_off_console, power_on_console,
+        map_console_power_response, normalize_console_id, normalize_title_ids, power_off_console,
+        power_on_console,
     };
     use serde_json::json;
     use xbox_webapi::ConsolePowerResponse;
@@ -892,28 +833,31 @@ mod tests {
 
     #[test]
     fn maps_top_level_and_group_playtime_variants() {
-        let values = extract_playtimes(
-            &json!({
+        let response = json!({
+            "statlistscollection": [{
+                "titleid": "111",
+                "name": "MinutesPlayed",
+                "value": "1234"
+            }, {
+                "stats": [{"name": "MinutesPlayed", "value": "90"}]
+            }],
+            "groups": [{
+                "titleId": "222",
                 "statlistscollection": [{
-                    "titleid": "111",
-                    "name": "MinutesPlayed",
-                    "value": "1234"
-                }, {
-                    "stats": [{"name": "MinutesPlayed", "value": "90"}]
-                }],
-                "groups": [{
-                    "titleId": "222",
-                    "statlistscollection": [{
-                        "stats": [{"name": "MinutesPlayed", "value": 45.9}]
-                    }]
+                        "stats": [{"name": "MinutesPlayed", "value": 45.0}]
                 }]
-            }),
-            Some("333"),
-        );
+            }]
+        });
 
-        assert_eq!(values.get("111"), Some(&1234));
-        assert_eq!(values.get("222"), Some(&45));
-        assert_eq!(values.get("333"), Some(&90));
+        assert_eq!(
+            xbox_webapi::parse_minutes_played(&response, "111"),
+            Some(1234)
+        );
+        assert_eq!(
+            xbox_webapi::parse_minutes_played(&response, "222"),
+            Some(45)
+        );
+        assert_eq!(xbox_webapi::parse_minutes_played(&response, "333"), None);
     }
 
     #[test]

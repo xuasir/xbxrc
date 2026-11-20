@@ -1,0 +1,37 @@
+[
+  {
+    "file": "iosapp/XBXRC/App/AppRootView.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/App/XBXRCApp.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  },
+  {
+    "file": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "changedLineFormatting": true,
+    "parse": "passed"
+  }
+]

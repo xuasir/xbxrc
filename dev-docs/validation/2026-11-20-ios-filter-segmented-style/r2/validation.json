@@ -1,0 +1,13 @@
+{
+  "result": "Passed",
+  "uiRegressions": 2,
+  "geometryCombinations": 8,
+  "nativeRenderingCheck": 1,
+  "orientationSetupCheck": 1,
+  "normalTargetHeight": 44,
+  "accessibilityTargetHeight": 57.66666666666666,
+  "swiftFormatLint": "Passed",
+  "frontendLintFix": "Passed",
+  "diffCheck": "Passed",
+  "temporaryTestsRestored": true
+}

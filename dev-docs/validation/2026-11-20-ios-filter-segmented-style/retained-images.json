@@ -1,0 +1,138 @@
+[
+  {
+    "path": "filters-wide-accessibility.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "FFD89628-A386-49DE-BBA9-C60497302EB8.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "filters-1024-dark-accessibility-zh_0_0A042D43-8151-439F-9A11-5E36C3E671E0.png",
+      "timestamp": 1795162842.733
+    },
+    "sha256": "7018e15c244734389a34d944b6005d88ee83882138e62835fb5de7a841feee14",
+    "size": [
+      2048,
+      1240
+    ]
+  },
+  {
+    "path": "filters-dark.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "9AB07DC4-27D5-4BC2-9F92-6C17FE69E9C8.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "filters-390-dark-normal-zh_0_861DE675-5376-4F42-9E9D-651B4F93025A.png",
+      "timestamp": 1795162839.566
+    },
+    "sha256": "ff229ecb3b79cb036db14a648269db0f33df26426f5819c5aec2190e8f602375",
+    "size": [
+      780,
+      880
+    ]
+  },
+  {
+    "path": "filters-light.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "F16D1C15-1656-48D5-8B4B-3728845A09F3.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "filters-390-light-normal-zh_0_9C793C56-7408-4379-8D9D-CC7116F88567.png",
+      "timestamp": 1795162838.64
+    },
+    "sha256": "cc060ee55e4aaa34ea1c115912da1e09ffc1018ae01976f4b6325546344ff07c",
+    "size": [
+      780,
+      880
+    ]
+  },
+  {
+    "path": "filters-narrow-accessibility.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "E95C7414-89AE-4201-AF94-F66E0B657751.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "filters-320-light-accessibility-en_0_855FB764-83C6-4CBC-B415-7A9D156B9B2D.png",
+      "timestamp": 1795162837.539
+    },
+    "sha256": "1a53a5813a9666870676a1940fcdfd3fbcde30863b77a5611d716cb761709f48",
+    "size": [
+      640,
+      1240
+    ]
+  },
+  {
+    "path": "phone-cloud-filters.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "555B7098-2CA8-4540-BD14-23534545F5E3.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "calibration-cloud-tool-capsules_0_8FA7864D-B871-456B-A32D-0B447449A2A6.png",
+      "timestamp": 1795162881.623
+    },
+    "sha256": "580bf86198852a8115d1c7ecb4fd45283cbb0dfb51ceb0a6b292c48bbecc73ae",
+    "size": [
+      1206,
+      2622
+    ]
+  },
+  {
+    "path": "phone-achievement-filters.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "A647502D-D64D-4320-B0ED-20D16B8D65B4.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "calibration-achievements-unlocked-filter_0_F2890C67-C7FD-4B4D-94D9-8E9916A885D0.png",
+      "timestamp": 1795162921.454
+    },
+    "sha256": "be048b7eea4f328675e8ffdb6bd3e232fa066ea46d043a0907fd320d9a8caae1",
+    "size": [
+      1206,
+      2622
+    ]
+  },
+  {
+    "path": "phone-history-filters.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "4BF1ED36-A3DB-4E87-95EA-5D6F949A449C.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "calibration-history-completed-filter_0_C7173249-0131-45BA-A7E8-5E8E57D1417C.png",
+      "timestamp": 1795162917.621
+    },
+    "sha256": "f31028f4fd4b99e6d134412b0e2cb8a6b2d414ae847d5ecdd5955fc73a735635",
+    "size": [
+      1206,
+      2622
+    ]
+  },
+  {
+    "path": "phone-album-filters.png",
+    "source": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "exportedFileName": "A649EC94-522B-4719-8975-01C2F19E3F85.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "annotations-my-album-page_0_1A5E00C1-C4B3-4894-9A66-56A373E0A03C.png",
+      "timestamp": 1795162938.029
+    },
+    "sha256": "9b51d481dfe9978d0608979039ae3a9aae1fe01af9fe15e35bd13be0720b9d2f",
+    "size": [
+      1206,
+      2622
+    ]
+  }
+]

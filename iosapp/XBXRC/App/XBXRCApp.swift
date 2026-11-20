@@ -12,16 +12,69 @@ struct XBXRCApp: App {
     @StateObject private var settingsStore: AppSettingsStore
     @StateObject private var authStore: AuthStore
     @StateObject private var dataStore: XboxDataStore
-    @StateObject private var cloudStore = CloudLibraryStore()
+    @StateObject private var cloudStore: CloudLibraryStore
+    @StateObject private var favorites: CloudFavoritesStore
     @StateObject private var streamingStore: StreamingFeatureStore
 
     init() {
-        let settingsStore = AppSettingsStore()
+        let settingsStore: AppSettingsStore
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
+                || ProcessInfo.processInfo.arguments.contains("--pc-pages-ui-test"),
+                let defaults = UserDefaults(suiteName: "XBXRC.SettingsUITests")
+            {
+                if !ProcessInfo.processInfo.arguments.contains("--preserve-settings-ui-test") {
+                    defaults.removePersistentDomain(forName: "XBXRC.SettingsUITests")
+                }
+                settingsStore = AppSettingsStore(defaults: defaults)
+                settingsStore.mobile.appLanguage = .chinese
+            } else {
+                settingsStore = AppSettingsStore()
+            }
+        #else
+            settingsStore = AppSettingsStore()
+        #endif
         _settingsStore = StateObject(wrappedValue: settingsStore)
-        _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
-        _dataStore = StateObject(
-            wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore)
-        )
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pc-pages-ui-test") {
+                let dataClient = PCPageDataClient()
+                let cloudClient = PCPageCloudClient()
+                _authStore = StateObject(
+                    wrappedValue: AuthStore(
+                        settings: settingsStore, client: PCPageAuthClient(),
+                        cloudClient: cloudClient,
+                        keychain: PCPageSessionStore()))
+                _dataStore = StateObject(
+                    wrappedValue: XboxDataStore(
+                        client: dataClient, preferredGameLocaleProvider: settingsStore))
+                _cloudStore = StateObject(
+                    wrappedValue: CloudLibraryStore(
+                        client: cloudClient,
+                        repository: CloudCatalogSnapshotRepository(
+                            rootDirectory: FileManager.default.temporaryDirectory
+                                .appendingPathComponent(
+                                    "pc-page-ui-cache-\(UUID().uuidString)")),
+                        settingsProvider: settingsStore))
+                _favorites = StateObject(
+                    wrappedValue: CloudFavoritesStore(
+                        defaults: UserDefaults(suiteName: "XBXRC.SettingsUITests")!))
+            } else {
+                _cloudStore = StateObject(
+                    wrappedValue: CloudLibraryStore(settingsProvider: settingsStore))
+                _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
+                _dataStore = StateObject(
+                    wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore))
+                _favorites = StateObject(wrappedValue: CloudFavoritesStore())
+            }
+        #else
+            _cloudStore = StateObject(
+                wrappedValue: CloudLibraryStore(settingsProvider: settingsStore))
+            _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
+            _dataStore = StateObject(
+                wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore)
+            )
+            _favorites = StateObject(wrappedValue: CloudFavoritesStore())
+        #endif
         _streamingStore = StateObject(
             wrappedValue: StreamingFeatureStore(settingsProvider: settingsStore)
         )
@@ -45,20 +98,48 @@ struct XBXRCApp: App {
         )
     }
 
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test") {
+                XboxLoginView(isBusy: false, errorMessage: nil, action: {})
+                    .appThemeCanvas()
+            } else if ProcessInfo.processInfo.arguments.contains("--streaming-panels-ui-test") {
+                StreamingPanelsUITestView()
+            } else if ProcessInfo.processInfo.arguments.contains("--touch-playground-ui-test") {
+                TouchLayoutPlaygroundView()
+            } else {
+                AppRootView(streamingStore: streamingStore)
+            }
+        #else
+            AppRootView(streamingStore: streamingStore)
+        #endif
+    }
+
     var body: some Scene {
         let xboxDataSyncIdentity = XboxDataSyncTaskIdentity(
             session: authStore.session,
             ownerGeneration: authStore.ownerGeneration
         )
         WindowGroup {
-            AppRootView()
+            rootView
                 .environmentObject(authStore)
                 .environmentObject(dataStore)
                 .environmentObject(cloudStore)
                 .environmentObject(settingsStore)
                 .environmentObject(streamingStore)
+                .environmentObject(favorites)
+                .environment(\.locale, settingsStore.mobile.appLanguage.locale)
                 .preferredColorScheme(settingsStore.appearanceMode.colorScheme)
+                .onChange(of: settingsStore.mobile) { _, preferences in
+                    MobileInteractionFeedback.play(preferences)
+                }
                 .task {
+                    #if DEBUG
+                        if ProcessInfo.processInfo.arguments.contains("--settings-ui-test") {
+                            return
+                        }
+                    #endif
                     await authStore.restore()
                     await cloudStore.restoreCached(
                         session: authStore.session,
@@ -66,6 +147,11 @@ struct XBXRCApp: App {
                     )
                 }
                 .task(id: xboxDataSyncIdentity) {
+                    streamingStore.authentication = authStore
+                    dataStore.authentication = authStore
+                    cloudStore.authentication = authStore
+                    favorites.bind(
+                        accountID: xboxDataSyncIdentity.session.flatMap { Self.accountID($0) })
                     await dataStore.sync(
                         session: xboxDataSyncIdentity.session,
                         ownerGeneration: xboxDataSyncIdentity.ownerGeneration
@@ -73,7 +159,7 @@ struct XBXRCApp: App {
                 }
                 .task(id: authStore.session == nil) {
                     if authStore.session == nil {
-                        streamingStore.stop()
+                        streamingStore.stopForAuthRevocation()
                         await cloudStore.clear()
                     }
                 }
@@ -83,8 +169,14 @@ struct XBXRCApp: App {
                 .onChange(of: scenePhase) { previousPhase, phase in
                     streamingStore.handleScenePhase(phase)
                     if phase == .active {
+                        #if DEBUG
+                            let preview = ProcessInfo.processInfo.arguments.contains(
+                                "--streaming-panels-ui-test")
+                        #else
+                            let preview = false
+                        #endif
                         AppOrientationCoordinator.shared.sync(
-                            streamingPresented: streamingStore.isPresentingPlayer
+                            streamingPresented: streamingStore.isPresentingPlayer && !preview
                         )
                     }
                     IOSRuntimeTrace.state(
@@ -107,6 +199,17 @@ struct XBXRCApp: App {
         }
     }
 
+    private static func accountID(_ session: StoredAuthSession) -> String? {
+        guard let data = session.webTokenJSON.data(using: .utf8),
+            let token = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return session.cloudAccountID }
+        let root = token["data"] as? [String: Any] ?? token
+        guard let claims = root["DisplayClaims"] as? [String: Any],
+            let users = claims["xui"] as? [[String: Any]], let user = users.first
+        else { return session.cloudAccountID }
+        return user["xid"] as? String ?? session.cloudAccountID ?? user["uhs"] as? String
+    }
+
     private static func scenePhaseName(_ phase: ScenePhase) -> String {
         switch phase {
         case .active:
@@ -122,9 +225,9 @@ struct XBXRCApp: App {
 
     private static var buildConfiguration: String {
         #if DEBUG
-        "debug"
+            "debug"
         #else
-        "release"
+            "release"
         #endif
     }
 }

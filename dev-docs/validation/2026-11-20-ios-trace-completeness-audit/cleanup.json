@@ -1,0 +1,31 @@
+{
+  "at": "2026-11-20T15:58:42.689314+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-trace-audit-20261120",
+  "removedFiles": 83,
+  "removedBytes": 33574633,
+  "removedMiB": 32.02,
+  "existsAfter": false,
+  "freeBytesBefore": 73318400000,
+  "freeBytesAfter": 73318400000,
+  "processCheck": "No writer-audit/telemetry-audit/swiftc/swift-frontend process active before cleanup",
+  "archivedEvidenceFiles": [
+    "README.md",
+    "writer-probes.json",
+    "telemetry-probe.json",
+    "analyzer-probes.json",
+    "adverse-core-gate.json",
+    "adverse-core-fixture.jsonl",
+    "source-baseline.json",
+    "source-verification.json",
+    "event-inventory.json",
+    "WriterAudit.swift",
+    "TelemetryAudit.swift",
+    "validation.json",
+    "evidence-manifest.json"
+  ],
+  "retainedPendingAnalysis": {
+    "path": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json",
+    "exists": true,
+    "bytes": 80831157
+  }
+}

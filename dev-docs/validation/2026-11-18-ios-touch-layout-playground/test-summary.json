@@ -1,0 +1,207 @@
+{
+  "date": "2026-11-18",
+  "unitCases": 18,
+  "phone": "iPhone 18 Pro / iOS 27.0",
+  "ipad": "iPad Pro 13-inch (M5) / iOS 27.0",
+  "runs": {
+    "phone-r3": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testAbsoluteJoystickAndExclusivePointer]",
+          "duration": "0.010 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testCapabilityReportIncludesBehaviorsAndUnknownAxisPath]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testClusterNullInheritanceAndBlankReplacement]",
+          "duration": "0.018 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testDifferentControlsSharingOneActionReleaseIndependently]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testEveryVisibleControlCenterHitsItsControlAcrossSizes]",
+          "duration": "0.011 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testForzaLayerCancelsReplacedControlAndRestoresBase]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testInvalidCoordinatesAreDiscardedAndPressureIsFinite]",
+          "duration": "0.001 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayerHasMultipleIndependentSources]",
+          "duration": "0.005 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayoutViewportAndBackgroundCancelEverything]",
+          "duration": "0.009 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testOrdinaryButtonRollsOverAndReleasesOutside]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRealLayoutsAndCapabilityReports]",
+          "duration": "0.016 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRecorderExportsEdgesAndNeutralReset]",
+          "duration": "0.011 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapKeepsBothEdgesWithinOneBatch]",
+          "duration": "0.176 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSimultaneousStickButtonAndTrigger]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSurfaceRendersTransparentLayersAndCancelPublishesNeutral]",
+          "duration": "0.134 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testThrottleStickyAndBrakeRelease]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTogglePersistsUntilNextTapAndCancelReleasesIt]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTwoPointersSharingOneButtonReleaseIndependently]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCUITests.TouchLayoutInteractionTests testLayoutSelectionPressDragAndResetFromControllerEntry]",
+          "duration": "38.201 seconds"
+        }
+      ]
+    },
+    "ipad-final": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testAbsoluteJoystickAndExclusivePointer]",
+          "duration": "0.014 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testCapabilityReportIncludesBehaviorsAndUnknownAxisPath]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testClusterNullInheritanceAndBlankReplacement]",
+          "duration": "0.020 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testDifferentControlsSharingOneActionReleaseIndependently]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testEveryVisibleControlCenterHitsItsControlAcrossSizes]",
+          "duration": "0.009 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testForzaLayerCancelsReplacedControlAndRestoresBase]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testInvalidCoordinatesAreDiscardedAndPressureIsFinite]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayerHasMultipleIndependentSources]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayoutViewportAndBackgroundCancelEverything]",
+          "duration": "0.008 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testOrdinaryButtonRollsOverAndReleasesOutside]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRealLayoutsAndCapabilityReports]",
+          "duration": "0.016 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRecorderExportsEdgesAndNeutralReset]",
+          "duration": "0.012 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapKeepsBothEdgesWithinOneBatch]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSimultaneousStickButtonAndTrigger]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSurfaceRendersTransparentLayersAndCancelPublishesNeutral]",
+          "duration": "0.091 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testThrottleStickyAndBrakeRelease]",
+          "duration": "0.005 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTogglePersistsUntilNextTapAndCancelReleasesIt]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTwoPointersSharingOneButtonReleaseIndependently]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCUITests.TouchLayoutInteractionTests testLayoutSelectionPressDragAndResetFromControllerEntry]",
+          "duration": "49.309 seconds"
+        }
+      ]
+    },
+    "phone-visual-final": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "-[XBXRCUITests.TouchLayoutInteractionTests testLayoutSelectionPressDragAndResetFromControllerEntry]",
+          "duration": "61.098 seconds"
+        }
+      ]
+    },
+    "device-build": {
+      "result": "passed",
+      "cases": []
+    }
+  },
+  "checks": {
+    "swiftFormat": "passed",
+    "projectPlist": "passed",
+    "streamingSessionBoundary": "passed",
+    "forzaAndHaloMatchFrozenSource": true,
+    "centerAlpha": 0
+  },
+  "sourceSHA256": {
+    "official-layout.json": "260b834b53ee8aba1e9214f8a505b4aa3dbe60d7ef0239a744316d13bbe427bb",
+    "halo-layouts.json": "81c9e3abd9f9356144513bd19ccada46a9b6cbea4f2da0f73a43e66ce0f0525a",
+    "forza-layouts.json": "698988329e3548e73f2336e60eca85df0cd06318301137bb84bc9c2116925e56",
+    "generic.json": "d081a5368eb5d6780e55a6363b6df9981f1a4b34b7da6fc8e858e19b1c23cf9e"
+  },
+  "screenshots": [
+    "phone-forza-pedal-portrait.png",
+    "phone-forza-buttons-landscape.png",
+    "phone-generic-portrait.png",
+    "generic-transparent-surface.png",
+    "ipad-generic-portrait.png",
+    "phone-generic-landscape.png",
+    "ipad-forza-pedal-portrait.png",
+    "phone-forza-sticky-landscape.png"
+  ],
+  "validationBoundary": "多指通过纯 Swift 指针回放验证；XCUITest 从控制器入口采集单指按压、拖动，覆盖手机/iPad 横竖屏；设备目标为关闭签名的编译验证。实机多指手感与遮挡由用户验收。"
+}

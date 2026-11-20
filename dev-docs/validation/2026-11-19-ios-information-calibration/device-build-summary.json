@@ -1,0 +1,43 @@
+{
+  "actionTitle" : "Build \"XBXRC\"",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "undefined_arch",
+    "deviceId" : "dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder",
+    "deviceName" : "Any iOS Device",
+    "modelName" : "GenericiOS",
+    "osVersion" : "",
+    "platform" : "iOS"
+  },
+  "endTime" : 1795080386.862,
+  "errorCount" : 0,
+  "errors" : [
+
+  ],
+  "startTime" : 1795080367.219,
+  "status" : "succeeded",
+  "warningCount" : 3,
+  "warnings" : [
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "ImplicitStrongCapture",
+      "message" : "'weak' ownership of capture 'input' differs from implicitly-captured strong reference in outer scope",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift#EndingColumnNumber=39&EndingLineNumber=158&StartingColumnNumber=39&StartingLineNumber=158&Timestamp=816773167.228042"
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=56&EndingLineNumber=472&StartingColumnNumber=56&StartingLineNumber=472&Timestamp=816773167.228042"
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=41&EndingLineNumber=472&StartingColumnNumber=41&StartingLineNumber=472&Timestamp=816773167.228042"
+    }
+  ]
+}

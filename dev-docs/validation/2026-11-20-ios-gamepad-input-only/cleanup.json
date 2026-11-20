@@ -1,0 +1,20 @@
+{
+  "completedAtUTC": "2026-11-20T09:06:17.615176+00:00",
+  "removedRoot": "/private/tmp/xbxrc-ios-gamepad-input-only-20261120",
+  "removedFileCount": 7889,
+  "removedLogicalBytes": 997709543,
+  "removedAllocatedKiB": 996932,
+  "diskFreeBytesBefore": 67993600000,
+  "diskFreeBytesAfter": 68812800000,
+  "diskFreeDeltaBytes": 819200000,
+  "processCheck": "本轮构建/测试/导出进程已结束",
+  "pathCheck": "本轮临时根已删除",
+  "retained": [
+    "仓库验收目录",
+    "target/ios",
+    "target/ios-bindgen",
+    "target/browser",
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "共享 Swift 格式配置及其他任务目录"
+  ]
+}

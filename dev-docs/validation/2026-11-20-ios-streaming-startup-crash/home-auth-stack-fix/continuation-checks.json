@@ -1,0 +1,79 @@
+{
+  "verifiedAt": "2026-11-20T14:48:56.741414+08:00",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "xbox-ios-bridge",
+        "-p",
+        "xbox-streaming",
+        "--",
+        "--check"
+      ],
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "bash",
+        "iosapp/scripts/check-streaming-session-boundary.sh"
+      ],
+      "exitCode": 0,
+      "output": "streaming session boundary check passed\n"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "crates/xbox-streaming/src/session/operation.rs",
+        "crates/xbox-ios-bridge/src/streaming/stack_tests.rs",
+        "docs/project-task.md",
+        "docs/rfcs/2026-11-19-ios-streaming-pc-behavior-parity.md",
+        "docs/reports/2026-11-19-ios-streaming-pc-behavior-parity.md",
+        "dev-docs/validation/README.md"
+      ],
+      "exitCode": 0,
+      "output": ""
+    }
+  ],
+  "sourceChecks": [
+    {
+      "path": "crates/xbox-streaming/src/session/operation.rs",
+      "sha256": "19ccbe4df7f98468d589c0b1263e8d634233fc1e6c8d4730f26ec84f778b1785",
+      "matchesArchivedTests": true,
+      "whitespace": "Passed"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/operation/stack_tests.rs",
+      "sha256": "20fdf25e4b2df702efc5c2d70ebd5762d13a685f5c7bc41b2e7ce9b8cd93cd9e",
+      "matchesArchivedTests": true,
+      "whitespace": "Passed"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/stack_tests.rs",
+      "sha256": "3e35a56099d537317486009294c1548f39b9b10608c37a0d3971cab72224cd13",
+      "matchesArchivedTests": true,
+      "whitespace": "Passed"
+    }
+  ],
+  "adjacentSourcesMatchTaskBaseline": true,
+  "deviceBinaryHashMatches": true,
+  "pcIntegration": {
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "xbxrc",
+      "--target-dir",
+      "target/browser"
+    ],
+    "exitCode": 0,
+    "result": "Passed",
+    "evidence": "pc-tauri-check.txt"
+  },
+  "testRerun": "Archived 264-test run verified against unchanged production/test source hashes"
+}

@@ -9,23 +9,51 @@ struct IOSRuntimeTraceBudget: Equatable, Sendable {
 enum IOSRuntimeTracePolicy {
     static let profileDefaultsKey = "ios_runtime_trace_profile"
     static let pendingRowLimit = 4_096
+    static let essentialReservedRows = 128
+    static let detailPendingRowLimit = 2_048
+    static let maxRowBytes = 64 * 1_024
+    static let maxBufferedBytes = 1 * 1_024 * 1_024
+    static let storageRetryInterval: TimeInterval = 1
     static let batchRowLimit = 128
     static let flushInterval: TimeInterval = 0.04
     static let budgetNoticeIntervalMs: UInt64 = 60_000
 
+    static func pendingLimit(for importance: IOSRuntimeTraceImportance) -> Int {
+        switch importance {
+        case .essential: pendingRowLimit
+        case .key: pendingRowLimit - essentialReservedRows
+        case .debug, .raw: detailPendingRowLimit
+        }
+    }
+
+    static func shouldRecordLightweight(_ draft: IOSRuntimeTraceDraft) -> Bool {
+        guard draft.importance <= .key else { return false }
+        if draft.payload["firstFrame"] == .bool(true) { return true }
+        let counterKey: String
+        switch draft.event {
+        case "videoFrameAcceptedToMailbox": counterKey = "frameId"
+        case "displaySubmit": counterKey = "submitCount"
+        case "displayPresent": counterKey = "presentCount"
+        case "mailboxOverwrite": counterKey = "mailboxOverwriteCount"
+        default: return true
+        }
+        guard case .integer(let count) = draft.payload[counterKey] else { return true }
+        return count == 1 || count.isMultiple(of: 60)
+    }
+
     static var defaultProfile: IOSRuntimeTraceProfile {
         #if DEBUG
-        .dev
+            .dev
         #else
-        .production
+            .production
         #endif
     }
 
     static func effectiveProfile(_ stored: IOSRuntimeTraceProfile) -> IOSRuntimeTraceProfile {
         #if DEBUG
-        stored
+            stored
         #else
-        stored == .dev ? .production : stored
+            stored == .dev ? .production : stored
         #endif
     }
 
@@ -58,7 +86,7 @@ enum IOSRuntimeTracePolicy {
 enum IOSRuntimeTraceRedactor {
     private static let sensitiveFragments = [
         "token", "seed", "jwk", "handle", "oauth", "authorization", "callbackurl",
-        "accountid", "xuid", "xid", "uhs", "refreshcode",
+        "credential", "password", "username", "accountid", "xuid", "xid", "uhs", "refreshcode",
     ]
 
     static func redact(
@@ -66,27 +94,28 @@ enum IOSRuntimeTraceRedactor {
         profile: IOSRuntimeTraceProfile,
         fingerprintSalt: String
     ) -> [String: IOSRuntimeTraceValue] {
-        Dictionary(uniqueKeysWithValues: payload.map { key, value in
-            let normalizedKey = key.lowercased().replacingOccurrences(of: "_", with: "")
-            if sensitiveFragments.contains(where: normalizedKey.contains) {
-                if case .bool = value {
-                    return (key, value)
+        Dictionary(
+            uniqueKeysWithValues: payload.map { key, value in
+                let normalizedKey = key.lowercased().replacingOccurrences(of: "_", with: "")
+                if sensitiveFragments.contains(where: normalizedKey.contains) {
+                    if case .bool = value {
+                        return (key, value)
+                    }
+                    return (key, .string("<redacted>"))
                 }
-                return (key, .string("<redacted>"))
-            }
-            if normalizedKey == "productid" {
-                return (
-                    key,
-                    profile == .dev
-                        ? redactValue(value, profile: profile, salt: fingerprintSalt)
-                        : fingerprintValue(value, salt: fingerprintSalt)
-                )
-            }
-            if normalizedKey == "streamtitleid" || normalizedKey == "xboxtitleid" {
-                return (key, fingerprintValue(value, salt: fingerprintSalt))
-            }
-            return (key, redactValue(value, profile: profile, salt: fingerprintSalt))
-        })
+                if normalizedKey == "productid" {
+                    return (
+                        key,
+                        profile == .dev
+                            ? redactValue(value, profile: profile, salt: fingerprintSalt)
+                            : fingerprintValue(value, salt: fingerprintSalt)
+                    )
+                }
+                if normalizedKey == "streamtitleid" || normalizedKey == "xboxtitleid" {
+                    return (key, fingerprintValue(value, salt: fingerprintSalt))
+                }
+                return (key, redactValue(value, profile: profile, salt: fingerprintSalt))
+            })
     }
 
     static func sanitizeErrorMessage(_ value: String) -> String {
@@ -99,11 +128,11 @@ enum IOSRuntimeTraceRedactor {
         salt: String
     ) -> IOSRuntimeTraceValue {
         switch value {
-        case let .string(value):
+        case .string(let value):
             .string(redactString(value))
-        case let .array(values):
+        case .array(let values):
             .array(values.map { redactValue($0, profile: profile, salt: salt) })
-        case let .object(values):
+        case .object(let values):
             .object(redact(payload: values, profile: profile, fingerprintSalt: salt))
         default:
             value
@@ -114,7 +143,7 @@ enum IOSRuntimeTraceRedactor {
         _ value: IOSRuntimeTraceValue,
         salt: String
     ) -> IOSRuntimeTraceValue {
-        guard case let .string(raw) = value else {
+        guard case .string(let raw) = value else {
             return .string("<redacted>")
         }
         let digest = SHA256.hash(data: Data((salt + raw).utf8))

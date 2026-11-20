@@ -1,0 +1,3 @@
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+最终环境重跑结果见 rust-tests.log：253 passed，0 failed。

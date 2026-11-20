@@ -1,0 +1,38 @@
+Test Case '-[XBXRCTests.CapabilityMigrationTests testAlbumRepeatedContinuationKeepsLastSuccessfulPage]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testLatePersonalResponseCannotPublishIntoAnotherAccount]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPartialInstalledRefreshPreservesGamesStorageAndSourceFailures]' passed (0.021 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testSectionErrorsRenderAcrossWidthLanguageAndTextSizes]' passed (3.071 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 3.103 (3.106) seconds
+Test Case '-[XBXRCTests.CloudLibraryStoreConcurrencyTests testClearWaitsForDelayedSaveAndRemovesStaleOverlay]' passed (0.005 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.005 (0.005) seconds
+Test Case '-[XBXRCTests.PCDataParityTests testAccountChangeDiscardsLateTargetPlayerData]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testAchievementComparisonKeepsServiceConfigurationIdentity]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testAlbumPartialFailurePublishesSuccessfulSourceImmediately]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testAlbumRenewalUsesOriginalSourcePage]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testCancelledPlaytimeEndsBusyWithoutFailure]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testCatalogDiskRoundtripKeepsDiscoveryRanksAndUnavailableSources]' passed (0.014 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testCloudRetryChangesOnlyFailedSourceAndPersistsItsSuccessTime]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testCombinedAlbumExpandsOnlyAfterBothSourcesCoverTimeRange]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testConcurrent401RequestsShareOneRenewalAndResumeOriginalSources]' passed (0.067 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testConcurrentSourceRetriesKeepBothRanksAndSavedTimes]' passed (0.015 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testEmptySuccessRefreshFailurePreservesSnapshotAndTime]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testFavoritesRestoreOrderPinsMetadataAndAccountIsolation]' passed (0.010 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testInstalledLanguageSwitchDiscardsLateEnglishResult]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testLateSelfHistoryPageCannotAppendAfterRefresh]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testPageFailureRetriesOriginalContinuation]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testPartialTargetPlaytimeFailureRetainsPreviousValue]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testProductLanguageSwitchDiscardsLateOldLanguageResponse]' passed (0.015 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testRepeatedTargetContinuationPreservesCommittedPage]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testSectionRetryLoadsOnlyFailedInstalledSource]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testStorageOverviewClampsFreeSpaceAndHandlesCapacityOverflow]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testStorageOverviewUsesCompleteDeviceCapacities]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testTechnicalErrorsUseFiniteLocalizedMessages]' passed (0.002 seconds).
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.185 (0.193) seconds
+	 Executed 27 tests, with 0 failures (0 unexpected) in 3.294 (3.307) seconds
+	 Executed 27 tests, with 0 failures (0 unexpected) in 3.294 (3.310) seconds
+Test Case '-[XBXRCUITests.PCPageInteractionTests testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally]' passed (16.247 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSectionNoticesUseFullWidthAndWholeRowRetries]' passed (24.949 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 41.196 (41.201) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 41.196 (41.212) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 41.196 (41.213) seconds
+** TEST SUCCEEDED **

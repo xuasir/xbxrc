@@ -1,0 +1,74 @@
+[
+  {
+    "accessibility" : false,
+    "dark" : false,
+    "english" : false,
+    "filterHeight" : 44,
+    "filterY" : 65,
+    "pickerHeight" : 44,
+    "pickerY" : 65
+  },
+  {
+    "accessibility" : false,
+    "dark" : false,
+    "english" : true,
+    "filterHeight" : 44,
+    "filterY" : 65,
+    "pickerHeight" : 44,
+    "pickerY" : 65
+  },
+  {
+    "accessibility" : true,
+    "dark" : false,
+    "english" : false,
+    "filterHeight" : 57.666666666666657,
+    "filterY" : 84.666666666666657,
+    "pickerHeight" : 57.666666666666657,
+    "pickerY" : 84.666666666666657
+  },
+  {
+    "accessibility" : true,
+    "dark" : false,
+    "english" : true,
+    "filterHeight" : 57.666666666666657,
+    "filterY" : 84.666666666666657,
+    "pickerHeight" : 57.666666666666657,
+    "pickerY" : 84.666666666666657
+  },
+  {
+    "accessibility" : false,
+    "dark" : true,
+    "english" : false,
+    "filterHeight" : 44,
+    "filterY" : 65,
+    "pickerHeight" : 44,
+    "pickerY" : 65
+  },
+  {
+    "accessibility" : false,
+    "dark" : true,
+    "english" : true,
+    "filterHeight" : 44,
+    "filterY" : 65,
+    "pickerHeight" : 44,
+    "pickerY" : 65
+  },
+  {
+    "accessibility" : true,
+    "dark" : true,
+    "english" : false,
+    "filterHeight" : 57.666666666666657,
+    "filterY" : 84.666666666666657,
+    "pickerHeight" : 57.666666666666657,
+    "pickerY" : 84.666666666666657
+  },
+  {
+    "accessibility" : true,
+    "dark" : true,
+    "english" : true,
+    "filterHeight" : 57.666666666666657,
+    "filterY" : 84.666666666666657,
+    "pickerHeight" : 57.666666666666657,
+    "pickerY" : 84.666666666666657
+  }
+]

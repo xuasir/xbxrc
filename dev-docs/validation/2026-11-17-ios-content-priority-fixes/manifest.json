@@ -1,0 +1,32 @@
+[
+  {
+    "output": "review-installed-regions.jpg",
+    "source": "/tmp/xbxrc-ios-priority-revised-ipad-attachments/49E538D8-E109-452A-891D-8FB95BCC977E.png",
+    "test": "PCPageInteractionTests/testInstalledUpperRegionAndInlineSearch()",
+    "timestamp": 1794900766.787
+  },
+  {
+    "output": "priority-game-album-type-menu.jpg",
+    "source": "/tmp/xbxrc-ios-priority-revised-ipad-attachments/DD6E581B-140E-48AF-BA39-96FAA505A66F.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "timestamp": 1794900727.364
+  },
+  {
+    "output": "priority-game-album-empty.jpg",
+    "source": "/tmp/xbxrc-ios-priority-revised-ipad-attachments/FF3C2C52-5812-4012-9498-D8604924B4FA.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "timestamp": 1794900725.327
+  },
+  {
+    "output": "priority-player-actions.jpg",
+    "source": "/tmp/xbxrc-ios-priority-revised-ipad-attachments/6473FBE9-225B-4D76-8742-B53FF9DE17BE.png",
+    "test": "PCPageInteractionTests/testFriendComparisonAndSecretAchievementReveal()",
+    "timestamp": 1794900700.34
+  },
+  {
+    "output": "priority-game-overview.jpg",
+    "source": "/tmp/xbxrc-ios-priority-revised-ipad-attachments/86101F04-CF75-48E3-9737-ADBB70CAED31.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "timestamp": 1794900723.273
+  }
+]

@@ -1,0 +1,85 @@
+{
+  "layoutSnapshotCounts": {
+    "phone-attachments": 378,
+    "ipad-attachments": 378
+  },
+  "finalImages": [
+    {
+      "file": "phone-achievements.png",
+      "label": "成就摘要",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/phone-attachments/2F98A642-21C3-4701-8BC6-16E172C2B02C.png",
+      "captureName": "calibration-achievements-summary",
+      "sha256": "fe0631f372cbd7a9038b9a1ec6bb603c8ab665fae198b764916107337658f0bd"
+    },
+    {
+      "file": "phone-cloud-tools.png",
+      "label": "搜索与筛选",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/phone-recheck-attachments/DF7D5636-E189-4058-A7CC-006363FE36FE.png",
+      "captureName": "calibration-cloud-tool-capsules",
+      "sha256": "379fb6268a0f7dc32428e99ab098350f07a2afcc5631e5f112019fc4c1cf1d64"
+    },
+    {
+      "file": "phone-controller-card.png",
+      "label": "连接信息",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/phone-recheck-attachments/D8CCB8A3-AB2E-4834-9A34-53F0C806EDF9.png",
+      "captureName": "calibration-controller-information-card",
+      "sha256": "01ee5875f082e172c57ccea273440a63aec88d54384627c8ce510f64e703e1a6"
+    },
+    {
+      "file": "phone-controller-input.png",
+      "label": "输入记录",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/phone-recheck-attachments/8C3D768D-D905-4145-9CD3-B762CFE30C01.png",
+      "captureName": "calibration-controller-input-strip",
+      "sha256": "ca55dfa6eecf0b3603d0c960bd32e31eb3adbb8b7be0473bfe80e1151ed3e12e"
+    },
+    {
+      "file": "phone-cloud-detail-dark.png",
+      "label": "游戏详情",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/phone-attachments/8C02B3A4-6722-45A1-8A8C-3BB851F1FDCE.png",
+      "captureName": "reading-zh-Hans-phone-dark-cloud-detail",
+      "sha256": "a846057808eae7acf61786757139e747a96b363eb9134f24e932432a5b8aaed1"
+    },
+    {
+      "file": "ipad-cloud-tools.png",
+      "label": "宽窗工具区",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/5832D631-47B9-4E9A-A98C-4CE5648A1861.png",
+      "captureName": "calibration-cloud-tool-capsules",
+      "sha256": "6da0efcde6cf9124377057af19cd03251806fbf0e1bdf3af9df6d33fad012b99"
+    },
+    {
+      "file": "ipad-settings-navigation.png",
+      "label": "统一导航",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/15191F74-79DD-403C-B5C3-883B0FA06356.png",
+      "captureName": "reading-root-settings",
+      "sha256": "21c6e0b0c7f98deee766a492644144129e5512ee2b07357503b411fd3a8d2c6c"
+    },
+    {
+      "file": "ipad-friends.png",
+      "label": "好友列表",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/C1084FFB-BC99-42FE-A506-A91B193EC622.png",
+      "captureName": "density-ipad-friends-page",
+      "sha256": "815535abc0f7d10fa81c8360a83aad19eb382e6f79d30e22b55f2bd58bf832d3"
+    },
+    {
+      "file": "accessibility-input-history.png",
+      "label": "辅助字号",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/D2696E9F-1284-4F79-B052-BB90EC9C5468.png",
+      "captureName": "spacing-en-phone-accessibility-max-13-input-history",
+      "sha256": "60326afbebc384060b4218390c2eefa7fbf681003452b09ea50204f84fa25469"
+    },
+    {
+      "file": "accessibility-content-tabs.png",
+      "label": "内容标签",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/461AEE90-D565-465D-9D2C-767CDB6D3197.png",
+      "captureName": "spacing-en-phone-accessibility-max-08-game",
+      "sha256": "1ac26017b218d82606b0d7a9e48238017b87f8d0ddf20ddbe865a3d2af003b46"
+    },
+    {
+      "file": "ipad-cloud-detail-dark.png",
+      "label": "详情卡片",
+      "source": "/private/tmp/xbxrc-ios-information-calibration-20261119/r4/ipad-attachments/631A3A68-3231-4FB0-AF5F-4DADC282CBD2.png",
+      "captureName": "reading-zh-Hans-tablet-dark-cloud-detail",
+      "sha256": "9ccf031bdbd2f0b2c777f126b7dbc78db718590422e1a1a903a822890c2494f6"
+    }
+  ]
+}

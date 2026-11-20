@@ -1,0 +1,28 @@
+{
+  "baselineFiles": 109,
+  "auditedSourceFiles": [
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTrace.swift",
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceEnvelope.swift",
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift",
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+    "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift",
+    "iosapp/XBXRCTests/XBXRCTests.swift",
+    "iosapp/scripts/check-streaming-core-trace.py",
+    "iosapp/scripts/tests/test_check_streaming_core_trace.py"
+  ],
+  "auditedSourceChanges": [],
+  "otherFilesUpdatedDuringAudit": [
+    "iosapp/XBXRC/App/AppRootView.swift",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "iosapp/XBXRCTests/StreamingControlsStateTests.swift"
+  ],
+  "handling": "Preserved current contents; this audit only writes evidence and its task row"
+}

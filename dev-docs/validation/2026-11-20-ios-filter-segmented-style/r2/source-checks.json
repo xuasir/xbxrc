@@ -1,0 +1,10 @@
+{
+  "sources": {
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "17b06d4d465d178d6e3f7000215957d734de708b5852fff7bedaaf360081e6d2"
+  },
+  "temporaryTestsRestored": {
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift": true,
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": true
+  }
+}

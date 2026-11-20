@@ -1,0 +1,36 @@
+{
+  "resultBundle": "/tmp/xbxrc-ios-migration-resume-ipad-3.xcresult",
+  "layoutCaptureCount": 200,
+  "selected": [
+    {
+      "file": "dev-docs/validation/2026-11-16-ios-settings-parity/ipad-tablet-large-settings-general.png",
+      "test": "CapabilityMigrationTests/testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes()",
+      "source": "542A75D7-79C3-4053-9201-2853D4437D5D.png",
+      "sha256": "9a27e777a52ab061d620201ef45df3e876224e1528cb89593c5806c331a2ce59"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/ipad-pc-installed-statistics.png",
+      "test": "PCPageInteractionTests/testInstalledStorageFilterAndFourSectionDetail()",
+      "source": "C9B62109-CC7E-4052-8FE4-1184D1EA6601.png",
+      "sha256": "6dda03b50d7769289744c820bad5d1eff3f4dd3fe60207f69024f4dbbc9c7c56"
+    }
+  ],
+  "retainedFiles": [
+    {
+      "file": "dev-docs/validation/2026-11-16-ios-settings-parity/ipad-tablet-large-settings-general.png",
+      "sha256": "9a27e777a52ab061d620201ef45df3e876224e1528cb89593c5806c331a2ce59"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/ipad-pc-installed-statistics.png",
+      "sha256": "6dda03b50d7769289744c820bad5d1eff3f4dd3fe60207f69024f4dbbc9c7c56"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/ipad-system-friends-sidebar.png",
+      "sha256": "8c5c8364ba3cc343f79e9436483e581a59dd4bebc9809f0544e7ab3b28356e7b"
+    }
+  ],
+  "archiveCleanup": {
+    "date": "2026-11-18",
+    "policy": "历史布局200张的运行次数保留；当前归档按 retainedFiles 读取。"
+  }
+}

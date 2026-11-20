@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-17",
+  "logs": {
+    "final-phone-layouts": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-phone-layouts.log",
+      "sha256": "2de71502c05871416be5e11d2149df2b9cb498f205d95f391ca2d9894fe3f4de",
+      "successMarker": "** TEST SUCCEEDED **",
+      "resultBundle": "/tmp/xbxrc-ios-annotations-final-phone-layouts.xcresult",
+      "negativeFrameWarning": false
+    },
+    "final-ipad-layouts": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-ipad-layouts.log",
+      "sha256": "bccf1229e9a44b41cb0cce7f37cfee4dc11abd6f68de84f75130fd91b1a8149e",
+      "successMarker": "** TEST SUCCEEDED **",
+      "resultBundle": "/tmp/xbxrc-ios-annotations-final-ipad-layouts.xcresult",
+      "negativeFrameWarning": false
+    },
+    "final-my-dark": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-my-dark.log",
+      "sha256": "123764d9009e983b79ee7ed800b00d972ec30be9061a47f21e918f2811841066",
+      "successMarker": "** TEST SUCCEEDED **",
+      "resultBundle": "/tmp/xbxrc-ios-annotations-final-my-dark.xcresult",
+      "negativeFrameWarning": false
+    },
+    "theme-phone-final": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+      "sha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3",
+      "successMarker": "** TEST SUCCEEDED **",
+      "resultBundle": "/tmp/xbxrc-ios-annotations-theme-phone-final.xcresult",
+      "negativeFrameWarning": false
+    },
+    "theme-ipad-final": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+      "sha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd",
+      "successMarker": "** TEST SUCCEEDED **",
+      "resultBundle": "/tmp/xbxrc-ios-annotations-theme-ipad-final.xcresult",
+      "negativeFrameWarning": false
+    },
+    "final-device": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-device.log",
+      "sha256": "8b459e7211f8e948dd1506305aa5c63ff2cdc09c1b445fa5d200cab0865c71a1",
+      "successMarker": "** BUILD SUCCEEDED **",
+      "resultBundle": null,
+      "negativeFrameWarning": false
+    },
+    "final-lint": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-lint.log",
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237"
+    },
+    "final-swift-lint": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-swift-lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "final-boundary": {
+      "status": "passed",
+      "log": "/tmp/xbxrc-ios-annotations-final-boundary.log",
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571"
+    }
+  },
+  "uiCounts": {
+    "phone": {
+      "passed": 16,
+      "skipped": 2
+    },
+    "ipad": {
+      "passed": 18,
+      "skipped": 0
+    }
+  },
+  "finalLayoutCount": 784,
+  "finalInformationLayoutCount": 384,
+  "finalSettingsLayoutCount": 400,
+  "archivedPNGCount": 5,
+  "sourceImageCount": 6,
+  "taskCount": 16,
+  "contrast": "contrast.json",
+  "sourceAudit": "implementation-audit.json",
+  "hardwareAcceptance": "real controller, haptics, long streaming and system reduce transparency need device acceptance",
+  "archiveCleanup": {
+    "date": "2026-11-18",
+    "previousArchivedPNGCount": 119,
+    "retainedEvidencePNGCount": 5,
+    "retainedSourceImageCount": 6
+  }
+}

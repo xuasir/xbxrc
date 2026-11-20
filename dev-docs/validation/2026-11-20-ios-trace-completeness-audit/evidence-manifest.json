@@ -1,0 +1,50 @@
+{
+  "README.md": {
+    "bytes": 10993,
+    "sha256": "2fa7043d8bd8bf1b1263c5bd5abeef81584212a36b46da079fba148f8a0c0aa9"
+  },
+  "writer-probes.json": {
+    "bytes": 935,
+    "sha256": "4fc1b2f75bbdefb08a3d7df921be135c00c8b66104650c9195168579077a6fb8"
+  },
+  "telemetry-probe.json": {
+    "bytes": 107,
+    "sha256": "600047239f242b6f723d4a32bf41087be847992b9e5eb51c66c0756b33c87461"
+  },
+  "analyzer-probes.json": {
+    "bytes": 548,
+    "sha256": "9f3b8bec08c4916f98422e8c94e50708624897e338a13d6a18f6f02963ad8864"
+  },
+  "adverse-core-gate.json": {
+    "bytes": 21776,
+    "sha256": "e320a25d9c19b0024e825430a13aeb4a1ae3d1a7c4b8079d35670452f8a0fbfc"
+  },
+  "adverse-core-fixture.jsonl": {
+    "bytes": 10702,
+    "sha256": "d31d20e347fd53357dae07434390c22a713fa9f60ff5c1e2afb034eda6c5d8b7"
+  },
+  "source-baseline.json": {
+    "bytes": 14068,
+    "sha256": "9a65e338d583ad6d7214f219b079130c4c7d681158981a4dc573c2b1701f5db3"
+  },
+  "source-verification.json": {
+    "bytes": 1407,
+    "sha256": "658e01712d73eac3541ff94453a6bc9fdc945233ab4dec9cfd2beb8bb120a272"
+  },
+  "event-inventory.json": {
+    "bytes": 49394,
+    "sha256": "1565de1aa241e0af6a61069330397f246185e55c83d5479c43dc671f0d482abe"
+  },
+  "WriterAudit.swift": {
+    "bytes": 7004,
+    "sha256": "f1da9829ad077ce01d5dd743eb4aa3fbc14956c9a68def9d8b2f1eba80f4610e"
+  },
+  "TelemetryAudit.swift": {
+    "bytes": 9454,
+    "sha256": "f48d552fcf98a4d66e47fb28b4780ffdee1f375675a6b2daf76c8f51e70531ff"
+  },
+  "validation.json": {
+    "bytes": 1468,
+    "sha256": "b9c0da6cdfda60a366bbdea78a9bf9660d2639e050b74737fb9e951dc7c12f69"
+  }
+}

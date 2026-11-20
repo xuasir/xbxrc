@@ -1,0 +1,296 @@
+{
+  "sources": [
+    {
+      "path": "crates/xbox-streaming-protocol/src/frame_feedback.rs",
+      "sha256": "a77967035448ea140575a7c28897a17c1023abca32a7eadaf443309153f1dd8f"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-17-ios-navigation-surface/README.md",
+      "sha256": "b8572eb1e6feeb369e984f1829e1b067aaf6bbca3d0dc25762c8684285d90d4a"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "1b5bc4968bc3a7b5f1a80ea21b1703882a46088dcd9ed0ee4063592ebcda559d"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "275f4c013ec2589246c7da708a7c1a398e32a2ac5d0fce1a559936e37585ac11"
+    },
+    {
+      "path": "iosapp/XBXRC/App/AppRootView.swift",
+      "sha256": "bfdc2b64d5eeeb533279f017083fdc9439fa54a7f113d776e621767ef7325b6d"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+      "sha256": "15b780e2e87cd26fcc8359868faab93ff69fad4a830faf92f1c22f3b5bcf615d"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+      "sha256": "cd0752eb9433f83b3f9a9c4f1958d81bd860c5e946c81f85ddd72cdf6a45147c"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+      "sha256": "1383b0c7b10af553b0c4156c119e3caa30ea9b9b4c3512376c8d6cc50f333cae"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobilePreferences.swift",
+      "sha256": "a17757f1e99f3174341a3dc8bf652ff2e26bdcf78399f9c7a75d74000a20023f"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobileSettingsControls.swift",
+      "sha256": "c808b975fca213cddd4fee6e354bb02160381ac866816ddd4d4622aa2367f698"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/SettingsRootView.swift",
+      "sha256": "ab3b758003566eeabdc7b38d66cd08621ab3838ceb1787fc412a724d3891bb4e"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/SettingsView.swift",
+      "sha256": "e82a6034620d10ecc52bbe43638dcaedebe68e2a50eb1a11e6e56a5151d1b445"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "0bb39560a9c42f40d9f4a14d5936d383b6c2410df11e6f6d4e3d881e62fe1ecb"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+      "sha256": "9c7fd57c96b7270e0cb7b0de1bd860a332f2553d902e830527150003f77a0197"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+      "sha256": "5eb806aa68977d0ae9829a7345f5fa3a7949ca541cf24a0e36e46600ccf92f47"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+      "sha256": "2ea8efe96e1950345b44d00afb6547278d5097dc9faa976865bb327e458c8c0a"
+    },
+    {
+      "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "sha256": "498dd1b7cb1a1ce0fdf46bcf49275ab201fbe363fb6c016a1ca02ccf26448f38"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+      "sha256": "aee0532407a0cd406a59f99ba79dda8a123039e69ba8999ad957e68cc23bba15"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/SettingsInteractionTests.swift",
+      "sha256": "6ed75432ff1d25444ecaf07f07c98b8b28dcf5857bde428fb388c8adf9cbaed5"
+    }
+  ],
+  "images": [
+    {
+      "name": "reading-controller-instructions",
+      "device": "phone",
+      "test": "PCPageInteractionTests/testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry()",
+      "sha256": "f71afc8e9d3031d299635eabda097803c675c5e8bc0af7a40f7c42ea1d23e394",
+      "size": [
+        1170,
+        2532
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/phone/reading-controller-instructions.png",
+      "attachmentSha256": "b0d2ba590dff80dce5ef550a6f1ee33956038eb3d1ce9741de9ae5319bb7ad58",
+      "pixelSha256": "7235bd9d30a6a151da90bf5f47c21d7f63b274e7f6352ce5b86f4fcf04b86f9b",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-settings-attached-hint",
+      "device": "phone",
+      "test": "PCPageInteractionTests/testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry()",
+      "sha256": "aa3ee7860620927647b486144f7e6c35b1cd8ac118a571b7d833bd176e306e25",
+      "size": [
+        1170,
+        2532
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/phone/reading-settings-attached-hint.png",
+      "attachmentSha256": "322e117bc59173691fc34723c7507d4d7976a4a98fae3a37aa201e28a53447fb",
+      "pixelSha256": "5305fe6ef24ec5b3f280d97cdff8f1c2745c6db14891eed522d64e77dcccbe4f",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-cloud-scrolled-header",
+      "device": "phone",
+      "test": "PCPageInteractionTests/testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent()",
+      "sha256": "790ed389c323142250a3bbc154ebdcb072178b982aca453224bc6c25cc4dcf46",
+      "size": [
+        1170,
+        2532
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/phone/reading-cloud-scrolled-header.png",
+      "attachmentSha256": "cb8b64107216bda6adbbfa23e55940efce42c79e113760245c9f36cacc747af9",
+      "pixelSha256": "4d4edfa30edfb506d1da2b84f4400503246d88f14a4cb5e810a1dcd2f292cf58",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-single-host",
+      "device": "phone",
+      "test": "PCPageInteractionTests/testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent()",
+      "sha256": "518b5f9d531edee666c56b30fd6a1ce2db7e3d1e162702f6cbda929ac4803358",
+      "size": [
+        1170,
+        2532
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/phone/reading-single-host.png",
+      "attachmentSha256": "fd39945398d055e58d363af4deaa87f1afacda50a6b8e67d217a2ee5a51a3507",
+      "pixelSha256": "2c832f25e172095fd0bb97e0edc70e0a7fd4ba053efe54d0bd899a86cbf79a31",
+      "losslessCompression": true
+    },
+    {
+      "name": "settings-final-row",
+      "device": "phone",
+      "test": "SettingsInteractionTests/testBottomNavigationReservesSpaceAndFinalRowIsReachable()",
+      "sha256": "72f6c972b1c663cbff8cf6c9ca4dcc52315653cd2def51c08629a83b055f8414",
+      "size": [
+        1170,
+        2532
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/phone/settings-final-row.png",
+      "attachmentSha256": "1b6aaa6db9ada1a1aa7c009f501c3d4df05ed2960331237f99b5d8871a18e062",
+      "pixelSha256": "6f792ead97dd15b6627ec394722d38b6cad58301ff51877cc097871ff64bdd9f",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-en-tablet-large-dark-diagnostics",
+      "device": "ipad",
+      "test": "CapabilityMigrationTests/testNavigationBackgroundAndReadingPagesRenderAcrossLayouts()",
+      "sha256": "767d27f4fa1011dabb24b2d0d1d5fdb1b987a0f36750aa577590efa2217fea52",
+      "size": [
+        1366,
+        1024
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/reading-en-tablet-large-dark-diagnostics.png",
+      "attachmentSha256": "690c066eb5d3df1cd758684e19a25bf18490ded44ebb35f3a6a62018e855ca7f",
+      "pixelSha256": "7e7b6543eb1a397e24a507c8c422f210fa3a5f11f02e07fd66cd5e4b1d8be254",
+      "losslessCompression": true
+    },
+    {
+      "name": "ipad-tablet-large-shell-settings",
+      "device": "ipad",
+      "test": "CapabilityMigrationTests/testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes()",
+      "sha256": "737230c95f4e04e883f08477922197345f958d00547ef80701b2435ff38387d4",
+      "size": [
+        1366,
+        1024
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/ipad-tablet-large-shell-settings.png",
+      "attachmentSha256": "f97fe9f9505fb9d84ec8deb16f2ebd820032bc31c9a04334aae843f2ef6a5330",
+      "pixelSha256": "2bd2d0f2cf44482fa870ec8648a041de5364b3f2e31977b42dd038971c0acc91",
+      "losslessCompression": true
+    },
+    {
+      "name": "ipad-phone-settings-english",
+      "device": "ipad",
+      "test": "CapabilityMigrationTests/testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes()",
+      "sha256": "a9e28f0440c52da9bfbf6f4d77cd9df84b7de1ca422e53d713d21d04e4d36b9b",
+      "size": [
+        390,
+        844
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/ipad-phone-settings-english.png",
+      "attachmentSha256": "b19b1a1c0015875478182e23b1e2c64e863d9ca9c7b8057ab61336e26f0fbd98",
+      "pixelSha256": "22c0ef04a0c74d51dabba33afebe34c15e1ebda811c520a92456bddffe4142d0",
+      "losslessCompression": true
+    },
+    {
+      "name": "ipad-narrow-accessibility-settings-picture",
+      "device": "ipad",
+      "test": "CapabilityMigrationTests/testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes()",
+      "sha256": "3d326f407fc5e0d1ed3ddd600e865d38505f048fda853928d4750c097d97e0d8",
+      "size": [
+        320,
+        800
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/ipad-narrow-accessibility-settings-picture.png",
+      "attachmentSha256": "ed4b0b03302d07499090e35f7a78a3c9c9ca8becd2a6622a0f2c3fa649acdf33",
+      "pixelSha256": "fe1e0d4abef9c21a754512c3fcf5a0bf4a98c071eb5a8423d67dbf69a049b78a",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-settings-attached-hint",
+      "device": "ipad",
+      "test": "PCPageInteractionTests/testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry()",
+      "sha256": "1db5f8353fcc82573622d4d009b7cef439750103f92a9fa4d1b288499369a756",
+      "size": [
+        2064,
+        2752
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/reading-settings-attached-hint.png",
+      "attachmentSha256": "fcfe31333c108b2d145d300e45fa1f93998e5397560b39da51ae8f0d30ac8838",
+      "pixelSha256": "afc929c9cae6c6561a94aeef1b9dc9311f42a693f24aa32dcf4514aef1980490",
+      "losslessCompression": true
+    },
+    {
+      "name": "reading-cloud-scrolled-header",
+      "device": "ipad",
+      "test": "PCPageInteractionTests/testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent()",
+      "sha256": "b483593138a2775c3a5267dfac2e3c302b0e110a9e1ec2e8e1888ee4d2b9ac39",
+      "size": [
+        2064,
+        2752
+      ],
+      "retainedPath": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad/reading-cloud-scrolled-header.png",
+      "attachmentSha256": "19fd490ddb307482c315fb38444f50663cd76738e52cea2acd5690369e05dfbc",
+      "pixelSha256": "dd6ddd85f06a2c8d2fa311d59cd378e80b07289c0b4ffb106c00744531608ea6",
+      "losslessCompression": true
+    }
+  ],
+  "layoutCounts": {
+    "finalIpad": 342,
+    "phoneBeforeWideHeaderAlignment": 342
+  },
+  "checks": {
+    "phone": {
+      "result": "Passed",
+      "tests": 8,
+      "logSha256": "fd428e1618ed7c0d8ccc6b4898b2c7e0ac44aa17837b767a1ee83458c2c88e11",
+      "originalResultBundle": "/private/tmp/xbxrc-ios-navigation-reading-20261118/r4/phone-current.xcresult"
+    },
+    "ipad": {
+      "result": "Passed",
+      "tests": 50,
+      "logSha256": "77423c3a6b804eb3163e850d1118203d69bf8bd996668afa0cfcddecbbef7e19",
+      "originalResultBundle": "/private/tmp/xbxrc-ios-navigation-reading-20261118/r4/ipad-final.xcresult"
+    },
+    "device-build.log": {
+      "result": "Passed",
+      "sha256": "ef5d97fc06ebd45b981fdd71ac6d0e1d701d08147fbf9788306d288b8bc8f94e"
+    },
+    "streaming-boundary-final.log": {
+      "result": "Passed",
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571"
+    },
+    "swift-format-final.log": {
+      "result": "Passed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cargo-fmt.log": {
+      "result": "Passed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "lint-fix.log": {
+      "result": "Passed",
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237"
+    }
+  },
+  "retainedDependencyCache": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "layoutGroups": {
+    "settingsAndShell": 200,
+    "navigationAndReading": 128,
+    "hostOverview": 14
+  },
+  "evidencePolicy": "保留11张关键PNG、2张预览JPEG、测试摘要与必要失败诊断；原始完整附件矩阵随临时目录清理。PNG重压缩逐RGBA像素一致。",
+  "previews": [
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-navigation-reading/final-preview.jpg",
+      "sha256": "524da092e3ff9c4504e519ed0e9c7743770fccf486b06cd51f1872bfe232105a"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-navigation-reading/ipad-header-before-after.jpg",
+      "sha256": "9db47c36677a238e8195bd83d790632580bba0c1c704b91ace3bdebbe4ccd9e2"
+    }
+  ],
+  "closure": {
+    "status": "Done",
+    "cleanupRecord": "dev-docs/validation/2026-11-18-ios-navigation-reading/cleanup.json",
+    "retainedArchiveMiB": 19.32
+  }
+}

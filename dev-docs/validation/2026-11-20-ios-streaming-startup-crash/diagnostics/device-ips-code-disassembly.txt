@@ -1,0 +1,26 @@
+
+/private/tmp/xbxrc-ios-streaming-ips-analysis-20261120/r1/captured-code.o:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000000000000 <ltmp0>:
+       0: 914017ff     	add	sp, sp, #0x5, lsl #12   ; =0x5000
+       4: 913103ff     	add	sp, sp, #0xc40
+       8: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+       c: a8c26ffc     	ldp	x28, x27, [sp], #0x20
+      10: d65f03c0     	ret
+      14: a9be6ffc     	stp	x28, x27, [sp, #-0x20]!
+      18: a9017bfd     	stp	x29, x30, [sp, #0x10]
+      1c: 910043fd     	add	x29, sp, #0x10
+      20: d141d3e9     	sub	x9, sp, #0x74, lsl #12  ; =0x74000
+      24: d14007ff     	sub	sp, sp, #0x1, lsl #12   ; =0x1000
+      28: f90003ff     	str	xzr, [sp]
+      2c: eb2963ff     	cmp	sp, x9
+      30: 54ffffa1     	b.ne	0x24 <ltmp0+0x24>
+      34: d12103ff     	sub	sp, sp, #0x840
+      38: f90003ff     	str	xzr, [sp]
+      3c: d10083a9     	sub	x9, x29, #0x20
+      40: f90003e9     	str	x9, [sp]
+      44: 9140ebe9     	add	x9, sp, #0x3a, lsl #12  ; =0x3a000
+      48: 91108129     	add	x9, x9, #0x420
+      4c: f90007e9     	str	x9, [sp, #0x8]

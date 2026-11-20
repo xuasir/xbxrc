@@ -1,0 +1,661 @@
+{
+  "gate": "PASS",
+  "scope": {
+    "files": [
+      "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl"
+    ],
+    "rows": 34,
+    "sessions": [
+      "session-1"
+    ],
+    "firstTsMs": 1001,
+    "lastTsMs": 1034,
+    "profiles": {
+      "dev": 34
+    }
+  },
+  "failures": {
+    "noRows": 0,
+    "invalidRows": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "privacyViolations": 0,
+    "budgetViolations": 0,
+    "streamingCoreViolations": 0
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "sequence": {
+    "sessions": {
+      "session-1": {
+        "rows": 34,
+        "firstSeq": 1,
+        "lastSeq": 34,
+        "duplicates": 0,
+        "regressions": 0
+      }
+    },
+    "violations": []
+  },
+  "privacy": {
+    "violations": []
+  },
+  "budget": {
+    "rawFiles": [],
+    "aggregateExports": [
+      "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl"
+    ],
+    "retention": [],
+    "pressureNotices": 0,
+    "violations": []
+  },
+  "streamingCore": {
+    "gate": "PASS",
+    "rows": 34,
+    "attempts": [
+      {
+        "sessionId": "session-1",
+        "attemptId": "attempt-1",
+        "generation": 3,
+        "targets": [
+          "cloud"
+        ],
+        "rows": 34,
+        "sessionReady": [
+          {
+            "event": "sessionReady",
+            "seq": 2,
+            "tsMs": 1002,
+            "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+            "line": 2
+          }
+        ],
+        "peerEpochs": [
+          {
+            "peerEpoch": 7,
+            "rows": 26,
+            "firstSeq": 3,
+            "lastSeq": 29,
+            "checks": {
+              "answerApplied": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "seq": 3,
+                    "tsMs": 1003,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 3
+                  }
+                ]
+              },
+              "localIceStarted": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "seq": 4,
+                    "tsMs": 1004,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 4
+                  }
+                ]
+              },
+              "localIceCompleted": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "localIceCompleted",
+                    "seq": 5,
+                    "tsMs": 1005,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 5
+                  }
+                ]
+              },
+              "localIcePaired": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "seq": 4,
+                    "tsMs": 1004,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 4
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "seq": 5,
+                    "tsMs": 1005,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 5
+                  }
+                ],
+                "details": {
+                  "started": 1,
+                  "completed": 1
+                }
+              },
+              "negotiationPaired": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "seq": 3,
+                    "tsMs": 1003,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 3
+                  },
+                  {
+                    "event": "localIceStarted",
+                    "seq": 4,
+                    "tsMs": 1004,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 4
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "seq": 5,
+                    "tsMs": 1005,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 5
+                  }
+                ],
+                "details": {
+                  "answers": 1,
+                  "localIceStarted": 1,
+                  "localIceCompleted": 1
+                }
+              },
+              "remoteIceBatchReceived": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "remoteIceBatchReceived",
+                    "seq": 6,
+                    "tsMs": 1006,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 6
+                  }
+                ]
+              },
+              "remoteIceApplied": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "remoteIceBatchApplied",
+                    "seq": 7,
+                    "tsMs": 1007,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 7
+                  }
+                ],
+                "details": {
+                  "sources": [
+                    "remoteIceBatchApplied"
+                  ]
+                }
+              },
+              "remoteIceCompleted": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "remoteIceCompleted",
+                    "seq": 8,
+                    "tsMs": 1008,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 8
+                  }
+                ]
+              },
+              "peerConnected": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "peerConnected",
+                    "seq": 9,
+                    "tsMs": 1009,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 9
+                  }
+                ]
+              },
+              "fourChannelProfile": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "dataChannelProfilesCreated",
+                    "seq": 10,
+                    "tsMs": 1010,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 10
+                  }
+                ],
+                "details": {
+                  "snapshots": [
+                    {
+                      "reference": {
+                        "event": "dataChannelProfilesCreated",
+                        "seq": 10,
+                        "tsMs": 1010,
+                        "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                        "line": 10
+                      },
+                      "valid": true,
+                      "profiles": {
+                        "input": {
+                          "protocol": "1.0",
+                          "ordered": true
+                        },
+                        "control": {
+                          "protocol": "controlV1",
+                          "ordered": true
+                        },
+                        "chat": {
+                          "protocol": "chatV1",
+                          "ordered": true
+                        },
+                        "message": {
+                          "protocol": "messageV1",
+                          "ordered": true
+                        }
+                      },
+                      "errors": []
+                    }
+                  ]
+                }
+              },
+              "messageHandshakeSent": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "messageHandshakeSent",
+                    "seq": 12,
+                    "tsMs": 1012,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 12
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "messageHandshakeAcked": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "messageHandshakeAcked",
+                    "seq": 13,
+                    "tsMs": 1013,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 13
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "messagePostHandshakeCompleted": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "messagePostHandshakeCompleted",
+                    "seq": 14,
+                    "tsMs": 1014,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 14
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "controlBootstrapCompleted": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "controlBootstrapCompleted",
+                    "seq": 15,
+                    "tsMs": 1015,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 15
+                  }
+                ],
+                "details": {
+                  "count": 1,
+                  "preHandshakeObserved": [
+                    {
+                      "event": "controlBootstrapPreHandshakeCompleted",
+                      "seq": 11,
+                      "tsMs": 1011,
+                      "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                      "line": 11
+                    }
+                  ]
+                }
+              },
+              "controlReady": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "controlReady",
+                    "seq": 16,
+                    "tsMs": 1016,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 16
+                  }
+                ],
+                "details": {
+                  "count": 1,
+                  "events": [
+                    "controlReady"
+                  ],
+                  "legacyFallback": false,
+                  "ignoredLegacyCount": 1
+                }
+              },
+              "firstVideoFrame": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "firstVideoFrame",
+                    "seq": 17,
+                    "tsMs": 1017,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 17
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "steadyMediaObserved": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "steadyMediaObserved",
+                    "seq": 28,
+                    "tsMs": 1028,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 28
+                  }
+                ]
+              },
+              "videoSurfaceAttached": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "videoSurfaceAttached",
+                    "seq": 18,
+                    "tsMs": 1018,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 18
+                  }
+                ]
+              },
+              "videoSurfaceSized": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "videoSurfaceSized",
+                    "seq": 19,
+                    "tsMs": 1019,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 19
+                  }
+                ],
+                "details": {
+                  "observedCount": 1,
+                  "positiveSizes": [
+                    {
+                      "event": "videoSurfaceSized",
+                      "seq": 19,
+                      "tsMs": 1019,
+                      "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                      "line": 19
+                    }
+                  ]
+                }
+              },
+              "displayPipelineReady": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "displayPipelineReady",
+                    "seq": 20,
+                    "tsMs": 1020,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 20
+                  }
+                ]
+              },
+              "videoSurfaceRendererReady": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "videoSurfaceRendererReady",
+                    "seq": 21,
+                    "tsMs": 1021,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 21
+                  }
+                ],
+                "details": {
+                  "observedCount": 1,
+                  "positiveFrames": [
+                    {
+                      "event": "videoSurfaceRendererReady",
+                      "seq": 21,
+                      "tsMs": 1021,
+                      "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                      "line": 21
+                    }
+                  ]
+                }
+              },
+              "videoFrameAcceptedToMailbox": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "videoFrameAcceptedToMailbox",
+                    "seq": 22,
+                    "tsMs": 1022,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 22
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "displaySubmit": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "displaySubmit",
+                    "seq": 23,
+                    "tsMs": 1023,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 23
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "displayFirstPresent": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "displayFirstPresent",
+                    "seq": 24,
+                    "tsMs": 1024,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 24
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "displayPresent": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "displayPresent",
+                    "seq": 25,
+                    "tsMs": 1025,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 25
+                  }
+                ],
+                "details": {
+                  "count": 1
+                }
+              },
+              "displayHealthSnapshot": {
+                "passed": true,
+                "observed": [
+                  {
+                    "event": "displayHealthSnapshot",
+                    "seq": 27,
+                    "tsMs": 1027,
+                    "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                    "line": 27
+                  }
+                ],
+                "details": {
+                  "observedCount": 1,
+                  "positivePresentSnapshots": [
+                    {
+                      "event": "displayHealthSnapshot",
+                      "seq": 27,
+                      "tsMs": 1027,
+                      "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                      "line": 27
+                    }
+                  ]
+                }
+              },
+              "simulatorI420Evidence": {
+                "passed": true,
+                "observed": [],
+                "details": {
+                  "active": false
+                }
+              }
+            },
+            "failedChecks": [],
+            "orderingViolations": [],
+            "toleratedReorders": [],
+            "passed": true
+          }
+        ],
+        "completePeerEpochs": [
+          7
+        ],
+        "playingStates": [
+          {
+            "playing": {
+              "event": "streamingStateChanged",
+              "seq": 26,
+              "tsMs": 1026,
+              "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+              "line": 26
+            },
+            "peerEpoch": 7,
+            "reordered": false,
+            "reorderRows": 0,
+            "evidence": {
+              "peerConnected": {
+                "event": "peerConnected",
+                "seq": 9,
+                "tsMs": 1009,
+                "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                "line": 9
+              },
+              "controlReady": {
+                "event": "controlReady",
+                "seq": 16,
+                "tsMs": 1016,
+                "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                "line": 16
+              },
+              "videoFrameAcceptedToMailbox": {
+                "event": "videoFrameAcceptedToMailbox",
+                "seq": 22,
+                "tsMs": 1022,
+                "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                "line": 22
+              },
+              "displayFirstPresent": {
+                "event": "displayFirstPresent",
+                "seq": 24,
+                "tsMs": 1024,
+                "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+                "line": 24
+              }
+            }
+          }
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "seq": 30,
+            "tsMs": 1030,
+            "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+            "line": 30
+          }
+        ],
+        "cleanup": {
+          "iceTasksCancelled": [
+            {
+              "event": "iceTasksCancelled",
+              "seq": 31,
+              "tsMs": 1031,
+              "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+              "line": 31
+            }
+          ],
+          "peerClosed": [
+            {
+              "event": "peerClosed",
+              "seq": 32,
+              "tsMs": 1032,
+              "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+              "line": 32
+            }
+          ],
+          "remoteSessionClosed": [
+            {
+              "event": "remoteSessionClosed",
+              "seq": 33,
+              "tsMs": 1033,
+              "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+              "line": 33
+            }
+          ],
+          "accessReleased": [
+            {
+              "event": "accessReleased",
+              "seq": 34,
+              "tsMs": 1034,
+              "file": "/private/tmp/xbxrc-ios-trace-audit-20261120/r1/adverse-core-fixture.jsonl",
+              "line": 34
+            }
+          ]
+        },
+        "contextViolations": [],
+        "toleratedReorders": [],
+        "violations": [],
+        "passed": true
+      }
+    ],
+    "contextViolations": [],
+    "generationViolations": [],
+    "violations": []
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-19",
+  "status": "Completed",
+  "processesConfirmedEnded": true,
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-section-states-20261119/r1",
+    "/private/tmp/xbxrc-ios-section-states-20261119/r2",
+    "/private/tmp/xbxrc-ios-section-states-20261119/r3"
+  ],
+  "allocatedBytesBefore": {
+    "/private/tmp/xbxrc-ios-section-states-20261119/r1": 1129570304,
+    "/private/tmp/xbxrc-ios-section-states-20261119/r2": 176271360,
+    "/private/tmp/xbxrc-ios-section-states-20261119/r3": 128692224
+  },
+  "removedAllocatedBytes": 1434533888,
+  "removedAllocatedGiB": 1.336,
+  "availableBytesBefore": 64716800000,
+  "availableBytesAfter": 65945600000,
+  "availableIncreaseGiB": 1.144,
+  "remainingTargets": [],
+  "temporaryTaskRootExists": false,
+  "preservedEvidenceFiles": 19,
+  "preservedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-section-states-packages",
+  "dependencyArtifactsAvailable": true,
+  "stagedDiffHash": "932a462abc222f8a1e4a0cb7208d0c774d239db12e999bfa3da7f3eced8bf0fb",
+  "stagedChangesPreserved": true
+}

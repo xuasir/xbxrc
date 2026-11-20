@@ -1,0 +1,100 @@
+{
+  "recordedAt": "2026-11-20T14:50:40.653567+08:00",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4366,
+      "sha256": "1ca33cd8ab733ed97ba65b96e9b929d393430707a364140d00dbc1093ea01058"
+    },
+    {
+      "path": "baseline-credential-budget.txt",
+      "bytes": 1159,
+      "sha256": "853e08231d0df96269e6a1428afc443b8bb3accb0b71d2b11a664d8e05e0ceb0"
+    },
+    {
+      "path": "cached-device-symbols.txt",
+      "bytes": 31762,
+      "sha256": "8102e7e246229f61db368a50028c96e7514079654b71e413b5effaea89b34e15"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 1584,
+      "sha256": "3759c9ebe1e56e46e5cdd14ca813b1578495f8f9c03e4d2fe21cf76e55f748ca"
+    },
+    {
+      "path": "continuation-checks.json",
+      "bytes": 2102,
+      "sha256": "ffe9bc8af973e6d4b650dafd9408a684f290bd9bac5b122359a2eb68aeff7166"
+    },
+    {
+      "path": "credential-budget-after.txt",
+      "bytes": 710,
+      "sha256": "60e8aadb264b44ff621b1e5a223699f0779bc0bd3346b5a8c0b7258b449211a1"
+    },
+    {
+      "path": "device-build.log",
+      "bytes": 165256,
+      "sha256": "cafa0061a427fb60e0a992596acc582bf339734a97c95c0d6c51ff3433291318"
+    },
+    {
+      "path": "device-build.summary.txt",
+      "bytes": 505,
+      "sha256": "b705bbbaf525db8e85108a9016779a632bfed0770a9c79b8b3f638a4f67270f2"
+    },
+    {
+      "path": "device-operation-prologues.json",
+      "bytes": 173171,
+      "sha256": "34c201a010f808f83d533bf5a715e7cfb1fc7571f9cfb6726f6634e5271ed139"
+    },
+    {
+      "path": "incident.json",
+      "bytes": 1956,
+      "sha256": "d478a631c451620c5d3ef8753bd5f8ea8d990340daf261cdf859d97549d12aad"
+    },
+    {
+      "path": "inspect-operation-stack.py",
+      "bytes": 3650,
+      "sha256": "c47c5e2f454c40c3307459f1ec730eb552dcc8fd1060b0eda21ea49c77ac57e0"
+    },
+    {
+      "path": "pc-tauri-check.txt",
+      "bytes": 1344,
+      "sha256": "5cd1fca7fc9e6910c18c8a5fa6b0d454919e2b755fbe903582af0c8da1a1fa04"
+    },
+    {
+      "path": "production-layout.patch",
+      "bytes": 3578,
+      "sha256": "744807341294f83b10e4585e52a6204b2f44fd42a620f35dc1fb9092813ed46c"
+    },
+    {
+      "path": "rust-tests.txt",
+      "bytes": 26687,
+      "sha256": "032649183c22c8aea130f8dd8bf8c1f5fd0e66d7d6913ae3d5a0b498208d4860"
+    },
+    {
+      "path": "setup-diagnostics.json",
+      "bytes": 954,
+      "sha256": "35d8b7df78bd5182393a5da21e42cca9b78f262e1415b6ceeb335f51a506d1a5"
+    },
+    {
+      "path": "source-manifest.json",
+      "bytes": 1259,
+      "sha256": "70a74873d440bf57c27e93362bfc4a6b9c21f8891e842b733f685a972b217a16"
+    },
+    {
+      "path": "stack-regressions.txt",
+      "bytes": 3703,
+      "sha256": "65df3d656681dc972effe4779e8f6833c4c437f03762de424285670c6e1726c1"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 3977,
+      "sha256": "3da5dbc84f81b12e951493f23511f732ce01c8200a0c5e431943ecfc1ab43607"
+    },
+    {
+      "path": "xcode-home-crash.png",
+      "bytes": 1515535,
+      "sha256": "d75610f58b5ccd19f8ace8c1c16e39215cbb1a3962b9b09d0a8845adb60081fa"
+    }
+  ]
+}

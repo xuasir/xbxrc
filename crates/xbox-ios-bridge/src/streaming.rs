@@ -5,10 +5,9 @@ use crate::cloud_access::{
 use crate::data::extract_home_host_facts;
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use xbox_auth_flow::{AuthFlow, TransferTokenInput};
 use xbox_streaming::runtime::{RuntimeCapabilities, TurnContext};
@@ -16,7 +15,8 @@ use xbox_streaming::{
     compile, parse_resolution_preference, BitratePreference, CodecPreference, CompilerInput,
     Config, Context, IceCandidate, Plan, RemotePlayContext, RuntimeLaunchState, SessionFlowError,
     SessionFlowProvider, SessionFlowService, SessionFlowSnapshot, SessionPhase as FlowSessionPhase,
-    SessionProgressSnapshot, SessionRuntimeBinding, SessionRuntimeSnapshot, Target,
+    SessionProgressSnapshot, SessionRuntimeBinding, SessionRuntimeSnapshot, SessionStartupScope,
+    Target, TurnServer, TurnSource,
 };
 use xbox_streaming_protocol::{
     build_xbox_stream_control_authorization_payload,
@@ -28,9 +28,17 @@ use xbox_streaming_protocol::{
 };
 use xbox_webapi::{ConsoleApi, SmartglassApi};
 
+mod credentials;
+mod frame_feedback;
+mod home_context;
+use credentials::SessionCredentials;
+pub use credentials::XboxStreamingAuthUpdate;
+mod startup;
+pub use frame_feedback::{stream_input_frame_feedback_payload, XboxStreamFrameFeedback};
+use startup::IosStartupObserver;
+pub use startup::XboxStartupProgress;
+
 const OFFICIAL_XBOX_STUN_URL: &str = "stun:relay.communication.microsoft.com:3478";
-const REMOTE_ICE_APPLICATION_WINDOW: Duration = Duration::from_secs(30);
-const REMOTE_ICE_EMPTY_POLLS_AFTER_FIRST_CANDIDATE: u32 = 10;
 
 #[derive(Debug, Clone, thiserror::Error, uniffi::Error)]
 pub enum XboxStreamingError {
@@ -54,6 +62,7 @@ pub enum XboxStreamingError {
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct XboxIceCandidate {
+    pub source: Option<String>,
     pub candidate: String,
     pub sdp_m_line_index: Option<u32>,
     pub sdp_mid: Option<String>,
@@ -65,6 +74,7 @@ pub struct XboxIceCandidate {
 pub struct XboxRemoteIceBatch {
     pub candidates: Vec<XboxIceCandidate>,
     pub end_of_candidates: bool,
+    pub configuration_pending: bool,
 }
 
 /// 可直接映射到 libwebrtc `RTCIceServer` 的稳定配置。
@@ -150,6 +160,7 @@ pub fn is_stream_message_handshake_ack(payload: String) -> bool {
 pub struct XboxPreparedSignaling {
     pub generation: u64,
     pub ice_servers: Vec<XboxIceServer>,
+    pub fallback_ice_servers: Option<Vec<XboxIceServer>>,
     pub web_rtc_plan: XboxWebRtcPlan,
 }
 
@@ -176,10 +187,19 @@ pub struct XboxWebRtcPlan {
     pub prefer_ipv6: bool,
     pub normalize_end_of_candidates: bool,
     pub console_addresses: Vec<XboxHostAddress>,
+    pub prevent_resolution_drops: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct XboxCustomTurn {
+    pub server_url: String,
+    pub username: String,
+    pub credential: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct XboxStreamSettings {
+    pub cloud_server_region: String,
     pub preferred_game_locale: String,
     pub cloud_resolution: i64,
     pub home_resolution: i64,
@@ -192,11 +212,15 @@ pub struct XboxStreamSettings {
     pub audio_bitrate_mode: String,
     pub audio_bitrate_kbps: i64,
     pub home_turn_fallback: bool,
+    pub custom_turn: Option<XboxCustomTurn>,
+    pub prevent_resolution_drops: bool,
+    pub power_on: bool,
 }
 
 impl Default for XboxStreamSettings {
     fn default() -> Self {
         Self {
+            cloud_server_region: "auto".to_string(),
             preferred_game_locale: "en-US".to_string(),
             cloud_resolution: 720,
             home_resolution: 1080,
@@ -208,7 +232,10 @@ impl Default for XboxStreamSettings {
             cloud_bitrate_mbps: 20,
             audio_bitrate_mode: "Auto".to_string(),
             audio_bitrate_kbps: 20,
-            home_turn_fallback: true,
+            home_turn_fallback: false,
+            custom_turn: None,
+            prevent_resolution_drops: false,
+            power_on: false,
         }
     }
 }
@@ -316,32 +343,53 @@ impl RemoteSessionTerminal {
 
 #[derive(Debug, Clone, Default)]
 struct SessionFlowProjection {
+    generation: u64,
     session_id: Option<String>,
     remote_terminal: Option<RemoteSessionTerminal>,
+    remote_observation_revision: u64,
+    startup_progress: Option<XboxStartupProgress>,
 }
 
 #[derive(Clone)]
 struct IosSessionFlowProvider {
-    access: StreamingAccessContext,
+    credentials: Arc<SessionCredentials>,
+    target: Target,
     projection: Arc<StdMutex<SessionFlowProjection>>,
 }
 
 #[async_trait]
 impl SessionFlowProvider for IosSessionFlowProvider {
-    async fn get_streaming_token(&self, target_type: &str) -> Result<Value, SessionFlowError> {
-        if target_type != self.access.target.as_str() {
-            return Err(SessionFlowError::message(format!(
-                "streamingTargetMismatch:expected={};actual={target_type}",
-                self.access.target.as_str()
-            )));
+    fn on_session_lifecycle_event(&self, event: &str, _session_id: Option<&str>, _payload: Value) {
+        if event == "cleanupStarted" {
+            self.credentials.begin_cleanup();
         }
-        Ok(json!({ "gsToken": self.access.bearer_token }))
+    }
+    async fn get_streaming_token(&self, target_type: &str) -> Result<Value, SessionFlowError> {
+        let access = self.credentials.access(target_type, None, None).await?;
+        Ok(json!({ "gsToken": access.bearer_token, "_authGeneration": access.owner_generation }))
+    }
+
+    async fn recover_streaming_token(
+        &self,
+        target_type: &str,
+        rejected_token: &str,
+        credential_generation: Option<u64>,
+    ) -> Result<Value, xbox_webapi::WebApiError> {
+        let access = self
+            .credentials
+            .access(target_type, Some(rejected_token), credential_generation)
+            .await?;
+        Ok(json!({ "gsToken": access.bearer_token, "_authGeneration": access.owner_generation }))
     }
 
     async fn transfer_token(&self) -> Result<String, SessionFlowError> {
+        let access = self
+            .credentials
+            .access(self.target.as_str(), None, None)
+            .await?;
         AuthFlow::new()
             .transfer_token(TransferTokenInput {
-                refresh_token: self.access.refresh_token.clone(),
+                refresh_token: access.refresh_token,
             })
             .await
             .map(|output| output.transfer_token)
@@ -349,16 +397,20 @@ impl SessionFlowProvider for IosSessionFlowProvider {
     }
 
     async fn power_on_console(&self, console_id: &str) -> Result<bool, SessionFlowError> {
-        if self.access.target != Target::Home {
+        if self.target != Target::Home {
             return Ok(false);
         }
-        let facts = find_home_host_facts(&self.access.account_id, console_id)
+        let access = self
+            .credentials
+            .access(self.target.as_str(), None, None)
+            .await?;
+        let facts = find_home_host_facts(&access.account_id, console_id)
             .map_err(|error| SessionFlowError::message(error.to_string()))?
             .ok_or_else(|| SessionFlowError::message("homeTargetContextMissing"))?;
         let command_id = facts
             .command_id()
             .ok_or_else(|| SessionFlowError::message("homeCommandIdentityMissing"))?;
-        ConsoleApi::new(self.access.web_uhs.clone(), self.access.web_token.clone())
+        ConsoleApi::new(access.web_uhs, access.web_token)
             .power_on(command_id)
             .await
             .map(|response| response.accepted)
@@ -368,22 +420,25 @@ impl SessionFlowProvider for IosSessionFlowProvider {
     async fn get_remote_consoles(
         &self,
     ) -> Result<Vec<xbox_streaming::RemoteConsoleSnapshot>, SessionFlowError> {
-        if self.access.target != Target::Home {
+        if self.target != Target::Home {
             return Ok(Vec::new());
         }
-        let smartglass =
-            SmartglassApi::new(self.access.web_uhs.clone(), self.access.web_token.clone());
+        let access = self
+            .credentials
+            .access(self.target.as_str(), None, None)
+            .await?;
+        let smartglass = SmartglassApi::new(access.web_uhs.clone(), access.web_token.clone());
         let refreshed =
             tokio::time::timeout(Duration::from_secs(8), smartglass.get_consoles_list()).await;
         let facts = match refreshed {
             Ok(Ok(response)) => {
                 let facts = extract_home_host_facts(&response);
-                replace_home_host_facts(&self.access.account_id, facts.clone())
+                replace_home_host_facts(&access.account_id, facts.clone())
                     .map_err(|error| SessionFlowError::message(error.to_string()))?;
                 facts
             }
             Ok(Err(error)) => {
-                let cached = home_host_facts(&self.access.account_id)
+                let cached = home_host_facts(&access.account_id)
                     .map_err(|cache_error| SessionFlowError::message(cache_error.to_string()))?;
                 if cached.is_empty() {
                     return Err(SessionFlowError::message(error.to_string()));
@@ -391,7 +446,7 @@ impl SessionFlowProvider for IosSessionFlowProvider {
                 cached
             }
             Err(_) => {
-                let cached = home_host_facts(&self.access.account_id)
+                let cached = home_host_facts(&access.account_id)
                     .map_err(|error| SessionFlowError::message(error.to_string()))?;
                 if cached.is_empty() {
                     return Err(SessionFlowError::message("homeConsoleLookupTimeout"));
@@ -436,10 +491,16 @@ impl SessionFlowProvider for IosSessionFlowProvider {
             stream_state,
             progress.error_code.as_deref(),
         );
-        let Some(terminal) = terminal else { return };
         if let Ok(mut projection) = self.projection.lock() {
             if projection.session_id.as_deref() == Some(session_id) {
-                projection.remote_terminal.get_or_insert(terminal);
+                projection.remote_observation_revision =
+                    projection.remote_observation_revision.saturating_add(1);
+                if let Some(startup) = &mut projection.startup_progress {
+                    startup.apply_session(progress, stream_state);
+                }
+                if let Some(terminal) = terminal {
+                    projection.remote_terminal.get_or_insert(terminal);
+                }
             }
         }
     }
@@ -453,9 +514,9 @@ struct SessionState {
     signaling_epoch: u64,
     active_signaling_restart: bool,
     remote_ice: Vec<IceCandidate>,
-    remote_ice_started_at: Option<Instant>,
-    remote_ice_empty_polls: u32,
+    remote_ice_next_poll_at: Option<tokio::time::Instant>,
     remote_ice_observed: bool,
+    remote_ice_end_seen: bool,
     remote_ice_complete: bool,
 }
 
@@ -468,9 +529,9 @@ impl SessionState {
             signaling_epoch: 0,
             active_signaling_restart: false,
             remote_ice: Vec::new(),
-            remote_ice_started_at: None,
-            remote_ice_empty_polls: 0,
+            remote_ice_next_poll_at: None,
             remote_ice_observed: false,
+            remote_ice_end_seen: false,
             remote_ice_complete: false,
         }
     }
@@ -499,9 +560,9 @@ impl SessionState {
 
     fn reset_remote_ice(&mut self) {
         self.remote_ice.clear();
-        self.remote_ice_started_at = None;
-        self.remote_ice_empty_polls = 0;
+        self.remote_ice_next_poll_at = None;
         self.remote_ice_observed = false;
+        self.remote_ice_end_seen = false;
         self.remote_ice_complete = false;
     }
 }
@@ -512,12 +573,16 @@ type IosSessionFlow = SessionFlowService<IosSessionSnapshot, IosSessionFlowProvi
 /// 会话编排、轮询、connect token、keepalive、signaling 与结束判定全部由 Rust 持有。
 #[derive(uniffi::Object)]
 pub struct XboxStreamSession {
-    plan: Plan,
+    plan: StdMutex<Option<Plan>>,
+    target_id: String,
+    settings: XboxStreamSettings,
     flow: IosSessionFlow,
     access: StreamingAccessContext,
+    credentials: Arc<SessionCredentials>,
     projection: Arc<StdMutex<SessionFlowProjection>>,
     state: Mutex<SessionState>,
     generation: AtomicU64,
+    startup_scope: StdMutex<SessionStartupScope>,
 }
 
 #[uniffi::export]
@@ -528,7 +593,12 @@ pub fn create_stream_session(
     let target_id = normalize_target_id(&target_id)?;
     let access = load_stream_access(access_handle.trim())
         .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
-    build_stream_session(access, target_id, XboxStreamSettings::default())
+    build_stream_session(
+        access_handle,
+        access,
+        target_id,
+        XboxStreamSettings::default(),
+    )
 }
 
 /// 账户、代际和 target 都由 Swift 启动请求显式回传，bridge 在创建远端会话前校验。
@@ -556,39 +626,104 @@ pub fn create_scoped_stream_session(
         Some(owner_generation),
     )
     .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
-    build_stream_session(access, target_id, settings)
+    build_stream_session(access_handle, access, target_id, settings)
 }
 
 fn build_stream_session(
+    access_handle: String,
     access: StreamingAccessContext,
     target_id: String,
     settings: XboxStreamSettings,
 ) -> Result<Arc<XboxStreamSession>, XboxStreamingError> {
-    let plan = control_plan(&access, &target_id, &settings)?;
     let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
+    let credentials = Arc::new(SessionCredentials::new(
+        access_handle.trim().to_owned(),
+        access.clone(),
+    ));
     let flow = SessionFlowService::new(IosSessionFlowProvider {
-        access: access.clone(),
+        credentials: Arc::clone(&credentials),
+        target: access.target,
         projection: Arc::clone(&projection),
     });
 
     Ok(Arc::new(XboxStreamSession {
-        plan,
+        plan: StdMutex::new(None),
+        target_id,
+        settings,
         flow,
         access,
+        credentials,
         projection,
         state: Mutex::new(SessionState::new()),
         generation: AtomicU64::new(0),
+        startup_scope: StdMutex::new(SessionStartupScope::default()),
     }))
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl XboxStreamSession {
+    pub async fn pending_auth_update(&self) -> Option<XboxStreamingAuthUpdate> {
+        self.credentials.pending_update().await
+    }
+
+    pub async fn acknowledge_auth_update(&self, revision: u64) {
+        self.credentials.acknowledge(revision).await;
+    }
+
+    pub async fn synchronize_auth_session(
+        &self,
+        revision: u64,
+        auth_session: crate::AuthSession,
+    ) -> Result<(), XboxStreamingError> {
+        self.credentials
+            .synchronize(revision, auth_session)
+            .await
+            .map_err(|_| {
+                XboxStreamingError::Authentication(
+                    "host credential synchronization rejected".into(),
+                )
+            })
+    }
+    pub fn startup_progress(&self) -> Option<XboxStartupProgress> {
+        self.projection_snapshot()
+            .and_then(|projection| projection.startup_progress)
+    }
+
     pub async fn start(&self) -> Result<XboxPreparedSignaling, XboxStreamingError> {
         let generation = self.begin_generation().await?;
-        let execution = match self
-            .flow
-            .start_session_execution(self.plan.clone(), |_| (), |_| ())
-            .await
+        let scope = self
+            .startup_scope
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .clone();
+        let observer = IosStartupObserver::new(Arc::clone(&self.projection), generation);
+        // UniFFI 在 Swift 小栈线程上按值包装 future；重型阶段分别放到堆上。
+        let plan = match Box::pin(scope.run(
+            "streamContext",
+            Some(Duration::from_secs(90)),
+            self.prepare_start_plan(&scope),
+        ))
+        .await
+        {
+            Ok(plan) => plan,
+            Err(error) => {
+                self.mark_failed(generation).await?;
+                return Err(map_session_flow_error(error));
+            }
+        };
+        ensure_generation(&self.generation, generation)?;
+        *self
+            .plan
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(plan.clone());
+        let execution = match Box::pin(self.flow.start_session_execution_with_scope(
+            plan.clone(),
+            |_| (),
+            |_| (),
+            Some(&observer),
+            &scope,
+        ))
+        .await
         {
             Ok(execution) => execution,
             Err(error) => {
@@ -600,14 +735,20 @@ impl XboxStreamSession {
 
         if let Ok(mut projection) = self.projection.lock() {
             projection.session_id = Some(execution.session.session_id.clone());
+            if let Some(progress) = &mut projection.startup_progress {
+                progress.phase = "ready".into();
+                progress.status = "succeeded".into();
+            }
         }
         let mut state = self.state.lock().await;
         ensure_generation(&self.generation, generation)?;
         state.phase = SessionPhase::Ready;
+        let (ice_servers, fallback_ice_servers) = prepare_runtime_ice_servers(&plan);
         Ok(XboxPreparedSignaling {
             generation,
-            ice_servers: resolve_ice_servers(&self.plan),
-            web_rtc_plan: project_web_rtc_plan(&self.plan),
+            ice_servers,
+            fallback_ice_servers,
+            web_rtc_plan: project_web_rtc_plan(&plan),
         })
     }
 
@@ -627,10 +768,15 @@ impl XboxStreamSession {
             ensure_generation(&self.generation, generation)?;
             state.begin_offer_exchange()
         };
-        let timeout_ms = self.plan.session.schedule.ready_timeout_ms.max(1_000);
+        let timeout_ms = self
+            .plan_snapshot()?
+            .session
+            .schedule
+            .ready_timeout_ms
+            .max(1_000);
         let answer = tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            self.flow.exchange_offer(&session_id, None, &sdp, restart),
+            Box::pin(self.flow.exchange_offer(&session_id, None, &sdp, restart)),
         )
         .await
         .map_err(|_| {
@@ -646,6 +792,96 @@ impl XboxStreamSession {
         Ok(answer.sdp)
     }
 
+    /// Chat/quality 使用同一个 Peer 的媒体协商，保留主 ICE 代次。
+    pub async fn exchange_media_offer(
+        &self,
+        generation: u64,
+        sdp: String,
+        kind: String,
+    ) -> Result<String, XboxStreamingError> {
+        if !matches!(kind.as_str(), "chat" | "quality") || sdp.trim().is_empty() {
+            return Err(XboxStreamingError::InvalidArgument(
+                "media offer kind or SDP invalid".into(),
+            ));
+        }
+        let session_id = self.session_id_for(generation).await?;
+        self.ensure_remote_session_active(&session_id)?;
+        let answer = tokio::time::timeout(
+            Duration::from_secs(10),
+            Box::pin(
+                self.flow
+                    .exchange_offer(&session_id, Some(&kind), &sdp, false),
+            ),
+        )
+        .await
+        .map_err(|_| XboxStreamingError::Remote("mediaNegotiationTimeout".into()))?
+        .map_err(map_session_flow_error)?;
+        ensure_generation(&self.generation, generation)?;
+        self.ensure_remote_session_active(&session_id)?;
+        Ok(answer.sdp)
+    }
+
+    pub async fn supervise_runtime(
+        &self,
+        generation: u64,
+        sample_json: String,
+    ) -> Result<String, XboxStreamingError> {
+        if sample_json.len() > 16_384 {
+            return Err(XboxStreamingError::InvalidArgument(
+                "runtime sample budget exceeded".into(),
+            ));
+        }
+        let sample = serde_json::from_str(&sample_json)
+            .map_err(|_| XboxStreamingError::Parse("runtime sample invalid".into()))?;
+        let session_id = self.session_id_for(generation).await?;
+        self.ensure_remote_session_active(&session_id)?;
+        let decision = self
+            .flow
+            .supervise_runtime(&session_id, sample)
+            .await
+            .map_err(map_session_flow_error)?;
+        ensure_generation(&self.generation, generation)?;
+        serde_json::to_string(&decision)
+            .map_err(|_| XboxStreamingError::Parse("runtime decision invalid".into()))
+    }
+
+    pub async fn validate_resume(&self, generation: u64) -> Result<(), XboxStreamingError> {
+        let session_id = self.session_id_for(generation).await?;
+        self.ensure_remote_session_active(&session_id)?;
+        let target = self.plan_snapshot()?.session.target;
+        self.credentials
+            .access(target.as_str(), None, None)
+            .await
+            .map_err(|_| {
+                XboxStreamingError::Authentication("resumeCredentialsUnavailable".into())
+            })?;
+        let before = self
+            .projection_snapshot()
+            .map(|p| p.remote_observation_revision)
+            .unwrap_or(0);
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            Box::pin(self.flow.refresh_session_observation(&session_id)),
+        )
+        .await
+        .map_err(|_| XboxStreamingError::Network("resumeObservationTimeout".into()))?;
+        ensure_generation(&self.generation, generation)?;
+        self.ensure_remote_session_active(&session_id)?;
+        let after = self
+            .projection_snapshot()
+            .map(|p| p.remote_observation_revision)
+            .unwrap_or(0);
+        if before == after {
+            return Err(XboxStreamingError::Network(
+                "resumeObservationUnavailable".into(),
+            ));
+        }
+        if !self.flow.session_allows_recovery(&session_id).await {
+            return Err(XboxStreamingError::Remote("remoteSessionTerminal".into()));
+        }
+        self.ensure_remote_session_active(&session_id)
+    }
+
     pub async fn submit_ice(
         &self,
         generation: u64,
@@ -655,7 +891,7 @@ impl XboxStreamSession {
         let candidates = candidates
             .into_iter()
             .map(|candidate| IceCandidate {
-                source: None,
+                source: candidate.source,
                 candidate: candidate.candidate,
                 sdp_m_line_index: candidate.sdp_m_line_index,
                 sdp_mid: candidate.sdp_mid,
@@ -668,8 +904,7 @@ impl XboxStreamSession {
             ensure_generation(&self.generation, generation)?;
             state.active_signaling_restart
         };
-        self.flow
-            .submit_ice(&session_id, &candidates, restart)
+        Box::pin(self.flow.submit_ice(&session_id, &candidates, restart))
             .await
             .map_err(map_session_flow_error)?;
         ensure_generation(&self.generation, generation)
@@ -681,71 +916,68 @@ impl XboxStreamSession {
     ) -> Result<XboxRemoteIceBatch, XboxStreamingError> {
         let session_id = self.session_id_for(generation).await?;
         self.ensure_remote_session_active(&session_id)?;
-        let poll_interval =
-            Duration::from_millis(self.plan.session.schedule.ice_poll_interval_ms.max(100));
-        let (signaling_epoch, restart) = {
+        let (signaling_epoch, restart, next_poll_at) = {
             let state = self.state.lock().await;
             ensure_generation(&self.generation, generation)?;
-            self.ensure_remote_session_active(&session_id)?;
-            (state.signaling_epoch, state.active_signaling_restart)
-        };
-
-        loop {
-            ensure_generation(&self.generation, generation)?;
-            {
-                let mut state = self.state.lock().await;
-                ensure_generation(&self.generation, generation)?;
-                if state.signaling_epoch != signaling_epoch {
-                    return Ok(XboxRemoteIceBatch {
-                        candidates: Vec::new(),
-                        end_of_candidates: true,
-                    });
-                }
-                if state.remote_ice_complete {
-                    return Ok(XboxRemoteIceBatch {
-                        candidates: Vec::new(),
-                        end_of_candidates: true,
-                    });
-                }
-                let started_at = state.remote_ice_started_at.get_or_insert_with(Instant::now);
-                if started_at.elapsed() >= REMOTE_ICE_APPLICATION_WINDOW {
-                    state.remote_ice_complete = true;
-                    return Ok(XboxRemoteIceBatch {
-                        candidates: Vec::new(),
-                        end_of_candidates: true,
-                    });
-                }
-            }
-
-            let candidates = self
-                .flow
-                .poll_ice(&session_id, restart)
-                .await
-                .map_err(map_session_flow_error)?;
-            ensure_generation(&self.generation, generation)?;
-            self.ensure_remote_session_active(&session_id)?;
-
-            let mut state = self.state.lock().await;
-            ensure_generation(&self.generation, generation)?;
-            if state.signaling_epoch != signaling_epoch {
+            if state.remote_ice_complete {
                 return Ok(XboxRemoteIceBatch {
                     candidates: Vec::new(),
                     end_of_candidates: true,
+                    configuration_pending: false,
                 });
             }
-            let batch = project_remote_ice_batch_for_plan(&mut state, &self.plan, candidates);
-            drop(state);
-
-            if !batch.candidates.is_empty() || batch.end_of_candidates {
-                return Ok(batch);
-            }
-
-            tokio::time::sleep(poll_interval).await;
+            (
+                state.signaling_epoch,
+                state.active_signaling_restart,
+                state.remote_ice_next_poll_at,
+            )
+        };
+        if let Some(next_poll_at) = next_poll_at {
+            tokio::time::sleep_until(next_poll_at).await;
         }
+        ensure_generation(&self.generation, generation)?;
+        let candidates = Box::pin(self.flow.poll_ice(&session_id, restart))
+            .await
+            .map_err(map_session_flow_error)?;
+        let configuration_pending = self.flow.home_configuration_pending(&session_id).await;
+        ensure_generation(&self.generation, generation)?;
+        self.ensure_remote_session_active(&session_id)?;
+        let mut state = self.state.lock().await;
+        ensure_generation(&self.generation, generation)?;
+        if state.signaling_epoch != signaling_epoch {
+            return Err(XboxStreamingError::InvalidState(
+                "signalingSuperseded".into(),
+            ));
+        }
+        state.remote_ice_next_poll_at = Some(
+            tokio::time::Instant::now()
+                + Duration::from_millis(
+                    self.plan_snapshot()?
+                        .session
+                        .schedule
+                        .ice_poll_interval_ms
+                        .max(100),
+                ),
+        );
+        let batch = project_remote_ice_batch(&mut state, candidates, configuration_pending);
+        if batch.end_of_candidates && !state.remote_ice_observed {
+            return Err(XboxStreamingError::Remote(
+                "remoteIceCandidatesMissing".into(),
+            ));
+        }
+        Ok(batch)
     }
 
     pub async fn cancel(&self) -> u64 {
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Ok(mut projection) = self.projection.lock() {
+            projection.generation = generation;
+            projection.startup_progress = None;
+        }
+        self.startup_scope
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .cancel();
         let mut state = self.state.lock().await;
         state.generation = generation;
         state.phase = SessionPhase::Failed;
@@ -754,6 +986,14 @@ impl XboxStreamSession {
 
     pub async fn close(&self) -> Result<(), XboxStreamingError> {
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Ok(mut projection) = self.projection.lock() {
+            projection.generation = generation;
+            projection.startup_progress = None;
+        }
+        self.startup_scope
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .cancel();
         {
             let mut state = self.state.lock().await;
             state.generation = generation;
@@ -766,11 +1006,15 @@ impl XboxStreamSession {
             .projection_snapshot()
             .and_then(|projection| projection.session_id);
         if let Some(session_id) = session_id {
-            self.flow
+            let result = self
+                .flow
                 .close_session(&session_id)
                 .await
-                .map_err(map_session_flow_error)?;
+                .map_err(map_session_flow_error);
+            self.credentials.revoke();
+            result?;
         }
+        self.credentials.revoke();
         if let Ok(mut projection) = self.projection.lock() {
             *projection = SessionFlowProjection::default();
         }
@@ -806,7 +1050,13 @@ impl XboxStreamSession {
         self.ensure_active_home_generation(generation).await?;
         let text = normalize_console_text(&text)?;
         let command_id = self.home_command_id()?;
-        ConsoleApi::new(self.access.web_uhs.clone(), self.access.web_token.clone())
+        let access = self
+            .credentials
+            .access(Target::Home.as_str(), None, None)
+            .await
+            .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
+        ensure_generation(&self.generation, generation)?;
+        ConsoleApi::new(access.web_uhs, access.web_token)
             .send_text(&command_id, &text)
             .await
             .map(|response| response.accepted)
@@ -816,7 +1066,13 @@ impl XboxStreamSession {
     pub async fn power_off_console(&self, generation: u64) -> Result<bool, XboxStreamingError> {
         self.ensure_active_home_generation(generation).await?;
         let command_id = self.home_command_id()?;
-        ConsoleApi::new(self.access.web_uhs.clone(), self.access.web_token.clone())
+        let access = self
+            .credentials
+            .access(Target::Home.as_str(), None, None)
+            .await
+            .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
+        ensure_generation(&self.generation, generation)?;
+        ConsoleApi::new(access.web_uhs, access.web_token)
             .power_off(&command_id)
             .await
             .map(|response| response.accepted)
@@ -825,6 +1081,36 @@ impl XboxStreamSession {
 }
 
 impl XboxStreamSession {
+    async fn prepare_start_plan(
+        &self,
+        scope: &SessionStartupScope,
+    ) -> Result<Plan, SessionFlowError> {
+        let access = self
+            .credentials
+            .access(self.access.target.as_str(), None, None)
+            .await?;
+        // 发现 future 的构造和轮询也保留小栈余量，避免压力随包装向下传递。
+        let access = Box::pin(home_context::resolve_home_context(
+            access,
+            &self.credentials,
+            &self.target_id,
+            &self.settings,
+            scope,
+        ))
+        .await?;
+        control_plan(&access, &self.target_id, &self.settings)
+            .map_err(|error| SessionFlowError::message(error.to_string()))
+    }
+
+    fn plan_snapshot(&self) -> Result<Plan, XboxStreamingError> {
+        self.plan
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .clone()
+            .ok_or_else(|| {
+                XboxStreamingError::InvalidState("streaming plan is not prepared".into())
+            })
+    }
     async fn ensure_active_home_generation(
         &self,
         generation: u64,
@@ -849,7 +1135,7 @@ impl XboxStreamSession {
     }
 
     fn home_command_id(&self) -> Result<String, XboxStreamingError> {
-        find_home_host_facts(&self.access.account_id, &self.plan.session.target_id)
+        find_home_host_facts(&self.access.account_id, &self.target_id)
             .map_err(|error| XboxStreamingError::InvalidState(error.to_string()))?
             .and_then(|facts| facts.command_id().map(str::to_owned))
             .ok_or_else(|| XboxStreamingError::InvalidState("homeCommandIdentityMissing".into()))
@@ -871,8 +1157,20 @@ impl XboxStreamSession {
         state.generation = generation;
         state.phase = SessionPhase::Creating;
         state.reset_signaling();
+        {
+            let mut scope = self
+                .startup_scope
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            scope.cancel();
+            *scope = SessionStartupScope::default();
+        }
         if let Ok(mut projection) = self.projection.lock() {
-            *projection = SessionFlowProjection::default();
+            *projection = SessionFlowProjection {
+                generation,
+                startup_progress: Some(XboxStartupProgress::initial(self.access.target.is_home())),
+                ..SessionFlowProjection::default()
+            };
         }
         Ok(generation)
     }
@@ -955,7 +1253,50 @@ fn control_plan(
             settings.home_resolution,
         ),
     };
+    if let Some(turn) = &settings.custom_turn {
+        let uri = turn.server_url.trim();
+        let (scheme, authority) = uri
+            .split_once(':')
+            .ok_or_else(|| XboxStreamingError::InvalidArgument("customTurnInvalid".to_string()))?;
+        let endpoint = url::Url::parse(&format!("https://{authority}"))
+            .map_err(|_| XboxStreamingError::InvalidArgument("customTurnInvalid".to_string()))?;
+        if !["turn", "turns"].contains(&scheme.to_ascii_lowercase().as_str())
+            || authority.starts_with("//")
+            || uri.len() > 2048
+            || uri.chars().any(char::is_whitespace)
+            || endpoint.host_str().is_none()
+            || endpoint.path() != "/"
+            || !endpoint.username().is_empty()
+            || endpoint.password().is_some()
+            || endpoint.fragment().is_some()
+            || endpoint.port() == Some(0)
+            || endpoint
+                .query_pairs()
+                .any(|(key, value)| key != "transport" || !["udp", "tcp"].contains(&value.as_ref()))
+            || turn.username.trim().is_empty()
+            || turn.username.len() > 512
+            || turn.credential.trim().is_empty()
+            || turn.credential.len() > 4096
+        {
+            return Err(XboxStreamingError::InvalidArgument(
+                "customTurnInvalid".to_string(),
+            ));
+        }
+        config.runtime.custom_turn = Some(TurnServer {
+            url: format!("{}:{authority}", scheme.to_ascii_lowercase()),
+            username: turn.username.trim().to_string(),
+            credential: turn.credential.trim().to_string(),
+        });
+    }
     config.session.preferred_game_locale = normalize_game_locale(&settings.preferred_game_locale);
+    config.session.power_on = settings.power_on;
+    config.input.prevent_resolution_drops = settings.prevent_resolution_drops;
+    if access.target == Target::Cloud {
+        let region = settings.cloud_server_region.trim();
+        if !region.is_empty() && !region.eq_ignore_ascii_case("auto") {
+            config.session.preferred_region_name = Some(region.to_string());
+        }
+    }
     config.session.cloud_resolution = parse_resolution_preference(settings.cloud_resolution);
     config.session.home_resolution = parse_resolution_preference(settings.home_resolution);
     config.negotiation.cloud_prefer_ipv6 = settings.prefer_ipv6;
@@ -980,28 +1321,27 @@ fn control_plan(
         Target::Cloud => (target_id.to_string(), RemotePlayContext::default()),
         Target::Home => {
             let facts = find_home_host_facts(&access.account_id, target_id)
-                .map_err(|error| XboxStreamingError::InvalidArgument(error.to_string()))?
-                .ok_or_else(|| {
-                    XboxStreamingError::InvalidArgument("homeTargetContextMissing".to_string())
-                })?;
-            validate_home_host_capability(&facts)?;
-            config.session.power_on = facts.remote_console.power_state.as_deref() != Some("On")
-                && facts.remote_console.remote_management_enabled == Some(true);
-            let canonical_target_id = facts
-                .canonical_target_id()
-                .ok_or_else(|| {
-                    XboxStreamingError::InvalidArgument("homeTargetIdentityMissing".to_string())
-                })?
-                .to_string();
-            (
-                canonical_target_id,
-                RemotePlayContext {
-                    configuration_resolved: true,
-                    remote_management_enabled: facts.remote_console.remote_management_enabled,
-                    console_streaming_enabled: facts.remote_console.console_streaming_enabled,
-                    console_addrs: facts.console_addrs,
-                },
-            )
+                .map_err(|error| XboxStreamingError::InvalidArgument(error.to_string()))?;
+            if let Some(facts) = facts {
+                validate_home_host_capability(&facts)?;
+                let canonical_target_id = facts
+                    .canonical_target_id()
+                    .ok_or_else(|| {
+                        XboxStreamingError::InvalidArgument("homeTargetIdentityMissing".to_string())
+                    })?
+                    .to_string();
+                (
+                    canonical_target_id,
+                    RemotePlayContext {
+                        configuration_resolved: false,
+                        remote_management_enabled: facts.remote_console.remote_management_enabled,
+                        console_streaming_enabled: facts.remote_console.console_streaming_enabled,
+                        console_addrs: facts.console_addrs,
+                    },
+                )
+            } else {
+                (target_id.to_owned(), RemotePlayContext::default())
+            }
         }
     };
     let context = Context {
@@ -1073,7 +1413,7 @@ fn validate_home_host_capability(facts: &HomeHostFacts) -> Result<(), XboxStream
     let allowed = if power_state == Some("On") {
         facts.remote_console.console_streaming_enabled != Some(false)
     } else {
-        facts.remote_console.remote_management_enabled == Some(true)
+        facts.remote_console.remote_management_enabled != Some(false)
     };
     if allowed {
         Ok(())
@@ -1098,6 +1438,16 @@ fn resolve_ice_servers(plan: &Plan) -> Vec<XboxIceServer> {
         });
     }
     servers
+}
+
+// PC fallback 来源先尝试直连，自定义 TURN 保持首次连接直接装配。
+fn prepare_runtime_ice_servers(plan: &Plan) -> (Vec<XboxIceServer>, Option<Vec<XboxIceServer>>) {
+    let servers = resolve_ice_servers(plan);
+    if plan.runtime.turn.source == TurnSource::Fallback && plan.runtime.turn.resolved.is_some() {
+        (servers[..1].to_vec(), Some(servers))
+    } else {
+        (servers, None)
+    }
 }
 
 fn project_web_rtc_plan(plan: &Plan) -> XboxWebRtcPlan {
@@ -1164,6 +1514,7 @@ fn project_web_rtc_plan(plan: &Plan) -> XboxWebRtcPlan {
                 port: address.port,
             })
             .collect(),
+        prevent_resolution_drops: plan.input.prevent_resolution_drops,
     }
 }
 
@@ -1224,6 +1575,7 @@ fn ensure_generation(generation: &AtomicU64, expected: u64) -> Result<(), XboxSt
 
 fn to_bridge_candidate(candidate: IceCandidate) -> XboxIceCandidate {
     XboxIceCandidate {
+        source: candidate.source,
         candidate: candidate.candidate,
         sdp_m_line_index: candidate.sdp_m_line_index,
         sdp_mid: candidate.sdp_mid,
@@ -1239,79 +1591,39 @@ fn is_end_of_candidates(value: &str) -> bool {
         || value.eq_ignore_ascii_case("end-of-candidates")
 }
 
-fn console_address_ice_candidates(plan: &Plan) -> impl Iterator<Item = IceCandidate> + '_ {
-    plan.negotiation
-        .console_addrs
-        .iter()
-        .enumerate()
-        .filter_map(|(index, address)| {
-            address.ip.parse::<IpAddr>().ok()?;
-            (address.port > 0).then(|| IceCandidate {
-                source: None,
-                candidate: format!(
-                    "a=candidate:{} 1 UDP 1 {} {} typ host",
-                    index.saturating_add(1),
-                    address.ip,
-                    address.port
-                ),
-                sdp_m_line_index: Some(0),
-                sdp_mid: Some("0".to_string()),
-                username_fragment: None,
-                message_type: Some("iceCandidate".to_string()),
-            })
-        })
-}
-
-fn project_remote_ice_batch_for_plan(
-    state: &mut SessionState,
-    plan: &Plan,
-    candidates: impl IntoIterator<Item = IceCandidate>,
-) -> XboxRemoteIceBatch {
-    project_remote_ice_batch(
-        state,
-        candidates
-            .into_iter()
-            .chain(console_address_ice_candidates(plan)),
-    )
-}
-
 fn project_remote_ice_batch(
     state: &mut SessionState,
     candidates: impl IntoIterator<Item = IceCandidate>,
+    configuration_pending: bool,
 ) -> XboxRemoteIceBatch {
     let mut fresh = Vec::new();
-    let mut explicit_end = false;
     for candidate in candidates {
-        if is_end_of_candidates(&candidate.candidate) {
-            explicit_end = true;
-            continue;
-        }
+        let end = is_end_of_candidates(&candidate.candidate);
+        state.remote_ice_end_seen |= end;
         if !state
             .remote_ice
             .iter()
             .any(|existing| existing == &candidate)
         {
+            state.remote_ice_observed |= !end;
             state.remote_ice.push(candidate.clone());
             fresh.push(candidate);
         }
     }
-    if fresh.is_empty() {
-        state.remote_ice_empty_polls = state.remote_ice_empty_polls.saturating_add(1);
-    } else {
-        state.remote_ice_observed = true;
-        state.remote_ice_empty_polls = 0;
-    }
-    let inferred_end = state.remote_ice_observed
-        && state.remote_ice_empty_polls >= REMOTE_ICE_EMPTY_POLLS_AFTER_FIRST_CANDIDATE;
-    let end_of_candidates = explicit_end || inferred_end;
-    if end_of_candidates {
-        state.remote_ice_complete = true;
-    }
+    // 与 PC 共用结束事实：当前配置完成，且远端 EOC 或已收到候选并连接。
+    state.remote_ice_complete = !configuration_pending
+        && (state.remote_ice_end_seen
+            || (state.remote_ice_observed && state.phase == SessionPhase::Connected));
     XboxRemoteIceBatch {
         candidates: fresh.into_iter().map(to_bridge_candidate).collect(),
-        end_of_candidates,
+        end_of_candidates: state.remote_ice_complete,
+        configuration_pending,
     }
 }
+
+#[cfg(test)]
+#[path = "streaming/stack_tests.rs"]
+mod stack_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1323,12 +1635,60 @@ mod tests {
         test_access_for_account(target, "xuid")
     }
 
-    fn test_access_for_account(target: Target, account_id: &str) -> StreamingAccessContext {
+    #[tokio::test]
+    async fn provider_passes_shared_auth_generation_and_checks_recovery_scope() {
+        let account = uuid::Uuid::new_v4().to_string();
+        let (handle, access) = crate::cloud_access::register_test_stream_access(
+            test_access_for_account(Target::Cloud, &account),
+        );
+        let generation = access.owner_generation;
+        let provider = IosSessionFlowProvider {
+            credentials: Arc::new(SessionCredentials::new(handle, access)),
+            target: Target::Cloud,
+            projection: Arc::new(StdMutex::new(SessionFlowProjection::default())),
+        };
+        let token = provider.get_streaming_token("cloud").await.unwrap();
+        assert_eq!(token["_authGeneration"], generation);
+        assert_eq!(token["gsToken"], "gs-token");
+        assert_eq!(
+            provider
+                .recover_streaming_token("cloud", "gs-token", Some(generation + 1))
+                .await
+                .unwrap_err()
+                .to_status_code(),
+            Some(401)
+        );
+    }
+
+    #[test]
+    fn home_wake_is_an_explicit_setting_with_the_pc_default() {
+        let account = uuid::Uuid::new_v4().to_string();
+        let access = test_access_for_account(Target::Home, &account);
+        let mut facts = home_host_facts(&account).unwrap();
+        facts[0].remote_console.power_state = Some("Standby".into());
+        replace_home_host_facts(&account, facts).unwrap();
+        for enabled in [false, true] {
+            let settings = XboxStreamSettings {
+                power_on: enabled,
+                ..Default::default()
+            };
+            let plan = control_plan(&access, "console-device-id", &settings).unwrap();
+            assert_eq!(plan.session.schedule.wake_console, enabled);
+            assert_eq!(plan.session.schedule.require_console_ready, enabled);
+        }
+        assert!(!XboxStreamSettings::default().power_on);
+    }
+
+    pub(super) fn test_access_for_account(
+        target: Target,
+        account_id: &str,
+    ) -> StreamingAccessContext {
         let access = StreamingAccessContext {
             host: "cloud.example.com".to_string(),
             bearer_token: "gs-token".to_string(),
             account_id: account_id.to_string(),
             refresh_token: "refresh-token".to_string(),
+            auth_seed: None,
             target,
             session_access: SessionAccessContext {
                 gs_token: Some("gs-token".to_string()),
@@ -1381,12 +1741,17 @@ mod tests {
     }
 
     fn test_session_for_target(target: Target) -> Arc<XboxStreamSession> {
-        build_stream_session(
-            test_access(target),
+        let access = test_access(target);
+        let plan = control_plan(&access, "1234abcd", &XboxStreamSettings::default()).unwrap();
+        let session = build_stream_session(
+            "test-handle".into(),
+            access,
             "1234abcd".to_string(),
             XboxStreamSettings::default(),
         )
-        .expect("session")
+        .expect("session");
+        *session.plan.lock().unwrap() = Some(plan);
+        session
     }
 
     fn test_session() -> Arc<XboxStreamSession> {
@@ -1463,7 +1828,11 @@ mod tests {
     fn monitor_terminal_projection_rejects_stale_session_callbacks() {
         let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
         let provider = IosSessionFlowProvider {
-            access: test_access(Target::Cloud),
+            credentials: Arc::new(SessionCredentials::new(
+                "test-handle".into(),
+                test_access(Target::Cloud),
+            )),
+            target: Target::Cloud,
             projection: Arc::clone(&projection),
         };
         provider.on_session_created(
@@ -1554,6 +1923,56 @@ mod tests {
         assert!(plan.session.headers.contains_key("x-ms-device-info"));
         assert!(plan.session.headers.contains_key("User-Agent"));
         assert_eq!(plan.session.settings.sdk_type, "web");
+    }
+
+    #[test]
+    fn ios_pc_ranges_reach_shared_plan_for_home_1440_and_zero_auto_bitrates() {
+        let settings = XboxStreamSettings {
+            preferred_game_locale: String::new(),
+            home_resolution: 1440,
+            home_bitrate_mode: "Custom".to_string(),
+            home_bitrate_mbps: 0,
+            cloud_bitrate_mode: "Custom".to_string(),
+            cloud_bitrate_mbps: 0,
+            audio_bitrate_mode: "Custom".to_string(),
+            audio_bitrate_kbps: 0,
+            ..XboxStreamSettings::default()
+        };
+        let access = test_access_for_account(Target::Home, "settings-pc-ranges");
+        let plan = control_plan(&access, "console-command-id", &settings).expect("plan");
+        let projection = project_web_rtc_plan(&plan);
+        assert_eq!(projection.target_video_width, 2560);
+        assert_eq!(projection.target_video_height, 1440);
+        assert_eq!(plan.session.locale, "en-US");
+        assert_eq!(projection.audio_bitrate_kbps, Some(128));
+        assert!(projection.max_video_bitrate_kbps.is_some());
+        assert_eq!(
+            parse_video_bitrate_preference("Custom", 0),
+            BitratePreference::Auto
+        );
+        assert_eq!(
+            parse_audio_bitrate_preference("Custom", 0),
+            BitratePreference::Auto
+        );
+    }
+
+    #[test]
+    fn clarity_preference_reaches_shared_input_and_ios_runtime_projection() {
+        for target in [Target::Cloud, Target::Home] {
+            for enabled in [false, true] {
+                let settings = XboxStreamSettings {
+                    prevent_resolution_drops: enabled,
+                    ..XboxStreamSettings::default()
+                };
+                let access = test_access_for_account(target, "clarity-preference");
+                let plan = control_plan(&access, "console-command-id", &settings).expect("plan");
+                assert_eq!(plan.input.prevent_resolution_drops, enabled);
+                assert_eq!(
+                    project_web_rtc_plan(&plan).prevent_resolution_drops,
+                    enabled
+                );
+            }
+        }
     }
 
     #[test]
@@ -1686,6 +2105,45 @@ mod tests {
     }
 
     #[test]
+    fn custom_turn_is_validated_and_overrides_home_fallback() {
+        let mut access = test_access_for_account(Target::Home, "custom-turn-settings");
+        access.fallback_turn = Some(TurnServer {
+            url: "turn:fallback.example.com:3478".into(),
+            username: "fallback".into(),
+            credential: "fallback".into(),
+        });
+        let mut settings = XboxStreamSettings {
+            custom_turn: Some(XboxCustomTurn {
+                server_url: "turns:custom.example.com:5349?transport=tcp".into(),
+                username: "user".into(),
+                credential: "secret".into(),
+            }),
+            ..Default::default()
+        };
+        let plan = control_plan(&access, "console-command-id", &settings).expect("custom plan");
+        assert_eq!(plan.runtime.turn.source, TurnSource::Custom);
+        assert_eq!(
+            resolve_ice_servers(&plan)[1].username.as_deref(),
+            Some("user")
+        );
+        for uri in [
+            "https:relay.example.com",
+            "turn:",
+            "turn://relay.example.com",
+            "turn:user@relay.example.com",
+            "turn:relay.example.com:0",
+            "turn:relay.example.com/path",
+            "turn:relay.example.com?transport=bad",
+        ] {
+            settings.custom_turn.as_mut().unwrap().server_url = uri.into();
+            assert!(
+                control_plan(&access, "console-command-id", &settings).is_err(),
+                "{uri}"
+            );
+        }
+    }
+
+    #[test]
     fn home_plan_rejects_explicitly_disabled_streaming_capability() {
         let access = test_access_for_account(Target::Home, "capability-disabled");
         cache_home_fixture("capability-disabled", Some(true), Some(false));
@@ -1703,14 +2161,28 @@ mod tests {
             credential: "credential".to_string(),
         });
 
-        let plan = control_plan(&access, "console-device-id", &XboxStreamSettings::default())
-            .expect("home plan");
+        let default_plan =
+            control_plan(&access, "console-device-id", &XboxStreamSettings::default())
+                .expect("default home plan");
+        assert_eq!(default_plan.runtime.turn.source, TurnSource::None);
+        assert_eq!(resolve_ice_servers(&default_plan).len(), 1);
+        let settings = XboxStreamSettings {
+            home_turn_fallback: true,
+            ..Default::default()
+        };
+        let plan = control_plan(&access, "console-device-id", &settings).expect("relay home plan");
         assert_eq!(plan.runtime.turn.source, TurnSource::Fallback);
         assert_eq!(plan.session.target_id, "1234abcd");
         let ice_servers = resolve_ice_servers(&plan);
         assert_eq!(ice_servers.len(), 2);
         assert_eq!(ice_servers[0].urls, vec![OFFICIAL_XBOX_STUN_URL]);
         assert_eq!(ice_servers[1].urls, vec!["turn:relay.example.com:3478"]);
+        let (direct, fallback) = prepare_runtime_ice_servers(&plan);
+        assert_eq!(direct.len(), 1);
+        assert_eq!(fallback.unwrap().len(), 2);
+        let (direct, fallback) = prepare_runtime_ice_servers(&default_plan);
+        assert_eq!(direct.len(), 1);
+        assert!(fallback.is_none());
     }
 
     #[test]
@@ -1718,8 +2190,8 @@ mod tests {
         let cloud = test_session_for_target(Target::Cloud);
         let home = test_session_for_target(Target::Home);
 
-        assert_eq!(cloud.plan.session.target, Target::Cloud);
-        assert_eq!(home.plan.session.target, Target::Home);
+        assert_eq!(cloud.plan_snapshot().unwrap().session.target, Target::Cloud);
+        assert_eq!(home.plan_snapshot().unwrap().session.target, Target::Home);
         assert_eq!(
             std::any::type_name_of_val(&cloud.flow),
             std::any::type_name_of_val(&home.flow)
@@ -1727,77 +2199,50 @@ mod tests {
     }
 
     #[test]
-    fn rust_owns_remote_ice_deduplication_and_completion() {
+    fn remote_ice_completion_uses_connected_and_current_configuration_facts() {
         let mut state = SessionState::new();
-        let first = project_remote_ice_batch(&mut state, vec![candidate("candidate:remote")]);
+        let first = project_remote_ice_batch(&mut state, vec![candidate("candidate:remote")], true);
         assert_eq!(first.candidates.len(), 1);
-        assert!(!first.end_of_candidates);
-
-        let duplicate = project_remote_ice_batch(&mut state, vec![candidate("candidate:remote")]);
-        assert!(duplicate.candidates.is_empty());
-        assert!(!duplicate.end_of_candidates);
-
-        let mut final_batch = duplicate;
-        for _ in 1..REMOTE_ICE_EMPTY_POLLS_AFTER_FIRST_CANDIDATE {
-            final_batch = project_remote_ice_batch(&mut state, Vec::new());
+        assert!(first.configuration_pending);
+        for _ in 0..50 {
+            let batch =
+                project_remote_ice_batch(&mut state, vec![candidate("candidate:remote")], true);
+            assert!(batch.candidates.is_empty());
+            assert!(!batch.end_of_candidates);
         }
-        assert!(final_batch.candidates.is_empty());
-        assert!(final_batch.end_of_candidates);
-        assert!(state.remote_ice_complete);
+        state.phase = SessionPhase::Connected;
+        assert!(!project_remote_ice_batch(&mut state, Vec::new(), true).end_of_candidates);
+        assert!(project_remote_ice_batch(&mut state, Vec::new(), false).end_of_candidates);
     }
 
     #[test]
-    fn home_console_addresses_are_injected_once_per_signaling_epoch() {
-        let plan = control_plan(
-            &test_access(Target::Home),
-            "console-command-id",
-            &XboxStreamSettings::default(),
-        )
-        .expect("plan");
+    fn remote_ice_preserves_shared_candidate_binding_source_and_end_marker() {
         let mut state = SessionState::new();
-        assert!(!state.begin_offer_exchange());
-
-        let first = project_remote_ice_batch_for_plan(
-            &mut state,
-            &plan,
-            std::iter::once(candidate(
-                "a=candidate:remote 1 UDP 2130706431 203.0.113.10 9000 typ host",
-            )),
-        );
-        assert_eq!(first.candidates.len(), 2);
+        let mut remote =
+            candidate("a=candidate:remote 1 UDP 2130706431 203.0.113.10 9000 typ host");
+        remote.source = Some("session-configuration".into());
+        remote.sdp_mid = Some("video".into());
+        remote.sdp_m_line_index = Some(1);
+        remote.username_fragment = Some("current-ufrag".into());
+        let mut end = remote.clone();
+        end.candidate = "end-of-candidates".into();
+        let batch = project_remote_ice_batch(&mut state, vec![remote.clone(), end], true);
+        assert_eq!(batch.candidates.len(), 2);
         assert_eq!(
-            first.candidates[1].candidate,
-            "a=candidate:1 1 UDP 1 10.0.0.8 9002 typ host"
+            batch.candidates[0].source.as_deref(),
+            Some("session-configuration")
         );
-        assert_eq!(first.candidates[1].sdp_m_line_index, Some(0));
-        assert_eq!(first.candidates[1].sdp_mid.as_deref(), Some("0"));
+        assert_eq!(batch.candidates[0].sdp_mid.as_deref(), Some("video"));
+        assert_eq!(batch.candidates[0].sdp_m_line_index, Some(1));
         assert_eq!(
-            first.candidates[1].message_type.as_deref(),
-            Some("iceCandidate")
+            batch.candidates[0].username_fragment.as_deref(),
+            Some("current-ufrag")
         );
-
-        let duplicate = project_remote_ice_batch_for_plan(&mut state, &plan, Vec::new());
-        assert!(duplicate.candidates.is_empty());
-
-        state.complete_offer_exchange();
-        assert!(state.begin_offer_exchange());
-        let replay = project_remote_ice_batch_for_plan(&mut state, &plan, Vec::new());
+        assert!(!batch.end_of_candidates);
+        assert!(project_remote_ice_batch(&mut state, Vec::new(), false).end_of_candidates);
+        state.reset_remote_ice();
+        let replay = project_remote_ice_batch(&mut state, vec![remote], false);
         assert_eq!(replay.candidates.len(), 1);
-        assert_eq!(
-            replay.candidates[0].candidate,
-            "a=candidate:1 1 UDP 1 10.0.0.8 9002 typ host"
-        );
-    }
-
-    #[test]
-    fn cloud_plan_does_not_inject_console_address_candidates() {
-        let plan = control_plan(
-            &test_access(Target::Cloud),
-            "title-1",
-            &XboxStreamSettings::default(),
-        )
-        .expect("plan");
-        assert_eq!(console_address_ice_candidates(&plan).count(), 0);
     }
 
     #[test]
@@ -1812,16 +2257,17 @@ mod tests {
                 candidate("candidate:first"),
                 candidate("a=end-of-candidates"),
             ],
+            false,
         );
         assert!(first_ice.end_of_candidates);
-        assert_eq!(state.remote_ice.len(), 1);
+        assert_eq!(state.remote_ice.len(), 2);
 
         assert!(state.begin_offer_exchange());
         assert_eq!(state.signaling_epoch, 2);
         assert!(state.active_signaling_restart);
         assert!(state.remote_ice.is_empty());
-        assert!(state.remote_ice_started_at.is_none());
-        assert_eq!(state.remote_ice_empty_polls, 0);
+        assert!(state.remote_ice_next_poll_at.is_none());
+        assert!(!state.remote_ice_end_seen);
         assert!(!state.remote_ice_observed);
         assert!(!state.remote_ice_complete);
     }
@@ -1856,9 +2302,10 @@ mod tests {
                 candidate("candidate:remote"),
                 candidate("a=end-of-candidates"),
             ],
+            false,
         );
 
-        assert_eq!(batch.candidates.len(), 1);
+        assert_eq!(batch.candidates.len(), 2);
         assert!(batch.end_of_candidates);
         assert!(state.remote_ice_complete);
     }

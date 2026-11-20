@@ -1,0 +1,28 @@
+{
+  "adverseCoreGate": "PASS",
+  "adverseCoreFailures": {
+    "noRows": 0,
+    "invalidRows": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "privacyViolations": 0,
+    "budgetViolations": 0,
+    "streamingCoreViolations": 0
+  },
+  "sequenceGap": {
+    "sessions": {
+      "session-1": {
+        "rows": 2,
+        "firstSeq": 1,
+        "lastSeq": 10,
+        "duplicates": 0,
+        "regressions": 0
+      }
+    },
+    "violations": []
+  },
+  "outcomeBeforeRepeatedStarts": {
+    "evaluatedStarts": 1,
+    "violations": []
+  }
+}

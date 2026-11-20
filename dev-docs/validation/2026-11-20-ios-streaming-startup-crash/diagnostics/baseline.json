@@ -1,0 +1,10 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-startup-crash-20261120/r1",
+  "sourceSha256": {
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": "3a6fa1f65cfab5db12f80413748f825f2162e3b03f03eae8554b0162799afd3c",
+    "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift": "2a5f15bb1406200fbd50d39226b6d0fbb6e2af7536a31ecb92477b4193439f77",
+    "iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift": "bd3d173b94b02b17e02442b37b9bee0630a9cab6c76fabc874e13a1c25fe1d6a",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "9529310d5004aa7c6648d635efc0310fa195d81f76506ae6308e4bc95a64c11d"
+  },
+  "report": "用户实机xCloud与xHome均在出画面前闪退，实机当前无法连接；先以真实WebRTC入口复现"
+}

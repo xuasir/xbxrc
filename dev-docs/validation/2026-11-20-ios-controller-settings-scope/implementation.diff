@@ -1,0 +1,325 @@
+--- iosapp/XBXRC/Features/Controllers/ControllerView.swift (before)
++++ iosapp/XBXRC/Features/Controllers/ControllerView.swift (after)
+@@ -3,14 +3,13 @@
+ import SwiftUI
+ 
+ private enum ControllerRoute: AppSecondaryRoute {
+-  case connection, touch, sticks, mapping, keyboard, vibration, menu
++  case connection, touch, sticks, mapping, vibration, menu
+   var title: String {
+     switch self {
+     case .connection: "连接与测试"
+     case .touch: "触屏手柄"
+     case .sticks: "摇杆调节"
+     case .mapping: "按键与轴映射"
+-    case .keyboard: "键盘映射"
+     case .vibration: "震动"
+     case .menu: "菜单操作"
+     }
+@@ -19,7 +18,7 @@
+     switch self {
+     case .connection: .controller
+     case .touch: .touch
+-    case .sticks, .mapping, .keyboard: .sliders
++    case .sticks, .mapping: .sliders
+     case .vibration: .vibration
+     case .menu: .touch
+     }
+@@ -30,7 +29,6 @@
+     case .touch: "显示与透明度"
+     case .sticks: "死区与方向"
+     case .mapping: "按键 · 组合 · 轴"
+-    case .keyboard: "输入来源 · 按键 · 组合"
+     case .vibration: "强度与震动通道"
+     case .menu: "触屏与手柄快捷操作"
+     }
+@@ -51,7 +49,6 @@
+       case .touch: ControllerTouchSettingsView()
+       case .sticks: ControllerStickSettingsView()
+       case .mapping: ControllerMappingSettingsView()
+-      case .keyboard: ControllerKeyboardSettingsView(input: streaming.input)
+       case .vibration: ControllerVibrationView(isActive: isActive, input: streaming.input)
+       case .menu: ControllerMenuSettingsView()
+       }
+@@ -272,7 +269,6 @@
+ struct ControllerTouchSettingsView: View {
+   @EnvironmentObject private var settings: AppSettingsStore
+   @State private var showPlayground = false
+-  @State private var choices: [TouchLayoutChoice] = []
+   var body: some View {
+     AppSettingsForm {
+       Section {
+@@ -286,13 +282,13 @@
+         }
+         .appSettingsHint("自动模式在实体手柄断开时显示", identifier: "controller-touch")
+         preferenceSlider("触屏透明度", value: $settings.mobile.touchOpacity, range: 0.2...1)
+-        AppSettingsPicker(
+-          "串流触屏布局", selection: $settings.mobile.touchLayoutID,
+-          selectedTitle: choices.first { $0.id == settings.mobile.touchLayoutID }?.title ?? "标准手柄"
+-        ) {
+-          Text("标准手柄").tag("classic")
+-          ForEach(choices) { Text(LocalizedStringKey($0.title)).tag($0.id) }
+-        }
++        LabeledContent {
++          Text("标准手柄")
++        } label: {
++          Text("串流触屏布局")
++        }
++        .appSettingsInformation()
++        .accessibilityIdentifier("controller-touch-layout")
+       } header: {
+         Text("触屏")
+       }
+@@ -306,109 +302,6 @@
+     }
+     .appThemeCanvas()
+     .fullScreenCover(isPresented: $showPlayground) { TouchLayoutPlaygroundView() }
+-    .task { choices = (try? TouchLayoutCatalog.builtIn()) ?? [] }
+-  }
+-}
+-
+-struct ControllerKeyboardSettingsView: View {
+-  @ObservedObject var input: StreamInputSession
+-  @EnvironmentObject private var settings: AppSettingsStore
+-  @Environment(\.scenePhase) private var scenePhase
+-  @State private var captureTarget: String?
+-  @State private var capturedKeys: Set<String> = []
+-  @State private var waitingForRelease = false
+-  @State private var message: String?
+-
+-  var body: some View {
+-    AppSettingsForm {
+-      Section("输入来源") {
+-        AppSettingsPicker(
+-          "串流输入", selection: $settings.mobile.inputSource,
+-          selectedTitle: settings.mobile.inputSource.title
+-        ) {
+-          ForEach(StreamingInputPreference.allCases) {
+-            Text(LocalizedStringKey($0.title)).tag($0)
+-          }
+-        }
+-        Text("键盘采用 PC 默认布局，支持一至四个键的组合。菜单和文字输入期间释放游戏输入。")
+-          .appFont(.caption).appSettingsInformation()
+-      }
+-      Section("键盘映射") {
+-        ForEach(StreamingKeyboardMapping.controls, id: \.self) { control in
+-          Button {
+-            captureTarget = control
+-            capturedKeys = []
+-            waitingForRelease = !StreamingKeyboardInput.pressedKeys().isEmpty
+-            input.setSuppressed(true, reason: .settingsCapture)
+-          } label: {
+-            LabeledContent(title(control), value: binding(control))
+-          }
+-          .frame(minHeight: 44)
+-        }
+-        if captureTarget != nil {
+-          Text("按下按键或组合，然后全部松开以保存。")
+-          Button("取消录入") { finishCapture() }
+-        }
+-        if let message { Text(LocalizedStringKey(message)).appSettingsInformation() }
+-        Button("恢复默认键盘映射") {
+-          finishCapture()
+-          settings.mobile.keyboardMapping = .defaults
+-        }
+-      }
+-    }
+-    .task(id: captureTarget) {
+-      guard let target = captureTarget else { return }
+-      while !Task.isCancelled, captureTarget == target, scenePhase == .active {
+-        let keys = StreamingKeyboardInput.pressedKeys()
+-        if waitingForRelease {
+-          if keys.isEmpty { waitingForRelease = false }
+-        } else if keys.isEmpty, !capturedKeys.isEmpty {
+-          if capturedKeys.count <= 4 {
+-            settings.mobile.keyboardMapping.assign(control: target, keys: capturedKeys.sorted())
+-            message = "键盘映射已保存"
+-          } else {
+-            message = "组合最多支持四个键"
+-          }
+-          finishCapture()
+-          return
+-        } else {
+-          capturedKeys.formUnion(keys)
+-        }
+-        do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+-      }
+-    }
+-    .onDisappear { finishCapture() }
+-    .onChange(of: scenePhase) { _, phase in if phase != .active { finishCapture() } }
+-  }
+-
+-  private func finishCapture() {
+-    captureTarget = nil
+-    capturedKeys = []
+-    input.setSuppressed(false, reason: .settingsCapture)
+-  }
+-
+-  private func title(_ control: String) -> String {
+-    let buttons: [String: String] = [
+-      "south": "A", "east": "B", "west": "X", "north": "Y", "l1": "LB", "r1": "RB",
+-      "l2": "LT", "r2": "RT", "l3": "L3", "r3": "R3", "home": "Xbox",
+-      "view": "视图", "menu": "菜单", "dpadUp": "方向键 ↑", "dpadDown": "方向键 ↓",
+-      "dpadLeft": "方向键 ←", "dpadRight": "方向键 →",
+-      "leftStickUp": "左摇杆 ↑", "leftStickDown": "左摇杆 ↓",
+-      "leftStickLeft": "左摇杆 ←", "leftStickRight": "左摇杆 →",
+-      "rightStickUp": "右摇杆 ↑", "rightStickDown": "右摇杆 ↓",
+-      "rightStickLeft": "右摇杆 ←", "rightStickRight": "右摇杆 →",
+-    ]
+-    return buttons[control] ?? control
+-  }
+-
+-  private func binding(_ control: String) -> String {
+-    if captureTarget == control { return "录入中" }
+-    let mapping = settings.mobile.keyboardMapping
+-    let keys = mapping.bindings.filter { $0.control == control }.map(\.key)
+-    let chords = mapping.chords.filter { $0.control == control }.map {
+-      $0.keys.joined(separator: " + ")
+-    }
+-    return (keys + chords).joined(separator: " / ")
+   }
+ }
+ 
+--- iosapp/XBXRC/Features/Settings/MobilePreferences.swift (before)
++++ iosapp/XBXRC/Features/Settings/MobilePreferences.swift (after)
+@@ -97,6 +97,8 @@
+         value.picture = picture.normalized()
+         value.gamepadBindings = MobileControlBinding.normalized(gamepadBindings)
+         value.keyboardMapping = keyboardMapping.normalized()
++        // 正式串流固定标准手柄，旧测试布局偏好随设置加载回归默认。
++        value.touchLayoutID = "classic"
+         value.touchOpacity = clamp(touchOpacity, 0.2...1, fallback: 0.65)
+         value.leftStickDeadzone = clamp(leftStickDeadzone, 0...0.3, fallback: 0.1)
+         value.rightStickDeadzone = clamp(rightStickDeadzone, 0...0.3, fallback: 0.1)
+@@ -152,6 +154,8 @@
+         compactPerformanceOverlay = value(.compactPerformanceOverlay, compactPerformanceOverlay)
+         gamepadBindings = value(.gamepadBindings, gamepadBindings)
+         inputSource = value(.inputSource, inputSource)
++        // 已保存的键盘输入来源随旧设置加载恢复为实体手柄与触屏。
++        if inputSource == .keyboard { inputSource = .gamepad }
+         keyboardMapping = value(.keyboardMapping, keyboardMapping)
+         touchLayoutID = value(.touchLayoutID, touchLayoutID)
+         menuShortcut = value(.menuShortcut, menuShortcut)
+--- iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift (before)
++++ iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift (after)
+@@ -122,11 +122,7 @@
+             if settings.mobile.touchControllerMode == .always
+                 || (settings.mobile.touchControllerMode == .automatic && !hasController)
+             {
+-                if settings.mobile.touchLayoutID == "classic" {
+-                    TouchGamepadOverlay(input: input, openMenu: openMenu)
+-                } else {
+-                    StreamingTouchLayoutOverlay(input: input, openMenu: openMenu)
+-                }
++                TouchGamepadOverlay(input: input, openMenu: openMenu)
+             }
+         }
+         .task {
+@@ -134,40 +130,6 @@
+                 hasController = input.hasController
+                 try? await Task.sleep(for: .milliseconds(250))
+             }
+-        }
+-    }
+-}
+-
+-private struct StreamingTouchLayoutOverlay: View {
+-    @ObservedObject var input: StreamInputSession
+-    @EnvironmentObject private var settings: AppSettingsStore
+-    @StateObject private var layout = TouchLayoutRecorder()
+-    let openMenu: () -> Void
+-
+-    var body: some View {
+-        ZStack(alignment: .top) {
+-            TouchLayoutSurface(input: layout.input, opacity: settings.mobile.touchOpacity) {
+-                MobileInteractionFeedback.play(settings.mobile)
+-            }
+-            Button(action: openMenu) {
+-                Image(systemName: "ellipsis").frame(width: 44, height: 44)
+-                    .foregroundStyle(.white).background(.black.opacity(0.45), in: Circle())
+-            }.accessibilityLabel("打开串流菜单")
+-        }
+-        .allowsHitTesting(!input.isSuppressed)
+-        .task(id: settings.mobile.touchLayoutID) {
+-            layout.stateSink = { [weak input] frame in
+-                input?.setTouchLayoutState(frame.gamepad, active: frame.pointerCount > 0)
+-            }
+-            layout.select(settings.mobile.touchLayoutID)
+-        }
+-        .onChange(of: input.isSuppressed) { _, suppressed in
+-            if suppressed { layout.input.cancelAll(reason: "inputSuppressed") }
+-        }
+-        .onDisappear {
+-            layout.input.cancelAll(reason: "streamLayoutClosed")
+-            layout.stateSink = nil
+-            input.releaseTouches()
+         }
+     }
+ }
+--- iosapp/XBXRCTests/SettingsAndPersistenceTests.swift (before)
++++ iosapp/XBXRCTests/SettingsAndPersistenceTests.swift (after)
+@@ -130,10 +130,48 @@
+         XCTAssertEqual(input.outputState(now: 6).buttonMask, 128)
+         let restored = try JSONDecoder().decode(
+             MobilePreferences.self, from: JSONEncoder().encode(preferences))
+-        XCTAssertEqual(restored.inputSource, .keyboard)
++        XCTAssertEqual(restored.inputSource, .gamepad)
+         XCTAssertEqual(restored.keyboardMapping.state(pressedKeys: keys).buttonMask, 128)
+         preferences.inputSource = .gamepad
+         XCTAssertEqual(input.outputState(now: 7), .neutral)
++    }
++
++    @MainActor
++    func testRetiredInputPreferencesRestoreGamepadAndStandardLayout() throws {
++        let suite = "XBXRC.TouchLayoutMigration.\(UUID().uuidString)"
++        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
++        defer { defaults.removePersistentDomain(forName: suite) }
++
++        for layoutID in ["classic"] + (try TouchLayoutCatalog.builtIn()).map(\.id) {
++            var preferences = MobilePreferences()
++            preferences.touchLayoutID = layoutID
++            preferences.touchControllerMode = .always
++            preferences.touchOpacity = 0.4
++            preferences.invertLeftY = true
++            preferences.inputSource = .keyboard
++            preferences.keyboardMapping.assign(control: "north", keys: ["keyJ", "keyK"])
++            let mapping = preferences.keyboardMapping.normalized()
++            defaults.set(
++                try JSONEncoder().encode(preferences), forKey: MobilePreferences.persistenceKey)
++
++            let store = AppSettingsStore(defaults: defaults)
++            XCTAssertEqual(store.mobile.touchLayoutID, "classic", layoutID)
++            XCTAssertEqual(store.mobile.touchControllerMode, .always)
++            XCTAssertEqual(store.mobile.touchOpacity, 0.4)
++            XCTAssertTrue(store.mobile.invertLeftY)
++            XCTAssertEqual(store.mobile.inputSource, .gamepad)
++            XCTAssertEqual(store.mobile.keyboardMapping, mapping)
++
++            store.mobile.touchLayoutID = layoutID
++            store.mobile.touchOpacity = 0.5
++            let restored = AppSettingsStore(defaults: defaults)
++            XCTAssertEqual(restored.mobile.touchLayoutID, "classic", layoutID)
++            XCTAssertEqual(restored.mobile.touchControllerMode, .always)
++            XCTAssertEqual(restored.mobile.touchOpacity, 0.5)
++            XCTAssertTrue(restored.mobile.invertLeftY)
++            XCTAssertEqual(restored.mobile.inputSource, .gamepad)
++            XCTAssertEqual(restored.mobile.keyboardMapping, mapping)
++        }
+     }
+ 
+     @MainActor
+--- iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift (before)
++++ iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift (after)
+@@ -11,10 +11,12 @@
+         app.launch()
+         XCTAssertTrue(app.buttons["primary-navigation-controller"].waitForExistence(timeout: 10))
+         app.buttons["primary-navigation-controller"].tap()
++        save(app, "controller-sections")
+         XCTAssertTrue(app.buttons["section-touch"].waitForExistence(timeout: 5))
+         app.buttons["section-touch"].tap()
+         let entry = app.buttons["controller-touch-playground"]
+         XCTAssertTrue(entry.waitForExistence(timeout: 5))
++        save(app, "controller-standard-touch-settings")
+         entry.tap()
+         let picker = app.buttons["touch-layout-picker"]
+         XCTAssertTrue(picker.waitForExistence(timeout: 5))

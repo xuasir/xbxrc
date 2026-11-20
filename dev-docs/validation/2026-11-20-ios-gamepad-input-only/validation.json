@@ -1,0 +1,18 @@
+{
+  "task": "2026-11-20-ios-gamepad-input-only",
+  "date": "2026-11-20",
+  "swiftUnitTests": 84,
+  "uiTests": 2,
+  "rustTests": 76,
+  "result": "Passed",
+  "iphoneOSBuild": "Passed / unsigned",
+  "checks": {
+    "bindingsGeneration": "Passed",
+    "cargoFmt": "Passed",
+    "swiftLint": "Passed",
+    "frontendLintFix": "Passed",
+    "sessionBoundary": "Passed",
+    "gitDiffCheck": "Passed"
+  },
+  "manualAcceptance": "真机外接手柄的连接/断开与触屏实际手感由用户复测"
+}

@@ -1,0 +1,23 @@
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureWorksWithBackgroundOffAndKeepsRedaction]' passed (0.018 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.018 (0.020) seconds
+Test Case '-[XBXRCTests.StreamingControlsStateTests testConnectionSummaryKeepsRawMetricsOutOfUserState]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testControlsStateReturnsToDockAfterSheet]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testDiagnosticClipboardUsesFourGroupsAndExcludesRoutes]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testDiagnosticsPlacementPreservesVisibleGameAreaAcrossOrientations]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricsFirstDuplicateStaleAndCounterResetKeepMissingValues]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricsUseDistinctReceiveDecodeSubmitAndPresentCounters]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricZeroProgressShowsZeroAndPartialStatsPreserveUnknown]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testPortraitStreamingViewportPlacesAllGamepadControlsInLowerHalf]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState]' passed (0.006 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStreamingPanelsRenderPhoneTabletAndEnglishLayouts]' passed (3.353 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRecognizesSymmetricMovement]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsInvalidStartRegionsAndDuration]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsSameDirectionMovement]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsVerticalDriftAndLateStart]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureUsesAdaptiveMinimumTravel]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testXboxGuideDrawsStandardAssetAndKeepsSymbolCached]' passed (0.021 seconds).
+	 Executed 17 tests, with 0 failures (0 unexpected) in 3.415 (3.420) seconds
+	 Executed 18 tests, with 0 failures (0 unexpected) in 3.433 (3.442) seconds
+	 Executed 18 tests, with 0 failures (0 unexpected) in 3.433 (3.445) seconds
+** TEST SUCCEEDED **

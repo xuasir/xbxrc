@@ -1,0 +1,6 @@
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (31.588 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden]' passed (12.167 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 43.754 (43.757) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 43.754 (43.761) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 43.754 (43.762) seconds
+** TEST SUCCEEDED **

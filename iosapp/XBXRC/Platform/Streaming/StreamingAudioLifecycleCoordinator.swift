@@ -1,7 +1,5 @@
 import AVFoundation
 import Foundation
-
-#if canImport(WebRTC)
 @preconcurrency import WebRTC
 
 final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
@@ -53,6 +51,15 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         }
     }
 
+    func reconfigure(audioDirection: StreamingMediaDirection) throws {
+        try queue.sync {
+            guard machine.generation != nil else { return }
+            try activate(reason: .initialStart, audioDirection: audioDirection)
+            activeAudioDirection = audioDirection
+            emitDirect("audioDirectionChanged", payload: sessionPayload())
+        }
+    }
+
     private func enqueue(
         _ makeEvent: @escaping @Sendable (UInt64) -> StreamingAudioLifecycleEvent,
         payload: [String: IOSRuntimeTraceValue] = [:]
@@ -88,10 +95,11 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         while !pending.isEmpty {
             let effect = pending.removeFirst()
             switch effect {
-            case let .activate(generation, reason):
+            case .activate(let generation, let reason):
                 do {
                     try activate(reason: reason, audioDirection: activeAudioDirection)
-                    pending.append(contentsOf: machine.handle(.activationSucceeded(generation: generation)))
+                    pending.append(
+                        contentsOf: machine.handle(.activationSucceeded(generation: generation)))
                 } catch {
                     pending.append(
                         contentsOf: machine.handle(
@@ -104,18 +112,19 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
                     try drainTraceEffects(&pending, eventPayload: eventPayload)
                     throw error
                 }
-            case let .deactivate(generation):
+            case .deactivate(let generation):
                 let error = deactivate()
-                let result: StreamingAudioLifecycleEvent = if let error {
-                    .deactivationFailed(
-                        generation: generation,
-                        failure: Self.errorCategory(error)
-                    )
-                } else {
-                    .deactivationSucceeded(generation: generation)
-                }
+                let result: StreamingAudioLifecycleEvent =
+                    if let error {
+                        .deactivationFailed(
+                            generation: generation,
+                            failure: Self.errorCategory(error)
+                        )
+                    } else {
+                        .deactivationSucceeded(generation: generation)
+                    }
                 pending.append(contentsOf: machine.handle(result))
-            case let .trace(trace):
+            case .trace(let trace):
                 emit(trace, eventPayload: eventPayload)
                 if trace.event == .audioLifecycleStopped {
                     removeDelegateIfNeeded()
@@ -132,7 +141,7 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
     ) throws {
         while !effects.isEmpty {
             switch effects.removeFirst() {
-            case let .trace(trace):
+            case .trace(let trace):
                 emit(trace, eventPayload: eventPayload)
             case .none:
                 break
@@ -433,4 +442,3 @@ extension StreamingAudioLifecycleCoordinator: RTCAudioSessionDelegate {
 private enum StreamingAudioLifecycleCoordinatorError: Error {
     case invalidNestedEffect
 }
-#endif

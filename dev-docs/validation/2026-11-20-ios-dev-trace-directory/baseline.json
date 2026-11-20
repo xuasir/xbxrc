@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-11-20T15:38:44.782224+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-dev-trace-directory-20261120",
+  "files": [
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+      "sha256": "c9e30ee63e836857376ceca72d3e23ca5059c59d988d6d80a77c8a6009caac47"
+    },
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "38f9e22aa780e733544375ae2c5fb8e79e76a440673641099a20a45f952b5022"
+    },
+    {
+      "path": "iosapp/XBXRC.xcodeproj/xcshareddata/xcschemes/XBXRC.xcscheme",
+      "sha256": "dbcb3c2760d3b0f984fc496fed320377e2a9fa9b7ed31c91f39bcbefef5874c9"
+    },
+    {
+      "path": "iosapp/README.md",
+      "sha256": "f28717e3071f3de1c799670ac8ece00de0c99f2f0ed1c8b14b00e5f619a43b8c"
+    },
+    {
+      "path": "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift",
+      "sha256": "712538e9a2333fc197ab8708551f39007ce421c6575666b9725fb18584353ee1"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "reason": "UI几何断言沿用40pt图形及12pt图形到标题距离；新图形为28pt，槽位居中后可见图形到标题距离为18pt。已同步现有断言后在r2复验。",
+  "failedAssertionCount": 21,
+  "exampleFailures": [
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:47: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertEqualWithAccuracy failed: (\"28.0\") is not equal to (\"40.0\") +/- (\"1.0\")",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:48: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertEqualWithAccuracy failed: (\"28.0\") is not equal to (\"40.0\") +/- (\"1.0\")",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:49: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertEqualWithAccuracy failed: (\"18.0\") is not equal to (\"12.0\") +/- (\"1.0\")"
+  ]
+}

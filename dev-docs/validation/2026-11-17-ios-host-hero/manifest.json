@@ -1,0 +1,20 @@
+[
+  {
+    "name": "host-hero-offline",
+    "file": "host-hero-offline.png",
+    "test": "PCPageInteractionTests/testHostSwitcherUpdatesHeroActionsAndInstalledTarget()",
+    "sha256": "b45400a799a63ed7a0832aa3e6924ff101a3f724f60cf4d69cab146914ed9c65"
+  },
+  {
+    "name": "host-hero-series-s",
+    "file": "host-hero-series-s.png",
+    "test": "PCPageInteractionTests/testHostSwitcherUpdatesHeroActionsAndInstalledTarget()",
+    "sha256": "99871924007a1318c6d35b956e5bbd7d6ca9aabd65107cada6e968666b74c05f"
+  },
+  {
+    "name": "host-hero-series-x",
+    "file": "host-hero-series-x.png",
+    "test": "PCPageInteractionTests/testHostSwitcherUpdatesHeroActionsAndInstalledTarget()",
+    "sha256": "2ca2fa14c883cbb505f72fc3b10b639e9c34028e5120d687a5c07b9f61f04163"
+  }
+]

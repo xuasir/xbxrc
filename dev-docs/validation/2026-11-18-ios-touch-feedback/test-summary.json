@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-18",
+  "unitTestsFinal": 22,
+  "uiTests": 1,
+  "runs": {
+    "phone": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testAbsoluteJoystickAndExclusivePointer]",
+          "duration": "0.026 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testCapabilityReportIncludesBehaviorsAndUnknownAxisPath]",
+          "duration": "0.007 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testClusterNullInheritanceAndBlankReplacement]",
+          "duration": "0.022 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testDifferentControlsSharingOneActionReleaseIndependently]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testEveryVisibleControlCenterHitsItsControlAcrossSizes]",
+          "duration": "0.041 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testForzaLayerCancelsReplacedControlAndRestoresBase]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testHeldFeedbackPersistsAndCancellationClearsIt]",
+          "duration": "0.005 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testInvalidCoordinatesAreDiscardedAndPressureIsFinite]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayerHasMultipleIndependentSources]",
+          "duration": "0.017 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayoutViewportAndBackgroundCancelEverything]",
+          "duration": "0.011 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testOrdinaryButtonRollsOverAndReleasesOutside]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRealLayoutsAndCapabilityReports]",
+          "duration": "0.024 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRecorderExportsEdgesAndNeutralReset]",
+          "duration": "0.023 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapAndHeldPressDrawVisibleFeedbackAndKeepInputReleaseImmediate]",
+          "duration": "0.363 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapFeedbackSurvivesNeutralInputUntilMinimumDuration]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapKeepsBothEdgesWithinOneBatch]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSimultaneousStickButtonAndTrigger]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSurfaceRendersTransparentLayersAndCancelPublishesNeutral]",
+          "duration": "0.060 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testThrottleStickyAndBrakeRelease]",
+          "duration": "0.009 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTogglePersistsUntilNextTapAndCancelReleasesIt]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTwoPointersSharingOneButtonReleaseIndependently]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCUITests.TouchLayoutInteractionTests testLayoutSelectionPressDragAndResetFromControllerEntry]",
+          "duration": "46.622 seconds"
+        }
+      ]
+    },
+    "phone-final": {
+      "result": "passed",
+      "cases": [
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testAbsoluteJoystickAndExclusivePointer]",
+          "duration": "0.011 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testCapabilityReportIncludesBehaviorsAndUnknownAxisPath]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testClusterNullInheritanceAndBlankReplacement]",
+          "duration": "0.017 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testDifferentControlsSharingOneActionReleaseIndependently]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testEveryVisibleControlCenterHitsItsControlAcrossSizes]",
+          "duration": "0.009 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testForzaCameraHasPressFeedbackWithTransparentDefaultOutline]",
+          "duration": "0.261 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testForzaLayerCancelsReplacedControlAndRestoresBase]",
+          "duration": "0.008 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testHeldFeedbackPersistsAndCancellationClearsIt]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testInvalidCoordinatesAreDiscardedAndPressureIsFinite]",
+          "duration": "0.003 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayerHasMultipleIndependentSources]",
+          "duration": "0.010 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testLayoutViewportAndBackgroundCancelEverything]",
+          "duration": "0.010 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testOrdinaryButtonRollsOverAndReleasesOutside]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRealLayoutsAndCapabilityReports]",
+          "duration": "0.027 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testRecorderExportsEdgesAndNeutralReset]",
+          "duration": "0.018 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapAndHeldPressDrawVisibleFeedbackAndKeepInputReleaseImmediate]",
+          "duration": "0.320 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapFeedbackSurvivesNeutralInputUntilMinimumDuration]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testShortTapKeepsBothEdgesWithinOneBatch]",
+          "duration": "0.001 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSimultaneousStickButtonAndTrigger]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testSurfaceRendersTransparentLayersAndCancelPublishesNeutral]",
+          "duration": "0.051 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testThrottleStickyAndBrakeRelease]",
+          "duration": "0.006 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTogglePersistsUntilNextTapAndCancelReleasesIt]",
+          "duration": "0.002 seconds"
+        },
+        {
+          "name": "-[XBXRCTests.TouchLayoutTests testTwoPointersSharingOneButtonReleaseIndependently]",
+          "duration": "0.002 seconds"
+        }
+      ]
+    }
+  },
+  "checks": {
+    "swiftFormat": "passed",
+    "streamingBoundary": "passed"
+  },
+  "validation": "UIKit/CALayer真实渲染像素检查、短按中立输入与视觉保持、持续按压、取消、Forza透明默认样式及既有多指输入回放通过。UI入口按压/拖动与布局切换通过；实机触觉/声音沿应用开关待手动体验。"
+}

@@ -1,0 +1,13 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-dev-trace-directory-20261120",
+  "existsAfter": false,
+  "allocatedBytesRemoved": 221184,
+  "logicalBytesRemoved": 199613,
+  "diskFreeBytes": 73728000000,
+  "preserved": [
+    "withdrawal record",
+    "baseline hashes",
+    "minimal test summaries"
+  ],
+  "processCheck": "no build/test/app processes"
+}

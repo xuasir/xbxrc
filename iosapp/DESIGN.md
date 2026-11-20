@@ -1,212 +1,153 @@
-***
+# XBXRC iOS / iPad 设计规范
 
-version: alpha
-name: XBX Remote Client (iOS)
-description: Xbox 远程客户端 iOS 版（XBXRC）视觉设计系统。所有令牌均提取自 iosapp 真实 SwiftUI 实现，非臆造。品牌为 Xbox 绿、暗色优先且完全适配 light/dark。
-colors:
-brand: "#107C10"
-accent: "#0FAB21"
-canvas: "#0F0F10"
-canvasTop: "#0D1B12"
-canvasBottom: "#12161E"
-surfaceElevated: "#1A1B1E"
-surfacePanel: "#2B2B2B"
-textPrimary: "#FFFFFF"
-textSecondary: "#D1D1D6"
-textTertiary: "#A1A1AA"
-textDisabled: "#71717A"
-success: "#2BC24A"
-warning: "#FDB900"
-danger: "#FF5252"
-typography:
-titleBold: system .title bold
-headlineSemibold: system .headline semibold
-subheadline: system .subheadline
-footnoteMedium: system .footnote medium
-platform: SwiftUI (iOS, dark/light adaptive)
-scope: iosapp 客户端现状提取
----------------------
+版本：2026-11-20。覆盖五个根页、信息与设置子页、媒体详情、控制器工具及串流操作层。本文统一本轮图片批注与既有视觉合同，后续页面和公共组件按此规范验收。
 
-# Design System: XBX Remote Client (iOS)
+iPhone 与 iPad 共用 SwiftUI 页面壳层、原生 NavigationStack、主题令牌和交互组件。窗口宽度、系统字号与内容语义共同决定布局；认证、Xbox 数据、会话和信令继续消费现有 Rust 领域合同。
 
-> **来源与范围说明**：本文件仅登记 `iosapp/` SwiftUI 客户端当前真实存在、可由代码直接证实的视觉令牌与组件惯例。与桌面版 `xbx-design` 系统（`.agents/skills/xbx-design/`）共用同一 Xbox 视觉语言（同为 `#107C10` 绿、暗色优先、表面分级、状态色一致），构成跨端一致的设计语言。未包含任何新增设计建议。
+## 设计准则
 
-***
+| 准则 | 页面要求 | 主要实现 |
+| --- | --- | --- |
+| P01 内容先行 | 首屏呈现身份、核心状态、关键指标与主要动作。成功页面展示游戏、玩家和设备事实；等待、失败、权限及上次内容的说明归属受影响的操作或分区。 | `AppSectionRequestState`、`AppAccountRequestNotice`、`AppRefreshButton` |
+| P02 语义可辨 | 标题通过字号与字重建立层级，事实采用标签和值，操作通过动词、边界或方向指示表达用途。选中状态同时具有表面变化和 VoiceOver 标记。 | `appFont`、`AppMetric`、`AppFactGroup`、`AppNavigationRow` |
+| P03 工具成组 | 搜索占满一行；少量互斥条件直接横向切换；筛选、排序与重置组成同一工具行。工具表面采用满圆角胶囊，视觉尺寸与触屏尺寸分别确定。 | `AppContentSearch`、`AppSegmentedFilter`、`AppInformationPicker`、`AppContentToolbar` |
+| P04 信息成组 | 同一主题的事实和指标共用一张卡片；独立主题具有独立标题与表面。图片表达身份，文本表达内容，主动作具有明确视觉权重。 | `AppMetricGrid`、`AppFactGroup`、`appSurface` |
+| P05 连续画布 | 页面背景、状态栏、标题区和侧栏共用窗口画布。媒体背景渐变透出；滚动视口在标题区下方完整裁切，顶部保持稳定遮盖。 | `AppThemeBackground`、`AppArtworkBackdrop`、`appPageToolbar`、`AppPageScroll` |
+| P06 密度有序 | 空间按信息重要程度分配。正文和事实按自然高度布局，相关说明紧贴控件，分页动作在列表末尾居中。 | `AppLayoutPolicy`、`AppInlineHint`、`AppLoadMoreButton` |
+| P07 自适应可操作 | 内容字体保留完整 Dynamic Type 缩放；长文真实换行，横向选项可滚动，辅助字号下事实与指标改为单列。交互区域至少 44pt。 | `appResponsiveTypography`、`AppWrappingLayout`、原生控件与无障碍状态 |
 
-## Overview
+## 信息层级与文字
 
-面向 iOS 的 Xbox 远程游玩客户端视觉基调：**暗色优先、品牌绿为动作色、以渐变光晕背景营造深邃感**。
+常规档以系统默认字号为基准，字体采用 SF / 苹方；实际内容宽度小于 360pt 时启用窄屏档。各档继续接受系统 Dynamic Type 缩放。
 
-- **调性**：深色深邃 + 品牌绿高亮，冷静、游戏向。完整支持 light/dark（`UIColor` 按 `userInterfaceStyle` 返回不同分量），无强制锁定。
+| 用途 | 令牌 | 常规 / 窄屏 | 字重与表达 |
+| --- | --- | --- | --- |
+| 根页标题、身份主标题 | `.hero` | 24 / 22pt | semibold；标识当前页面、玩家或游戏 |
+| 子页标题 | `.title` | 18 / 17pt | semibold；表达返回栈中的当前位置 |
+| 分组标题、关键指标数值 | `.section` | 18 / 16pt | semibold；指标数值采用等宽数字 |
+| 正文、条目名称与入口 | `.body` | 14 / 13pt | 正文 regular，名称与主要入口 semibold |
+| 次级正文、工具选项 | `.bodySmall` | 13 / 12pt | 常态 regular，选中或菜单当前值 semibold |
+| 标签、日期、补充事实与提示 | `.caption` | 12 / 11pt | regular；采用次级文字色 |
 
-- **背景哲学**：不依赖纯色画布，而是 `AppThemeBackground` 通过三层 `LinearGradient`（top→canvas→bottom）+ 双 `RadialGradient` 光晕（品牌绿置左上、冷色青置右下）+ 半透明浮雕启动图标叠加构成身份化背景。`AllowsHitTesting(false)`、`accessibilityHidden(true)`。
+标题工具栏保留固定几何，根页标题最大 32pt，子页标题最大 24pt；长标题以单行收敛并保留完整 VoiceOver 名称。正文、说明、事实和内容工具采用真实缩放，布局通过换行、单列与局部横向滚动承接辅助字号。
 
-- **输入与动效**：默认 SwiftUI 交互语义；所有可访问动效尊重 `AccessibilityReduceMotion`（reduce 时缩短/跳过位移动画）。
+标签与值相隔 4pt，标题与正文形成可读分组。状态和说明使用次级文字色；品牌色表达主动作、选中项和重要活动状态。可点击条目同时具备完整名称、值与操作区域。
 
-- **启动体验**：白底 + `LaunchIcon` 缩放淡出（`easeInOut`，普通 0.42s / reduce 0.22s，图标放大至 scale 7），`zIndex(100)` 覆盖。
+## 颜色与表面
 
-***
+| 语义 | 深色 | 浅色 |
+| --- | --- | --- |
+| 页面画布 | `#202E27` | `#F6FAF8` |
+| 主文字 | `#FFFFFF` | `#202329` |
+| 次级文字 | `#CAD8D0` | `#525963` |
+| 常态图标 | `#CADFD1` | `#525963` |
+| 品牌与动作 | `#95E8B1` | `#008746` |
+| 品牌按钮内文字 | `#202E27` | `#FFFFFF` |
+| 实色面板 | `#415D4E` | `#FFFFFF` |
+| 环境光 | `#BBDCC5` | `#8ACDB1` |
 
-## Colors
+普通深色卡片使用 `#ABD0B8` 8% 至 `#91B3A3` 4% 的渐变、白色 11% 细边框与轻阴影；浅色卡片使用白色 96% 至 92% 的渐变和黑色 6% 细边框。卡片具有可辨边界，同时保留页面背景的连续性。
 
-全部取自真实代码。品牌示意：`color(red:16,green:124,blue:16)`= `#107C10`；`Assets.xcassets` 的 `AccentColor` 实际分量 `0.060/0.670/0.130` ≈ `#0FAB21`（更亮的品牌绿），代码常量统一用 `#107C10`。
+串流快捷栏采用 28% 黑色静态透明底色与 52pt 窄栏，诊断详情采用 72% 黑色局部浮层；其他媒体上的突出浮层使用 `regularMaterial` 与深色透明罩层；降低透明度时深色表面采用 `#415D4E`。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
 
-### Brand
+媒体背景高度为 380pt，上端画布覆盖率为深色 36%、浅色 68%，中段为 52% / 78%，下端融入完整画布。头像背景适度模糊，游戏背景保留主体辨识度；装饰背景参与无障碍隔离，图片失败时使用既有回退图形。
 
-| 令牌      | 取值        | 用途                                           |
-| ------- | --------- | -------------------------------------------- |
-| `brand` | `#107C10` | 主题 tint、登录图标、action 按钮 glass tint、SVG 浮雕图标颜色 |
+## 间距、卡片与密度
 
-### Canvas / Background（`AppThemePalette`）
+| 用途 | 尺寸 |
+| --- | --- |
+| 页面左右边距 | 24pt |
+| 内容 / 设置最大宽度 | 1040 / 760pt |
+| 文字细节 / 组内条目 / 标题与内容 / 独立分区 | 4 / 8 / 12 / 32pt |
+| 网格列间距 / 媒体网格行间距 | 16 / 24pt |
+| 普通条目内边距 / 事实与指标卡片内边距 | 12 / 16pt |
+| 设置行 / 信息与媒体卡片 / 登录面板圆角 | 6 / 8 / 10pt |
+| 控制器图片最大宽度 | 440pt |
 
-| 令牌             | 深色                   | 浅色                     | 用途      |
-| -------------- | -------------------- | ---------------------- | ------- |
-| `canvas`       | `#0F0F10`            | `#F4F7F5`              | 主画布底色   |
-| `canvasTop`    | `#0D1B12`            | `#E8F3EB`              | 背景渐变的顶部 |
-| `canvasBottom` | `#12161E`            | `#EBF1F8`              | 背景渐变的底部 |
-| `brandAura`    | rgba(16,124,16,0.22) | rgba(43,194,74,0.16)   | 左上品牌光晕  |
-| `coolAura`     | rgba(55,99,118,0.18) | rgba(129,172,196,0.14) | 右下冷色光晕  |
+同组信息使用一个外表面，内层事实按标签和值排布。发行信息、游戏特性、设备连接摘要分别形成卡片。只读说明按文字高度呈现；空标题、空脚注与成功请求状态按实际内容退出布局。
 
-### Semantic（`XBXProfileTokens`）
+功能入口使用图标、标题和短功能词；设置根入口保留完整描述，最小高度 60pt，二级设置行以原生控件实际高度和 44pt 触屏目标确定尺寸。短说明位于所属表面下方，间隔 4pt、水平对齐 12pt 内边距。
 
-**状态色**
+## 搜索、筛选与内容分类
 
-| 令牌        | 取值        | 用途       |
-| --------- | --------- | -------- |
-| `success` | `#2BC24A` | 成功 / 在线  |
-| `warning` | `#FDB900` | 警告 / 降级  |
-| `danger`  | `#FF5252` | 错误 / 破坏性 |
+| 元素 | 常规视觉尺寸 | 交互行为 |
+| --- | --- | --- |
+| 局部搜索 | 内容区全宽，胶囊约 36pt 高 | 触屏高度至少 44pt；展开为 TextField，保留清除与提交操作 |
+| 少量互斥筛选 | 共用胶囊底槽约 32pt 高，选中胶囊内缩 2pt | 直接展示全部选项；选中项采用实色表面、semibold 文字与无障碍选中标记 |
+| 排序、分类与动态选项 | 自然宽度，与筛选底槽同高、同底色的满圆角胶囊 | 当前值与向下指示组成菜单按钮；选项在原生菜单第一层切换 |
+| 内容分类 Tab | 透明文字、选中下划线 | 表达概览 / 成就 / 相册 / 统计等内容类别，按名称横向滚动 |
+| 分页动作 | 自然宽度、胶囊约 32pt 高 | 列表末尾居中，忙碌状态沿同一按钮反馈 |
 
-**表面**
+搜索位于工具区第一行，筛选与排序位于第二行。宽度充足时完整展示，窄窗、英文和辅助字号通过工具行横向滚动显露全部选项。单独使用的筛选横条可填满内容宽度，组合工具行中的筛选按内容取宽。
 
-| 令牌                | 深色        | 浅色    |
-| ----------------- | --------- | ----- |
-| `surfaceElevated` | `#1A1B1E` | White |
-| `surfacePanel`    | `#2B2B2B` | White |
+互斥筛选采用平整的低对比底槽，浅色为 `#E0E8E5` 底槽与白色选中胶囊，深色为 `#31433B` 底槽与 `#607568` 选中胶囊。各选项共用主文字色，选中项通过独立实色胶囊和字重表达状态。底槽与选中胶囊采用满圆角，表面内缩与自然增长的文字高度共同保障可读性。
 
-**文字四级**
+同行下拉菜单与互斥筛选共用 `appFilterTrackSurface` 实色底槽、主文字色、垂直内边距和满圆角轮廓。常规档视觉高度约32pt，辅助字号按相同文字留白自然增高；背景保持平整，边界由底槽与画布的色差表达。
 
-| 令牌              | 深色        | 浅色        |
-| --------------- | --------- | --------- |
-| `textPrimary`   | White     | `#0F0F10` |
-| `textSecondary` | `#D1D1D6` | `#55555E` |
-| `textTertiary`  | `#A1A1AA` | `#7C7C88` |
-| `textDisabled`  | `#71717A` | `#A9A9B2` |
+视觉高度由 44pt 操作区内的垂直留白形成。系统字号增大时胶囊、内容 Tab 与输入记录按文字自然增高；选项和菜单值保留可读文字，触屏区域沿真实绑定生效。
 
-**边界**
+## 页面壳层与导航
 
-| 令牌             | 取值                          |
-| -------------- | --------------------------- |
-| `borderSubtle` | 深色 white 8% / 浅色 black 8%   |
-| `divider`      | 深色 white 12% / 浅色 black 12% |
+| 区域 | 布局合同 |
+| --- | --- |
+| 顶部 | 状态栏与原生导航栏共享窗口画布；根页左侧为 28pt Xbox 图形、40pt 固定槽位、12pt 槽位与标题间距；标题工具区 44pt，右侧按页面语义安排操作 |
+| 中部 | 使用透明滚动视口；内容宽窗居中限宽，顶部完整裁切；图片、信息卡片与设置行各自提供所属表面 |
+| 底部 | 五个等宽导航依次为主机 / 云游戏 / 我的 / 控制器 / 设置；26pt 图形、48pt 导航行、上下各 8pt 内边距；胶囊限宽 560pt，左右最少 24pt、下沿距屏幕 24pt |
 
-**媒体上层文字（over media，恒白）**
+底栏使用 `ultraThinMaterial` 悬浮表面，画布色覆盖率为深色 38%、浅色 28%。系统底部安全区计入实际 24pt 下沿距离；键盘出现时沿键盘顶边保留 24pt。滚动末尾以 88pt 内容边距保障最后操作可达。
 
-| 令牌                 | 取值        |
-| ------------------ | --------- |
-| `onMediaPrimary`   | White     |
-| `onMediaSecondary` | White 76% |
-| `onMediaTertiary`  | White 58% |
+五个根页共用原生 TabView 的导航归属，已访问页面保留返回栈、筛选和滚动位置。子页使用原生 NavigationStack 返回，返回图标具有 44pt 触屏区，边缘返回沿 UINavigationController 原生手势。
 
-***
+窗口宽度达到 900pt 且字号处于常规档时，主机、云目录、控制器和设置在同一返回栈内展示 220pt 二级侧栏。标题与 Xbox 标志沿完整窗口共享横向起点，侧栏与正文共享画布；宽窄切换保留分类选择与子页状态。
 
-## Typography
+根页正文采用 240ms 淡入，底栏选中表面采用 280ms 过渡；减少动态效果时采用 160ms 过渡。标题、品牌标志和背景保持固定几何。页操作使用 22pt 图标，二级入口使用 24pt 图标，方向指示按 10～16pt 的语义档位呈现。
 
-使用 SwiftUI 系统语义字体，无自定义字体。层级通过相机名 + 语义 weight 表达：
+## 各页面应用规则
 
-| 语境            | SwiftUI 字体                                        | 出处                                  |
-| ------------- | ------------------------------------------------- | ----------------------------------- |
-| 主标题           | `.title.bold()`                                   | `XboxLoginView`（"连接 Xbox"）          |
-| 按钮 / 强调文本     | `.headline.weight(.semibold)`                     | `XboxLoginButtonStyle`、玻璃 action 按钮 |
-| 次级说明          | `.subheadline` `.foregroundStyle(.secondary)`     | 登录副标题                               |
-| 错误提示          | `.footnote.weight(.medium)` + `.red`              | 登录错误条                               |
-| Gamerscore 币值 | `.system(size:9, weight:.black, design:.rounded)` | `GamerscoreCoinIcon`                |
+iOS 游戏输入统一为触屏手柄与外接手柄。控制器、设置、串流菜单和输入诊断围绕这两类来源组织；正式输入采样、按键映射和设备连接事实共用现有手柄合同。PC 的键盘模拟与键盘映射归桌面端。历史移动偏好加载时忽略已撤下的桌面输入字段，保留触屏、手柄、显示与音频设置。
 
-文字语义颜色映射：`.foregroundStyle(.primary/.secondary)` 走系统色阶；显式令牌取 `XBXProfileTokens.text*`。
+触屏配置以通用 Xbox 为基准，上级菜单选择本地模板；自定义布局和触屏手柄调整使用独立导航子页。位置按横竖屏分别保存，竖屏全部控件保持下半区；透明度和大小随模板保存。编辑先修改本地草稿，保存后供本地串流与云游戏共用，绘制、无障碍范围和命中读取同一控件几何。
 
-***
+| 页面 | 信息与操作合同 |
+| --- | --- |
+| 主机 | 主机原图表达当前设备，名称、型号、运行状态与空间表达实际事实。单台机器身份区居中，多台机器在身份区下方使用横向切换；游玩、电源和安装库动作随当前选择更新 |
+| 云游戏 | 栏目以方形封面和名称组织内容；浏览子页共用全宽搜索与同行工具胶囊。游戏数量作为辅助事实，来源请求失败留在相应栏目 |
+| 云游戏详情 | 身份区使用 80pt 圆角方形封面、游戏名、发行商及输入能力；简介展开操作附着同组标题。个人游戏入口具有标题、说明和方向指示；发行信息与游戏特性分别成卡；底部游玩动作与真实等待、访问要求相邻 |
+| 我的与玩家 | 我的使用 72pt 身份头像与成就点数 / 好友 / 关注 / 粉丝的一排指标。好友、成就、游玩统计与相册通过独立子页进入；好友条目使用 40pt 头像、姓名、状态、活动及紧凑成就点数 |
+| 成就与游玩记录 | 成就摘要保留全成就游戏数量、成就点数两项。集合汇总沿当前数据列表计算，VoiceOver 说明标明范围；完整账户点数归属身份区。统计页增加核心时长事实，进度与解锁状态直接横条切换 |
+| 安装库 | 主机身份、串流动作与存储摘要位于上半区，搜索、排序与设备筛选位于下半区。有效数量与容量表达内容，更新时间用于失败后解释上次快照 |
+| 相册 | 媒体类型直接横向切换，动态游戏选项使用同一行菜单；单游戏空态在内容区居中，分页动作居中，媒体预览和分享沿原生导航与系统操作 |
+| 控制器 | 连接摘要形成卡片，有效设备详情可展开；手柄图片居中并保持比例。输入记录在下划线上方横向滚动，保留原有十条上限和按压边沿采样；轴值归辅助详情 |
+| 设置与诊断 | 设置使用独立选项表面、原生 Picker / Toggle / Slider / Stepper；数值、生效时机与必要提示贴附相关控件。服务诊断、原始观测和记录详情归高级诊断及主动展开区域 |
+| 串流操作层 | 继续使用现有 libwebrtc / Metal 播放链和公共突出浮层；触屏热点至少 44pt，菜单、测试和录入沿现有输入接管原因管理生命周期 |
 
-## Elevation
+## 请求状态与反馈
 
-层级主要依赖**表面明度差与系统 glass**，其次为受控阴影：
+首次载入在对应内容槽位反馈。刷新由当前页动作或分区呈现忙碌状态；成功快照继续承载正文。缓存、接口、分页实现细节归诊断记录，用户页面保留能支持判断和操作的说明。
 
-- **表面分级**：`surfacePanel`(基) → `surfaceElevated`(升)。overlay 卡片/面板用 `surfaceElevated`。
+失败提示位于受影响分区，采用标题、短原因和重试动作的层级；整行具备至少 44pt 点击区域。上次内容的时间在更新失败时解释快照来源；分页失败留在列表末尾并保留已有内容。账户级重新登录入口在页面统一呈现。
 
-- **品牌发光**：登录手柄图标阴影 `shadow(brand 22%.opacity, radius 18, y 8)`，是品牌对象的签名辉光。
+设置变更、收藏、选中和录入沿真实状态反馈。控制器映射通过明确选择进入录入，按键释放或摇杆回中后保存；离开页面、切换设备和进入后台时释放输入接管，恢复游戏输入前等待归零。
 
-- **玻璃效**：iOS 26 `glassEffect(.regular)` 用于按钮与错误条；`interactive()` + `tint(brand)` 表达动作对象。
+## 无障碍、语言与验收
 
-- **轨道卡片**：`OrbitCardCarousel` 使用 scale/opacity/rotate/offset + `mask` + 描边 `stroke` + 轻阴影构造景深，卡片之间通过位移与 z-index 分层。
+所有动作、导航与选择区域至少 44pt，VoiceOver 保留完整名称、值、选中状态和操作含义。装饰图片与重复图标参与无障碍隔离；只读事实按语义组合，含独立操作的父组保留子按钮。
 
-- **浮雕**：背景启动图标使用 `blur` + `opacity`（深色 0.035 / 浅色 0.10）制造水印级深度。
+应用语言、可见文本、动态格式与无障碍名称共同消费 string catalog 和应用 locale；玩家、设备和游戏名称保持数据来源文本。日期、时长、数量及输入记录按应用语言格式化。
 
-***
+全局基线覆盖中英文、深浅主题、320 / 390 / 430 / 550 / 667 / 744 / 834 / 1024 / 1366pt 与横竖屏，并覆盖常规字号及辅助字号。原生交互核验搜索、筛选、排序、重置、分页、返回、最后操作可达；顶部遮挡通过滚动前后导航栏边缘像素比对。布局截图来自实际 UIHostingController / 原生 UI 绘制，保留关键截图与测试摘要。
 
-## Components
+验收范围随改动影响确定：局部样式和文案选择受影响页面与代表尺寸，公共壳层、字号和组件采用一次跨尺寸矩阵；修正失败后复验失败路径及直接受影响页面。已通过证据按当前差异复用，验收达到门槛后进入交付与清理。
 
-### AppThemeBackground（全局画布）
+每轮归档最终截图、失败诊断和验证摘要，确认构建与测试进程结束后清理本轮结果包、重复导出、临时 DerivedData、日志与一次性脚本。真实账号数据、手柄触觉和实际 xCloud / xHome 串流由用户实机验收。
 
-三层线性渐变 + 双径向光晕 + 浮雕 `LaunchIcon`，随 `colorScheme` 切换深浅，见 **Canvas** 与 **Elevation**。
+## 规范来源与追踪
 
-### Glass Action 按钮
+- [本轮 RFC](../docs/rfcs/2026-11-19-ios-information-calibration.md)：图片批注、全局准则和实施范围。
+- [本轮验收报告](../docs/reports/2026-11-19-ios-information-calibration.md)：最终行为、验证证据与清理结果。
+- [本轮证据](../dev-docs/validation/2026-11-19-ios-information-calibration/README.md)：原始样板、最终原生截图和测试摘要。
+- [导航与分层阅读报告](../docs/reports/2026-11-18-ios-navigation-reading-followups.md)：三段式壳层、顶部遮挡、提示归属和原生导航约束。
+- PC 颜色与表面来源：`src/styles/_theme-foundation.scss`、`src/styles/_theme-semantic.scss`、`src/components/layout/AppShellLayout.vue`；主机、资料与设置沿现有 PC 页面语义。
+- [Fluent 图标来源与 MIT 许可](XBXRC/Resources/ThirdParty/FluentSystemIcons/README.md)；一级导航和 Xbox 品牌图形复用仓库现有矢量资源。
 
-胶囊形（`contentShape(Capsule())`，minHeight 54），`.foregroundStyle(.primary)`，`glassEffect(.regular.interactive().tint(brand))`，按下 `scale(0.975)` + `brightness(-0.03)`，动画 `.snappy(0.22)`（reduce 关闭）。登录按钮字体 `.headline.weight(.semibold)`。
-
-### Hero 轮播（RecentlyPlayedHeroCarousel）
-
-高度由 `LibraryLayoutMetrics` 动态：`heroMinimumHeight=480` / `heroMaximumHeight=540` / `heroViewportFraction=0.54`；海报 112×168、圆角 14；recent 卡 250×148。轮播拖拽 `withAnimation` `.easeOut(0.16)` 与 `.snappy(0.68, extraBounce:0.06)`。
-
-### 轨道 / 书架（LibraryShelf）
-
-横向 `LazyHStack(spacing:12)`，横向内边距 16，标题 + 计数 + 箭头，按压态 `LibraryPressStyle`。
-
-### 卡片
-
-- **游戏海报卡**：poster 112×168、圆角 14，媒体上层文字用 `onMedia*` 白系。
-
-- **轨道卡片**：圆角 + `mask` + 描边 `stroke` + 轻阴影，见 Elevation。
-
-### Gamerscore 币图标（GamerscoreCoinIcon）
-
-小型徽章：`.green` 填充、白色 `.black .rounded` 9pt 数字，形式为金币角标。
-
-### 错误提示条（登录）
-
-`.red` 前景 + `Label`（`exclamationmark.triangle`），`glassEffect(.regular.tint(red 10%))`，圆角 14，横向内边距 16 / 竖向 12。
-
-### 个人信息（Profile）
-
-沉浸式 hero，头像尺寸 92，卡片 `cardRadius=12`，页面内边距 `pageInset=16`；状态色取自语义令牌。登出需确认。
-
-### 导航
-
-`TabView` 四段：游戏库 `/rectangle.stack.fill`、主机 `/desktopcomputer`、成就 `/trophy.fill`、我的 `/person.crop.circle.fill`，tint = `AppThemePalette.brand`。播放时为全屏 `StreamingPlayerView`（`ignoresSafeArea`）隐藏 Tab。
-
-***
-
-## Do's & Don'ts（当前现状惯例）
-
-**Do**
-
-- 品牌绿 `#107C10` 只用于动作 / 高亮 / tint，不在组件上用大面品牌色做装饰。
-
-- 颜色一律走语义令牌（`XBXProfileTokens`、`AppThemePalette`）并随 dark/light 自适应；不硬编码单模式颜色。
-
-- 状态色（success/warning/danger）只作用于值或图标，不作用于整行/标签底色。
-
-- 按钮与交互对象用系统语义字体 + `glassEffect`，按压反馈统一缩放 + 亮度。
-
-- 所有自定义位移动画防护 `reduceMotion`。
-
-- 页面布局沿用 `pageInset=16`、卡片圆角 12–14、胶囊按钮等既有节奏。
-
-**Don't**
-
-- 不引入独立于上述 `AppThemePalette` / `XBXProfileTokens` 的平行色板；新颜色应复用现有令牌。
-
-- 不绕过 `glassEffect` 自造按钮视觉。
-
-- 不使用骨架屏假摩擦音暗示；等待态走系统 `ProgressView`。
-
-- 媒体上层一律用 `onMedia` 白系，不加深色文字。
-
+手机串流菜单通过双指向内滑动唤出，左右两条窄栏分别承载串流操作和指标/诊断工具。运行指标、诊断录制、导出、音频、麦克风、画面比例及文字发送在一级完成；画面设置从底部上滑，诊断四组详情直接位于右上局部浮层。录制沿用现有诊断 Trace，结束与关机采用原生确认。登录空态采用中部 Xbox 标志与下方全宽登录按钮。

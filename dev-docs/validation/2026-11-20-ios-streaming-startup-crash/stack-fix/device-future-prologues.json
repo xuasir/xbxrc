@@ -1,0 +1,65 @@
+{
+  "rust_future_new": {
+    "symbol": "__ZN11uniffi_core3ffi10rustfuture15rust_future_new17h462899a26c482f30E",
+    "prologue": [
+      "  b004e8: a9be6ffc     \tstp\tx28, x27, [sp, #-0x20]!",
+      "  b004ec: a9017bfd     \tstp\tx29, x30, [sp, #0x10]",
+      "  b004f0: 910043fd     \tadd\tx29, sp, #0x10",
+      "  b004f4: d134c3ff     \tsub\tsp, sp, #0xd30",
+      "  b004f8: f90003ff     \tstr\txzr, [sp]",
+      "  b004fc: aa0003e1     \tmov\tx1, x0",
+      "  b00500: 910203e0     \tadd\tx0, sp, #0x80",
+      "  b00504: f90007e0     \tstr\tx0, [sp, #0x8]",
+      "  b00508: 52819608     \tmov\tw8, #0xcb0              ; =3248",
+      "  b0050c: aa0803e2     \tmov\tx2, x8",
+      "  b00510: 943374b3     \tbl\t0x17dd7dc <_writev+0x17dd7dc>",
+      "  b00514: f94007e0     \tldr\tx0, [sp, #0x8]",
+      "  b00518: 910063e8     \tadd\tx8, sp, #0x18",
+      "  b0051c: f9000be8     \tstr\tx8, [sp, #0x10]",
+      "  b00520: 97fed57f     \tbl\t0xab5b1c <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE>",
+      "  b00524: f9400be0     \tldr\tx0, [sp, #0x10]"
+    ]
+  },
+  "RustFuture_new": {
+    "symbol": "__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE",
+    "prologue": [
+      "  ab5b1c: a9be6ffc     \tstp\tx28, x27, [sp, #-0x20]!",
+      "  ab5b20: a9017bfd     \tstp\tx29, x30, [sp, #0x10]",
+      "  ab5b24: 910043fd     \tadd\tx29, sp, #0x10",
+      "  ab5b28: d135c3ff     \tsub\tsp, sp, #0xd70",
+      "  ab5b2c: f90003ff     \tstr\txzr, [sp]",
+      "  ab5b30: f90007e8     \tstr\tx8, [sp, #0x8]",
+      "  ab5b34: aa0003e1     \tmov\tx1, x0",
+      "  ab5b38: 9102c3e0     \tadd\tx0, sp, #0xb0",
+      "  ab5b3c: f9000be0     \tstr\tx0, [sp, #0x10]",
+      "  ab5b40: 52819608     \tmov\tw8, #0xcb0              ; =3248",
+      "  ab5b44: aa0803e2     \tmov\tx2, x8",
+      "  ab5b48: 94349f25     \tbl\t0x17dd7dc <_writev+0x17dd7dc>",
+      "  ab5b4c: f9400be0     \tldr\tx0, [sp, #0x10]",
+      "  ab5b50: 910163e8     \tadd\tx8, sp, #0x58",
+      "  ab5b54: 97ffb7be     \tbl\t0xaa3a4c <__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE>",
+      "  ab5b58: 14000007     \tb\t0xab5b74 <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x58>"
+    ]
+  },
+  "WrappedFuture_new": {
+    "symbol": "__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE",
+    "prologue": [
+      "  aa3a4c: a9be6ffc     \tstp\tx28, x27, [sp, #-0x20]!",
+      "  aa3a50: a9017bfd     \tstp\tx29, x30, [sp, #0x10]",
+      "  aa3a54: 910043fd     \tadd\tx29, sp, #0x10",
+      "  aa3a58: d14007ff     \tsub\tsp, sp, #0x1, lsl #12   ; =0x1000",
+      "  aa3a5c: f90003ff     \tstr\txzr, [sp]",
+      "  aa3a60: d14007ff     \tsub\tsp, sp, #0x1, lsl #12   ; =0x1000",
+      "  aa3a64: f90003ff     \tstr\txzr, [sp]",
+      "  aa3a68: d14007ff     \tsub\tsp, sp, #0x1, lsl #12   ; =0x1000",
+      "  aa3a6c: f90003ff     \tstr\txzr, [sp]",
+      "  aa3a70: d10cc3ff     \tsub\tsp, sp, #0x330",
+      "  aa3a74: f90003e8     \tstr\tx8, [sp]",
+      "  aa3a78: aa0003e1     \tmov\tx1, x0",
+      "  aa3a7c: 910083e0     \tadd\tx0, sp, #0x20",
+      "  aa3a80: f90007e0     \tstr\tx0, [sp, #0x8]",
+      "  aa3a84: 52819608     \tmov\tw8, #0xcb0              ; =3248",
+      "  aa3a88: aa0803e2     \tmov\tx2, x8"
+    ]
+  }
+}

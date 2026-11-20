@@ -88,12 +88,12 @@ enum IOSRuntimeTraceValue: Codable, Equatable, Sendable {
     func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case let .string(value): try container.encode(value)
-        case let .integer(value): try container.encode(value)
-        case let .double(value): try container.encode(value)
-        case let .bool(value): try container.encode(value)
-        case let .array(value): try container.encode(value)
-        case let .object(value): try container.encode(value)
+        case .string(let value): try container.encode(value)
+        case .integer(let value): try container.encode(value)
+        case .double(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
+        case .array(let value): try container.encode(value)
+        case .object(let value): try container.encode(value)
         case .null: try container.encodeNil()
         }
     }
@@ -148,4 +148,16 @@ struct IOSRuntimeTraceDraft: Sendable {
     let dimension: IOSRuntimeTraceDimension
     let importance: IOSRuntimeTraceImportance
     let operationID: String?
+    // 在事件入口采样，写入队列等待只计入独立的诊断字段。
+    let tsMs = UInt64(max(0, Date().timeIntervalSince1970 * 1_000))
+    let monotonicMs = ProcessInfo.processInfo.systemUptime * 1_000
+}
+
+struct IOSDiagnosticRecord: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let startedAt: Date
+    var endedAt: Date?
+    var isActive = false
+    var operation: String? = nil
+    var count = 1
 }

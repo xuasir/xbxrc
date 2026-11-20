@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-19",
+  "implementation": "delivered",
+  "taskState": "Validation Pending",
+  "remainingOwner": "用户实机验收",
+  "rust": {
+    "passed": 253,
+    "failed": 0,
+    "crates": {
+      "xbox-ios-bridge": 67,
+      "xbox-streaming": 176,
+      "xbox-streaming-protocol": 10
+    },
+    "log": "diagnostics/rust-tests.log"
+  },
+  "pc": {
+    "passed": 94,
+    "failed": 0,
+    "files": 5,
+    "testFiles": [
+      "src/streaming/runtime/browser-runtime.test.ts",
+      "src/streaming/runtime/browser-policy.test.ts",
+      "src/streaming/runtime/connection-recovery.test.ts",
+      "src/streaming/runtime/runtime-host-policy.test.ts",
+      "src/streaming/runtime/shared-supervision-baseline.test.ts"
+    ],
+    "log": "diagnostics/pc-tests.log"
+  },
+  "ios": {
+    "phone": {
+      "passed": 180,
+      "unitTests": 178,
+      "uiTests": 2,
+      "summary": "phone-summary.json"
+    },
+    "ipad": {
+      "passed": 180,
+      "unitTests": 178,
+      "uiTests": 2,
+      "summary": "ipad-summary.json"
+    },
+    "selectedUnitSuites": [
+      "SettingsAndPersistenceTests",
+      "StreamingFrameFeedbackTests",
+      "XBXRCTests",
+      "AuthCredentialCoordinatorTests",
+      "TouchLayoutTests"
+    ],
+    "excludedProfileAssertions": [
+      "testInteractiveLoginPersistsSessionAndProfile",
+      "testXboxDataStoreKeepsLibraryWhenPlaytimeFails"
+    ],
+    "exclusionEvidence": "baseline-failures.json"
+  },
+  "sharedReplay": {
+    "source": "PC BrowserSoftRecoveryGate + BrowserNetworkPolicy",
+    "rows": 186,
+    "scenarios": 6,
+    "fixture": "shared-supervision-baseline.json"
+  },
+  "deviceBuild": {
+    "result": "Passed",
+    "target": "generic/platform=iOS",
+    "codeSigningAllowed": false,
+    "log": "diagnostics/device-build.log"
+  },
+  "checks": {
+    "bindings": "Passed",
+    "tauriCheck": "Passed",
+    "pcBuild": "Passed",
+    "pnpmLintFix": "Passed",
+    "pnpmTypecheck": "Passed",
+    "cargoFmtCheck": "Passed",
+    "sessionBoundary": "Passed",
+    "worktreeDiffCheck": "Passed"
+  },
+  "trace": {
+    "phone": {
+      "gate": "PASS",
+      "rows": 2802,
+      "sessions": 6,
+      "rawFiles": 6,
+      "pairingStarts": 28,
+      "pressureNotices": 0,
+      "profile": "dev",
+      "requireFlow": "none",
+      "scope": "模拟器夹具与设置入口的结构、序列、配对、脱敏、预算验证"
+    },
+    "ipad": {
+      "gate": "PASS",
+      "rows": 4573,
+      "sessions": 6,
+      "rawFiles": 6,
+      "pairingStarts": 42,
+      "pressureNotices": 0,
+      "profile": "dev",
+      "requireFlow": "none",
+      "scope": "模拟器夹具与设置入口的结构、序列、配对、脱敏、预算验证"
+    }
+  },
+  "validationSourceManifest": "validation-source-manifest.json",
+  "sourceHashMatches": 8,
+  "repositoryBaseline": {
+    "cachedDiffCheck": "3 项其他验收证据的末尾空行诊断",
+    "diagnostics": [
+      "dev-docs/validation/2026-11-18-ios-brand-navigation-spacing/device-build-summary.txt:15",
+      "dev-docs/validation/2026-11-18-ios-navigation-reading/diagnostics/device-build-summary.txt:25",
+      "dev-docs/validation/2026-11-18-ios-navigation-reading/diagnostics/rust-tests.txt:78"
+    ]
+  },
+  "manualAcceptance": "device-acceptance.md",
+  "cleanup": {
+    "status": "Complete",
+    "record": "cleanup.json",
+    "allocatedBytesRemoved": 1888403456,
+    "resultBundlesRemoved": 23,
+    "diskFreeBytesAfter": 64716800000,
+    "retainedRawTraceFiles": 12,
+    "retainedScreenshots": 4
+  }
+}

@@ -1,0 +1,6 @@
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift:473:57: warning: '+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+    |                                                        `- warning: '+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift:473:42: warning: '+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+    |                                          `- warning: '+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+2026-11-20 17:03:33.429 appintentsmetadataprocessor[23894:7037971] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+** BUILD SUCCEEDED **

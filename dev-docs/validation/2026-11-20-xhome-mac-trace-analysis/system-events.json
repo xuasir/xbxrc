@@ -1,0 +1,5902 @@
+[
+  {
+    "timestamp": "2026-11-20 15:21:34.826046+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826151+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826234+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826312+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826392+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826469+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826655+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.826901+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.827408+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873070+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873192+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873289+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873373+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873451+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.873531+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.875152+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.875357+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.875880+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.920514+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.920644+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.920752+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.920854+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.920937+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.921024+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.921125+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.921529+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.922344+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968278+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968435+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968552+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968678+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968823+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.968913+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.969608+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.969795+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:34.970382+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.010554+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.011178+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.011482+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.013640+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.013771+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.013884+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.014039+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.014154+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.014313+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.014933+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.015102+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.015712+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.016465+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.018536+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.061640+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.061810+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.061909+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.061994+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.062077+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.062605+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.063405+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.063938+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111489+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111600+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111688+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111767+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111846+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.111926+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.112199+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.112383+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.113016+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155321+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155448+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155537+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155617+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155697+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.155776+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.157149+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.157401+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.157949+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.199391+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.199511+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.199600+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.199699+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.199801+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.200618+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.200861+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.201356+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219481+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219627+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219723+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219810+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219894+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.219982+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.220644+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.221135+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240121+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240236+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240320+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240402+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240492+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.240663+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.241002+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.241581+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.286542+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.286767+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.286979+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.287112+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.287229+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.287351+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.287491+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.287646+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.288025+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.330239+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.330438+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.330617+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.330751+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.330862+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.332267+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.332415+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.332986+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.372700+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.372815+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.372903+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.372985+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.373065+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.374363+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.374471+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.375048+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.416700+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.416810+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.417042+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.417188+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.417334+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.417761+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.417911+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.418059+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.418298+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.434769+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.434868+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.434956+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.435035+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.435168+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.435294+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.435542+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.436070+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.453641+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.453816+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.453998+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.454196+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.454334+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.454482+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.454585+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.454992+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.499885+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500062+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500197+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500303+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500458+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500599+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500692+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.500892+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.501526+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.520375+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.520556+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.520705+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.520880+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.520975+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538276+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538396+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538494+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538585+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538667+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.538751+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.539080+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.582951+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583067+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583200+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583354+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583452+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583587+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583680+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.583864+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.584469+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.600870+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.601000+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.601090+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.601585+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.602113+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.645070+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.645205+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.645294+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.645502+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.646863+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.646957+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.647568+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688293+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688416+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688508+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688592+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688674+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.688756+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.689783+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.689876+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.690391+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.729644+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.729758+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.729847+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.729932+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.730018+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.731347+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.731707+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.770987+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.771347+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.771702+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.771924+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772117+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772367+0800",
+    "event": "ios-streaming/runtimeSupervisionSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772495+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772582+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772667+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.772749+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815429+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815544+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815633+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815714+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815797+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.815880+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.816705+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.816875+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.817446+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.835370+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.835603+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.835733+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.835823+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.836282+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.836581+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.837117+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854384+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854499+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854589+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854673+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854757+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.854838+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.855217+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.855852+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899315+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899439+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899553+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899710+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899809+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.899901+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.900009+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.900181+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.900911+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.918450+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.918592+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.918679+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.918774+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.918857+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.919382+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.920161+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.938151+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.938289+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.938414+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.938536+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.938904+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.939109+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.939766+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986218+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986355+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986601+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986724+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986875+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.986988+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.987156+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.987269+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:35.987711+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.022804+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.023131+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.023350+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.031765+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.031880+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.031963+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.032043+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.032122+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.033119+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.033365+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.033940+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.034540+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.034966+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.074728+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.074831+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.074914+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.074992+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.075172+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.076402+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.076540+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.077175+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.092659+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.092856+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.092997+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.093092+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.093257+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.093380+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.093474+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.093558+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.094122+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.110680+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.110869+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.111034+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.111248+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.111369+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.111613+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.111989+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.112459+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.153648+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.153867+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.154125+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.154249+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.154417+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.154507+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.155380+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.155608+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.156145+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.197192+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.197305+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.197393+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.197541+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.197648+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.198221+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.198398+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.198614+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.199189+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.241353+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.241467+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.241636+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.241764+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.241891+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.243308+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.243452+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.244056+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.288526+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.288724+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.288838+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.288980+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.289097+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.289229+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.289371+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.289511+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.290167+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331234+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331360+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331445+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331524+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331610+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331690+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.331910+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.332155+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.332764+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.374583+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.374770+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.374911+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.375003+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.375110+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.375204+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.376329+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.376502+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.377132+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392098+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392282+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392403+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392511+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392623+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.392755+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.435723+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.435848+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.435941+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.436572+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.436686+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.436783+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.436900+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.437068+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452166+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452256+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452369+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452580+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452714+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.452805+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.453035+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.453655+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.498274+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.498453+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.498593+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.499698+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.499970+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.500604+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.540353+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.540479+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.540597+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.541168+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.541563+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.541763+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.542350+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.542896+0800",
+    "event": "ios-streaming/inputFrameSent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.583277+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.583459+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.583579+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.583717+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.583955+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.584105+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.584198+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.584844+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.627968+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.628079+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.628168+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.628248+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.628328+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.628411+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.629167+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.629401+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.630000+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671280+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671389+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671475+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671556+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671635+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.671713+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.672985+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.673126+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.673694+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.716664+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.716787+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.716880+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.716963+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.717046+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.717131+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.718555+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.718790+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.719418+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.734982+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.735137+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.735252+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.735479+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.735701+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.736053+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.736206+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.736497+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.780666+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.780906+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781125+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781342+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781451+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781571+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781697+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.781796+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.782252+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.824730+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.824920+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.825109+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.825236+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.825390+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.825515+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.826333+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.826567+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.827238+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.871525+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.871807+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.872073+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.872187+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.872314+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.873847+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.873984+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.874583+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.907828+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.907940+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908029+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908114+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908196+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908412+0800",
+    "event": "ios-streaming/runtimeSupervisionSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908492+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908568+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.908666+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.909289+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989243+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989400+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989499+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989588+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989671+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989751+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.989904+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.990127+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:36.990740+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020288+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020394+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020482+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020622+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020747+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.020840+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.021143+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.021349+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.021937+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.023407+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.023754+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.023980+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.051894+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.052107+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.052382+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.052575+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.052810+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.053013+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.053227+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.053394+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.053824+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.054011+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.056598+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.081634+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.081798+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.081925+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.082084+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.082224+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.082322+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.082960+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.083121+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.083729+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.113613+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.113807+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.113938+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.114062+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.114165+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.114271+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.115067+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.115268+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.115953+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146277+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146390+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146477+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146566+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146648+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.146993+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.147704+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.147906+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.148480+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.175897+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.176103+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.176327+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.176459+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.176594+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.176703+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.177487+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.177666+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.178283+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209243+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209356+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209482+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209661+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209798+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.209989+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.210845+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.211431+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.240738+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.240863+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.240951+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.241030+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.241109+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.241189+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.241575+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.241785+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.242415+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272416+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272561+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272663+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272752+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272842+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.272929+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.273010+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.273269+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.274092+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.302834+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303037+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303351+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303529+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303649+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303821+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.303983+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.304399+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.332660+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.332781+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.332866+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.332947+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.333034+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.333122+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.333352+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.333579+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.334151+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.362479+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.362615+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.362758+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.362946+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.363066+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.363201+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.363370+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.363598+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.364181+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.395547+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.395733+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.395830+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.395913+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.395994+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.396172+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.396872+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.397427+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427412+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427553+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427649+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427736+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427817+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.427962+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.428162+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.428385+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.428999+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.458987+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459175+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459287+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459474+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459567+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459672+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459764+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.459942+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.460507+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491052+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491178+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491305+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491396+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491479+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.491961+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.492179+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:37.492754+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.024071+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.024624+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.024915+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407293+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407587+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407697+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407786+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407871+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.407954+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.408037+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.408196+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.408935+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.410210+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.411680+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.413674+0800",
+    "event": "ios-streaming/audioPlayoutGlitchDetected",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.415600+0800",
+    "event": "ios-streaming/audioPlayoutGlitchDetected",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.416758+0800",
+    "event": "ios-streaming/audioPlayoutGlitchDetected",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.422502+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.422743+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.422892+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.423032+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.423115+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.423367+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.425101+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.425571+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.426163+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.457657+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.458172+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.458432+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.458735+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.458974+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.459421+0800",
+    "event": "ios-streaming/runtimeSupervisionSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.459619+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.459858+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.460049+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.460312+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.500804+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.501117+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.501379+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.501630+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.501867+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.502129+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.502329+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.502534+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.503082+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.532037+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.532362+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.532648+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.532763+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.532893+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.533056+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.533687+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.534141+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.560047+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.560888+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.561175+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.561328+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.561807+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.562296+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.562395+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.562485+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.562571+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.591955+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.592495+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.592965+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.593198+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.593340+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.593543+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.593851+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.594237+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.594555+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.624627+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.624803+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.625062+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.625176+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.625407+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.625921+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.626176+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.626832+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.653298+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.653607+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.653841+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.653982+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.654104+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.654247+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.654509+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.655138+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.668202+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.668377+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.668575+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.668741+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.668891+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.669041+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.669593+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.670176+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.700463+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.700644+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.700781+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.700910+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.701148+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.701327+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.701776+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.701972+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.702575+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.763804+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.764217+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.764367+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.764500+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.766378+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.767258+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.767368+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.767477+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797051+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797276+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797464+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797594+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797803+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.797927+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.798096+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.798557+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.812748+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.812910+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.813050+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.813179+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.813311+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.813421+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.813949+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.814545+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.827970+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.828087+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.828175+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.828404+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.828508+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.828643+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.829169+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.829762+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.840757+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.841029+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.841214+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.841411+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.841691+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.843008+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.877066+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.877313+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.877464+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.877582+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.877722+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.878021+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.878225+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.908908+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909124+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909396+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909570+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909733+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909882+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.909977+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.910460+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.940194+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.940381+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.940719+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.940922+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.941241+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.941857+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.972148+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.972262+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.972352+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.972582+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.972878+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.973112+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.973746+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.987465+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.987656+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.987807+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.987915+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.988071+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.988243+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.988357+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:38.988899+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017107+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017225+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017311+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017393+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017475+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.017557+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.018251+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.018495+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.019053+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.025377+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.025700+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.025913+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.047202+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.047378+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.047513+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.047750+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.047848+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.048115+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.048768+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.049228+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.049397+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.049688+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.078397+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.078524+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.078611+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.078692+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.078832+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.079046+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.079274+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.079952+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108162+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108355+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108568+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108687+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108801+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.108928+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.109043+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.109210+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.109724+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.138470+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.138599+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.138692+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.138808+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.138904+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.139159+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.139369+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.140062+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153208+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153328+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153424+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153507+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153593+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.153679+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.154412+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.154911+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.184551+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.184711+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.184891+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.185000+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.185097+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.185358+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.185943+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.186145+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.186737+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215320+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215448+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215539+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215621+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215705+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.215787+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.216492+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.216648+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.217299+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.231342+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.231458+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.231545+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.231627+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.231794+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.232526+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.233090+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.248886+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.248979+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.249066+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.249186+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.249281+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.249491+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.250238+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.250735+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279078+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279291+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279422+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279535+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279709+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.279888+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.280380+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.280560+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.281232+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.306667+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.306774+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.306860+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.306940+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.307082+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.307865+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.308415+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.337817+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338039+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338279+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338384+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338507+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338691+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.338856+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.339457+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.354472+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.354588+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.354676+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.354766+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.354848+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.355012+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.355310+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.355958+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.388093+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.388273+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.388391+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.388550+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.388688+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.389337+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.389503+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.390137+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.417608+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.417782+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.417917+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.418155+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.418319+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.418520+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.418711+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.418812+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.419288+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.448908+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.449040+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.449131+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.449220+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.449307+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.450191+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.450280+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.450805+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.868561+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.868782+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.869005+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.869258+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.869418+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.869623+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.870343+0800",
+    "event": "ios-streaming/inputFrameSent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.870547+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.870719+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.871462+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.933862+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.934094+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.934250+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.934358+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.934513+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.934640+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.935294+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.935495+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.936111+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969157+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969285+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969371+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969451+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969534+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969780+0800",
+    "event": "ios-streaming/runtimeSupervisionSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.969909+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.970296+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.970448+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:39.971037+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.000243+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.000492+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.000662+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.000847+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.001041+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.001180+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.001540+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.001690+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.002241+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.033718+0800",
+    "event": "ios-streaming/receiverTrackDiscovered",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.034100+0800",
+    "event": "ios-streaming/rtcHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.034338+0800",
+    "event": "ios-streaming/displayHealthSnapshot",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060377+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060497+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060588+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060673+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060754+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.060843+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.061674+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.061790+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.062357+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.062583+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.063028+0800",
+    "event": "ios-streaming/videoSurfaceAttached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.090549+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.090674+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.090854+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.090987+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.091117+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.091236+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.091393+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.091511+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.092124+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.105833+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.105989+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.106138+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.106236+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.106369+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.106474+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.106577+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.107193+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123476+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123587+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123680+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123764+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123853+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.123984+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.124859+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.125432+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.136091+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.136208+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.136373+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.136598+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.136725+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.137512+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.137781+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.138366+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.152570+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.152823+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.152984+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.153180+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.154594+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.155327+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.155913+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.184289+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.184412+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.184498+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.184579+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.184661+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.185436+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.185596+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.186177+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.214308+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.214503+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.214675+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.214941+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.215061+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.215600+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.215785+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.216463+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.229917+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.230028+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.230117+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.230196+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.230361+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.257969+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258099+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258183+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258265+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258356+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258445+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.258530+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.259012+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273093+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273252+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273407+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273570+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273674+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273795+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.273933+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.274485+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.304540+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.304732+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.305179+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.305364+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.305626+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.306289+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.332649+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.332764+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.332852+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.333038+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.333261+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.333489+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.334149+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.364060+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.364226+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.364361+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.364449+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.364533+0800",
+    "event": "ios-streaming/displayPresent",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.365178+0800",
+    "event": "ios-streaming/videoFrameDropped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.365339+0800",
+    "event": "ios-streaming/videoFrameAcceptedToMailbox",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.365966+0800",
+    "event": "ios-streaming/displaySubmit",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.369261+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.401034+0800",
+    "event": "ios-streaming/sessionTerminal",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.401126+0800",
+    "event": "ios-streaming/terminalSelected",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.402397+0800",
+    "event": "ios-streaming/presentationDetached",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.402623+0800",
+    "event": "ios-streaming/inputStopped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.402734+0800",
+    "event": "ios-streaming/hapticsStopped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.402898+0800",
+    "event": "ios-streaming/iceTasksCancelled",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:40.759642+0800",
+    "event": "ios-streaming/peerClosed",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:41.121664+0800",
+    "event": "ios-streaming/remoteSessionClosed",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:41.126819+0800",
+    "event": "ios-streaming/accessReleased",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:41.127271+0800",
+    "event": "ios-streaming/streamingStateChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.394509+0800",
+    "event": "library-ui/libraryActivationRequested",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.394712+0800",
+    "event": "cloud-library/catalogActivationStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.394790+0800",
+    "event": "cloud-library/cacheRestoreStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.395396+0800",
+    "event": "cloud-library/catalogActivationRefreshRequired",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.395430+0800",
+    "event": "library-ui/libraryPageAppeared",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.421579+0800",
+    "event": "library-ui/contentPresented",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.492461+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.492583+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.493179+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.493268+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.493347+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.493424+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.698017+0800",
+    "event": "cloud-library/catalogRefreshStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.788032+0800",
+    "event": "auth/cloudAccessBoundaryStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:47.789214+0800",
+    "event": "auth/cloudAccessUniFFIBoundaryStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:51.973651+0800",
+    "event": "library-ui/libraryActivationRequested",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:51.973764+0800",
+    "event": "cloud-library/catalogActivationStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:51.973851+0800",
+    "event": "cloud-library/cacheRestoreStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:51.973992+0800",
+    "event": "cloud-library/catalogActivationSkipped",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:51.974062+0800",
+    "event": "library-ui/libraryActivationCompleted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:52.001451+0800",
+    "event": "library-ui/contentPresented",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:52.001994+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:52.002084+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:52.002208+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:52.002330+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:53.418201+0800",
+    "event": "xbox-data/libraryRefreshStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:54.951610+0800",
+    "event": "xbox-data/libraryContentCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:54.978223+0800",
+    "event": "auth/cloudAccessUniFFIBoundarySucceeded",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:54.993978+0800",
+    "event": "cloud-library/activityOverlayCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:55.173446+0800",
+    "event": "xbox-data/dataSessionBound",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:55.196365+0800",
+    "event": "auth/cloudAccessBoundarySucceeded",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:55.196464+0800",
+    "event": "cloud-library/catalogRequestBoundaryStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:57.015142+0800",
+    "event": "cloud-library/activityOverlayCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:21:58.755125+0800",
+    "event": "cloud-library/activityOverlayCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:00.985491+0800",
+    "event": "cloud-library/catalogRequestBoundarySucceeded",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:00.985776+0800",
+    "event": "cloud-library/catalogRemoteSnapshotReceived",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:01.022271+0800",
+    "event": "cloud-library/catalogRefreshCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:01.022514+0800",
+    "event": "cloud-library/metadataHydrationStarted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:01.086544+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:01.086857+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:01.086971+0800",
+    "event": "image/imageCandidatesExhausted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:02.204983+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:03.796838+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:05.040542+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:06.182325+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:08.213423+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:09.184634+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:10.431758+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:11.523234+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:12.743231+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:13.916760+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:15.099688+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:16.290203+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:17.395299+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:18.654158+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:20.587135+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:21.673003+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:23.070245+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:24.114818+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:26.578747+0800",
+    "event": "ios-app/scenePhaseChanged",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:27.474595+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  },
+  {
+    "timestamp": "2026-11-20 15:22:28.304473+0800",
+    "event": "cloud-library/metadataPageCommitted",
+    "processId": 90119
+  }
+]

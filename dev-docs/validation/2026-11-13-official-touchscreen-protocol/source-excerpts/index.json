@@ -1,0 +1,98 @@
+[
+  {
+    "file": "input-reporter.txt",
+    "source": "web-rtc-stream.d6f6b903.chunk.js",
+    "rawSha256": "be0ba2cf3e322dac37087141344df78a436980e613b07285e2a4dd38465e9454",
+    "formattedSha256": "941bf38e786e73772e2bfe5bbf3e2121b50af43d26fdf3bdcdd1c011e149d9f3",
+    "nodes": [
+      {
+        "originalStart": 47643,
+        "originalEnd": 68931
+      },
+      {
+        "originalStart": 46969,
+        "originalEnd": 47643
+      }
+    ]
+  },
+  {
+    "file": "input-channels.txt",
+    "source": "web-rtc-stream.d6f6b903.chunk.js",
+    "rawSha256": "d10eaca0d31b2119c376485caba3e00ce81b19cd264e2e03f7e4f47c739dccfe",
+    "formattedSha256": "18443bb5e74df7d31a9b4069632dce92b7423b2fc421ec33edcb44ccaf32a4b0",
+    "nodes": [
+      {
+        "originalStart": 21713,
+        "originalEnd": 22321
+      },
+      {
+        "originalStart": 69000,
+        "originalEnd": 77362
+      },
+      {
+        "originalStart": 77362,
+        "originalEnd": 81338
+      },
+      {
+        "originalStart": 81338,
+        "originalEnd": 91931
+      }
+    ]
+  },
+  {
+    "file": "channel-negotiation.txt",
+    "source": "web-rtc-stream.d6f6b903.chunk.js",
+    "rawSha256": "483b1e21851f080bdf3ac815f0b2b130e9afbc277084d39d28cf1be3cebf3c95",
+    "formattedSha256": "94a4fa8942eb781793bee8c83551cdcbb03ab89d08a7729cfe8325e3f35531dc",
+    "nodes": [
+      {
+        "originalStart": 91945,
+        "originalEnd": 92272
+      },
+      {
+        "originalStart": 92278,
+        "originalEnd": 92627
+      },
+      {
+        "originalStart": 149186,
+        "originalEnd": 150542
+      },
+      {
+        "originalStart": 150542,
+        "originalEnd": 151054
+      },
+      {
+        "originalStart": 154795,
+        "originalEnd": 156363
+      },
+      {
+        "originalStart": 143685,
+        "originalEnd": 144593
+      }
+    ]
+  },
+  {
+    "file": "input-state-model.txt",
+    "source": "8128.1aca8038.chunk.js",
+    "rawSha256": "6c78ad6a9b960faed7eaaaeeb041e6d70a0b10c06f3c2f5c195f5bc21190eef6",
+    "formattedSha256": "3fb862c90953f9fdde7faf2c154dac19f2a412647ff1071bdb6e3bbf45eec7c3",
+    "nodes": [
+      {
+        "originalStart": 165326,
+        "originalEnd": 177329
+      }
+    ]
+  },
+  {
+    "file": "circular-buffer.txt",
+    "source": "2091.34346f46.chunk.js",
+    "rawSha256": "3d3ba062de779fb0c302cc1620a1a730b84c82f09c0838730a7f3e908cde9907",
+    "formattedSha256": "e04452c6db2760b3e11ab906184b5cf832ab623de828577de8a09bde1c429e11",
+    "nodes": [
+      {
+        "originalStart": 63209,
+        "originalEnd": 65194
+      }
+    ]
+  }
+]

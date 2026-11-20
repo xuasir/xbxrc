@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-20",
+  "files": {
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": "dc9046eb6864d46046330bef48496c6a5a7ac30dcdc0f0b3e7bf1e61e686ce78",
+    "iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift": "704a00d6d32cafbe1683f86a63386b9f50d52f09f6a7721b73ad93d142b90c26",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "d5ed300596220956631eef5848a8836a20919ffdf48af1d693e6c46a755ea628"
+  },
+  "rawTrace": {
+    "source": "/Users/guo.xu/Library/Developer/CoreSimulator/Devices/79FF2297-6C93-409D-8E53-59A51F8B62AD/data/Containers/Data/Application/057E3733-406F-4399-B7CB-1655F3F22C5E/Library/Application Support/XBXRC/RuntimeTrace/runtime-trace-ios-1795139006155-1.jsonl",
+    "file": "traces/phone/runtime-trace-ios-1795139006155-1.jsonl",
+    "sha256": "b2fddb88c5919a61e6df75278e49211e48666a05e692ff6ab00b31f16b0d62a9",
+    "scope": "原生SDK测试夹具；首次协商与NV12单帧GPU呈现"
+  }
+}

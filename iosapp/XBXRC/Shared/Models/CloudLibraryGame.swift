@@ -44,8 +44,12 @@ struct CloudLibraryGame: Codable, Hashable, Identifiable, Sendable {
     let categories: [String]
     let supportedInputTypes: [String]
     let hasEntitlement: Bool?
-    let isRecentlyPlayed: Bool?
-    let isNew: Bool?
+    var isRecentlyPlayed: Bool?
+    var isNew: Bool?
+    var recentRank: Int?
+    var newRank: Int?
+    var popularRank: Int?
+    var leavingRank: Int?
     let lastPlayedAt: Date?
     let playtimeMinutes: Int?
     let achievementProgress: AchievementProgress?
@@ -81,7 +85,9 @@ struct CloudLibraryGame: Codable, Hashable, Identifiable, Sendable {
         isNew: Bool?,
         lastPlayedAt: Date?,
         playtimeMinutes: Int?,
-        achievementProgress: AchievementProgress?
+        achievementProgress: AchievementProgress?,
+        recentRank: Int? = nil,
+        newRank: Int? = nil, popularRank: Int? = nil, leavingRank: Int? = nil
     ) {
         self.productID = productID
         self.streamTitleID = streamTitleID
@@ -101,6 +107,10 @@ struct CloudLibraryGame: Codable, Hashable, Identifiable, Sendable {
         self.lastPlayedAt = lastPlayedAt
         self.playtimeMinutes = playtimeMinutes
         self.achievementProgress = achievementProgress
+        self.recentRank = recentRank
+        self.newRank = newRank
+        self.popularRank = popularRank
+        self.leavingRank = leavingRank
     }
 
     init(gameSummary game: GameSummary) {

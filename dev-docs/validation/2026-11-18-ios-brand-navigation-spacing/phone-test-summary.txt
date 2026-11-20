@@ -1,0 +1,21 @@
+Test Suite 'Selected tests' started at 2026-11-18 15:58:08.390.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-18 15:58:08.393.
+Test Suite 'PCPageInteractionTests' started at 2026-11-18 15:58:08.393.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' passed (38.190 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' passed (18.337 seconds).
+Test Suite 'PCPageInteractionTests' passed at 2026-11-18 15:59:04.925.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 56.527 (56.533) seconds
+Test Suite 'SettingsInteractionTests' started at 2026-11-18 15:59:04.933.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' passed (10.302 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' passed (16.632 seconds).
+Test Suite 'SettingsInteractionTests' passed at 2026-11-18 15:59:31.870.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 26.934 (26.937) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-18 15:59:31.871.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 83.461 (83.478) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 15:59:31.872.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 83.461 (83.482) seconds
+** TEST SUCCEEDED **

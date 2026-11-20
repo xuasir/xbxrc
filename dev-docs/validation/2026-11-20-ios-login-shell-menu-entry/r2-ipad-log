@@ -1,0 +1,74 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination "platform=iOS Simulator,id=754F69D9-2451-47ED-95AB-69596D404F2D" -derivedDataPath /private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r1/DerivedData -clonedSourcePackagesDirPath /Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -parallel-testing-enabled NO "-only-testing:XBXRCUITests/TouchLayoutInteractionTests/testSignedOutXBXRCLogoAndBottomLoginButton" -resultBundlePath /private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r2/ipad.xcresult CODE_SIGNING_ALLOWED=NO test-without-building
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  XBXRCWebRTC: /Users/guo.xu/Documents/code/games/xbxrc/iosapp/Packages/WebRTC @ local
+
+Writing result bundle at path:
+	/private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r2/ipad.xcresult
+
+2026-11-20 22:59:48.701328+0800 XBXRCUITests-Runner[12365:7818020] [Default] Running tests...
+2026-11-20 22:59:49.157110+0800 XBXRCUITests-Runner[12365:7818020] [UIKit App Config] Update the Info.plist: Launch screens will soon be required.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-11-20 22:59:53.074.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-20 22:59:53.075.
+Test Suite 'TouchLayoutInteractionTests' started at 2026-11-20 22:59:53.075.
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testSignedOutXBXRCLogoAndBottomLoginButton]' started.
+    t =     0.01s Start Test at 2026-11-20 22:59:53.082
+    t =     0.11s Set Up
+    t =     0.11s Setting device orientation to Portrait
+    t =     0.22s     Wait for com.apple.springboard to idle
+    t =     0.23s Open com.xuasir.xbxrc.ios
+    t =     0.23s     Launch com.xuasir.xbxrc.ios
+2026-11-20 22:59:53.545 xcodebuild[12333:7817669] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-20 22:59:53.545 xcodebuild[12333:7817669] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[12365]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.7D6eEH/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10833c398) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.7D6eEH/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x108878310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     1.66s         Setting up automation session
+    t =     4.54s         Wait for com.xuasir.xbxrc.ios to idle
+    t =     6.48s Waiting 10.0s for "signed-out-login" Button to exist
+    t =     7.52s     Checking `Expect predicate `existsNoRetry == 1` for object "signed-out-login" Button`
+    t =     7.52s         Checking existence of `"signed-out-login" Button`
+    t =     7.66s Checking existence of `"signed-out-logo" Image`
+    t =     7.66s Find the "signed-out-logo" Image
+    t =     7.67s Find the "signed-out-login" Button
+    t =     7.67s Checking existence of `"page-xbox-logo" Image`
+    t =     7.68s Checking existence of `"primary-navigation-hosts" Button`
+    t =     7.68s Checking existence of `"primary-navigation-library" Button`
+    t =     7.69s Checking existence of `"primary-navigation-my" Button`
+    t =     7.69s Checking existence of `"primary-navigation-controller" Button`
+    t =     7.70s Checking existence of `"primary-navigation-settings" Button`
+    t =     7.70s Find the Window (First Match)
+    t =     7.71s Find the "signed-out-logo" Image
+    t =     7.72s Find the "signed-out-logo" Image
+    t =     7.73s Find the "signed-out-login" Button
+    t =     7.74s Find the "signed-out-logo" Image
+    t =     7.75s Find the "signed-out-login" Button
+    t =     7.76s Find the "signed-out-login" Button
+    t =     7.77s Find the "signed-out-login" Button
+    t =     7.78s Find the "signed-out-login" Button
+    t =     7.79s Find the "signed-out-login" Button
+    t =     8.02s Added attachment named 'signed-out-xbxrc-logo-bottom-login'
+    t =     8.03s Tear Down
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testSignedOutXBXRCLogoAndBottomLoginButton]' passed (8.266 seconds).
+Test Suite 'TouchLayoutInteractionTests' passed at 2026-11-20 23:00:01.348.
+	 Executed 1 test, with 0 failures (0 unexpected) in 8.266 (8.273) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-20 23:00:01.350.
+	 Executed 1 test, with 0 failures (0 unexpected) in 8.266 (8.275) seconds
+Test Suite 'Selected tests' passed at 2026-11-20 23:00:01.350.
+	 Executed 1 test, with 0 failures (0 unexpected) in 8.266 (8.276) seconds
+2026-11-20 23:00:01.678 xcodebuild[12333:7817669] [MT] IDETestOperationsObserverDebug: 17.036 elapsed -- Testing started completed.
+2026-11-20 23:00:01.678 xcodebuild[12333:7817669] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-20 23:00:01.678 xcodebuild[12333:7817669] [MT] IDETestOperationsObserverDebug: 17.036 sec, +17.036 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r2/ipad.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

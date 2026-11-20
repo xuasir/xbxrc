@@ -1,0 +1,37 @@
+[
+  {
+    "round": "r1",
+    "issue": "早期共享开发 sink 尚未注册导致设备编译失败",
+    "resolution": "共享工程注册完成后设备编译通过，保留相关现有改动"
+  },
+  {
+    "round": "r2",
+    "issue": "Swift 27 的 CGImage 断言类型写法导致测试编译失败",
+    "resolution": "改用 CFGetTypeID 与 CGImage.typeID，资源及缓存测试通过"
+  },
+  {
+    "round": "r2",
+    "issue": "诊断浮层关闭按钮未进入页面工具栏；横屏会话底部采样行在滚动区域",
+    "resolution": "菜单与详情各自装配关闭按钮，UI 测试按实际滚动区域验收采样行"
+  },
+  {
+    "round": "r2",
+    "issue": "失败诊断收集等待模拟器响应超时 600 秒",
+    "resolution": "原测试进程已自行结束，后续使用独立的已启动 iPhone 17e 模拟器"
+  },
+  {
+    "round": "r3",
+    "issue": "沙箱阻止系统 Swift 模块缓存及 SwiftPM diagnostics 文件写入",
+    "resolution": "通过授权的 Xcode 命令执行构建与测试"
+  },
+  {
+    "round": "r3",
+    "issue": "共享 Metal 模块新增 drawable 呈现回调在模拟器 SDK 中缺乏接口",
+    "resolution": "新增真机编译条件，保留真机上屏回调与原 GPU 完成观测"
+  },
+  {
+    "round": "r3",
+    "issue": "共享 RTC trace 字典新增字段触发 Swift 表达式类型推断超时",
+    "resolution": "新增字段拆为独立且明确类型的字典赋值，保持字段及值不变"
+  }
+]

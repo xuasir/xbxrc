@@ -13,6 +13,8 @@ protocol XboxAuthClient: Sendable {
         seedJSON: String,
         forceRegionIP: String
     ) async throws -> AuthSession
+    func loadProfileSource(webTokenJSON: String, source: XboxProfileSource) async throws
+        -> XboxProfile
     func loadProfile(webTokenJSON: String) async throws -> XboxProfile
 }
 
@@ -59,6 +61,14 @@ struct RustXboxAuthClient: XboxAuthClient {
         }
     }
 
+    func loadProfileSource(webTokenJSON: String, source: XboxProfileSource) async throws
+        -> XboxProfile
+    {
+        try await traceBoundary(event: "loadProfileSource") {
+            try await fetchProfileSection(webTokenJson: webTokenJSON, source: source)
+        }
+    }
+
     private func traceBoundary<Value: Sendable>(
         event: String,
         operation: () async throws -> Value
@@ -80,7 +90,8 @@ struct RustXboxAuthClient: XboxAuthClient {
                 event: "uniffiBoundarySucceeded",
                 payload: [
                     "operation": .string(event),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .network,
                 importance: .debug,
@@ -95,7 +106,8 @@ struct RustXboxAuthClient: XboxAuthClient {
                     error,
                     extra: [
                         "operation": .string(event),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .network,
@@ -104,5 +116,13 @@ struct RustXboxAuthClient: XboxAuthClient {
             )
             throw error
         }
+    }
+}
+
+extension XboxAuthClient {
+    func loadProfileSource(webTokenJSON: String, source: XboxProfileSource) async throws
+        -> XboxProfile
+    {
+        try await loadProfile(webTokenJSON: webTokenJSON)
     }
 }

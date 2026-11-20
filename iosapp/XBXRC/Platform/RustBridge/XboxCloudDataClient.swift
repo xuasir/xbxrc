@@ -56,6 +56,8 @@ struct RemoteCloudCatalogSnapshot: Sendable {
     let fetchedAt: Date
     let failedHydrationChunks: Int
     let pendingHydrationProductIDs: [String]
+    var unavailableSources: Set<String> = []
+    var sourceFailures: [String: SectionRequestFailure] = [:]
 }
 
 struct CloudCatalogMetadata: Sendable {
@@ -70,6 +72,12 @@ struct CloudCatalogMetadata: Sendable {
 }
 
 protocol XboxCloudDataClient: Sendable {
+    func loadCatalogSource(accessHandle: String, source: String, market: String, language: String) async throws -> [String]
+    func loadProductDetail(productID: String, market: String, language: String) async throws
+        -> CloudProductDetails
+    func loadWaitTime(accessHandle: String, streamTitleID: String, serverRegion: String)
+        async throws
+        -> UInt64?
     func prepareAccess(
         refreshToken: String,
         seedJSON: String,
@@ -120,7 +128,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 domain: "auth",
                 event: "cloudAccessUniFFIBoundarySucceeded",
                 payload: [
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     "appLevel": .integer(Int64(result.authSession.appLevel)),
                     "leaseGeneration": .integer(Int64(result.ownerGeneration)),
                     "leaseExpiresAtMs": .integer(Int64(result.expiresAtMs)),
@@ -145,7 +154,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 payload: CloudLibraryDiagnostics.errorPayload(
                     error,
                     extra: [
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
                     ]
                 ),
                 dimension: .network,
@@ -210,7 +220,7 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                     extra: [
                         "elapsedMs": .integer(
                             Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))
-                        ),
+                        )
                     ]
                 ),
                 dimension: .network,
@@ -221,6 +231,9 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
         }
     }
 
+    func loadCatalogSource(accessHandle: String, source: String, market: String, language: String) async throws -> [String] {
+        try await fetchCatalogSource(accessHandle: accessHandle, source: source, market: market, language: language)
+    }
     func loadCatalog(
         accessHandle: String,
         market: String,
@@ -255,7 +268,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                     extra: [
                         "market": .string(market),
                         "language": .string(language),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .network,
@@ -291,13 +305,19 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                     isNew: game.isNew,
                     lastPlayedAt: nil,
                     playtimeMinutes: nil,
-                    achievementProgress: nil
+                    achievementProgress: nil,
+                    recentRank: game.recentRank.map(Int.init),
+                    newRank: game.newRank.map(Int.init),
+                    popularRank: game.popularRank.map(Int.init),
+                    leavingRank: game.leavingRank.map(Int.init)
                 )
             },
             scope: scope,
             fetchedAt: fetchedAt,
             failedHydrationChunks: Int(snapshot.failedHydrationChunks),
-            pendingHydrationProductIDs: snapshot.pendingHydrationProductIds
+            pendingHydrationProductIDs: snapshot.pendingHydrationProductIds,
+            unavailableSources: Set(snapshot.unavailableSources),
+            sourceFailures: Dictionary(snapshot.sourceFailures.map { ($0.source, SectionRequestFailure($0.failure)) }, uniquingKeysWith: { first, _ in first })
         )
         IOSRuntimeTrace.snapshot(
             domain: "cloud-library",
@@ -306,7 +326,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 "games": .integer(Int64(result.games.count)),
                 "pendingHydration": .integer(Int64(result.pendingHydrationProductIDs.count)),
                 "failedHydrationChunks": .integer(Int64(result.failedHydrationChunks)),
-                "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                "elapsedMs": .integer(
+                    Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
             ],
             dimension: .network,
             importance: .key,
@@ -359,7 +380,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                 payload: [
                     "requested": .integer(Int64(productIDs.count)),
                     "received": .integer(Int64(result.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .network,
                 importance: .debug,
@@ -374,7 +396,8 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
                     error,
                     extra: [
                         "products": .integer(Int64(productIDs.count)),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .network,
@@ -401,11 +424,21 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
             domain: "auth",
             event: "cloudAccessReleaseCompleted",
             payload: [
-                "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                "elapsedMs": .integer(
+                    Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
             ],
             dimension: .network,
             importance: .debug,
             operationID: operationID
         )
+    }
+}
+
+extension XboxCloudDataClient {
+    func loadCatalogSource(accessHandle: String, source: String, market: String, language: String) async throws -> [String] {
+        let result = try await loadCatalog(accessHandle: accessHandle, market: market, language: language)
+        if result.unavailableSources.contains(source) { throw XboxNativeQueryError.unavailable }
+        let key: KeyPath<CloudLibraryGame, Int?> = source == "recent" ? \.recentRank : source == "newest" ? \.newRank : source == "popular" ? \.popularRank : \.leavingRank
+        return result.games.filter { $0[keyPath: key] != nil }.sorted { ($0[keyPath: key] ?? 0) < ($1[keyPath: key] ?? 0) }.map(\.productID)
     }
 }

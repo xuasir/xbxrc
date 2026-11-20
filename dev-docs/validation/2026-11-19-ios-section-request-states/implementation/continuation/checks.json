@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-20",
+  "round": "r4",
+  "result": "Passed",
+  "phoneSupplementalTests": 3,
+  "passedTests": [
+    "Test Case '-[XBXRCTests.PCDataParityTests testTechnicalErrorsUseFiniteLocalizedMessages]' passed (0.006 seconds).",
+    "Test Case '-[XBXRCTests.XBXRCTests testInteractiveLoginPersistsSessionAndProfile]' passed (0.003 seconds).",
+    "Test Case '-[XBXRCTests.XBXRCTests testXboxDataStoreKeepsLibraryWhenPlaytimeFails]' passed (0.011 seconds)."
+  ],
+  "swiftFormat": "Passed",
+  "diffCheck": "Passed",
+  "localizedNoticeKeys": 26,
+  "localizedNoticeTranslations": {
+    "%@加载失败": {
+      "en": "Failed to load %@",
+      "zh-Hans": "%@加载失败"
+    },
+    "%@加载更多失败": {
+      "en": "Failed to load more %@",
+      "zh-Hans": "%@加载更多失败"
+    },
+    "%@更新失败": {
+      "en": "Failed to update %@",
+      "zh-Hans": "%@更新失败"
+    },
+    "Xbox 服务响应较慢，请稍后重试。": {
+      "en": "Xbox is taking longer to respond. Try again shortly.",
+      "zh-Hans": "Xbox 服务响应较慢，请稍后重试。"
+    },
+    "Xbox 服务暂时无法提供这部分资料，请稍后重试。": {
+      "en": "Xbox cannot provide these details right now. Try again shortly.",
+      "zh-Hans": "Xbox 服务暂时无法提供这部分资料，请稍后重试。"
+    },
+    "再次检查": {
+      "en": "Check again",
+      "zh-Hans": "再次检查"
+    },
+    "刷新列表": {
+      "en": "Refresh list",
+      "zh-Hans": "刷新列表"
+    },
+    "已加载内容可继续查看。": {
+      "en": "You can continue viewing the loaded items.",
+      "zh-Hans": "已加载内容可继续查看。"
+    },
+    "当前账户暂时无法访问这部分资料，请检查账户和访问条件。": {
+      "en": "This account cannot currently access these details. Check your account and access requirements.",
+      "zh-Hans": "当前账户暂时无法访问这部分资料，请检查账户和访问条件。"
+    },
+    "显示上次内容": {
+      "en": "Showing previous content",
+      "zh-Hans": "显示上次内容"
+    },
+    "显示上次内容 · %@": {
+      "en": "Showing previous content · %@",
+      "zh-Hans": "显示上次内容 · %@"
+    },
+    "暂时无法连接 Xbox 服务，请检查网络后重试。": {
+      "en": "Unable to connect to Xbox. Check your connection and try again.",
+      "zh-Hans": "暂时无法连接 Xbox 服务，请检查网络后重试。"
+    },
+    "正在更新…": {
+      "en": "Updating…",
+      "zh-Hans": "正在更新…"
+    },
+    "正在载入…": {
+      "en": "Loading…",
+      "zh-Hans": "正在载入…"
+    },
+    "正在重试…": {
+      "en": "Retrying…",
+      "zh-Hans": "正在重试…"
+    },
+    "登录状态需要更新": {
+      "en": "Sign-in needs updating",
+      "zh-Hans": "登录状态需要更新"
+    },
+    "登录状态需要更新，请重新登录后继续加载。": {
+      "en": "Your sign-in needs updating. Sign in again to continue.",
+      "zh-Hans": "登录状态需要更新，请重新登录后继续加载。"
+    },
+    "稍后重试": {
+      "en": "Try again shortly",
+      "zh-Hans": "稍后重试"
+    },
+    "请求较频繁，请稍后再试。": {
+      "en": "Too many requests. Try again shortly.",
+      "zh-Hans": "请求较频繁，请稍后再试。"
+    },
+    "这份列表暂时无法继续加载，请刷新列表后重试。": {
+      "en": "This list could not load further. Refresh the list to try again.",
+      "zh-Hans": "这份列表暂时无法继续加载，请刷新列表后重试。"
+    },
+    "这部分资料暂时无法载入，请稍后重试。": {
+      "en": "These details could not be loaded. Try again shortly.",
+      "zh-Hans": "这部分资料暂时无法载入，请稍后重试。"
+    },
+    "重新登录": {
+      "en": "Sign in again",
+      "zh-Hans": "重新登录"
+    },
+    "重新登录后继续加载账户资料。": {
+      "en": "Sign in again to continue loading account details.",
+      "zh-Hans": "重新登录后继续加载账户资料。"
+    },
+    "重试": {
+      "en": "Retry",
+      "zh-Hans": "重试"
+    },
+    "重试加载更多": {
+      "en": "Retry loading more",
+      "zh-Hans": "重试加载更多"
+    },
+    "重试更新": {
+      "en": "Retry update",
+      "zh-Hans": "重试更新"
+    }
+  },
+  "screenshotsVerified": 19,
+  "stagedChangesPreserved": true,
+  "otherTestEditsPreserved": true,
+  "originalValidation": "r3手机29项、iPad3项、Rust67项与设备目标构建证据继续保留。",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-section-states-20261119/r4",
+  "cleanup": "Completed",
+  "removedAllocatedGiB": 0.472,
+  "totalTaskRemovedAllocatedGiB": 1.808,
+  "concurrentUpdatePreserved": true,
+  "verifiedTestScopeUnchanged": true,
+  "concurrentUpdateEvidence": "concurrent-update.json"
+}

@@ -1,0 +1,34 @@
+{
+  "r1_compile": {
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift:18:19: error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored",
+      "   |                   `- error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutPlaygroundView.swift:34:77: error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored",
+      "    |                                                                             `- error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored"
+    ],
+    "resolution": "按压反馈使用显式 onPress 参数，避免新增拖动回调与尾随闭包匹配冲突。"
+  },
+  "r1_ui": {
+    "cause": "同一台 iPhone 17e 同时运行另一轮本地 UI 测试，Runner 受到 signal 9，随后 Xcode 报 Failed to send signal 19。",
+    "resolution": "停止本轮受影响的进程并改用空闲 iPhone 18 Pro，其他测试继续保留。",
+    "unit_tests": 91
+  },
+  "r2_portrait_assertion": {
+    "observed": "Menu 的 minY=271.897，测试错误地与预览 AX 范围的中点 439.282 比较。",
+    "finding": "截图中 Menu/View 与全部控件位于画布下半区；SwiftUI 预览标识实际传给 UIKit 下半区触摸面，其 frame 的中点对应控制区的中点。",
+    "resolution": "使用此实际区域的 minY/maxY 验收控件，并独立核验触摸面高度为完整竖屏比例的一半。"
+  },
+  "r3_ui": {
+    "observed": "模板流程重启后发生事件合成超时；竖屏流程查询被外层标识覆盖的 touch-layout-surface，导致无匹配。",
+    "resolution": "使用传递后的 touch-layout-preview 范围；重启本轮独占设备并设置 180/240 秒测试期限与 collect-test-diagnostics never。",
+    "final_unit_tests": 91
+  },
+  "r4_delete_locator": {
+    "observed": "confirmationDialog 在 Popover/Sheet 中渲染，原 app.alerts 定位未匹配。",
+    "resolution": "为确认按钮增加独立 ID。"
+  },
+  "r5_delete_locator": {
+    "observed": "系统确认面板为同一按钮生成两层相同 ID 的无障碍节点。",
+    "resolution": "使用 firstMatch 定位对应可操作节点。"
+  }
+}

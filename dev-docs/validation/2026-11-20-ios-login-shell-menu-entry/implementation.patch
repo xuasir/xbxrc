@@ -1,0 +1,319 @@
+diff --git a/iosapp/XBXRC/App/AppRootView.swift b/iosapp/XBXRC/App/AppRootView.swift
+index 21648125..e2760459 100644
+--- a/iosapp/XBXRC/App/AppRootView.swift
++++ b/iosapp/XBXRC/App/AppRootView.swift
+@@ -184,10 +184,19 @@ struct AppRootView: View {
+ 
+   var body: some View {
+     ZStack {
+-      AppNavigationShell(selection: $selection)
+-        .opacity(streamingPresented ? 0 : 1)
+-        .allowsHitTesting(!streamingPresented)
+-        .accessibilityHidden(streamingPresented)
++      Group {
++        if showsNavigation {
++          AppNavigationShell(selection: $selection)
++        } else {
++          XboxLoginView(isBusy: authStore.isBusy, errorMessage: authStore.errorMessage) {
++            Task { await authStore.retry() }
++          }
++          .appThemeCanvas()
++        }
++      }
++      .opacity(streamingPresented ? 0 : 1)
++      .allowsHitTesting(!streamingPresented)
++      .accessibilityHidden(streamingPresented)
+ 
+       if streamingPresented {
+         StreamingPageRoot(store: streamingStore)
+@@ -211,6 +220,18 @@ struct AppRootView: View {
+       AppOrientationCoordinator.shared.sync(streamingPresented: isPresenting)
+     }
+   }
++
++  private var showsNavigation: Bool {
++    #if DEBUG
++      // 设置夹具沿用独立入口，登录验收完整经过正式根视图。
++      if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
++        && !ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test")
++      {
++        return true
++      }
++    #endif
++    return authStore.isSignedIn
++  }
+ }
+ 
+ enum AppSection: Int, CaseIterable, Identifiable {
+diff --git a/iosapp/XBXRC/App/XBXRCApp.swift b/iosapp/XBXRC/App/XBXRCApp.swift
+index e5b07213..581c6761 100644
+--- a/iosapp/XBXRC/App/XBXRCApp.swift
++++ b/iosapp/XBXRC/App/XBXRCApp.swift
+@@ -61,7 +61,13 @@ struct XBXRCApp: App {
+             } else {
+                 _cloudStore = StateObject(
+                     wrappedValue: CloudLibraryStore(settingsProvider: settingsStore))
+-                _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
++                if ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test") {
++                    _authStore = StateObject(
++                        wrappedValue: AuthStore(
++                            settings: settingsStore, keychain: SignedOutUITestSessionStore()))
++                } else {
++                    _authStore = StateObject(wrappedValue: AuthStore(settings: settingsStore))
++                }
+                 _dataStore = StateObject(
+                     wrappedValue: XboxDataStore(preferredGameLocaleProvider: settingsStore))
+                 _favorites = StateObject(wrappedValue: CloudFavoritesStore())
+@@ -101,10 +107,7 @@ struct XBXRCApp: App {
+     @ViewBuilder
+     private var rootView: some View {
+         #if DEBUG
+-            if ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test") {
+-                XboxLoginView(isBusy: false, errorMessage: nil, action: {})
+-                    .appThemeCanvas()
+-            } else if ProcessInfo.processInfo.arguments.contains("--streaming-panels-ui-test") {
++            if ProcessInfo.processInfo.arguments.contains("--streaming-panels-ui-test") {
+                 StreamingPanelsUITestView()
+             } else if ProcessInfo.processInfo.arguments.contains("--touch-playground-ui-test") {
+                 TouchLayoutPlaygroundView()
+@@ -136,7 +139,9 @@ struct XBXRCApp: App {
+                 }
+                 .task {
+                     #if DEBUG
+-                        if ProcessInfo.processInfo.arguments.contains("--settings-ui-test") {
++                        if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
++                            && !ProcessInfo.processInfo.arguments.contains("--signed-out-ui-test")
++                        {
+                             return
+                         }
+                     #endif
+@@ -231,3 +236,12 @@ struct XBXRCApp: App {
+         #endif
+     }
+ }
++
++#if DEBUG
++    private actor SignedOutUITestSessionStore: AuthSessionStoring {
++        private var session: StoredAuthSession?
++        func load() async throws -> StoredAuthSession? { session }
++        func save(_ session: StoredAuthSession) async throws { self.session = session }
++        func delete() async throws { session = nil }
++    }
++#endif
+diff --git a/iosapp/XBXRC/Features/Authentication/XboxLoginView.swift b/iosapp/XBXRC/Features/Authentication/XboxLoginView.swift
+index 988f7b12..68b619e3 100644
+--- a/iosapp/XBXRC/Features/Authentication/XboxLoginView.swift
++++ b/iosapp/XBXRC/Features/Authentication/XboxLoginView.swift
+@@ -6,37 +6,40 @@ struct XboxLoginView: View {
+     let action: () -> Void
+ 
+     var body: some View {
+-        VStack(spacing: 32) {
+-            Image("XboxLogo")
+-                .resizable().scaledToFit()
+-                .foregroundStyle(AppThemePalette.brand)
+-                .frame(width: 96, height: 96)
+-                .accessibilityLabel("Xbox")
++        ZStack {
++            Image("LaunchIcon")
++                .renderingMode(.original).resizable().scaledToFit()
++                .frame(width: 132, height: 132)
++                .accessibilityLabel(Text(verbatim: "XBXRC"))
+                 .accessibilityIdentifier("signed-out-logo")
+-            if let errorMessage {
+-                Label(errorMessage, systemImage: "exclamationmark.triangle")
+-                    .appFont(.caption, weight: .regular).foregroundStyle(.red)
+-            }
+-            Button(action: action) {
+-                HStack(spacing: 8) {
+-                    if isBusy { ProgressView().controlSize(.small) }
+-                    Text(isBusy ? "正在连接" : "登录 Xbox")
++            VStack(spacing: 16) {
++                if let errorMessage {
++                    Label(errorMessage, systemImage: "exclamationmark.triangle")
++                        .appFont(.caption, weight: .regular).foregroundStyle(.red)
++                }
++                Button(action: action) {
++                    HStack(spacing: 8) {
++                        if isBusy { ProgressView().controlSize(.small) }
++                        Text(isBusy ? "正在连接" : "登录 Xbox")
++                    }
++                    .appFont(.body, weight: .medium)
++                    .foregroundStyle(AppThemePalette.onBrand)
++                    .tint(AppThemePalette.onBrand)
++                    .padding(.horizontal, AppLayoutPolicy.pageInset)
++                    .frame(maxWidth: .infinity, minHeight: 52)
++                    .background(AppThemePalette.brand, in: RoundedRectangle(cornerRadius: 6))
+                 }
+-                .appFont(.body, weight: .medium)
+-                .foregroundStyle(AppThemePalette.onBrand)
+-                .tint(AppThemePalette.onBrand)
+-                .padding(.horizontal, AppLayoutPolicy.pageInset)
+-                .frame(maxWidth: .infinity, minHeight: 52)
+-                .background(AppThemePalette.brand, in: RoundedRectangle(cornerRadius: 6))
++                .buttonStyle(.plain)
++                .opacity(isBusy ? 0.6 : 1)
++                .disabled(isBusy)
++                .accessibilityLabel(isBusy ? "正在连接 Xbox" : "登录 Xbox")
++                .accessibilityIdentifier("signed-out-login")
+             }
+-            .buttonStyle(.plain)
+-            .opacity(isBusy ? 0.6 : 1)
+-            .disabled(isBusy)
+-            .accessibilityLabel(isBusy ? "正在连接 Xbox" : "登录 Xbox")
+-            .accessibilityIdentifier("signed-out-login")
++            .frame(maxWidth: 360)
++            .padding(.horizontal, AppLayoutPolicy.pageInset)
++            .padding(.bottom, 32)
++            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+         }
+-        .frame(maxWidth: 360)
+-        .padding(.horizontal, AppLayoutPolicy.pageInset)
+         .frame(maxWidth: .infinity, maxHeight: .infinity)
+     }
+ }
+diff --git a/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift b/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift
+index 8eae0e87..458d3a1c 100644
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift
+@@ -2,6 +2,7 @@ import SwiftUI
+ import UIKit
+ 
+ enum StreamingControlsRevealSource: String, Sendable {
++    case button
+     case twoFingerInward
+     case accessibility
+ }
+diff --git a/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift b/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+index 190ca69c..17ea95fe 100644
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+@@ -29,6 +29,25 @@ struct StreamingControlsOverlay: View {
+ 
+     var body: some View {
+         ZStack {
++            if controls.surface == .hidden {
++                VStack {
++                    HStack {
++                        dockButton(
++                            systemName: "line.3.horizontal", label: "打开串流菜单",
++                            identifier: "stream-controls-open"
++                        ) {
++                            reveal(source: .button)
++                        }
++                        .background(
++                            .black.opacity(reduceTransparency ? 0.92 : 0.28),
++                            in: RoundedRectangle(cornerRadius: 14)
++                        )
++                        Spacer()
++                    }
++                    Spacer()
++                }
++                .padding(16)
++            }
+             if let message {
+                 VStack {
+                     Text(message)
+diff --git a/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift b/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+index 9bdb08f0..8677b801 100644
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+@@ -248,18 +248,13 @@ enum StreamingDiagnosticsPlacement {
+                     .padding(.horizontal, 64)
+                 }
+                 StreamingControlsOverlay(
+-                    store: store, revealToken: revealToken, revealSource: .accessibility,
++                    store: store, revealToken: revealToken, revealSource: .twoFingerInward,
+                     autoHideAfter: nil)
+             }
+             .onAppear { store.prepareControlsUITestPreview() }
+             .background {
+                 StreamingControlsGestureLayer { revealToken += 1 }
+             }
+-            .overlay(alignment: .top) {
+-                // DEBUG 夹具提供无障碍唤出入口，正式串流使用双指手势。
+-                Button("测试唤出串流菜单") { revealToken += 1 }
+-                    .accessibilityIdentifier("stream-test-reveal")
+-            }
+         }
+     }
+ #endif
+diff --git a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+index 009c9982..07d15ce8 100644
+--- a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -220,9 +220,11 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         XCUIDevice.shared.orientation = .landscapeLeft
+         defer { XCUIDevice.shared.orientation = .portrait }
+         app.launch()
+-        let reveal = app.buttons["stream-test-reveal"]
++        let reveal = app.buttons["stream-controls-open"]
+         XCTAssertTrue(reveal.waitForExistence(timeout: 10))
+-        XCTAssertFalse(app.buttons["打开串流菜单"].exists)
++        XCTAssertTrue(reveal.isHittable)
++        XCTAssertGreaterThanOrEqual(reveal.frame.width, 44)
++        XCTAssertGreaterThanOrEqual(reveal.frame.height, 44)
+         XCTAssertTrue(app.buttons["touch-control-right/inner/1"].exists)
+         save(app, "streaming-hidden-landscape")
+         reveal.tap()
+@@ -274,6 +276,9 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         XCTAssertTrue(app.buttons["stream-controls-close"].waitForExistence(timeout: 5))
+         app.buttons["stream-controls-close"].tap()
+         XCTAssertFalse(diagnostics.exists)
++        XCTAssertTrue(reveal.waitForExistence(timeout: 3))
++        reveal.tap()
++        XCTAssertTrue(diagnostics.waitForExistence(timeout: 3))
+     }
+ 
+     func testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial() {
+@@ -284,7 +289,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
+             "--settings-ui-test", "--streaming-panels-ui-test", "-AppleLanguages", "(zh-Hans)",
+         ]
+         app.launch()
+-        let reveal = app.buttons["stream-test-reveal"]
++        let reveal = app.buttons["stream-controls-open"]
+         XCTAssertTrue(reveal.waitForExistence(timeout: 10))
+         waitForOrientation(app, landscape: false)
+         let window = app.windows.firstMatch.frame
+@@ -318,7 +323,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         let app = XCUIApplication()
+         app.launchArguments = ["--settings-ui-test", "--streaming-panels-ui-test"]
+         app.launch()
+-        XCTAssertTrue(app.buttons["stream-test-reveal"].waitForExistence(timeout: 10))
++        XCTAssertTrue(app.buttons["stream-controls-open"].waitForExistence(timeout: 10))
+         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+         XCTAssertFalse(app.buttons["stream-diagnostics-menu"].exists)
+         let size = app.windows.firstMatch.frame.size
+@@ -329,7 +334,7 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         save(app, "streaming-two-finger-gesture")
+     }
+ 
+-    func testSignedOutLogoAndWideLoginButton() {
++    func testSignedOutXBXRCLogoAndBottomLoginButton() {
+         continueAfterFailure = false
+         XCUIDevice.shared.orientation = .portrait
+         let app = XCUIApplication()
+@@ -341,12 +346,22 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         XCTAssertTrue(button.waitForExistence(timeout: 10))
+         let logo = app.images["signed-out-logo"]
+         XCTAssertTrue(logo.exists)
++        XCTAssertEqual(logo.label, "XBXRC")
++        XCTAssertTrue(button.isEnabled)
++        XCTAssertFalse(app.images["page-xbox-logo"].exists)
++        for section in ["hosts", "library", "my", "controller", "settings"] {
++            XCTAssertFalse(app.buttons["primary-navigation-\(section)"].exists)
++        }
+         let window = app.windows.firstMatch.frame
+         XCTAssertEqual(logo.frame.midX, window.midX, accuracy: 2)
++        XCTAssertEqual(logo.frame.midY, window.midY, accuracy: 20)
+         XCTAssertGreaterThan(button.frame.minY, logo.frame.maxY)
++        XCTAssertGreaterThan(button.frame.minY, window.height * 0.75)
++        XCTAssertGreaterThanOrEqual(window.maxY - button.frame.maxY, 32)
++        XCTAssertLessThan(window.maxY - button.frame.maxY, 100)
+         XCTAssertGreaterThan(button.frame.width, min(300, window.width * 0.75))
+         XCTAssertGreaterThanOrEqual(button.frame.height, 51.9)
+-        save(app, "signed-out-logo-wide-login")
++        save(app, "signed-out-xbxrc-logo-bottom-login")
+     }
+ 
+     private func save(_ app: XCUIApplication, _ name: String) {

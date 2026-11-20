@@ -1,0 +1,94 @@
+diff --git a/crates/xbox-streaming/src/session/operation.rs b/crates/xbox-streaming/src/session/operation.rs
+index 435b019f..c24165c1 100644
+--- a/crates/xbox-streaming/src/session/operation.rs
++++ b/crates/xbox-streaming/src/session/operation.rs
+@@ -38,20 +38,24 @@ impl SessionStartupScope {
+         self.inner.cancelled.is_cancelled()
+     }
+ 
+-    pub async fn run<T>(
+-        &self,
+-        stage: &str,
++    pub fn run<'a, T: 'a>(
++        &'a self,
++        stage: &'a str,
+         timeout: Option<Duration>,
+-        operation: impl Future<Output = Result<T, SessionFlowError>>,
+-    ) -> Result<T, SessionFlowError> {
+-        let result = self.inner.cancelled.run(stage, timeout, operation).await;
+-        if result
+-            .as_ref()
+-            .is_err_and(|error| error.message.starts_with("operationTimeout:"))
+-        {
+-            self.cancel();
++        operation: impl Future<Output = Result<T, SessionFlowError>> + 'a,
++    ) -> impl Future<Output = Result<T, SessionFlowError>> + 'a {
++        // 先交给取消边界固定到堆上，作用域 future 仅持有轻量包装。
++        let operation = self.inner.cancelled.run(stage, timeout, operation);
++        async move {
++            let result = operation.await;
++            if result
++                .as_ref()
++                .is_err_and(|error| error.message.starts_with("operationTimeout:"))
++            {
++                self.cancel();
++            }
++            result
+         }
+-        result
+     }
+ 
+     pub(crate) async fn wait_for_creation(&self) -> Result<(), SessionFlowError> {
+@@ -343,22 +347,26 @@ pub(crate) fn now_ms() -> u64 {
+ }
+ 
+ impl SessionCancelToken {
+-    pub(crate) async fn run<T>(
+-        &self,
+-        stage: &str,
++    pub(crate) fn run<'a, T: 'a>(
++        &'a self,
++        stage: &'a str,
+         timeout: Option<Duration>,
+-        operation: impl Future<Output = Result<T, SessionFlowError>>,
+-    ) -> Result<T, SessionFlowError> {
+-        tokio::select! {
+-            biased;
+-            _ = self.cancelled() => Err(cancelled_error(stage)),
+-            result = async {
+-                match timeout {
+-                    Some(duration) => tokio::time::timeout(duration, operation).await
+-                        .map_err(|_| SessionFlowError::message(format!("operationTimeout:stage={stage}")))?,
+-                    None => operation.await,
+-                }
+-            } => result,
++        operation: impl Future<Output = Result<T, SessionFlowError>> + 'a,
++    ) -> impl Future<Output = Result<T, SessionFlowError>> + 'a {
++        // 在 async/select 构造前固定操作，压低大型分支构造和轮询时的栈峰值。
++        let operation = Box::pin(operation);
++        async move {
++            tokio::select! {
++                biased;
++                _ = self.cancelled() => Err(cancelled_error(stage)),
++                result = async {
++                    match timeout {
++                        Some(duration) => tokio::time::timeout(duration, operation).await
++                            .map_err(|_| SessionFlowError::message(format!("operationTimeout:stage={stage}")))?,
++                        None => operation.await,
++                    }
++                } => result,
++            }
+         }
+     }
+ }
+@@ -367,6 +375,10 @@ pub(crate) fn cancelled_error(stage: &str) -> SessionFlowError {
+     SessionFlowError::message(format!("operationCancelled:stage={stage}"))
+ }
+ 
++#[cfg(test)]
++#[path = "operation/stack_tests.rs"]
++mod stack_tests;
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;

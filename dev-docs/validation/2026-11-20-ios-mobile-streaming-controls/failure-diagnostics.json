@@ -1,0 +1,77 @@
+{
+  "errors": {
+    "unit.log": [
+      "2026-11-20 17:34:43.136 xcodebuild[30685:7108604] Logging connecton invalid: <OS_xpc_error: <dictionary: 0x1f05dcb60> { count = 1, transaction: 0, voucher = 0x0, contents =",
+      "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]:499] WARN  : Unable to discover any Simulator runtimes. Developer Directory is /Applications/Xcode.app/Contents/Developer.",
+      "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]_block_invoke:556] ERROR : Could not get list of trusted mount directories: Error Domain=com.apple.CoreSimulator.SimError Code=409 \"Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded\" UserInfo={NSLocalizedDescription=Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded}",
+      "[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({",
+      "[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({",
+      "xcodebuild: error: Could not resolve package dependencies:",
+      "  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted",
+      "<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'",
+      "<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)",
+      "  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted",
+      "<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'",
+      "<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)"
+    ],
+    "phone-ui.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift:41:24: error: cannot find type 'TouchLayoutConfiguration' in scope",
+      "    |                        `- error: cannot find type 'TouchLayoutConfiguration' in scope",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Settings/MobilePreferences.swift:58:32: error: cannot find type 'TouchLayoutTemplate' in scope",
+      "    |                                `- error: cannot find type 'TouchLayoutTemplate' in scope",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Settings/MobilePreferences.swift:16:8: error: type 'MobilePreferences' does not conform to protocol 'Encodable'",
+      "    |        `- error: type 'MobilePreferences' does not conform to protocol 'Encodable'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Settings/MobilePreferences.swift:16:8: error: type 'MobilePreferences' does not conform to protocol 'Equatable'",
+      "    |        |- error: type 'MobilePreferences' does not conform to protocol 'Equatable'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Settings/MobilePreferences.swift:99:38: error: cannot find 'TouchLayoutTemplate' in scope",
+      "    |                                      `- error: cannot find 'TouchLayoutTemplate' in scope",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Settings/MobilePreferences.swift:102:35: error: cannot find 'TouchLayoutTemplate' in scope",
+      "    |                                   `- error: cannot find 'TouchLayoutTemplate' in scope",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift:107:32: error: cannot find type 'TouchLayoutConfiguration' in scope",
+      "    |                                `- error: cannot find type 'TouchLayoutConfiguration' in scope"
+    ],
+    "phone-ui-r2.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift:18:19: error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored",
+      "   |                   `- error: contextual type for closure argument list expects 3 arguments, which cannot be implicitly ignored"
+    ],
+    "phone-ui-r3.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:189:37: error: value of type 'XCUIElement' has no member 'lastMatch'",
+      "    |                             `- error: value of type 'XCUIElement' has no member 'lastMatch'"
+    ],
+    "phone-ui-r4.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:287: error: -[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial] : XCTAssertGreaterThanOrEqual failed: (\"86.15611844574886\") is less than (\"195.0\") - left/outer/1",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:336: error: -[XBXRCUITests.TouchLayoutInteractionTests testSignedOutLogoAndWideLoginButton] : XCTAssertGreaterThanOrEqual failed: (\"51.99999999999994\") is less than (\"52.0\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:241: error: -[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility] : XCTAssertTrue failed",
+      "  4   -[IDEScheme _executionOperationForSchemeOperationParameters:build:onlyBuild:buildParameters:title:buildLog:dontActuallyRunCommands:restorePersistedBuildResults:deviceAvailableChecker:error:actionCallbackBlock:] (in IDEFoundation)",
+      "  5   -[IDEScheme(TestSchemeAction) schemeTestActionOperationForSchemeOperationParameters:onlyBuild:buildLog:deviceAvailableChecker:buildParameters:shouldBuild:restorePersistedBuildResults:error:completionBlock:] (in IDEFoundation)",
+      "  6   -[IDEScheme buildAndActionTaskForSchemeOperationParameters:shouldBuild:onlyBuild:buildParameters:buildLog:deviceAvailableChecker:restorePersistedBuildResults:dontActuallyRunCommands:error:completionBlock:] (in IDEFoundation)",
+      "  7   -[IDEScheme schemeOperationForSchemeOperationParameters:buildLog:overridingProperties:overridingBuildConfiguration:dontActuallyRunCommands:restorePersistedBuildResults:deviceAvailableChecker:error:completionBlock:] (in IDEFoundation)",
+      "  8   -[IDEScheme schemeOperationForSchemeOperationParameters:buildLog:overridingProperties:overridingBuildConfiguration:dontActuallyRunCommands:restorePersistedBuildResults:error:completionBlock:] (in IDEFoundation)",
+      "  9   -[Xcode3CommandLineBuildTool(TestSchemeAction) buildForTestSchemeCommandWantsSkip:buildAction:isProjectBuild:title:buildLog:isMoreDestinationsPending:runDestinations:runDestination:schemeCommand:executionEnvironment:restorePersistedBuildResults:operationToEnqueue:error:] (in Xcode3Core)",
+      " 10   -[Xcode3CommandLineBuildTool doSchemeBuildWithRunDestinations:runDestinationIdx:wantsSkip:buildActionTimingSection:timingSection:buildAction:isMoreDesinationsPending:actionResultBlock:title:buildLog:executionEnvironment:restorePersistedBuildResults:operationToEnqueue:error:] (in Xcode3Core)",
+      " 11   -[Xcode3CommandLineBuildTool doBuildForBuildAction:timingSection:colorize:colorizeFailure:error:] (in Xcode3Core)",
+      "  4   -[IDEScheme _buildOperationGroupForSchemeOperationParameters:primaryBuildParameters:variantSpecifiers:buildLog:dontActuallyRunCommands:restorePersistedBuildResults:schemeActionRecord:error:] (in IDEFoundation)",
+      "  5   -[IDEScheme _executionOperationForSchemeOperationParameters:build:onlyBuild:buildParameters:title:buildLog:dontActuallyRunCommands:restorePersistedBuildResults:deviceAvailableChecker:error:actionCallbackBlock:] (in IDEFoundation)",
+      "  6   -[IDEScheme(TestSchemeAction) schemeTestActionOperationForSchemeOperationParameters:onlyBuild:buildLog:deviceAvailableChecker:buildParameters:shouldBuild:restorePersistedBuildResults:error:completionBlock:] (in IDEFoundation)"
+    ],
+    "ipad-ui.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:317: error: -[XBXRCUITests.TouchLayoutInteractionTests testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden] : XCTAssertTrue failed"
+    ],
+    "phone-final.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:233: error: -[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility] : XCTAssertTrue failed - stream-microphone-toggle"
+    ],
+    "phone-controls-final.log": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:262: error: -[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility] : XCTAssertTrue failed",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:320: error: -[XBXRCUITests.TouchLayoutInteractionTests testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden] : XCTAssertTrue failed"
+    ]
+  },
+  "resolved": [
+    "构建期间共享工作区新增触屏文件完成登记；串流 onPress 显式绑定",
+    "诊断浮层增加无障碍 contain 分组",
+    "DEBUG 预览方向独立于生产横屏请求",
+    "按钮几何按浮点误差验收",
+    "测试夹具单独关闭自动隐藏，正式菜单保留 5 秒",
+    "移除覆盖快捷按钮的验收手势区域；手机恢复窗口真实双指轨迹"
+  ],
+  "retainedScope": "iPad 通用 pinch 垂直漂移按合同拒绝，独立手机手势测试通过。"
+}

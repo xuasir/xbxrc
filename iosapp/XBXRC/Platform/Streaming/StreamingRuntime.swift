@@ -9,22 +9,44 @@ final class StreamingFeatureStore: ObservableObject {
     @Published private(set) var streamTarget: StreamingLaunchTarget?
     @Published private(set) var diagnostics: StreamingSessionDiagnostics = .empty
     @Published private(set) var audioMuted = false
+    @Published private(set) var microphoneEnabled = false
+    @Published private(set) var microphonePending = false
+    @Published private(set) var presentationActive = true
+    @Published var picture = MobilePicturePreferences()
+    @Published private(set) var enablesAudioControl = true
     @Published private(set) var videoContentMode: StreamingVideoContentMode = .fit
     @Published private(set) var controlMessage: String?
+    @Published private(set) var startupProgress: StreamingStartupProgress?
 
+    let input: StreamInputSession
+    weak var authentication: AuthStore?
     private let sessionActor: StreamSessionActor
     private let settingsProvider: any StreamingSessionSettingsProviding
+    private let cloudLaunchResolver: any CloudGameLaunchResolving
     private var generation: UInt64 = 0
     private var attemptID: String?
     private var launchTask: Task<Void, Never>?
+    private var retryLaunch: (@MainActor () -> Void)?
+    private var microphoneOperationRevision: UInt64 = 0
+    private var previousIdleTimerDisabled: Bool?
+    private var metricsSampler = StreamingMetricsSampler()
+    private var sessionStartedAtMilliseconds: Double = 0
+    private var connectedElapsedMilliseconds: Double?
+    private var mediaReadyElapsedMilliseconds: Double?
 
     init(
-        settingsProvider: any StreamingSessionSettingsProviding = StaticStreamingSettingsProvider()
+        settingsProvider: any StreamingSessionSettingsProviding = StaticStreamingSettingsProvider(),
+        cloudLaunchResolver: any CloudGameLaunchResolving = RustCloudGameLaunchResolver()
     ) {
         self.settingsProvider = settingsProvider
+        self.cloudLaunchResolver = cloudLaunchResolver
+        let input = StreamInputSession {
+            (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
+        }
+        self.input = input
         sessionActor = StreamSessionActor(
             controlFactory: RustStreamingControlSessionFactory(),
-            peerFactory: LibWebRTCPeerRuntimeFactory()
+            peerFactory: LibWebRTCPeerRuntimeFactory(inputSession: input)
         )
     }
 
@@ -32,17 +54,87 @@ final class StreamingFeatureStore: ObservableObject {
         settingsProvider: any StreamingSessionSettingsProviding = StaticStreamingSettingsProvider(),
         controlFactory: any StreamingControlSessionFactory,
         peerFactory: any StreamingPeerRuntimeFactory,
-        remoteAnswerApplyTimeout: Duration = .seconds(10)
+        cloudLaunchResolver: any CloudGameLaunchResolving = RustCloudGameLaunchResolver(),
+        remoteAnswerApplyTimeout: Duration = .seconds(10),
+        initialConnectionTimeout: Duration = .seconds(15)
     ) {
         self.settingsProvider = settingsProvider
+        self.cloudLaunchResolver = cloudLaunchResolver
+        let input = StreamInputSession {
+            (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
+        }
+        self.input = input
         sessionActor = StreamSessionActor(
             controlFactory: controlFactory,
             peerFactory: peerFactory,
-            remoteAnswerApplyTimeout: remoteAnswerApplyTimeout
+            remoteAnswerApplyTimeout: remoteAnswerApplyTimeout,
+            initialConnectionTimeout: initialConnectionTimeout
         )
     }
 
+    #if DEBUG
+    func prepareControlsUITestPreview() {
+        state = .playing
+        streamTarget = .home
+        diagnostics = StreamingSessionDiagnostics(
+            peerStats: nil, displayHealth: nil, peer: nil, audioLifecycleState: nil,
+            audioRoute: nil, audioTrackReady: true, updatedAtMilliseconds: 0)
+    }
+    #endif
+
     var isPresentingPlayer: Bool { state.presentsPlayer }
+    var statusText: String {
+        if state == .preparingAccess || state == .creatingSession, let startupProgress {
+            return startupProgress.statusText
+        }
+        return state.statusText
+    }
+    var startupDetailText: String? {
+        state == .preparingAccess || state == .creatingSession ? startupProgress?.detailText : nil
+    }
+
+    func startCloudGame(
+        productID: String,
+        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
+    ) {
+        let region = settingsProvider.streamingSessionSettings.cloudServerRegion
+        let resolutionGeneration = generation &+ 1
+        start(target: .cloud, targetID: productID) { [weak self] in
+            let access = try await prepareAccess()
+            do {
+                guard let self, !Task.isCancelled, self.generation == resolutionGeneration else {
+                    throw StreamingRuntimeError.superseded
+                }
+                self.startupProgress = StreamingStartupProgress(phase: "checkingGame")
+                let identity = try await self.cloudLaunchResolver.resolve(
+                    accessHandle: access.handle, productID: productID, serverRegion: region)
+                guard !Task.isCancelled, self.generation == resolutionGeneration else {
+                    throw StreamingRuntimeError.superseded
+                }
+                guard identity.productID.caseInsensitiveCompare(productID) == .orderedSame,
+                    !identity.streamTitleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else { throw StreamingRuntimeError.cloudGameUnavailable }
+                guard identity.hasEntitlement != false else {
+                    throw StreamingRuntimeError.cloudEntitlementRequired
+                }
+                return PreparedStreamingAccess(
+                    handle: access.handle, accountID: access.accountID,
+                    regionHost: access.regionHost,
+                    ownerGeneration: access.ownerGeneration, expiresAtMs: access.expiresAtMs,
+                    resolvedTargetID: identity.streamTitleID)
+            } catch {
+                if let self {
+                    await self.sessionActor.releaseUnclaimedAccess(handle: access.handle)
+                } else {
+                    try? releaseStreamAccess(accessHandle: access.handle)
+                }
+                throw error
+            }
+        }
+        retryLaunch = { [weak self] in
+            self?.startCloudGame(productID: productID, prepareAccess: prepareAccess)
+        }
+    }
 
     func start(
         streamTitleID rawStreamTitleID: String,
@@ -90,6 +182,9 @@ final class StreamingFeatureStore: ObservableObject {
             return
         }
 
+        retryLaunch = { [weak self] in
+            self?.start(target: target, targetID: targetID, prepareAccess: prepareAccess)
+        }
         generation &+= 1
         let requestGeneration = generation
         let requestAttemptID = UUID().uuidString
@@ -100,9 +195,22 @@ final class StreamingFeatureStore: ObservableObject {
         streamTarget = target
         videoTrack = nil
         diagnostics = .empty
-        audioMuted = false
-        videoContentMode = .fit
+        metricsSampler = .init()
+        sessionStartedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+        connectedElapsedMilliseconds = nil
+        mediaReadyElapsedMilliseconds = nil
+        input.reset()
+        audioMuted = sessionSettings.startMuted
+        enablesAudioControl = sessionSettings.enableAudioControl
+        picture =
+            (settingsProvider as? AppSettingsStore)?.mobile.picture ?? MobilePicturePreferences()
+        videoContentMode = StreamingVideoContentMode(rawValue: sessionSettings.videoFit) ?? .fit
+        if previousIdleTimerDisabled == nil {
+            previousIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
+        }
+        UIApplication.shared.isIdleTimerDisabled = sessionSettings.keepScreenAwake
         controlMessage = nil
+        startupProgress = nil
         state = .preparingAccess
         traceState(state, generation: requestGeneration)
         traceAttempt(
@@ -152,7 +260,7 @@ final class StreamingFeatureStore: ObservableObject {
                         dimension: .lifecycle,
                         importance: .essential
                     )
-                    try? releaseStreamAccess(accessHandle: access.handle)
+                    await self.sessionActor.releaseUnclaimedAccess(handle: access.handle)
                     self.traceAttempt(
                         "accessReleased",
                         attemptID: requestAttemptID,
@@ -172,10 +280,13 @@ final class StreamingFeatureStore: ObservableObject {
                     importance: .key
                 )
                 sessionActorOwnsTerminal = true
+                let resolvedTargetID = access.resolvedTargetID ?? targetID
+                let authOwnerGeneration = self.authentication?.ownerGeneration
+                self.streamTitleID = resolvedTargetID
                 try await self.sessionActor.start(
                     request: StreamingLaunchRequest(
                         target: target,
-                        targetID: targetID,
+                        targetID: resolvedTargetID,
                         accessHandle: access.handle,
                         accountGeneration: Self.accountGeneration(
                             accountID: access.accountID,
@@ -192,11 +303,40 @@ final class StreamingFeatureStore: ObservableObject {
                     },
                     videoSink: { [weak self] generation, track in
                         guard let self, generation == self.generation else { return }
+                        if self.videoTrack?.traceContext?.peerEpoch
+                            != track?.traceContext?.peerEpoch
+                        {
+                            self.metricsSampler = .init()
+                        }
                         self.videoTrack = track
                     },
                     diagnosticsSink: { [weak self] generation, diagnostics in
                         guard let self, generation == self.generation else { return }
-                        self.diagnostics = diagnostics
+                        var projected = diagnostics
+                        projected.metrics = self.metricsSampler.observe(diagnostics)
+                        projected.connectedElapsedMilliseconds = self.connectedElapsedMilliseconds
+                        projected.mediaReadyElapsedMilliseconds = self.mediaReadyElapsedMilliseconds
+                        self.diagnostics = projected
+                    },
+                    authSink: { [weak self] generation, update in
+                        guard let self, self.generation == generation,
+                            let authentication = self.authentication, let authOwnerGeneration
+                        else { throw AuthStoreError.staleOperation }
+                        return try await authentication.persistStreamingAuthUpdate(
+                            update, expectedOwnerGeneration: authOwnerGeneration)
+                    },
+                    startupSink: { [weak self] generation, progress in
+                        guard let self, generation == self.generation,
+                            self.state == .creatingSession
+                        else {
+                            return
+                        }
+                        self.startupProgress = progress
+                    },
+                    microphoneSink: { [weak self] generation, enabled, pending in
+                        guard let self, generation == self.generation else { return }
+                        self.microphoneEnabled = enabled
+                        self.microphonePending = pending
                     }
                 )
             } catch is CancellationError {
@@ -231,10 +371,12 @@ final class StreamingFeatureStore: ObservableObject {
                 return
             } catch {
                 let wasSuperseded = Task.isCancelled || requestGeneration != self.generation
-                let permissionDenied = (error as? StreamingRuntimeError)
+                let permissionDenied =
+                    (error as? StreamingRuntimeError)
                     == .microphonePermissionDenied
                 if !sessionActorOwnsTerminal {
-                    let reason: StreamingTerminalReason = wasSuperseded
+                    let reason: StreamingTerminalReason =
+                        wasSuperseded
                         ? .superseded
                         : .runtimeFailure
                     self.traceAttempt(
@@ -250,13 +392,27 @@ final class StreamingFeatureStore: ObservableObject {
                     )
                 }
                 guard !wasSuperseded else { return }
+                // 会话 actor 负责已启动会话的终态与重试属性；准备授权阶段由当前 Store 收口。
+                guard !sessionActorOwnsTerminal else { return }
                 self.state = .failed(
                     message: CloudLibraryDiagnostics.safeError(error),
                     retryable: !permissionDenied
                 )
+                self.input.setSuppressed(true, reason: .terminal)
+                restoreIdleTimer()
                 self.traceState(self.state, generation: requestGeneration)
             }
         }
+    }
+
+    var canRetry: Bool {
+        if case .failed(_, let retryable) = state { return retryable && retryLaunch != nil }
+        return false
+    }
+
+    func retry() {
+        guard canRetry else { return }
+        retryLaunch?()
     }
 
     func stop() {
@@ -322,6 +478,39 @@ final class StreamingFeatureStore: ObservableObject {
         }
     }
 
+    func setMicrophoneEnabled(_ enabled: Bool) {
+        guard state == .playing || microphonePending else { return }
+        microphoneOperationRevision &+= 1
+        let revision = microphoneOperationRevision
+        let requestGeneration = generation
+        microphonePending = true
+        traceControl("microphone", phase: "invoked")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await sessionActor.setMicrophoneEnabled(enabled, generation: requestGeneration)
+                guard generation == requestGeneration, revision == microphoneOperationRevision
+                else {
+                    return
+                }
+                microphoneEnabled = enabled
+                microphonePending = false
+                controlMessage = enabled ? "麦克风已开启" : "麦克风已关闭"
+                traceControl("microphone", phase: "completed", succeeded: true)
+            } catch {
+                guard generation == requestGeneration, revision == microphoneOperationRevision
+                else {
+                    return
+                }
+                microphoneEnabled = false
+                microphonePending = false
+                controlMessage =
+                    (error as? StreamingRuntimeError)?.localizedDescription ?? "麦克风设置失败"
+                traceControl("microphone", phase: "completed", succeeded: false)
+            }
+        }
+    }
+
     func powerOffAndStop() {
         guard controlCapabilities.canPowerOff else { return }
         let requestGeneration = generation
@@ -363,10 +552,17 @@ final class StreamingFeatureStore: ObservableObject {
         guard state != .idle else { return }
         let sessionGeneration = generation
         videoTrack = nil
+        input.setSuppressed(true, reason: .terminal)
+        microphoneOperationRevision &+= 1
+        microphoneEnabled = false
+        microphonePending = false
+        restoreIdleTimer()
         generation &+= 1
         let stoppedGeneration = generation
         launchTask?.cancel()
         launchTask = nil
+        retryLaunch = nil
+        startupProgress = nil
         state = .stopping
         traceState(state, generation: sessionGeneration)
         Task { [weak self] in
@@ -386,37 +582,64 @@ final class StreamingFeatureStore: ObservableObject {
     }
 
     func handleScenePhase(_ phase: ScenePhase) {
-        guard phase == .background, state != .idle else { return }
-        state = .suspending
-        traceState(state, generation: generation)
-        stop(reason: .backgroundStop)
+        input.setSuppressed(phase != .active, reason: .lifecycle)
+        presentationActive = phase == .active
+        guard state != .idle, state != .stopping else { return }
+        let requestGeneration = generation
+        Task { [sessionActor] in
+            await sessionActor.setVisible(phase == .active, generation: requestGeneration)
+        }
     }
 
     func handlePresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
         let context = event.context
-        guard context.generation == generation,
-              context.attemptID == attemptID,
-              videoTrack?.traceContext == context
+        guard presentationActive, context.generation == generation,
+            context.attemptID == attemptID,
+            videoTrack?.traceContext == context
         else { return }
         Task { [sessionActor] in
             switch event {
-            case let .displayPipelineReady(context):
+            case .displayPipelineReady(let context):
                 await sessionActor.displayPipelineReady(context: context)
-            case let .firstFrameAccepted(context):
+            case .firstFrameAccepted(let context):
                 await sessionActor.firstFrameAcceptedToMailbox(context: context)
-            case let .firstFrameSubmitted(context):
+            case .firstFrameSubmitted(let context):
                 await sessionActor.firstFrameSubmitted(context: context)
-            case let .firstFramePresented(context):
+            case .firstFramePresented(let context):
                 await sessionActor.firstFramePresented(context: context)
-            case let .displayHealth(context, snapshot):
+            case .displayHealth(let context, let snapshot):
                 await sessionActor.displayHealthUpdated(context: context, snapshot: snapshot)
             }
         }
     }
 
+    private func restoreIdleTimer() {
+        if let previousIdleTimerDisabled {
+            UIApplication.shared.isIdleTimerDisabled = previousIdleTimerDisabled
+        }
+        previousIdleTimerDisabled = nil
+    }
+
     private func apply(state: StreamingFeatureState, generation: UInt64) {
         guard generation == self.generation else { return }
+        if case .failed = self.state { return }
+        guard self.state != state else { return }
         self.state = state
+        let elapsed = ProcessInfo.processInfo.systemUptime * 1_000 - sessionStartedAtMilliseconds
+        if state == .waitingForFirstFrame, connectedElapsedMilliseconds == nil {
+            connectedElapsedMilliseconds = elapsed
+            diagnostics.connectedElapsedMilliseconds = elapsed
+        }
+        if state == .playing, mediaReadyElapsedMilliseconds == nil {
+            mediaReadyElapsedMilliseconds = elapsed
+            diagnostics.mediaReadyElapsedMilliseconds = elapsed
+        }
+        if case .failed = state {
+            microphoneEnabled = false
+            microphonePending = false
+            input.setSuppressed(true, reason: .terminal)
+            restoreIdleTimer()
+        }
         traceState(state, generation: generation)
     }
 
@@ -490,6 +713,7 @@ private struct PreparedStreamingAccess: Sendable {
     let regionHost: String
     let ownerGeneration: UInt64
     let expiresAtMs: UInt64
+    var resolvedTargetID: String? = nil
 }
 
 @MainActor
@@ -498,7 +722,8 @@ private final class StaticStreamingSettingsProvider: StreamingSessionSettingsPro
 }
 
 struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
-    func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession {
+    func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession
+    {
         let session = try createScopedStreamSession(
             accessHandle: request.accessHandle,
             targetType: request.target == .cloud ? "cloud" : "home",
@@ -506,6 +731,7 @@ struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
             accountId: request.accountID,
             ownerGeneration: request.ownerGeneration,
             settings: XboxStreamSettings(
+                cloudServerRegion: request.settings.cloudServerRegion,
                 preferredGameLocale: request.settings.preferredGameLocale,
                 cloudResolution: Int64(request.settings.cloudResolution),
                 homeResolution: Int64(request.settings.homeResolution),
@@ -517,7 +743,13 @@ struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
                 cloudBitrateMbps: Int64(request.settings.cloudBitrateMbps),
                 audioBitrateMode: request.settings.audioBitrateMode,
                 audioBitrateKbps: Int64(request.settings.audioBitrateKbps),
-                homeTurnFallback: request.settings.homeTurnFallback
+                homeTurnFallback: request.settings.homeTurnFallback,
+                customTurn: request.settings.customTurn.map {
+                    XboxCustomTurn(
+                        serverUrl: $0.serverURL, username: $0.username, credential: $0.credential)
+                },
+                preventResolutionDrops: request.settings.preventResolutionDrops,
+                powerOn: request.settings.powerOn
             )
         )
         return RustStreamingControlSession(session: session)
@@ -534,6 +766,18 @@ private actor RustStreamingControlSession: StreamingControlSession {
 
     init(session: XboxStreamSession) {
         self.session = session
+    }
+
+    func pendingAuthUpdate() async -> XboxStreamingAuthUpdate? {
+        await session.pendingAuthUpdate()
+    }
+
+    func acknowledgeAuthUpdate(revision: UInt64) async {
+        await session.acknowledgeAuthUpdate(revision: revision)
+    }
+
+    func synchronizeAuthSession(revision: UInt64, session authSession: AuthSession) async throws {
+        try await session.synchronizeAuthSession(revision: revision, authSession: authSession)
     }
 
     func prepareSignaling() async throws -> StreamingPreparedSignaling {
@@ -569,9 +813,42 @@ private actor RustStreamingControlSession: StreamingControlSession {
                 allowedCandidateTypes: snapshot.webRtcPlan.allowedCandidateTypes,
                 iceTransportPolicy: snapshot.webRtcPlan.iceTransportPolicy,
                 preferIPv6: snapshot.webRtcPlan.preferIpv6,
-                normalizeEndOfCandidates: snapshot.webRtcPlan.normalizeEndOfCandidates
-            )
+                normalizeEndOfCandidates: snapshot.webRtcPlan.normalizeEndOfCandidates,
+                preventResolutionDrops: snapshot.webRtcPlan.preventResolutionDrops
+            ),
+            fallbackIceServers: snapshot.fallbackIceServers?.map {
+                StreamingIceServer(urls: $0.urls, username: $0.username, credential: $0.credential)
+            }
         )
+    }
+
+    func startupProgress() async -> StreamingStartupProgress? {
+        session.startupProgress().map { value in
+            StreamingStartupProgress(
+                phase: value.phase, status: value.status, streamState: value.streamState,
+                totalWaitSeconds: value.totalWaitSeconds,
+                allocationWaitSeconds: value.allocationWaitSeconds,
+                provisioningWaitSeconds: value.provisioningWaitSeconds,
+                retryCount: value.retryCount,
+                retryLimit: value.retryLimit)
+        }
+    }
+
+    func exchangeMediaOffer(_ sdp: String, kind: String) async throws -> String {
+        try await session.exchangeMediaOffer(generation: requireGeneration(), sdp: sdp, kind: kind)
+    }
+
+    func supervise(_ sample: StreamingSupervisionSample) async throws
+        -> StreamingSupervisionDecision
+    {
+        let data = try JSONEncoder().encode(sample)
+        let result = try await session.superviseRuntime(
+            generation: requireGeneration(), sampleJson: String(decoding: data, as: UTF8.self))
+        return try JSONDecoder().decode(StreamingSupervisionDecision.self, from: Data(result.utf8))
+    }
+
+    func validateResume() async throws {
+        try await session.validateResume(generation: requireGeneration())
     }
 
     func exchangeOffer(_ sdp: String) async throws -> String {
@@ -631,13 +908,16 @@ private actor RustStreamingControlSession: StreamingControlSession {
         do {
             try await session.submitIce(
                 generation: generation,
-                candidates: candidates.map { candidate in XboxIceCandidate(
-                    candidate: candidate.sdp,
-                    sdpMLineIndex: UInt32(exactly: candidate.sdpMLineIndex),
-                    sdpMid: candidate.sdpMid,
-                    usernameFragment: nil,
-                    messageType: nil
-                ) }
+                candidates: candidates.map { candidate in
+                    XboxIceCandidate(
+                        source: candidate.source,
+                        candidate: candidate.sdp,
+                        sdpMLineIndex: UInt32(exactly: candidate.sdpMLineIndex),
+                        sdpMid: candidate.sdpMid,
+                        usernameFragment: candidate.usernameFragment,
+                        messageType: nil
+                    )
+                }
             )
             IOSRuntimeTrace.event(
                 domain: "ios-streaming",
@@ -685,7 +965,7 @@ private actor RustStreamingControlSession: StreamingControlSession {
                 domain: "ios-streaming",
                 event: "signalingIceCompletionSucceeded",
                 payload: [
-                    "elapsedMs": .integer(Int64(Date().timeIntervalSince(startedAt) * 1_000)),
+                    "elapsedMs": .integer(Int64(Date().timeIntervalSince(startedAt) * 1_000))
                 ],
                 dimension: .network,
                 importance: .key,
@@ -714,10 +994,13 @@ private actor RustStreamingControlSession: StreamingControlSession {
                 StreamingIceCandidate(
                     sdp: $0.candidate,
                     sdpMid: $0.sdpMid,
-                    sdpMLineIndex: Int32(clamping: $0.sdpMLineIndex ?? 0)
+                    sdpMLineIndex: Int32(clamping: $0.sdpMLineIndex ?? 0),
+                    usernameFragment: $0.usernameFragment,
+                    source: $0.source
                 )
             },
-            endOfCandidates: batch.endOfCandidates
+            endOfCandidates: batch.endOfCandidates,
+            configurationPending: batch.configurationPending
         )
     }
 

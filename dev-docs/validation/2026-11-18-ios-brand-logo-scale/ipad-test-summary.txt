@@ -1,0 +1,8 @@
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' passed (58.375 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' passed (21.450 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 79.825 (79.843) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 79.825 (79.844) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 79.825 (79.845) seconds
+** TEST SUCCEEDED **

@@ -1,0 +1,1 @@
+HostInstalledGamesView, PCDataParityTests, CapabilityMigrationTests: swift-format lint --strict Passed

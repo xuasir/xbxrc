@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-11-20T19:46:58.136008+08:00",
+  "validatedSourceCount": 4,
+  "allSourceHashesMatch": true,
+  "simulator": {
+    "artifact": "retry-simulator-summary.json",
+    "result": "Passed",
+    "passed": 33,
+    "failed": 0,
+    "originalBundle": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/retry-simulator.xcresult",
+    "originalBundleSummaryVerified": true
+  },
+  "interruptedRun": {
+    "artifact": "interruption-simulator-summary.json",
+    "originalBundle": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/final-simulator.xcresult",
+    "result": "Failed",
+    "cause": "signal kill before establishing test connection",
+    "followedBySuccessfulRetry": true
+  },
+  "deviceBuild": {
+    "artifact": "final-device-build-summary.log",
+    "result": "BUILD SUCCEEDED",
+    "codeSigningAllowed": false
+  },
+  "checks": {
+    "sourceAndArchiveHashes": "PASS",
+    "sessionBoundary": "PASS",
+    "swiftFormat": "PASS",
+    "analyzerRegressionTests": 3,
+    "gitDiffCheck": "PASS"
+  },
+  "freshPerformanceTrace": {
+    "available": false,
+    "observedFile": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+    "rows": 36195,
+    "newTimingRows": 0,
+    "pending": "当前构建在Mac Designed for iPad按原1440p设置同场景运行至少60秒，核对六项分段耗时与六维健康"
+  },
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-callback-20261120"
+}

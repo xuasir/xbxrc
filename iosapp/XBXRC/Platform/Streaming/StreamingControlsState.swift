@@ -4,11 +4,18 @@ import Foundation
 enum StreamingVideoContentMode: String, CaseIterable, Equatable, Sendable {
     case fit
     case fill
+    case stretch, ratio16x9, ratio16x10, ratio18x9, ratio21x9, ratio4x3
 
     var title: String {
         switch self {
         case .fit: "适应"
         case .fill: "填充"
+        case .stretch: "拉伸"
+        case .ratio16x9: "16:9"
+        case .ratio16x10: "16:10"
+        case .ratio18x9: "18:9"
+        case .ratio21x9: "21:9"
+        case .ratio4x3: "4:3"
         }
     }
 }
@@ -47,6 +54,12 @@ struct StreamingSessionDiagnostics: Equatable, Sendable {
     let audioRoute: String?
     let audioTrackReady: Bool
     let updatedAtMilliseconds: Double
+    var supervision: StreamingSupervisionDecision? = nil
+    var metrics: StreamingSampleMetrics = .init()
+    var connectedElapsedMilliseconds: Double? = nil
+    var mediaReadyElapsedMilliseconds: Double? = nil
+    var requestedVideoBitrateKbps: Int? = nil
+    var negotiatedVideoBitrateKbps: Int? = nil
 
     static let empty = StreamingSessionDiagnostics(
         peerStats: nil,
@@ -57,6 +70,16 @@ struct StreamingSessionDiagnostics: Equatable, Sendable {
         audioTrackReady: false,
         updatedAtMilliseconds: 0
     )
+
+    var compactSummary: String {
+        let rate =
+            peerStats?.receiveBitrateBps.map { String(format: "%.1f Mbps", $0 / 1_000_000) }
+            ?? "— Mbps"
+        let rtt =
+            peerStats?.roundTripTimeSeconds.map { String(format: "%.0f ms", $0 * 1_000) } ?? "— ms"
+        let supply = peerStats?.frameSupplyDelta.map { "\($0) frames/Δ" } ?? "— frames/Δ"
+        return "\(rate) · \(rtt) · \(supply)"
+    }
 
     func connectionSummary(featureState: StreamingFeatureState) -> StreamingConnectionSummary {
         if featureState == .recovering { return .recovering }
@@ -75,9 +98,9 @@ struct StreamingSessionDiagnostics: Equatable, Sendable {
 enum StreamingControlsSurface: Equatable, Sendable {
     case hidden
     case dock
-    case userSheet
+    case pictureSheet
     case debugSheet
-    case textInput
+    case sharing
     case confirmingExit
     case confirmingPowerOff
 }
@@ -118,10 +141,10 @@ struct StreamingInwardGestureSample: Equatable, Sendable {
 enum StreamingInwardGesturePolicy {
     static func recognizes(_ sample: StreamingInwardGestureSample) -> Bool {
         guard sample.viewWidth > 0,
-              sample.startDeltaMilliseconds <= 120,
-              sample.durationMilliseconds <= 450,
-              sample.leftStart.x <= sample.viewWidth * 0.24,
-              sample.rightStart.x >= sample.viewWidth * 0.76
+            sample.startDeltaMilliseconds <= 120,
+            sample.durationMilliseconds <= 450,
+            sample.leftStart.x <= sample.viewWidth * 0.24,
+            sample.rightStart.x >= sample.viewWidth * 0.76
         else { return false }
 
         let requiredTravel = min(max(sample.viewWidth * 0.09, 72), 120)

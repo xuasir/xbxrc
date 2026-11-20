@@ -1,0 +1,22 @@
+{
+  "sampling-pressure-replay.json": {
+    "test": "TouchLayoutTests/testHighRateStickThrottleAndShortTapReplayPreservesEdges()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1794990550.251
+  },
+  "sampling-report-landscape.png": {
+    "test": "TouchLayoutInteractionTests/testLayoutSelectionPressDragAndResetFromControllerEntry()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1794990605.209
+  },
+  "forza-sticky-landscape.png": {
+    "test": "TouchLayoutInteractionTests/testLayoutSelectionPressDragAndResetFromControllerEntry()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1794990591.838
+  },
+  "generic-landscape.png": {
+    "test": "TouchLayoutInteractionTests/testLayoutSelectionPressDragAndResetFromControllerEntry()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1794990581.411
+  }
+}

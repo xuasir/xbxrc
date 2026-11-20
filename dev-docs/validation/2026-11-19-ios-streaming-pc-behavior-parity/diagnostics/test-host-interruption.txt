@@ -1,0 +1,2 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-19 13:02:02.327 Df log[3923:0] [com.apple.log:] log run noninteractively, parent: 9128 (launchd_sim), args: 'log' 'show' '--last' '5m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "XBXRC" AND (eventMessage CONTAINS "kill" OR eventMessage CONTAINS "signature" OR eventMessage CONTAINS "exit")

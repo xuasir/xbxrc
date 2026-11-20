@@ -1,0 +1,191 @@
+{
+  "scope": "保留libwebrtc+Metal媒体链；其他串流行为对齐PC main",
+  "settings": [
+    {
+      "setting": "resolution/codec",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming.rs",
+        "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift"
+      ],
+      "automatedEvidence": "四档分辨率、五档codec保存/恢复；公共compiler和SDP投影",
+      "deviceAcceptance": "实机源尺寸/codec"
+    },
+    {
+      "setting": "home/cloud/audio bitrate",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming.rs",
+        "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift"
+      ],
+      "automatedEvidence": "Auto/Custom、0/1/20/200；质量档位下min/start/max一致",
+      "deviceAcceptance": "实际远端上限"
+    },
+    {
+      "setting": "preventResolutionDrops",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift"
+      ],
+      "automatedEvidence": "两模式持续Metadata、wire副本限幅、背压/期限/旧Peer",
+      "deviceAcceptance": "实际Metadata与源尺寸"
+    },
+    {
+      "setting": "authorization/server region/game locale",
+      "effectiveAt": "下次授权/连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming/credentials.rs",
+        "crates/xbox-ios-bridge/src/streaming/home_context.rs"
+      ],
+      "automatedEvidence": "401续期、账户/代次、地区分离、区域发现、locale保存",
+      "deviceAcceptance": "跨区实际连接"
+    },
+    {
+      "setting": "preferIPv6",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming.rs",
+        "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift"
+      ],
+      "automatedEvidence": "公共candidate batch、绑定/mid/ufrag/EOC与native适配",
+      "deviceAcceptance": "实际selected pair"
+    },
+    {
+      "setting": "home TURN fallback/custom TURN",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming.rs",
+        "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift"
+      ],
+      "automatedEvidence": "fallback来源直连优先、15秒期限、一次重建回退；自定义首次装配；导入校验",
+      "deviceAcceptance": "host/srflx/relay与真实失败路径"
+    },
+    {
+      "setting": "powerOn",
+      "effectiveAt": "下次连接",
+      "consumers": [
+        "crates/xbox-ios-bridge/src/streaming/home_context.rs"
+      ],
+      "automatedEvidence": "两值保存与公共唤醒/require-ready schedule",
+      "deviceAcceptance": "待机主机唤醒"
+    },
+    {
+      "setting": "videoFit",
+      "effectiveAt": "默认下次/菜单即时",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift"
+      ],
+      "automatedEvidence": "PC比例选项、持久化、串流即时几何消费者",
+      "deviceAcceptance": "真实几何"
+    },
+    {
+      "setting": "picture/compatibility/superResolution",
+      "effectiveAt": "默认下次/菜单即时",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift"
+      ],
+      "automatedEvidence": "参数归一化、Metal shader编译、标准/兼容/MetalFX实际装配",
+      "deviceAcceptance": "像素变化/MetalFX能力回退"
+    },
+    {
+      "setting": "enableAudioControl/startMuted",
+      "effectiveAt": "会话快照/菜单即时",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+        "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift"
+      ],
+      "automatedEvidence": "两值保存、MPVolumeView显隐、实际接收音轨enable、重建保留",
+      "deviceAcceptance": "实机播放与系统音量"
+    },
+    {
+      "setting": "microphone",
+      "effectiveAt": "即时协商",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+        "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift"
+      ],
+      "automatedEvidence": "同Peer chat offer、sender/direction、权限取消检查、协商串行、重建代次和UI投影",
+      "deviceAcceptance": "采集、上行bytes/packets、权限/音频路由"
+    },
+    {
+      "setting": "performance/diagnostics",
+      "effectiveAt": "即时",
+      "consumers": [
+        "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift"
+      ],
+      "automatedEvidence": "轻量/手动capture/留存/脱敏；公共监督、实际P99和帧间隔投影",
+      "deviceAcceptance": "fresh六维trace"
+    },
+    {
+      "setting": "selected controller/mapping/deadzone/inversion",
+      "effectiveAt": "下一次采样",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+        "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift"
+      ],
+      "automatedEvidence": "同一设备快照用于输入、公告、震动；逻辑映射、轴、切换归零",
+      "deviceAcceptance": "真实双手柄输入与断连"
+    },
+    {
+      "setting": "keyboard/input source",
+      "effectiveAt": "下一次采样",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift"
+      ],
+      "automatedEvidence": "公共默认键表、组合、归属、失焦/菜单释放",
+      "deviceAcceptance": "外接键盘实机"
+    },
+    {
+      "setting": "vibration/ui feedback",
+      "effectiveAt": "即时",
+      "consumers": [
+        "iosapp/XBXRC/Features/Settings/MobilePreferences.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift"
+      ],
+      "automatedEvidence": "PC四路预设/总强度、所选设备、delay/duration/repeat",
+      "deviceAcceptance": "真实四路触觉/UI音效"
+    },
+    {
+      "setting": "menu/diagnostic shortcuts",
+      "effectiveAt": "即时",
+      "consumers": [
+        "iosapp/XBXRC/Features/Settings/MobileSettingsModels.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift"
+      ],
+      "automatedEvidence": "0.6秒、映射后状态、归属抑制、冲突、全释放重触发",
+      "deviceAcceptance": "真实设备组合与菜单"
+    },
+    {
+      "setting": "touch mode/opacity/data layout",
+      "effectiveAt": "即时",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+        "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift"
+      ],
+      "automatedEvidence": "原虚拟手柄输入；布局/显隐/透明度；短按、多指、轴、菜单释放",
+      "deviceAcceptance": "串流触屏实测"
+    },
+    {
+      "setting": "keepScreenAwake",
+      "effectiveAt": "活动会话",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift"
+      ],
+      "automatedEvidence": "两值保存与idle timer消费者、进入前值保存、退出/失败恢复",
+      "deviceAcceptance": "设备锁屏"
+    },
+    {
+      "setting": "background/resume",
+      "effectiveAt": "生命周期",
+      "consumers": [
+        "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+        "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift"
+      ],
+      "automatedEvidence": "逻辑会话保留；输入/震动释放；凭据/terminal校验；恢复后新帧；麦克风恢复",
+      "deviceAcceptance": "失活/后台/锁屏长测"
+    }
+  ]
+}

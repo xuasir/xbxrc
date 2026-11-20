@@ -1,0 +1,23 @@
+{
+  "before": {
+    "xbox_ios_bridge.swift": "71165b2293d7f9d34c8867b3d7f97fa67ef53c120b2138dc8135ab80b9e00eb8",
+    "xbox_ios_bridgeFFI.h": "be734f094e36ae769981345bff4c492b13e1f099618ce723f1e052b0dca07897",
+    "xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+  },
+  "regenerated": {
+    "xbox_ios_bridge.swift": "5e63cac61b19e9e70d542c940917c242c6e70f02445367cd4b2e7ccb9f97f650",
+    "xbox_ios_bridgeFFI.h": "be734f094e36ae769981345bff4c492b13e1f099618ce723f1e052b0dca07897",
+    "xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+  },
+  "matches": {
+    "xbox_ios_bridge.swift": false,
+    "xbox_ios_bridgeFFI.h": true,
+    "xbox_ios_bridge.modulemap": true
+  },
+  "equivalentIgnoringFinalNewline": {
+    "xbox_ios_bridge.swift": true,
+    "xbox_ios_bridgeFFI.h": true,
+    "xbox_ios_bridge.modulemap": true
+  },
+  "notes": "Swift 唯一差异为末尾换行；C 头文件和 modulemap 逐字一致，原工作区文件保留。"
+}

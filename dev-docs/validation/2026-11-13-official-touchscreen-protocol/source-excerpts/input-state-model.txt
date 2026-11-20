@@ -1,0 +1,75 @@
+// 来源 8128.1aca8038.chunk.js；原文 SHA-256 b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2
+({
+997406(e, t, i) { i.d(t, { $B: () => s, Cv: () => k, Fg: () => M, Lh: () => S, NP: () => P, Qs: () => w, RE: () => A, SE: () => g, Sl: () => h, TZ: () => c, VU: () => u, W8: () => m, WT: () => v, Yu: () => I, dr: () => R, iz: () => d, mb: () => n, ot: () => x, pY: () => p, pu: () => D, qb: () => T, sl: () => E, t: () => y, yB: () => f, yy: () => C }); var n, s, o = i(258212), r = i.n(o), a = (i(669375), i(510785), i(778357), i(946196), i(650821), i(936554), i(968472), i(41696), i(981045), i(145950), i(375604), i(141532), i(32950), i(773599), i(464770), i(762080), i(797012), i(231274), i(829548), i(447342), i(514825), i(392467), i(767497), i(388236), i(104793), i(317216), i(466653), i(177706), i(745023), i(914972), i(612991), i(847010), i(791211)), l = i(82361); !function (e) { e[e.IntervalTimer = 0] = "IntervalTimer", e[e.IntervalWorkerThread = 1] = "IntervalWorkerThread"; }(n || (n = {})), function (e) { e[e.None = 0] = "None", e[e.Metadata = 1] = "Metadata", e[e.GamepadReport = 2] = "GamepadReport", e[e.PointerReport = 4] = "PointerReport", e[e.ClientMetadata = 8] = "ClientMetadata", e[e.ServerMetadata = 16] = "ServerMetadata", e[e.Mouse = 32] = "Mouse", e[e.Keyboard = 64] = "Keyboard", e[e.Vibration = 128] = "Vibration", e[e.SensorReport = 256] = "SensorReport", e[e.UnreliableInputReport = 512] = "UnreliableInputReport", e[e.UnreliableInputAck = 1024] = "UnreliableInputAck"; }(s || (s = {})); const d = { GamepadIndex: 0, A: 0, B: 0, X: 0, Y: 0, LeftShoulder: 0, RightShoulder: 0, LeftTrigger: 0, RightTrigger: 0, View: 0, Menu: 0, LeftThumb: 0, RightThumb: 0, DPadUp: 0, DPadDown: 0, DPadLeft: 0, DPadRight: 0, Nexus: 0, LeftThumbXAxis: 0, LeftThumbYAxis: 0, RightThumbXAxis: 0, RightThumbYAxis: 0, PhysicalPhysicality: 0, VirtualPhysicality: 0, Dirty: !1, Virtual: !1 }, c = 1, h = 6; var u, g, m, p, v; !function (e) { e[e.FourMotorRumble = 0] = "FourMotorRumble"; }(u || (u = {})), function (e) { e.None = "relative", e.Arrow = "default", e.Hand = "pointer", e.Ibeam = "text"; }(g || (g = {})), function (e) { e[e.Relative = 0] = "Relative", e[e.Absolute = 1] = "Absolute"; }(m || (m = {})), function (e) { e[e.Pixels = 0] = "Pixels", e[e.Line = 1] = "Line", e[e.Page = 2] = "Page"; }(p || (p = {})), function (e) { e[e.Unknown = 0] = "Unknown", e[e.Unreliable = 1] = "Unreliable", e[e.Approximate = 2] = "Approximate", e[e.Accurate = 3] = "Accurate"; }(v || (v = {})); const S = { accelerationX: 0, accelerationY: 0, accelerationZ: 0, accelerationTimestamp: 0, angularVelocityX: 0, angularVelocityY: 0, angularVelocityZ: 0, angularVelocityTimestamp: 0, magneticFieldX: 0, magneticFieldY: 0, magneticFieldZ: 0, magneticFieldTimestamp: 0, orientationW: 0, orientationX: 0, orientationY: 0, orientationZ: 0, orientationTimestamp: 0, accelerationAccuracy: v.Unknown, angularVelocityAccuracy: v.Unknown, magneticFieldAccuracy: v.Unknown, orientationAccuracy: v.Unknown }; class f {
+    constructor() { r()(this, "discriminator", void 0), this.discriminator = 0; }
+    markStateChange(e = 1) { this.discriminator += e; }
+    isStateChanged(e) { return this.discriminator !== e.discriminator; }
+} var y, w; !function (e) { e[e.DpadUp = 0] = "DpadUp", e[e.DpadDown = 1] = "DpadDown", e[e.DpadLeft = 2] = "DpadLeft", e[e.DpadRight = 3] = "DpadRight", e[e.Menu = 4] = "Menu", e[e.View = 5] = "View", e[e.LeftThumb = 6] = "LeftThumb", e[e.RightThumb = 7] = "RightThumb", e[e.LeftShoulder = 8] = "LeftShoulder", e[e.RightShoulder = 9] = "RightShoulder", e[e.Nexus = 10] = "Nexus", e[e.Share = 11] = "Share", e[e.A = 12] = "A", e[e.B = 13] = "B", e[e.X = 14] = "X", e[e.Y = 15] = "Y", e[e.EnumLength = 16] = "EnumLength"; }(y || (y = {})); class C extends f {
+    constructor() { super(), r()(this, "gamepadId", void 0), r()(this, "transitionCount", void 0), r()(this, "triggerLeft", void 0), r()(this, "triggerRight", void 0), r()(this, "thumbLX", void 0), r()(this, "thumbLY", void 0), r()(this, "thumbRX", void 0), r()(this, "thumbRY", void 0), r()(this, "physicalPhysicality", void 0), r()(this, "virtualPhysicality", void 0), this.gamepadId = 0, this.transitionCount = new Uint8Array(y.EnumLength), this.triggerLeft = 0, this.triggerRight = 0, this.thumbLX = 0, this.thumbLY = 0, this.thumbRX = 0, this.thumbRY = 0, this.physicalPhysicality = l.J.None, this.virtualPhysicality = l.J.None; }
+    isEqual(e) { for (let t = 0; t < y.EnumLength; t++)
+        if (this.transitionCount[t] != e.transitionCount[t])
+            return !1; return this.triggerLeft === e.triggerLeft && this.triggerRight === e.triggerRight && this.thumbLX === e.thumbLX && this.thumbLY === e.thumbLY && this.thumbRX === e.thumbRX && this.thumbRY === e.thumbRY && this.physicalPhysicality === e.physicalPhysicality && this.virtualPhysicality === e.virtualPhysicality; }
+    copyFrom(e) { this.discriminator = e.discriminator; for (let t = 0; t < y.EnumLength; t++)
+        this.transitionCount[t] = e.transitionCount[t]; this.triggerLeft = e.triggerLeft, this.triggerRight = e.triggerRight, this.thumbLX = e.thumbLX, this.thumbLY = e.thumbLY, this.thumbRX = e.thumbRX, this.thumbRY = e.thumbRY, this.physicalPhysicality = e.physicalPhysicality, this.virtualPhysicality = e.virtualPhysicality; }
+} !function (e) { e[e.PointerUpDown = 0] = "PointerUpDown", e[e.PointerMove = 1] = "PointerMove", e[e.EnumLength = 2] = "EnumLength"; }(w || (w = {})); class T extends f {
+    constructor() { super(), r()(this, "pointerId", void 0), r()(this, "pointerStateCountByStateType", void 0), r()(this, "x", void 0), r()(this, "y", void 0), r()(this, "pressure", void 0), r()(this, "twist", void 0), r()(this, "width", void 0), r()(this, "height", void 0), r()(this, "clientWidth", void 0), r()(this, "clientHeight", void 0), this.pointerId = 0, this.pointerStateCountByStateType = new Uint8Array(w.EnumLength), this.x = 0, this.y = 0, this.pressure = 0, this.twist = 0, this.width = 0, this.height = 0; }
+    isPointerUp() { return this.pointerStateCountByStateType[w.PointerUpDown] % 2 === 0; }
+    isEqual(e) { for (let t = 0; t < w.EnumLength; t++)
+        if (this.pointerStateCountByStateType[t] !== e.pointerStateCountByStateType[t])
+            return !1; return this.pointerId === e.pointerId && this.x === e.x && this.y === e.y && this.pressure === e.pressure && this.twist === e.twist && this.width === e.width && this.height === e.height && this.clientWidth === e.clientWidth && this.clientHeight === e.clientHeight; }
+    copyFrom(e) { this.discriminator = e.discriminator; for (let t = 0; t < w.EnumLength; t++)
+        this.pointerStateCountByStateType[t] = e.pointerStateCountByStateType[t]; this.pointerId = e.pointerId, this.x = e.x, this.y = e.y, this.pressure = e.pressure, this.twist = e.twist, this.width = e.width, this.height = e.height, this.clientWidth = e.clientWidth, this.clientHeight = e.clientHeight; }
+} const b = 256; class k extends f {
+    constructor() { super(), r()(this, "transitionCount", void 0), this.transitionCount = new Uint8Array(b); }
+    isKeyDown(e) { return !(e >= b || e < 0) && this.transitionCount[e] % 2 === 1; }
+    isEqual(e) { for (let t = 0; t < b; t++)
+        if (this.transitionCount[t] !== e.transitionCount[t])
+            return !1; return !0; }
+    copyFrom(e) { this.discriminator = e.discriminator; for (let t = 0; t < b; t++)
+        this.transitionCount[t] = e.transitionCount[t]; }
+} class I {
+    constructor() { r()(this, "changedKeys", void 0), this.changedKeys = new Map; }
+} var A, E; !function (e) { e[e.Left = 1] = "Left", e[e.Right = 2] = "Right", e[e.Middle = 4] = "Middle", e[e.XButton1 = 8] = "XButton1", e[e.XButton2 = 16] = "XButton2"; }(A || (A = {})), function (e) { e[e.Left = 0] = "Left", e[e.Right = 1] = "Right", e[e.Middle = 2] = "Middle", e[e.XButton1 = 3] = "XButton1", e[e.XButton2 = 4] = "XButton2", e[e.ButtonCount = 8] = "ButtonCount"; }(E || (E = {})); class x extends f {
+    constructor() { super(), r()(this, "transitionCount", void 0), r()(this, "x", void 0), r()(this, "y", void 0), r()(this, "wheelX", void 0), r()(this, "wheelY", void 0), r()(this, "type", void 0), this.transitionCount = new Uint8Array(E.ButtonCount), this.x = 0, this.y = 0, this.wheelX = 0, this.wheelY = 0, this.type = m.Relative; }
+    isButtonDown(e) { return !(e >= E.ButtonCount || e < 0) && this.transitionCount[e] % 2 === 1; }
+    isEqual(e) { for (let t = 0; t < E.ButtonCount; t++)
+        if (this.transitionCount[t] !== e.transitionCount[t])
+            return !1; return this.x === e.x && this.y === e.y && this.wheelX === e.wheelX && this.wheelY === e.wheelY && this.type === e.type; }
+    copyFrom(e) { this.discriminator = e.discriminator; for (let t = 0; t < E.ButtonCount; t++)
+        this.transitionCount[t] = e.transitionCount[t]; this.x = e.x, this.y = e.y, this.wheelX = e.wheelX, this.wheelY = e.wheelY, this.type = e.type; }
+} class M {
+    constructor() { r()(this, "changedGamepads", void 0), r()(this, "changedPointers", void 0), r()(this, "changedKeyboard", void 0), r()(this, "changedMouse", void 0), r()(this, "lockKeysState", void 0), this.changedGamepads = new Array, this.changedPointers = new Array, this.lockKeysState = new R; }
+    isEmpty() { return 0 === this.changedGamepads.length && 0 === this.changedPointers.length && void 0 === this.changedKeyboard && void 0 === this.changedMouse && !this.lockKeysState.isInitialized(); }
+} class P {
+    constructor(e) { r()(this, "frameId", void 0), r()(this, "gamepad", void 0), r()(this, "pointers", void 0), r()(this, "keyboard", void 0), r()(this, "mouse", void 0), r()(this, "lockKeysState", void 0), this.frameId = e, this.gamepad = new C, this.pointers = new Array, this.keyboard = new k, this.mouse = new x, this.lockKeysState = new R; }
+    calculateChanges(e) { const t = new M; this.gamepad.isStateChanged(e.gamepad) || !this.gamepad.isEqual(e.gamepad) ? t.changedGamepads = [this.gamepad] : t.changedGamepads = new Array; for (const i of this.pointers) {
+        const n = e.pointers.find((e => e.pointerId === i.pointerId));
+        void 0 !== n && !n.isStateChanged(i) && n.isEqual(i) || t.changedPointers.push(i);
+    } if (this.keyboard.isStateChanged(e.keyboard) || !this.keyboard.isEqual(e.keyboard)) {
+        const i = new I;
+        for (let t = 0; t < b; t++)
+            this.keyboard.transitionCount[t] !== e.keyboard.transitionCount[t] && i.changedKeys.set(t, this.keyboard.transitionCount[t]);
+        t.changedKeyboard = i;
+    }
+    else
+        t.changedKeyboard = void 0; return this.mouse.isStateChanged(e.mouse) || !this.mouse.isEqual(e.mouse) ? t.changedMouse = this.mouse : t.changedMouse = void 0, this.lockKeysState.isInitialized() && !this.lockKeysState.isEqual(e.lockKeysState) && t.lockKeysState.copyFrom(this.lockKeysState), t; }
+    isStateChanged(e) { let t = !1; if (e.gamepad.discriminator === this.gamepad.discriminator && e.mouse.discriminator === this.mouse.discriminator && e.keyboard.discriminator === this.keyboard.discriminator && e.pointers.length === this.pointers.length && e.lockKeysState.isEqual(this.lockKeysState))
+        for (const i of this.pointers) {
+            const n = e.pointers.find((e => e.pointerId === i.pointerId));
+            if (void 0 === n || i.discriminator !== n.discriminator) {
+                t = !0;
+                break;
+            }
+        }
+    else
+        t = !0; return t; }
+    copyFrom(e) { for (this.frameId = e.frameId, this.gamepad.copyFrom(e.gamepad); this.pointers.length < e.pointers.length;)
+        this.pointers.push(new T); for (let t = 0; t < e.pointers.length; t++)
+        this.pointers[t].copyFrom(e.pointers[t]); this.pointers.length = e.pointers.length, this.keyboard.copyFrom(e.keyboard), this.mouse.copyFrom(e.mouse), this.lockKeysState.copyFrom(e.lockKeysState); }
+} const D = { KeyA: 4, KeyB: 5, KeyC: 6, KeyD: 7, KeyE: 8, KeyF: 9, KeyG: 10, KeyH: 11, KeyI: 12, KeyJ: 13, KeyK: 14, KeyL: 15, KeyM: 16, KeyN: 17, KeyO: 18, KeyP: 19, KeyQ: 20, KeyR: 21, KeyS: 22, KeyT: 23, KeyU: 24, KeyV: 25, KeyW: 26, KeyX: 27, KeyY: 28, KeyZ: 29, Digit1: 30, Digit2: 31, Digit3: 32, Digit4: 33, Digit5: 34, Digit6: 35, Digit7: 36, Digit8: 37, Digit9: 38, Digit0: 39, Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45, Equal: 46, BracketLeft: 47, BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53, Comma: 54, Period: 55, Slash: 56, CapsLock: 57, F1: 58, F2: 59, F3: 60, F4: 61, F5: 62, F6: 63, F7: 64, F8: 65, F9: 66, F10: 67, F11: 68, F12: 69, ScrollLock: 71, Pause: 72, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78, ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, NumLock: 83, NumpadDivide: 84, NumpadMultiply: 85, NumpadSubtract: 86, NumpadAdd: 87, NumpadEnter: 88, Numpad1: 89, Numpad2: 90, Numpad3: 91, Numpad4: 92, Numpad5: 93, Numpad6: 94, Numpad7: 95, Numpad8: 96, Numpad9: 97, Numpad0: 98, NumpadDecimal: 99, ControlLeft: 224, ShiftLeft: 225, AltLeft: 226, MetaLeft: 227, ControlRight: 228, ShiftRight: 229, AltRight: 230, MetaRight: 231 }; class R {
+    constructor(e, t, i) { r()(this, "capsLock", void 0), r()(this, "numLock", void 0), r()(this, "scrollLock", void 0), r()(this, "initialized", !1), void 0 === e || void 0 === t || void 0 === i ? (this.capsLock = !1, this.numLock = !1, this.scrollLock = !1, this.initialized = !1) : (this.capsLock = e, this.numLock = t, this.scrollLock = i, this.initialized = !0); }
+    isInitialized() { return this.initialized; }
+    isEqual(e) { return e.isInitialized() === this.isInitialized() && (this.capsLock === e.capsLock && this.numLock === e.numLock && this.scrollLock === e.scrollLock); }
+    copyFrom(e) { e.isInitialized() ? (this.capsLock = e.capsLock, this.numLock = e.numLock, this.scrollLock = e.scrollLock, this.initialized = !0) : (this.capsLock = !1, this.numLock = !1, this.scrollLock = !1, this.initialized = !1); }
+} r()(R, "KeyboardReportType", a.KeyboardReportTypes.LockKeySync), r()(R, "CapsLockKeyString", "CapsLock"), r()(R, "CapsLockWindowsKey", a.WindowsVkeyMap.VK_CAPITAL), r()(R, "CapsLockKeyCode", 20), r()(R, "NumLockKeyString", "NumLock"), r()(R, "NumLockWindowsKey", a.WindowsVkeyMap.VK_NUMLOCK), r()(R, "NumLockKeyCode", 144), r()(R, "ScrollLockKeyString", "ScrollLock"), r()(R, "ScrollLockWindowsKey", a.WindowsVkeyMap.VK_SCROLL), r()(R, "ScrollLockKeyCode", 145); }
+});

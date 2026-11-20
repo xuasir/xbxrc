@@ -1,0 +1,86 @@
+{
+  "date": "2026-11-20",
+  "taskState": "Validation Pending",
+  "fixDelivered": true,
+  "actualDeviceCrashReportAvailable": true,
+  "actualDeviceRootCauseConfirmation": "provided ips confirms UniFFI construction stack overflow; stack fix delivered and automatic validation passed; real-device current-build retest pending",
+  "reproduction": {
+    "scope": "production SDP diagnostic functions extracted verbatim with PC fixture",
+    "beforeFixExitCode": -5,
+    "signal": "SIGTRAP",
+    "message": "Fatal error: Duplicate values for key: 96",
+    "afterFixPassedCases": 5
+  },
+  "nativeSdkTests": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "scope": [
+      "real WebRTC initial offer in both feedback modes",
+      "real native H264 decoder and background callbacks",
+      "NV12 frame delivered from background queue to actual Metal present",
+      "SDP payload reuse and repeated mappings",
+      "existing frame-feedback regressions"
+    ],
+    "summary": "phone-summary.json"
+  },
+  "deviceBuild": {
+    "result": "Passed",
+    "target": "generic/platform=iOS",
+    "codeSigningAllowed": false,
+    "log": "diagnostics/device-build.log"
+  },
+  "trace": {
+    "gate": "PASS",
+    "rows": 19,
+    "rawFiles": 1,
+    "scope": "native SDK fixture and one NV12 frame; require-flow none",
+    "report": "phone-trace-gate.json"
+  },
+  "sixDimensions": {
+    "networkHealth": "requires actual xCloud/xHome selected pair, RTT, jitter and loss",
+    "recoveryChainHealth": "requires actual recovery triggers, actions and subsequent new frames",
+    "mediaSupply": "native H264 first-frame callbacks and NV12 GPU completion verified in separate fixtures",
+    "steadySupply": "requires continuous 15-second real-session window",
+    "submitPresentTails": "one GPU completion verified; P95/P99 requires real-session samples",
+    "frameSupplyDelta": {
+      "nv12FixtureAccepted": 1,
+      "submitted": 1,
+      "completed": 1,
+      "actualSession": "requires real-session cumulative deltas"
+    }
+  },
+  "checks": {
+    "streamingSessionBoundary": "Passed",
+    "sourceHashes": "3 matched",
+    "webrtcCache": "fixed checksum and device/simulator binaries verified"
+  },
+  "knownSetupFailures": [
+    {
+      "test": "testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+      "reason": "test used inherited frame initializer with nil Metal device",
+      "resolution": "test explicitly supplies MTLCreateSystemDefaultDevice, matching application assembly",
+      "finalResult": "Passed"
+    }
+  ],
+  "cleanup": {
+    "result": "complete",
+    "allocatedBytesRemoved": 985247744,
+    "retainedWebRtcCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+    "record": "cleanup.json"
+  },
+  "deviceCrashAnalysis": "device-crash-analysis.json",
+  "stackFix": {
+    "delivered": true,
+    "validation": "stack-fix/validation.json",
+    "rustPassed": 259,
+    "deviceBuild": "Passed",
+    "startFutureBytes": 3184,
+    "deviceWrappedFrameBytes": 13136,
+    "cleanup": {
+      "result": "complete",
+      "allocatedBytesRemoved": 436482048,
+      "record": "stack-fix/cleanup.json"
+    }
+  }
+}

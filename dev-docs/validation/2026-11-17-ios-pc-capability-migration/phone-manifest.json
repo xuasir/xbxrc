@@ -1,0 +1,42 @@
+{
+  "resultBundle": "/tmp/xbxrc-ios-migration-resume-phone.xcresult",
+  "layoutCaptureCount": 200,
+  "selected": [
+    {
+      "file": "dev-docs/validation/2026-11-16-ios-settings-parity/phone-phone-settings-general.png",
+      "test": "CapabilityMigrationTests/testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes()",
+      "source": "43E654A3-5345-4F12-8D43-FE2DB604FE5E.png",
+      "sha256": "9d8b6b253f504739557e73d510ad26a14e53d7dcadb1e10db8e0a4b2a1510876"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/phone-pc-playtime-english-value.png",
+      "test": "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary()",
+      "source": "9851EDA4-384C-4EDE-9A6B-6C7FA5BE3468.png",
+      "sha256": "92fbf74ed261b368df59aebbddab8c7ed99d7d0ca121a6b69fa3799eb9d3e6fb"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/phone-pc-cloud-english-detail.png",
+      "test": "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary()",
+      "source": "8CBEECFA-BAB8-4DC9-AABB-9CAE58FD73B3.png",
+      "sha256": "98f28ad7f3a40f9bfa7d83092a937ebb50bceac6f3762695e857bf32593ea8a2"
+    }
+  ],
+  "retainedFiles": [
+    {
+      "file": "dev-docs/validation/2026-11-16-ios-settings-parity/phone-phone-settings-general.png",
+      "sha256": "9d8b6b253f504739557e73d510ad26a14e53d7dcadb1e10db8e0a4b2a1510876"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/phone-pc-cloud-english-detail.png",
+      "sha256": "98f28ad7f3a40f9bfa7d83092a937ebb50bceac6f3762695e857bf32593ea8a2"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-pc-capability-migration/phone-pc-playtime-english-value.png",
+      "sha256": "92fbf74ed261b368df59aebbddab8c7ed99d7d0ca121a6b69fa3799eb9d3e6fb"
+    }
+  ],
+  "archiveCleanup": {
+    "date": "2026-11-18",
+    "policy": "历史布局200张的运行次数保留；当前归档按 retainedFiles 读取。"
+  }
+}

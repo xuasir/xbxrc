@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/latest/layout.json",
+  "content": {
+    "left": {
+      "inner": [
+        {
+          "type": "joystick",
+          "axis": {
+            "input": "axisXY",
+            "output": "leftJoystick"
+          }
+        }
+      ]
+    },
+    "right": {
+      "inner": [
+        {
+          "type": "button",
+          "action": "gamepadA"
+        }
+      ]
+    }
+  }
+}

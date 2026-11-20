@@ -10,7 +10,7 @@
 | [rfcs/](rfcs/) | 方案、执行进度、决策与验收计划 |
 | [reports/](reports/) | 已交付结果与证据边界 |
 | [references/](references/) | 长期协议、构建与设计参考 |
-| [designs/](designs/) | 设计源文件和预览资源 |
+| [designs/](designs/README.md) | 启动图、图标的设计源文件与预览；页面验收见 [专项证据](../dev-docs/validation/ios-ui-evidence.md) |
 | [dev-docs/](../dev-docs/README.md) | 当前开发规范、本地验收与专项验证证据 |
 | [scripts/](../scripts/README.md) | 构建、发布、维护与诊断工具 |
 | [tests/](../tests/README.md) | 仓库级运行日志门禁回归及夹具 |

@@ -1,0 +1,72 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.58s
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_ios_bridge-2f5037d452e2afe7)
+
+running 9 tests
+credential_future_size credential_access=6104
+credential_future_size credential_renewal=5200
+credential_future_size scoped_credential_access=816
+exported_future_size start=3184
+exported_future_size pending_auth_update=160
+exported_future_size acknowledge_auth_update=176
+exported_future_size synchronize_auth_session=424
+exported_future_size exchange_offer=288
+exported_future_size exchange_media_offer=296
+exported_future_size supervise_runtime=3976
+exported_future_size validate_resume=6176
+exported_future_size submit_ice=296
+exported_future_size next_remote_ice_batch=296
+exported_future_size cancel=144
+exported_future_size close=176
+exported_future_size mark_connected=160
+exported_future_size send_text=6240
+startup_stage_future_size prepare_start_plan=test streaming::stack_tests::credential_operations_preserve_stack_headroom ... ok
+6144
+startup_stage_future_size home_context=1568
+startup_stage_future_size session_execution=6880
+exported_future_size power_off_console=6168
+test streaming::stack_tests::boxed_startup_stages_preserve_stack_headroom ... ok
+test streaming::stack_tests::exported_async_futures_stay_within_stack_budget ... ok
+test streaming::stack_tests::home_and_cloud_provider_credentials_poll_on_device_stack ... ok
+
+running 1 test
+
+running 1 test
+test streaming::stack_tests::ffi_start_cancels_a_pending_poll_and_frees_on_device_stack ... ok
+test streaming::stack_tests::ffi_start_returns_credential_error_and_frees_on_device_stack ... ok
+test streaming::stack_tests::ffi_start_free_drops_a_pending_operation_on_device_stack ... ok
+stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1
+stack_fixture_request POST /v5/sessions/cloud/play HTTP/1.1
+stack_fixture_request GET /v5/sessions/cloud/stack-fixture/state HTTP/1.1
+stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1
+stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1
+stack_fixture_request GET /v6/servers/home?mr=50 HTTP/1.1
+stack_fixture_request POST /v5/sessions/home/play HTTP/1.1
+stack_fixture_request GET /v5/sessions/home/stack-fixture/state HTTP/1.1
+stack_fixture_request DELETE /v5/sessions/cloud/stack-fixture HTTP/1.1
+test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 1.06s
+
+test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... ok
+stack_fixture_request DELETE /v5/sessions/home/stack-fixture HTTP/1.1
+stack_fixture_request CONNECT login.live.com:443 HTTP/1.1
+stack_fixture_request CONNECT login.live.com:443 HTTP/1.1
+test streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 75 filtered out; finished in 1.83s
+
+test streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 1.85s
+
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_streaming-1fdce5e6e2fd9df4)
+
+running 2 tests
+operation_wrapper_future_size cancel=400
+operation_wrapper_future_size scope=816
+operation_wrapper_future_size nested=816
+test session::operation::stack_tests::operation_wrappers_bound_large_future_layout ... ok
+test session::operation::stack_tests::large_nested_operations_poll_cancel_timeout_and_drop_on_small_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 176 filtered out; finished in 0.03s
+

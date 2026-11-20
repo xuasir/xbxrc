@@ -1,0 +1,11 @@
+Test Case '-[XBXRCTests.PCDataParityTests testTechnicalErrorsUseFiniteLocalizedMessages]' started.
+Test Case '-[XBXRCTests.PCDataParityTests testTechnicalErrorsUseFiniteLocalizedMessages]' passed (0.006 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Case '-[XBXRCTests.XBXRCTests testInteractiveLoginPersistsSessionAndProfile]' started.
+Test Case '-[XBXRCTests.XBXRCTests testInteractiveLoginPersistsSessionAndProfile]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.XBXRCTests testXboxDataStoreKeepsLibraryWhenPlaytimeFails]' started.
+Test Case '-[XBXRCTests.XBXRCTests testXboxDataStoreKeepsLibraryWhenPlaytimeFails]' passed (0.011 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.014 (0.015) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.020 (0.024) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.020 (0.027) seconds
+** TEST SUCCEEDED **

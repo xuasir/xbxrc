@@ -3,7 +3,8 @@ import Foundation
 enum IOSRuntimeTrace {
     private static let writer: IOSRuntimeTraceWriter = {
         let raw = UserDefaults.standard.string(forKey: IOSRuntimeTracePolicy.profileDefaultsKey)
-        let stored = raw.flatMap(IOSRuntimeTraceProfile.init(rawValue:))
+        let stored =
+            raw.flatMap(IOSRuntimeTraceProfile.init(rawValue:))
             ?? IOSRuntimeTracePolicy.defaultProfile
         return IOSRuntimeTraceWriter(profile: stored)
     }()
@@ -129,6 +130,17 @@ enum IOSRuntimeTrace {
 
     static func prepareExport(allFiles: Bool) async throws -> URL {
         try await writer.prepareExport(allFiles: allFiles)
+    }
+
+    static func setLightweight(_ enabled: Bool) { writer.setLightweight(enabled) }
+    static var isCapturing: Bool { writer.isCapturing }
+    static func startCapture() async throws { try await writer.startCapture() }
+    static func stopCapture() async -> URL? { await writer.stopCapture() }
+    static func diagnosticRecords() async -> [IOSDiagnosticRecord] {
+        await writer.diagnosticRecords()
+    }
+    static func diagnosticExport(_ record: IOSDiagnosticRecord) async throws -> URL {
+        try await writer.diagnosticExport(record)
     }
 
     static func clearFiles() async {

@@ -1,0 +1,9 @@
+{
+  "iosapp/XBXRC/App/AppRootView.swift": "19e81dc53bcf3f0cf5c161089cfe8a0585fb5f63e73d6705f867936e5cdf0a57",
+  "iosapp/XBXRC/App/XBXRCApp.swift": "e9ffecb0f44f4e759c48de5f254a74bd73f92ba01da9fe8861ccfed93698d37a",
+  "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift": "fbf41eba11a3c5fc212960fba473990747ca0b63fda8039c4ae659b14793e1ff",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "1f544cbba7382384b1eb01c7ace8482d66e01c473936d30661e323bc66900226",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": "63532a9f42dca6bf32a2bb06916d3b90909e16e307de4eed126818f0e7f92775",
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "12dafbdb9a5847a402ea36bb229ee897fa0c7ce5a367e90c1bb384fbd1f3aff0",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "36e786ea73f2123552f9a0f8fee10bd7062d9dc967950d375a70385a1163fbeb"
+}

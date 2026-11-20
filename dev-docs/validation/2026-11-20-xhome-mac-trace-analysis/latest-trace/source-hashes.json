@@ -1,0 +1,8 @@
+{
+  "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "0b4f30fb5caaeb932c8d19e4ade4cf3187fca5b72064dc942e4ac1296a80f2b0",
+  "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "cd2503b1ad752b021c7b20933aedd3245a296ca33f3d3ab6f8a31b5d16f979a4",
+  "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "350fcd1153ee98689b80d2f72c35544d4016fda9c39f1e8c69541e685bb8df83",
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift": "690a7e1e2ee0bf661c0575ee411709c78ecd02d693bb45b79c00aa722259ad64",
+  "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "8384fe192f31d8481d30eb8db47038d18ed9fedba373e0f0117552601303c3c5",
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift": "530b5dc853a8c086be22784ff604e698d9bd9e5e1bc75b2edfd5a93a7ea774e1"
+}

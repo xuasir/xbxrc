@@ -1,0 +1,50 @@
+{
+  "startedAt": "2026-11-20T13:41:26.224583+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-home-auth-stack-fix-20261120",
+  "baselineSources": [
+    {
+      "path": "crates/xbox-streaming/src/session/operation.rs",
+      "sha256": "9872d7ccaea966293867774ab5dae9d5b3ecfb0e4803d6f41c188831b5c2d2c6",
+      "modifiedAt": "2026-11-08T12:42:18.043927+08:00"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/cloud_access.rs",
+      "sha256": "529267998790f1d45805e578bfbba462cb4877b83cfde691e0dca5ca39dea0ff",
+      "modifiedAt": "2026-11-19T10:17:29.880614+08:00"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming.rs",
+      "sha256": "5710f6e7dabf7adb7c5fc06e5e5bf21831a17b82864f79a121a88b31e7b058b0",
+      "modifiedAt": "2026-11-20T10:55:05.346031+08:00"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/credentials.rs",
+      "sha256": "c22f5973a81ab2878e180b11420c78135d8b39b30b30ab559777decafa0ea687",
+      "modifiedAt": "2026-11-19T10:37:19.029751+08:00"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/stack_tests.rs",
+      "sha256": "1e82027661d5a74100a2a46cd697680643b7018be1484c75ed49ffbfe695b7c3",
+      "modifiedAt": "2026-11-20T11:31:34.162545+08:00"
+    }
+  ],
+  "screenshot": "xcode-home-crash.png",
+  "observed": {
+    "runDestination": "My Mac (Designed for iPad)",
+    "exception": "EXC_BAD_ACCESS code=2",
+    "address": "0x16d85b3e0",
+    "source": "SessionCancelToken::run operation.rs:355",
+    "topVisibleSymbol": "cloud_access::StreamingAccessProvider async block",
+    "scope": "screenshot; LLDB register/VM region data not yet available"
+  },
+  "liveDebugger": {
+    "state": "Exited",
+    "userConfirmed": true,
+    "completeBacktraceAvailable": false,
+    "registersAndVmRegionAvailable": false,
+    "cuaRead": "Timed out"
+  },
+  "extraTemporaryResults": [
+    "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-20-11_14-16-0013.xcresult"
+  ]
+}

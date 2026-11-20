@@ -1,0 +1,106 @@
+{
+  "completedAt": "2026-11-20T19:47:17.022323+08:00",
+  "removedRoot": "/private/tmp/xbxrc-ios-display-callback-20261120",
+  "removedEntries": [
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/DeviceDerivedData",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/SimulatorDerivedData",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/StreamSessionActor.diff",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/StreamingMetalRenderer.diff",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/StreamingRuntime.diff",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/XBXRCTests.diff",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/base-analyzer-tests.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/baseline",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/baseline-source.json",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/device-build.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/final-device-build.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/final-simulator-tests.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/final-simulator.xcresult",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/retry-simulator-tests.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/retry-simulator.xcresult",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/session-boundary.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/simulator-tests.log",
+      "kind": "file"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/simulator.xcresult",
+      "kind": "directory"
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-callback-20261120/r1/swift-format.log",
+      "kind": "file"
+    }
+  ],
+  "removedFileCount": 9123,
+  "removedAllocatedBytes": 1025810432,
+  "removedAllocatedMiB": 978.29,
+  "freeBytesBefore": 66355200000,
+  "freeBytesAfter": 67174400000,
+  "freeSpaceDeltaBytes": 819200000,
+  "processCheck": {
+    "status": "PASS",
+    "activeTaskBuildTestExportOrHostProcesses": 0,
+    "observation": "清理前ps检查仅匹配检查命令自身；xcresult摘要导出已完成"
+  },
+  "pathVerification": {
+    "temporaryRootAbsent": true,
+    "systemTemporaryRoot": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T",
+    "remainingTaskPaths": []
+  },
+  "retained": [
+    "最终33项测试日志及Xcode摘要",
+    "signal kill失败诊断",
+    "设备构建/格式/边界/分析器摘要",
+    "四份实现源码快照及任务diff、SHA-256",
+    "runtime-logs/ios原始用户Trace",
+    "共享WebRTC/Rust构建缓存"
+  ]
+}

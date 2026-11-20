@@ -1,0 +1,112 @@
+{
+  "date": "2026-11-20",
+  "taskState": "Validation Pending",
+  "stackFixDelivered": true,
+  "deviceRootCauseConfirmed": true,
+  "publicFutures": {
+    "beforeBytes": {
+      "start": 119216,
+      "pending_auth_update": 160,
+      "acknowledge_auth_update": 176,
+      "synchronize_auth_session": 424,
+      "exchange_offer": 14688,
+      "exchange_media_offer": 14728,
+      "supervise_runtime": 3976,
+      "validate_resume": 18960,
+      "submit_ice": 12912,
+      "next_remote_ice_batch": 27624,
+      "cancel": 144,
+      "close": 176,
+      "mark_connected": 160,
+      "send_text": 6240,
+      "power_off_console": 6168
+    },
+    "afterBytes": {
+      "start": 3184,
+      "pending_auth_update": 160,
+      "acknowledge_auth_update": 176,
+      "synchronize_auth_session": 424,
+      "exchange_offer": 288,
+      "exchange_media_offer": 296,
+      "supervise_runtime": 3976,
+      "validate_resume": 6176,
+      "submit_ice": 296,
+      "next_remote_ice_batch": 296,
+      "cancel": 144,
+      "close": 176,
+      "mark_connected": 160,
+      "send_text": 6240,
+      "power_off_console": 6168
+    },
+    "budgetBytes": 8192,
+    "startReductionPercent": 97.329
+  },
+  "boxedStages": {
+    "bytes": {
+      "prepare_start_plan": 6144,
+      "home_context": 28960,
+      "session_execution": 31768
+    },
+    "budgetBytes": 32768
+  },
+  "deviceStackLayout": {
+    "beforeWrappedFrameBytes": 477280,
+    "afterWrappedFrameBytes": 13136,
+    "frameReductionPercent": 97.248,
+    "constructorFrameBytes": {
+      "rust_future_new": 3408,
+      "RustFuture_new": 3472,
+      "WrappedFuture_new": 13136,
+      "exported_entry": 3328
+    },
+    "constructorChainFrameBytes": 23344,
+    "crashSymbolsMatched": true,
+    "scope": "实际 Debug iPhoneOS arm64 链接产物；相同哈希的 UniFFI 构造函数与原 ips 对照"
+  },
+  "smallStack": {
+    "bytes": 557056,
+    "regressionTestsAdded": 6,
+    "runtimeCases": 7,
+    "scope": [
+      "xCloud/xHome actual FFI create, poll, credential error, cancel/free and direct pending free",
+      "xCloud actual SessionFlow HTTP create -> Provisioned -> close, result record decoding",
+      "session ownership released after completion/cancellation/free"
+    ],
+    "fixtureEnvironment": "本地 HTTP 夹具通过独立测试进程设置 NO_PROXY；主测试进程环境保持原配置"
+  },
+  "rustTests": {
+    "xboxIosBridge": 73,
+    "xboxStreaming": 176,
+    "xboxStreamingProtocol": 10,
+    "total": 259,
+    "failed": 0,
+    "ignored": 0,
+    "evidence": [
+      "bridge-tests.log",
+      "rust-tests.log"
+    ]
+  },
+  "deviceBuild": {
+    "result": "Passed",
+    "configuration": "Debug",
+    "target": "generic/platform=iOS",
+    "codeSigningAllowed": false,
+    "log": "device-build.log"
+  },
+  "bindings": {
+    "contractEquivalent": true,
+    "byteExactHeader": true,
+    "byteExactModulemap": true,
+    "swiftDifference": "末尾换行",
+    "workspaceFilesRetained": true,
+    "evidence": "bindings-validation.json"
+  },
+  "checks": {
+    "cargoFmt": "Passed",
+    "sessionBoundary": "Passed",
+    "gitDiffCheck": "Passed",
+    "webrtcVersion": "137.7151.04 checksum/device/simulator binaries verified"
+  },
+  "deviceAcceptance": "重新编译安装后，实机复测 xCloud/xHome 首帧、退出重连及原六维 trace 清单",
+  "cleanup": "cleanup.json"
+}

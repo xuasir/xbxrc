@@ -1,0 +1,10 @@
+Test Case '-[XBXRCTests.CapabilityMigrationTests testSectionErrorsRenderAcrossWidthLanguageAndTextSizes]' passed (3.351 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.351 (3.352) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.351 (3.355) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.351 (3.357) seconds
+Test Case '-[XBXRCUITests.PCPageInteractionTests testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally]' passed (17.052 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSectionNoticesUseFullWidthAndWholeRowRetries]' passed (18.668 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 35.721 (35.725) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 35.721 (35.734) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 35.721 (35.738) seconds
+** TEST SUCCEEDED **

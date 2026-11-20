@@ -1,0 +1,16 @@
+{
+  "files": {
+    "crates/xbox-ios-bridge/src/cloud_access.rs": "9c80c971e1aec40dd0a763ec07b89cbf708cc3434655913ed4bd68abb24557a3",
+    "crates/xbox-ios-bridge/src/streaming.rs": "cb72422f66f0c212762e29f8f68819be7ec0b6e23141024a253b2173bd9d0aa4",
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "9afa7e17bb2b4ea06f26da2eaba3425cdd66defb5304653b7d7d8aea969dd615",
+    "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift": "621df227fb36da851be51dd82e2f1440542ebe5d458c77f1afabc9bddf9398b5",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "4985cb1d6f77d4f0a65f98286c44bb84b0b70d15e45b3c5c1a1aa4d23e505caa",
+    "iosapp/XBXRC/Features/Authentication/AuthStore.swift": "080000b742a7aba6590e0459544140627ad3c016bc504687717496a12096fe8c",
+    "iosapp/XBXRC/App/XBXRCApp.swift": "082f38d5311a9c325c2aa851ecaa1185833ca8e162f0356f218f5adae0fa4820",
+    "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift": "45a90096fc724875fdfa277553989550ad01b41ad302ae2798741bd9201a26c7",
+    "iosapp/XBXRC/Shared/State/XboxDataStore.swift": "a43422f7e532fc4244c4f6ebf9920d6b7b59c3816230a0bc9345a59e8fa6c121",
+    "iosapp/XBXRC/Shared/State/XboxPlayerData.swift": "df6fd87baf39f3a32784a2831a41af78304dbd32d0609e6bd8140a4b2c483124"
+  },
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-pc-behavior-parity/m1/r1",
+  "status": "in-progress"
+}

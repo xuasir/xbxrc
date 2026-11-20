@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "phoneDistinctTestsPassed": 10,
+  "phoneInitial": {
+    "passed": 8,
+    "failed": 2
+  },
+  "phoneRecheck": {
+    "passed": 2,
+    "failed": 0
+  },
+  "ipad": {
+    "passed": 7,
+    "failed": 0
+  },
+  "layoutSnapshots": 756,
+  "retainedFinalPNGs": 11,
+  "swiftParsedFiles": 108,
+  "deviceBuild": {
+    "status": "succeeded",
+    "errors": 0,
+    "existingWarnings": 3
+  },
+  "checks": [
+    "Swift parse",
+    "Swift format lint",
+    "pnpm lint:fix",
+    "streaming session boundary"
+  ],
+  "cleanup": "complete"
+}

@@ -128,7 +128,7 @@ enum StreamingResolutionOption: Int, CaseIterable, Identifiable, Sendable {
     }
 
     static let cloudChoices: [StreamingResolutionOption] = [.p1440, .p1080Hq, .p1080, .p720]
-    static let homeChoices: [StreamingResolutionOption] = [.p1080Hq, .p1080, .p720]
+    static let homeChoices: [StreamingResolutionOption] = cloudChoices
 }
 
 enum StreamingBitrateMode: String, CaseIterable, Identifiable, Sendable {
@@ -159,10 +159,10 @@ enum StreamingCodecOption: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .auto: "自动"
-        case .h264High: "H.264 High"
-        case .h264Main: "H.264 Main"
-        case .h264Normal: "H.264 Constrained Baseline"
-        case .h264Low: "H.264 Baseline"
+        case .h264High: "超高"
+        case .h264Main: "高"
+        case .h264Normal: "标准"
+        case .h264Low: "低"
         }
     }
 
@@ -234,6 +234,14 @@ struct StreamingSessionSettingsSnapshot: Equatable, Sendable {
     let audioBitrateMode: String
     let audioBitrateKbps: Int
     let homeTurnFallback: Bool
+    var cloudServerRegion: String = "auto"
+    var videoFit: String = "fit"
+    var startMuted: Bool = false
+    var keepScreenAwake: Bool = true
+    var customTurn: MobileTurnConfiguration? = nil
+    var enableAudioControl: Bool = false
+    var preventResolutionDrops: Bool = false
+    var powerOn: Bool = false
 
     static let standard = StreamingSessionSettingsSnapshot(
         preferredGameLocale: "en-US",
@@ -247,7 +255,7 @@ struct StreamingSessionSettingsSnapshot: Equatable, Sendable {
         cloudBitrateMbps: 20,
         audioBitrateMode: StreamingBitrateMode.auto.rawValue,
         audioBitrateKbps: 20,
-        homeTurnFallback: true
+        homeTurnFallback: false
     )
 }
 
@@ -268,7 +276,27 @@ protocol PreferredGameLocaleProviding: AnyObject {
 }
 
 @MainActor
-final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, StreamingSessionSettingsProviding, PreferredGameLocaleProviding {
+final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding,
+    StreamingSessionSettingsProviding,
+    PreferredGameLocaleProviding
+{
+    @Published var mobile: MobilePreferences {
+        didSet {
+            guard mobile != oldValue else { return }
+            let normalized = mobile.normalized()
+            if mobile != normalized { mobile = normalized }
+            if let data = try? JSONEncoder().encode(normalized) {
+                persistence.defaults.set(data, forKey: MobilePreferences.persistenceKey)
+            }
+        }
+    }
+    @Published private(set) var customTurn: MobileTurnConfiguration?
+    @Published var customTurnEnabled: Bool {
+        didSet {
+            persistence.defaults.set(customTurnEnabled, forKey: "ios.connection.customTurnEnabled")
+        }
+    }
+
     static let cloudRegionKey = "ios.cloud.forceRegionPreset"
     static let ephemeralLoginKey = "ios.auth.usesEphemeralWebSession"
     static let appearanceModeKey = "ios.appearance.mode"
@@ -452,6 +480,12 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
         let persistence = AppSettingsPersistence(defaults: defaults)
         let snapshot = persistence.load()
         self.persistence = persistence
+        mobile =
+            defaults.data(forKey: MobilePreferences.persistenceKey)
+            .flatMap { try? JSONDecoder().decode(MobilePreferences.self, from: $0) }
+            .flatMap { $0.schemaVersion == 2 ? $0.normalized() : nil } ?? MobilePreferences()
+        customTurn = MobileTurnKeychain.load()
+        customTurnEnabled = defaults.bool(forKey: "ios.connection.customTurnEnabled")
         appearanceMode = AppAppearanceMode(rawValue: snapshot.appearanceMode) ?? .system
         appIconPreset = AppIconPreset(rawValue: snapshot.appIconPreset) ?? .default
         cloudRegionPreset = CloudRegionPreset(rawValue: snapshot.cloudRegionPreset) ?? .default
@@ -469,6 +503,9 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
         audioBitrateKbps = snapshot.audioBitrateKbps
         homeTurnFallbackEnabled = snapshot.homeTurnFallbackEnabled
         persistence.save(snapshot)
+        if let data = try? JSONEncoder().encode(mobile) {
+            defaults.set(data, forKey: MobilePreferences.persistenceKey)
+        }
     }
 
     /// 仅在系统确认切换成功后提交偏好，失败时保留当前图标。
@@ -523,19 +560,40 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
 
     var streamingSessionSettings: StreamingSessionSettingsSnapshot {
         StreamingSessionSettingsSnapshot(
-            preferredGameLocale: PreferredGameLocaleNormalizer.normalize(preferredGameLocale),
+            preferredGameLocale: PreferredGameLocaleNormalizer.normalizePreference(
+                preferredGameLocale),
             cloudResolution: cloudResolution.rawValue,
             homeResolution: homeResolution.rawValue,
             preferIPv6: preferIPv6,
             videoCodec: codecPreference.rawValue,
             homeBitrateMode: homeBitrateMode.rawValue,
-            homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 1, max: 200),
+            homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 0, max: 200),
             cloudBitrateMode: cloudBitrateMode.rawValue,
-            cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 1, max: 200),
+            cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 0, max: 200),
             audioBitrateMode: audioBitrateMode.rawValue,
-            audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 1, max: 512),
-            homeTurnFallback: homeTurnFallbackEnabled
+            audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 0, max: 200),
+            homeTurnFallback: homeTurnFallbackEnabled,
+            cloudServerRegion: mobile.cloudServerRegion,
+            videoFit: mobile.videoFit,
+            startMuted: mobile.startMuted,
+            keepScreenAwake: mobile.keepScreenAwake,
+            customTurn: customTurnEnabled ? customTurn : nil,
+            enableAudioControl: mobile.enableAudioControl,
+            preventResolutionDrops: mobile.preventResolutionDrops,
+            powerOn: mobile.powerOn
         )
+    }
+
+    func applyCustomTurn(_ value: MobileTurnConfiguration) throws {
+        try MobileTurnKeychain.save(value)
+        customTurn = value
+        customTurnEnabled = true
+    }
+
+    func clearCustomTurn() throws {
+        try MobileTurnKeychain.clear()
+        customTurn = nil
+        customTurnEnabled = false
     }
 
     private func persistSettings() {
@@ -546,17 +604,18 @@ final class AppSettingsStore: ObservableObject, CloudRegionSettingsProviding, St
                 appIconPreset: appIconPreset.rawValue,
                 cloudRegionPreset: cloudRegionPreset.rawValue,
                 usesEphemeralLoginSession: usesEphemeralLoginSession,
-                preferredGameLocale: PreferredGameLocaleNormalizer.normalizePreference(preferredGameLocale),
+                preferredGameLocale: PreferredGameLocaleNormalizer.normalizePreference(
+                    preferredGameLocale),
                 cloudResolution: cloudResolution.rawValue,
                 homeResolution: homeResolution.rawValue,
                 preferIPv6: preferIPv6,
                 codecPreference: codecPreference.rawValue,
                 homeBitrateMode: homeBitrateMode.rawValue,
-                homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 1, max: 200),
+                homeBitrateMbps: Self.clamp(homeBitrateMbps, min: 0, max: 200),
                 cloudBitrateMode: cloudBitrateMode.rawValue,
-                cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 1, max: 200),
+                cloudBitrateMbps: Self.clamp(cloudBitrateMbps, min: 0, max: 200),
                 audioBitrateMode: audioBitrateMode.rawValue,
-                audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 1, max: 512),
+                audioBitrateKbps: Self.clamp(audioBitrateKbps, min: 0, max: 200),
                 homeTurnFallbackEnabled: homeTurnFallbackEnabled
             )
         )

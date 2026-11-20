@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-20",
+  "file": "iosapp/XBXRCTests/XBXRCTests.swift",
+  "kind": "Additive test",
+  "addedTest": "testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+  "currentFileHash": "dfcb841feb377939605443f15dd530a359dc40d15da17f6f09d6436546244954",
+  "verifiedFileHash": "9529310d5004aa7c6648d635efc0310fa195d81f76506ae6308e4bc95a64c11d",
+  "addedBlockHash": "4683c05a62bcdadb6ddaccfeec796ab497ea543d173063c8fee483b74ae80d57",
+  "restOfFileMatchesVerifiedSource": true,
+  "preserved": true,
+  "validationScope": "r4已验收的分区回归及其共享替身完整保留；新增串流用例由对应任务验证。"
+}

@@ -4,7 +4,8 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUTPUT_DIR="$REPO_ROOT/iosapp/XBXRC/Platform/RustBridge/Generated"
-LIBRARY_PATH="$REPO_ROOT/target/debug/libxbox_ios_bridge.a"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target/ios-bindgen}"
+LIBRARY_PATH="$CARGO_TARGET_DIR/debug/libxbox_ios_bridge.a"
 
 cd "$REPO_ROOT"
 cargo build -p xbox-ios-bridge

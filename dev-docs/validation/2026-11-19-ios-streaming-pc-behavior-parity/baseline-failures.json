@@ -1,0 +1,20 @@
+{
+  "sourceLog": "m6-ipad-r6.log",
+  "scope": "两项资料模块旧断言单独保留；最终串流回归显式排除",
+  "failures": [
+    {
+      "test": "testInteractiveLoginPersistsSessionAndProfile",
+      "actual": 4,
+      "expected": 1,
+      "source": "iosapp/XBXRC/Features/Authentication/AuthStore.swift:351",
+      "reason": "当前资料刷新按identity/social/friends/presence四个source独立执行；旧断言仍期待一次profile请求"
+    },
+    {
+      "test": "testXboxDataStoreKeepsLibraryWhenPlaytimeFails",
+      "actual": null,
+      "expected": "游戏已载入，游玩时长暂时无法更新",
+      "source": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+      "reason": "当前资料模块使用section state；旧断言仍检查聚合warning文案"
+    }
+  ]
+}

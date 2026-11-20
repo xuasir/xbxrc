@@ -38,11 +38,11 @@ enum IOSStreamInputPacketEncoder {
     }
 
     private static func normalizeAxis(_ value: Float) -> Int16 {
-        Int16((Double(value.clamped(to: -1 ... 1)) * 32_767).rounded())
+        Int16((Double(value.clamped(to: -1...1)) * 32_767).rounded())
     }
 
     private static func normalizeTrigger(_ value: Float) -> UInt16 {
-        UInt16((Double(value.clamped(to: 0 ... 1)) * 65_535).rounded())
+        UInt16((Double(value.clamped(to: 0...1)) * 65_535).rounded())
     }
 }
 
@@ -59,7 +59,8 @@ struct IOSStreamInputSendGate: Equatable, Sendable {
         state: IOSStreamGamepadState,
         bufferedAmount: UInt64,
         nowMilliseconds: Double,
-        force: Bool = false
+        force: Bool = false,
+        hasFrameFeedback: Bool = false
     ) -> Bool {
         if force {
             blocked = false
@@ -76,9 +77,10 @@ struct IOSStreamInputSendGate: Equatable, Sendable {
         }
 
         let changed = lastSentState != state
-        let keepaliveDue = lastSentState != nil
+        let keepaliveDue =
+            lastSentState != nil
             && nowMilliseconds - lastSentAtMilliseconds >= Self.idleKeepaliveMilliseconds
-        return changed || keepaliveDue
+        return changed || keepaliveDue || hasFrameFeedback
     }
 
     mutating func markSent(state: IOSStreamGamepadState, at nowMilliseconds: Double) {
@@ -136,13 +138,15 @@ struct IOSStreamRumbleEffect: Equatable, Sendable {
     let rightTrigger: Float
     let durationMilliseconds: UInt16
     let format: IOSStreamRumbleWireFormat
+    var delayMilliseconds: UInt16 = 0
+    var repeatCount: UInt8 = 0
 
     var isStop: Bool {
         durationMilliseconds == 0
             || strongMagnitude == 0
-            && weakMagnitude == 0
-            && leftTrigger == 0
-            && rightTrigger == 0
+                && weakMagnitude == 0
+                && leftTrigger == 0
+                && rightTrigger == 0
     }
 }
 
@@ -158,16 +162,16 @@ enum IOSStreamRumblePacketDecoder {
     }
 
     private static func decodeBetterXcloud(_ bytes: [UInt8]) -> IOSStreamRumbleEffect? {
-        guard bytes.count >= 13 else { return nil }
+        guard bytes.count == 12 || bytes.count == 13 else { return nil }
         let v8Type = UInt16(bytes[0]) | UInt16(bytes[1]) << 8
-        let messageTypeSize = v8Type & reportType != 0 ? 2 : 1
+        let messageTypeSize = bytes.count == 13 ? 2 : 1
         let messageType = messageTypeSize == 2 ? v8Type : UInt16(bytes[0])
         guard messageType & reportType != 0 else { return nil }
 
         var offset = messageTypeSize
         guard bytes.indices.contains(offset), bytes[offset] == 0 else { return nil }
         offset += 1
-        guard offset + 6 < bytes.count else { return nil }
+        guard offset + 9 < bytes.count else { return nil }
 
         return IOSStreamRumbleEffect(
             gamepadIndex: normalizedGamepadIndex(bytes[offset]),
@@ -176,7 +180,9 @@ enum IOSStreamRumblePacketDecoder {
             leftTrigger: percent(bytes[offset + 3]),
             rightTrigger: percent(bytes[offset + 4]),
             durationMilliseconds: UInt16(bytes[offset + 5]) | UInt16(bytes[offset + 6]) << 8,
-            format: .betterXcloud
+            format: .betterXcloud,
+            delayMilliseconds: UInt16(bytes[offset + 7]) | UInt16(bytes[offset + 8]) << 8,
+            repeatCount: bytes[offset + 9]
         )
     }
 
@@ -231,6 +237,14 @@ struct IOSStreamHapticsPulse: Equatable, Sendable {
     let intensity: Float
     let sharpness: Float
     let durationMilliseconds: UInt16
+    var delayMilliseconds: UInt16 = 0
+    var repeatCount: UInt8 = 0
+
+    var startTimesMilliseconds: [Int] {
+        (0...Int(repeatCount)).map {
+            Int(delayMilliseconds) + $0 * (Int(durationMilliseconds) + Int(delayMilliseconds))
+        }
+    }
 }
 
 struct IOSStreamHapticsTransition: Equatable, Sendable {
@@ -259,7 +273,7 @@ enum IOSStreamHapticsRouter {
         supportedRoutes: Set<IOSStreamHapticsRoute>
     ) -> [IOSStreamHapticsPulse] {
         guard !effect.isStop else { return [] }
-        let duration = max(10, effect.durationMilliseconds)
+        let duration = effect.durationMilliseconds
         var pulses: [IOSStreamHapticsPulse] = []
 
         appendMotor(
@@ -299,7 +313,12 @@ enum IOSStreamHapticsRouter {
             pulses: &pulses
         )
 
-        return coalesced(pulses)
+        return coalesced(pulses).map { pulse in
+            var value = pulse
+            value.delayMilliseconds = effect.delayMilliseconds
+            value.repeatCount = effect.repeatCount
+            return value
+        }
     }
 
     private static func appendMotor(
@@ -325,7 +344,7 @@ enum IOSStreamHapticsRouter {
         pulses.append(
             IOSStreamHapticsPulse(
                 route: route,
-                intensity: magnitude.clamped(to: 0 ... 1),
+                intensity: magnitude.clamped(to: 0...1),
                 sharpness: sharpness,
                 durationMilliseconds: duration
             )
@@ -354,30 +373,30 @@ enum IOSStreamHapticsRouter {
     }
 }
 
-private extension Float {
-    func clamped(to range: ClosedRange<Float>) -> Float {
+extension Float {
+    fileprivate func clamped(to range: ClosedRange<Float>) -> Float {
         min(range.upperBound, max(range.lowerBound, self))
     }
 }
 
-private extension Data {
-    mutating func appendUInt16LE(_ value: UInt16) {
+extension Data {
+    fileprivate mutating func appendUInt16LE(_ value: UInt16) {
         append(contentsOf: Swift.withUnsafeBytes(of: value.littleEndian, Array.init))
     }
 
-    mutating func appendUInt32LE(_ value: UInt32) {
+    fileprivate mutating func appendUInt32LE(_ value: UInt32) {
         append(contentsOf: Swift.withUnsafeBytes(of: value.littleEndian, Array.init))
     }
 
-    mutating func appendUInt32BE(_ value: UInt32) {
+    fileprivate mutating func appendUInt32BE(_ value: UInt32) {
         append(contentsOf: Swift.withUnsafeBytes(of: value.bigEndian, Array.init))
     }
 
-    mutating func appendInt16LE(_ value: Int16) {
+    fileprivate mutating func appendInt16LE(_ value: Int16) {
         append(contentsOf: Swift.withUnsafeBytes(of: value.littleEndian, Array.init))
     }
 
-    mutating func appendFloat64LE(_ value: Double) {
+    fileprivate mutating func appendFloat64LE(_ value: Double) {
         append(contentsOf: Swift.withUnsafeBytes(of: value.bitPattern.littleEndian, Array.init))
     }
 }

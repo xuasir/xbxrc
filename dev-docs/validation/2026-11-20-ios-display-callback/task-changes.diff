@@ -1,0 +1,747 @@
+--- baseline/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
++++ iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+@@ -101,6 +101,7 @@
+     private var nextLocalIceFlushTaskID: UInt64 = 0
+     private var latestRequestedGeneration: UInt64 = 0
+     private var stateSink: StateSink?
++    private var lastPublishedState: StreamingFeatureState?
+     private var videoSink: VideoSink?
+     private var diagnosticsSink: DiagnosticsSink?
+     private var microphoneSink: MicrophoneSink?
+@@ -229,6 +230,7 @@
+         self.microphoneSink = microphoneSink
+         requestedAudioMuted = request.settings.startMuted
+         self.stateSink = stateSink
++        lastPublishedState = nil
+         self.videoSink = videoSink
+         self.diagnosticsSink = diagnosticsSink
+         playbackReadiness.resetForPeer()
+@@ -2001,6 +2003,7 @@
+         activeAccessHandle = nil
+         activeGeneration = nil
+         stateSink = nil
++        lastPublishedState = nil
+         videoSink = nil
+         diagnosticsSink = nil
+         playbackReadiness.resetForPeer()
+@@ -2333,7 +2336,11 @@
+ 
+     private func publish(_ state: StreamingFeatureState, generation: UInt64) async {
+         guard isCurrent(generation) else { return }
+-        await stateSink?(generation, visible ? state : .suspending)
++        let visibleState = visible ? state : .suspending
++        guard let stateSink, lastPublishedState != visibleState else { return }
++        // 在跨 MainActor 等待前记住状态，合并重入的健康回报。
++        lastPublishedState = visibleState
++        await stateSink(generation, visibleState)
+     }
+ 
+     private func ensureCurrent(_ generation: UInt64) throws {
+--- baseline/iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift
++++ iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift
+@@ -623,6 +623,7 @@
+     private func apply(state: StreamingFeatureState, generation: UInt64) {
+         guard generation == self.generation else { return }
+         if case .failed = self.state { return }
++        guard self.state != state else { return }
+         self.state = state
+         let elapsed = ProcessInfo.processInfo.systemUptime * 1_000 - sessionStartedAtMilliseconds
+         if state == .waitingForFirstFrame, connectedElapsedMilliseconds == nil {
+--- baseline/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
++++ iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+@@ -177,6 +177,59 @@
+     }
+ }
+ 
++struct StreamingDisplayHealthCoalescer {
++    static let interval: Duration = .milliseconds(100)
++    private var context: StreamingPresentationTraceContext?
++    private var lastDelivered: StreamingDisplayHealthSnapshot?
++    private(set) var pending: StreamingDisplayHealthSnapshot?
++
++    mutating func offer(
++        context: StreamingPresentationTraceContext,
++        snapshot: StreamingDisplayHealthSnapshot
++    ) -> StreamingPresentationLifecycleEvent? {
++        if self.context != context {
++            self.context = context
++            lastDelivered = snapshot
++            pending = nil
++            return .displayHealth(context, snapshot)
++        }
++        pending = snapshot == lastDelivered ? nil : snapshot
++        return nil
++    }
++
++    mutating func flush() -> StreamingPresentationLifecycleEvent? {
++        guard let context, let pending else { return nil }
++        self.pending = nil
++        lastDelivered = pending
++        return .displayHealth(context, pending)
++    }
++
++    mutating func reset() {
++        context = nil
++        pending = nil
++        lastDelivered = nil
++    }
++}
++
++struct StreamingGpuCompletionTiming: Sendable {
++    let completedAtMs: Double
++    let slotReleasedAtMs: Double
++    let mainActorEnteredAtMs: Double
++    let feedbackFinishedAtMs: Double
++    let telemetryFinishedAtMs: Double
++
++    func tracePayload(recordedAtMs: Double) -> [String: IOSRuntimeTraceValue] {
++        [
++            "gpuToSlotReleaseMs": .double(max(0, slotReleasedAtMs - completedAtMs)),
++            "gpuToMainActorMs": .double(max(0, mainActorEnteredAtMs - completedAtMs)),
++            "frameFeedbackWorkMs": .double(max(0, feedbackFinishedAtMs - mainActorEnteredAtMs)),
++            "displayTelemetryWorkMs": .double(max(0, telemetryFinishedAtMs - feedbackFinishedAtMs)),
++            "mainActorWorkBeforeTraceMs": .double(max(0, recordedAtMs - mainActorEnteredAtMs)),
++            "gpuToTraceRecordMs": .double(max(0, recordedAtMs - completedAtMs)),
++        ]
++    }
++}
++
+ func streamingPresentationTracePayload(
+     _ payload: [String: IOSRuntimeTraceValue],
+     context: StreamingPresentationTraceContext?
+@@ -206,7 +259,7 @@
+     case pipelineUnavailable
+ }
+ 
+-private enum StreamingDecodedFrameStorage: @unchecked Sendable {
++enum StreamingDecodedFrameStorage: @unchecked Sendable {
+     case pixelBuffer(CVPixelBuffer)
+ 
+     #if targetEnvironment(simulator)
+@@ -226,13 +279,13 @@
+ }
+ 
+ #if targetEnvironment(simulator)
+-    private struct StreamingSimulatorI420Frame: @unchecked Sendable {
++    struct StreamingSimulatorI420Frame: @unchecked Sendable {
+         // mailbox 强引用 WebRTC buffer，确保异步 GPU 上传前 Y/U/V plane 生命周期有效。
+         let buffer: any RTCI420BufferProtocol
+     }
+ #endif
+ 
+-private struct StreamingDecodedFrameRef: @unchecked Sendable {
++struct StreamingDecodedFrameRef: @unchecked Sendable {
+     let identifier: UInt64
+     let storage: StreamingDecodedFrameStorage
+     let width: Int
+@@ -243,11 +296,11 @@
+     let frameFeedback: StreamingFrameFeedbackTicket?
+ }
+ 
+-private struct StreamingMailboxSubmissionResult {
++struct StreamingMailboxSubmissionResult {
+     let overwroteCandidate: Bool
+ }
+ 
+-private struct StreamingMailboxDrainResult {
++struct StreamingMailboxDrainResult {
+     let frame: StreamingDecodedFrameRef?
+     let drawableBusy: Bool
+ }
+@@ -267,7 +320,7 @@
+     }
+ }
+ 
+-private final class StreamingLatestFrameMailbox {
++final class StreamingLatestFrameMailbox: @unchecked Sendable {
+     private let lock = NSLock()
+     private var inflightCurrent: StreamingDecodedFrameRef?
+     private var latestCandidate: StreamingDecodedFrameRef?
+@@ -367,6 +420,12 @@
+         lock.unlock()
+         return count
+     }
++
++    func snapshotDrawableBusy() -> Bool {
++        lock.lock()
++        defer { lock.unlock() }
++        return inflightCurrent != nil
++    }
+ }
+ 
+ final class StreamingDisplayTelemetry {
+@@ -456,9 +515,11 @@
+ 
+     func recordPresent(
+         identifier: UInt64,
+-        timestampMilliseconds: Double
++        timestampMilliseconds: Double,
++        drawableBusy: Bool? = nil
+     ) -> (snapshot: StreamingDisplayHealthSnapshot, isFirstPresent: Bool) {
+         lock.lock()
++        if let drawableBusy { currentDrawableBusy = drawableBusy }
+         presentCount += 1
+         lastPresentDelta = 1
+         frameInterval.observe(timestampMilliseconds)
+@@ -497,6 +558,15 @@
+         lock.lock()
+         pendingSubmissionAtMilliseconds.removeValue(forKey: identifier)
+         lock.unlock()
++    }
++
++    @discardableResult
++    func cancelPendingSubmissions() -> StreamingDisplayHealthSnapshot {
++        lock.lock()
++        defer { lock.unlock() }
++        pendingSubmissionAtMilliseconds.removeAll(keepingCapacity: true)
++        currentDrawableBusy = false
++        return makeSnapshotLocked()
+     }
+ 
+     private func makeSnapshotLocked() -> StreamingDisplayHealthSnapshot {
+@@ -784,6 +854,8 @@
+     private let mailbox = StreamingLatestFrameMailbox()
+     private let telemetry = StreamingDisplayTelemetry()
+     private let scheduler = StreamingMetalRenderScheduler()
++    private var healthCoalescer = StreamingDisplayHealthCoalescer()
++    private var healthReportTask: Task<Void, Never>?
+     private let stateLock = NSLock()
+     private let commandQueue: MTLCommandQueue?
+     private let nv12PipelineState: MTLRenderPipelineState?
+@@ -801,6 +873,7 @@
+     private var videoContentMode: StreamingVideoContentMode = .fit
+     private var picture = MobilePicturePreferences()
+     private var presentationActive = true
++    private var presentationRevision: UInt64 = 0
+     #if !targetEnvironment(simulator)
+         private var superResolutionResources:
+             (
+@@ -860,12 +933,14 @@
+     }
+ 
+     func updateTraceContext(_ context: StreamingPresentationTraceContext?) {
++        if currentTraceContext() != context { flushDisplayHealth(reset: true) }
+         stateLock.lock()
+         guard streamingPresentationContextDidChange(previous: traceContext, next: context) else {
+             stateLock.unlock()
+             return
+         }
+         traceContext = context
++        presentationRevision &+= 1
+         lastReportedSurfaceSize = .zero
+         lastReportedFrameSize = .zero
+         didReportDisplayPipelineReady = false
+@@ -893,15 +968,23 @@
+ 
+     func setPresentationActive(_ active: Bool) {
+         guard presentationActive != active else { return }
++        flushDisplayHealth(reset: true)
+         presentationActive = active
++        presentationRevision &+= 1
+         mailbox.reset()
++        telemetry.cancelPendingSubmissions()
+         frameIngress.reset()
+         scheduler.setActive(active && window != nil)
+         if active { scheduler.requestTick() }
+     }
+ 
+     func shutdown() {
++        flushDisplayHealth(reset: true)
++        presentationActive = false
++        presentationRevision &+= 1
+         updateFrameFeedbackSession(nil)
++        mailbox.reset()
++        telemetry.cancelPendingSubmissions()
+         frameIngress.reset()
+         frameIngress.frameSink = nil
+         frameIngress.sizeSink = nil
+@@ -1169,15 +1252,23 @@
+         encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+         encoder.endEncoding()
+ 
+-        commandBuffer.addCompletedHandler { [weak self] completedCommandBuffer in
++        let revision = presentationRevision
++        commandBuffer.addCompletedHandler { [weak self, mailbox] completedCommandBuffer in
+             let completedSuccessfully = completedCommandBuffer.status == .completed
+             let renderedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
++            // GPU 已完成后立即释放帧槽；唯一 frameId 隔离 reset 后的迟到回调。
++            if completedSuccessfully {
++                _ = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
++            }
++            let slotReleasedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+             Task { @MainActor in
+                 self?.handleCompletedCommandBuffer(
+                     completedSuccessfully: completedSuccessfully,
+                     frame: frame,
+                     context: traceContext,
+-                    renderedAtMilliseconds: renderedAtMilliseconds
++                    revision: revision,
++                    renderedAtMilliseconds: renderedAtMilliseconds,
++                    slotReleasedAtMs: slotReleasedAtMs
+                 )
+             }
+         }
+@@ -1187,7 +1278,10 @@
+                 let presentedAt = presentedDrawable.presentedTime * 1_000
+                 guard presentedAt > 0 else { return }
+                 Task { @MainActor in
+-                    guard let self, self.currentTraceContext() == traceContext else { return }
++                    guard let self, self.presentationActive,
++                        self.presentationRevision == revision,
++                        self.currentTraceContext() == traceContext
++                    else { return }
+                     let snapshot = self.telemetry.recordDrawablePresent(
+                         submittedAt: submitTimestamp, presentedAt: presentedAt)
+                     self.emitPresentationEvent(.displayHealth(traceContext, snapshot))
+@@ -1202,9 +1296,14 @@
+         completedSuccessfully: Bool,
+         frame: StreamingDecodedFrameRef,
+         context: StreamingPresentationTraceContext,
+-        renderedAtMilliseconds: Double
++        revision: UInt64,
++        renderedAtMilliseconds: Double,
++        slotReleasedAtMs: Double
+     ) {
+-        guard currentTraceContext() == context else { return }
++        let mainActorEnteredAtMs = StreamingFrameFeedbackClock.nowMilliseconds
++        guard presentationActive, presentationRevision == revision,
++            currentTraceContext() == context
++        else { return }
+         guard completedSuccessfully else {
+             telemetry.cancelSubmit(identifier: frame.identifier)
+             handleSkippedPresent(
+@@ -1214,40 +1313,35 @@
+             )
+             return
+         }
+-        frame.frameFeedback?.session.recordRendered(
+-            timing: frame.frameFeedback!.timing, atMilliseconds: renderedAtMilliseconds)
+-        let hasPending = handlePresentedFrame(
+-            frame, context: context, presentedAt: renderedAtMilliseconds)
+-        let health = telemetry.setDrawableBusy(false)
+-        emitPresentationEvent(.displayHealth(context, health))
+-        if hasPending { scheduler.requestTick() }
+-    }
+-
+-    @discardableResult
+-    private func handlePresentedFrame(
+-        _ frame: StreamingDecodedFrameRef,
+-        context: StreamingPresentationTraceContext,
+-        presentedAt presentTimestamp: Double
+-    ) -> Bool {
+-        let hasPending = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
++        if let feedback = frame.frameFeedback {
++            feedback.session.recordRendered(
++                timing: feedback.timing, atMilliseconds: renderedAtMilliseconds)
++        }
++        let feedbackFinishedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+         let present = telemetry.recordPresent(
+             identifier: frame.identifier,
+-            timestampMilliseconds: presentTimestamp
++            timestampMilliseconds: renderedAtMilliseconds,
++            drawableBusy: mailbox.snapshotDrawableBusy()
+         )
+         emitPresentationEvent(.displayHealth(context, present.snapshot))
++        let timing = StreamingGpuCompletionTiming(
++            completedAtMs: renderedAtMilliseconds, slotReleasedAtMs: slotReleasedAtMs,
++            mainActorEnteredAtMs: mainActorEnteredAtMs, feedbackFinishedAtMs: feedbackFinishedAtMs,
++            telemetryFinishedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
+         var presentPayload: [String: IOSRuntimeTraceValue] = [
+             "presentCount": .integer(present.snapshot.presentCount),
+             "frameId": .integer(Int64(clamping: frame.identifier)),
+-            "presentedAtMonotonicMs": .double(presentTimestamp),
++            "presentedAtMonotonicMs": .double(renderedAtMilliseconds),
+             "presentTimestampSource": .string("commandBufferCompletion"),
+-            "completionHandlerDelayMs": .double(
+-                max(0, StreamingFrameFeedbackClock.nowMilliseconds - presentTimestamp)),
+             "frameWidth": .integer(Int64(frame.width)),
+             "frameHeight": .integer(Int64(frame.height)),
+         ]
+         if let compatibilityPath = frame.storage.compatibilityPath {
+             presentPayload["compatibilityPath"] = .string(compatibilityPath)
+         }
++        presentPayload.merge(
++            timing.tracePayload(recordedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
++        ) { _, new in new }
+         IOSRuntimeTrace.state(
+             domain: "ios-streaming",
+             event: "displayPresent",
+@@ -1279,7 +1373,7 @@
+             )
+             emitPresentationEvent(.firstFramePresented(context))
+         }
+-        return hasPending
++        if mailbox.hasPendingFrame() { scheduler.requestTick() }
+     }
+ 
+     private func handleSkippedPresent(
+@@ -1309,7 +1403,8 @@
+                 importance: .key,
+                 operationID: context.attemptID
+             )
+-            emitPresentationEvent(.displayHealth(context, telemetry.setDrawableBusy(false)))
++            emitPresentationEvent(
++                .displayHealth(context, telemetry.setDrawableBusy(mailbox.snapshotDrawableBusy())))
+         }
+         if StreamingRenderRetryPolicy.shouldRequestImmediateTick(
+             requeueAsLatest: requeueAsLatest,
+@@ -1845,10 +1940,35 @@
+         return context
+     }
+ 
++    @MainActor
+     private func emitPresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
+-        Task { @MainActor [weak self] in
+-            self?.presentationEventSink?(event)
+-        }
++        guard presentationActive, currentTraceContext() == event.context else { return }
++        switch event {
++        case .displayHealth(let context, let snapshot):
++            if let immediate = healthCoalescer.offer(context: context, snapshot: snapshot) {
++                presentationEventSink?(immediate)
++            }
++            guard healthCoalescer.pending != nil, healthReportTask == nil else { return }
++            healthReportTask = Task { @MainActor [weak self] in
++                do { try await Task.sleep(for: StreamingDisplayHealthCoalescer.interval) } catch {
++                    return
++                }
++                self?.flushDisplayHealth()
++            }
++        case .firstFramePresented:
++            flushDisplayHealth()
++            presentationEventSink?(event)
++        default:
++            presentationEventSink?(event)
++        }
++    }
++
++    @MainActor
++    private func flushDisplayHealth(reset: Bool = false) {
++        healthReportTask?.cancel()
++        healthReportTask = nil
++        if let event = healthCoalescer.flush() { presentationEventSink?(event) }
++        if reset { healthCoalescer.reset() }
+     }
+ 
+     static func supportsPictureRendering(on device: MTLDevice) -> Bool {
+--- baseline/iosapp/XBXRCTests/XBXRCTests.swift
++++ iosapp/XBXRCTests/XBXRCTests.swift
+@@ -1,4 +1,5 @@
+ import AVFoundation
++import Combine
+ import CoreVideo
+ import Metal
+ import UIKit
+@@ -14,6 +15,221 @@
+     func deliver() {
+         renderer.setSize(CGSize(width: 64, height: 64))
+         renderer.renderFrame(frame)
++    }
++}
++
++@MainActor
++private final class StreamingPublicationRecorder {
++    var states: [(UInt64, StreamingFeatureState)] = []
++    var context: StreamingPresentationTraceContext?
++}
++
++final class StreamingDisplayCallbackTests: XCTestCase {
++    private func makeFrame(_ mailbox: StreamingLatestFrameMailbox) throws
++        -> StreamingDecodedFrameRef
++    {
++        var buffer: CVPixelBuffer?
++        XCTAssertEqual(
++            CVPixelBufferCreate(
++                kCFAllocatorDefault, 16, 16, kCVPixelFormatType_32BGRA, nil, &buffer),
++            kCVReturnSuccess)
++        return mailbox.makeFrame(
++            storage: .pixelBuffer(try XCTUnwrap(buffer)), width: 16, height: 16,
++            rotationDegrees: 0, isFullRange: true, traceContext: nil)
++    }
++
++    @MainActor
++    func testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact() async throws {
++        let mailbox = StreamingLatestFrameMailbox()
++        let telemetry = StreamingDisplayTelemetry()
++        let first = try makeFrame(mailbox)
++        let second = try makeFrame(mailbox)
++        _ = mailbox.submit(first)
++        XCTAssertEqual(mailbox.beginRender().frame?.identifier, first.identifier)
++        _ = telemetry.recordSubmit(identifier: first.identifier, timestampMilliseconds: 100)
++        _ = mailbox.submit(second)
++        let hasPending = await Task.detached {
++            mailbox.finishRender(identifier: first.identifier, requeueAsLatest: false)
++        }.value
++        XCTAssertTrue(hasPending)
++        XCTAssertFalse(mailbox.snapshotDrawableBusy())
++        // 主线程尚未记账第一帧时，下一次显示 tick 已可取得第二帧。
++        XCTAssertEqual(mailbox.beginRender().frame?.identifier, second.identifier)
++        let oldCompletion = telemetry.recordPresent(
++            identifier: first.identifier, timestampMilliseconds: 102,
++            drawableBusy: mailbox.snapshotDrawableBusy())
++        XCTAssertTrue(oldCompletion.snapshot.currentDrawableBusy)
++        XCTAssertEqual(oldCompletion.snapshot.submitToPresentP95Milliseconds, 2)
++        _ = mailbox.finishRender(identifier: second.identifier, requeueAsLatest: false)
++    }
++
++    func testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission() throws {
++        let mailbox = StreamingLatestFrameMailbox()
++        let old = try makeFrame(mailbox)
++        _ = mailbox.submit(old)
++        _ = mailbox.beginRender()
++        mailbox.reset()
++        let current = try makeFrame(mailbox)
++        XCTAssertGreaterThan(current.identifier, old.identifier)
++        _ = mailbox.submit(current)
++        _ = mailbox.beginRender()
++        for _ in 0..<2 {
++            _ = mailbox.finishRender(identifier: old.identifier, requeueAsLatest: false)
++            XCTAssertTrue(mailbox.snapshotDrawableBusy())
++            XCTAssertTrue(mailbox.beginRender().drawableBusy)
++        }
++        _ = mailbox.finishRender(identifier: current.identifier, requeueAsLatest: false)
++        XCTAssertFalse(mailbox.snapshotDrawableBusy())
++    }
++
++    func testFailedCompletionRetriesFrameAndPrefersNewerCandidate() throws {
++        let mailbox = StreamingLatestFrameMailbox()
++        let first = try makeFrame(mailbox)
++        _ = mailbox.submit(first)
++        _ = mailbox.beginRender()
++        XCTAssertTrue(mailbox.finishRender(identifier: first.identifier, requeueAsLatest: true))
++        XCTAssertEqual(mailbox.beginRender().frame?.identifier, first.identifier)
++        let second = try makeFrame(mailbox)
++        _ = mailbox.submit(second)
++        XCTAssertTrue(mailbox.finishRender(identifier: first.identifier, requeueAsLatest: true))
++        XCTAssertEqual(mailbox.snapshotOverwriteCount(), 1)
++        XCTAssertEqual(mailbox.beginRender().frame?.identifier, second.identifier)
++    }
++
++    func testHealthBurstPreservesLatestCountersAndFlushesTailOnce() throws {
++        let context = StreamingPresentationTraceContext(
++            attemptID: "burst", generation: 1, peerEpoch: 1)
++        var coalescer = StreamingDisplayHealthCoalescer()
++        XCTAssertNotNil(coalescer.offer(context: context, snapshot: .zero))
++        let telemetry = StreamingDisplayTelemetry()
++        var latest = StreamingDisplayHealthSnapshot.zero
++        for identifier in 1...600 {
++            _ = telemetry.recordSubmit(
++                identifier: UInt64(identifier), timestampMilliseconds: Double(identifier))
++            latest =
++                telemetry.recordPresent(
++                    identifier: UInt64(identifier), timestampMilliseconds: Double(identifier) + 0.5
++                ).snapshot
++            XCTAssertNil(coalescer.offer(context: context, snapshot: latest))
++        }
++        guard case .displayHealth(let observedContext, let snapshot) = coalescer.flush() else {
++            return XCTFail("缺少尾部健康快照")
++        }
++        XCTAssertEqual(observedContext, context)
++        XCTAssertEqual(snapshot.submitCount, 600)
++        XCTAssertEqual(snapshot.presentCount, 600)
++        XCTAssertEqual(snapshot.latencySampleCount, 240)
++        XCTAssertEqual(snapshot, latest)
++        XCTAssertNil(coalescer.flush())
++        XCTAssertNil(coalescer.offer(context: context, snapshot: latest))
++        XCTAssertNil(coalescer.pending)
++    }
++
++    func testHealthContextChangeAndResetDiscardOldPendingSnapshot() {
++        let first = StreamingPresentationTraceContext(
++            attemptID: "first", generation: 1, peerEpoch: 1)
++        let second = StreamingPresentationTraceContext(
++            attemptID: "second", generation: 2, peerEpoch: 2)
++        var coalescer = StreamingDisplayHealthCoalescer()
++        _ = coalescer.offer(context: first, snapshot: .zero)
++        let busy = StreamingDisplayTelemetry().setDrawableBusy(true)
++        _ = coalescer.offer(context: first, snapshot: busy)
++        guard
++            case .displayHealth(let context, let snapshot) = coalescer.offer(
++                context: second, snapshot: .zero)
++        else {
++            return XCTFail("新代次应立即报告健康基线")
++        }
++        XCTAssertEqual(context, second)
++        XCTAssertEqual(snapshot, .zero)
++        XCTAssertNil(coalescer.flush())
++        _ = coalescer.offer(context: second, snapshot: busy)
++        coalescer.reset()
++        XCTAssertNil(coalescer.flush())
++        XCTAssertNotNil(coalescer.offer(context: second, snapshot: .zero))
++    }
++
++    func testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction() {
++        let timing = StreamingGpuCompletionTiming(
++            completedAtMs: 100, slotReleasedAtMs: 100.1, mainActorEnteredAtMs: 150,
++            feedbackFinishedAtMs: 151, telemetryFinishedAtMs: 153)
++        let payload = timing.tracePayload(recordedAtMs: 154)
++        XCTAssertEqual(payload["gpuToMainActorMs"], .double(50))
++        XCTAssertEqual(payload["frameFeedbackWorkMs"], .double(1))
++        XCTAssertEqual(payload["displayTelemetryWorkMs"], .double(2))
++        XCTAssertEqual(payload["mainActorWorkBeforeTraceMs"], .double(4))
++        XCTAssertEqual(payload["gpuToTraceRecordMs"], .double(54))
++        for profile in [IOSRuntimeTraceProfile.dev, .production] {
++            XCTAssertEqual(
++                IOSRuntimeTraceRedactor.redact(
++                    payload: payload, profile: profile, fingerprintSalt: "test"),
++                payload)
++        }
++    }
++
++    func testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters() {
++        let telemetry = StreamingDisplayTelemetry()
++        _ = telemetry.setDrawableBusy(true)
++        _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: 100)
++        let snapshot = telemetry.cancelPendingSubmissions()
++        XCTAssertEqual(snapshot.submitCount, 1)
++        XCTAssertFalse(snapshot.currentDrawableBusy)
++        _ = telemetry.recordPresent(identifier: 1, timestampMilliseconds: 101)
++        _ = telemetry.recordSubmit(identifier: 2, timestampMilliseconds: 200)
++        let resumed = telemetry.recordPresent(identifier: 2, timestampMilliseconds: 202).snapshot
++        XCTAssertEqual(resumed.submitCount, 2)
++        XCTAssertEqual(resumed.presentCount, 2)
++        XCTAssertEqual(resumed.latencySampleCount, 1)
++        XCTAssertEqual(resumed.submitToPresentP95Milliseconds, 2)
++    }
++
++    @MainActor
++    func testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession() async throws {
++        let recorder = StreamingRuntimeRecorder()
++        let publication = StreamingPublicationRecorder()
++        let session = StreamSessionActor(
++            controlFactory: StreamingTestControlFactory(
++                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
++            peerFactory: StreamingTestPeerFactory(recorder: recorder))
++        for generation: UInt64 in 1...2 {
++            try await session.start(
++                request: StreamingLaunchRequest(
++                    streamTitleID: "test-title", accessHandle: "test-access",
++                    accountGeneration: 1, sessionGeneration: generation),
++                stateSink: { publication.states.append(($0, $1)) },
++                videoSink: { _, track in publication.context = track?.traceContext },
++                diagnosticsSink: { _, _ in })
++            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
++            while publication.context?.generation != generation {
++                guard ContinuousClock.now < deadline else { return XCTFail("缺少当前视频代次") }
++                try await Task.sleep(for: .milliseconds(10))
++            }
++            let context = try XCTUnwrap(publication.context)
++            await session.displayPipelineReady(context: context)
++            await session.firstFrameAcceptedToMailbox(context: context)
++            await session.firstFrameSubmitted(context: context)
++            await session.firstFramePresented(context: context)
++            for _ in 0..<600 {
++                await session.displayHealthUpdated(context: context, snapshot: .zero)
++            }
++            XCTAssertEqual(
++                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 1)
++            await session.setVisible(false, generation: generation)
++            await session.setVisible(false, generation: generation)
++            XCTAssertEqual(
++                publication.states.filter { $0.0 == generation && $0.1 == .suspending }.count, 1)
++            await session.setVisible(true, generation: generation)
++            let now = StreamingFrameFeedbackClock.nowMilliseconds
++            let telemetry = StreamingDisplayTelemetry()
++            _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: now)
++            let fresh = telemetry.recordPresent(identifier: 1, timestampMilliseconds: now).snapshot
++            await session.displayHealthUpdated(context: context, snapshot: fresh)
++            XCTAssertEqual(
++                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 2)
++            await session.stop(generation: generation)
++            XCTAssertEqual(
++                publication.states.filter { $0.0 == generation && $0.1 == .idle }.count, 1)
++        }
+     }
+ }
+ 
+@@ -32,9 +248,13 @@
+             attemptID: UUID().uuidString, generation: 1, peerEpoch: 1)
+         surface.updateTraceContext(context)
+         var didPresent = false
++        var healthReports: [(Double, StreamingDisplayHealthSnapshot)] = []
+         surface.presentationEventSink = { event in
+             if case .firstFramePresented(let observed) = event, observed == context {
+                 didPresent = true
++            }
++            if case .displayHealth(let observed, let snapshot) = event, observed == context {
++                healthReports.append((StreamingFrameFeedbackClock.nowMilliseconds, snapshot))
+             }
+         }
+         window.isHidden = false
+@@ -44,18 +264,21 @@
+             window.isHidden = true
+         }
+         var pixelBuffer: CVPixelBuffer?
+-        let attributes = [
+-            kCVPixelBufferMetalCompatibilityKey: true,
+-            kCVPixelBufferIOSurfacePropertiesKey: [:],
+-        ] as CFDictionary
+-        XCTAssertEqual(CVPixelBufferCreate(
+-            kCFAllocatorDefault, 64, 64, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+-            attributes, &pixelBuffer), kCVReturnSuccess)
++        let attributes =
++            [
++                kCVPixelBufferMetalCompatibilityKey: true,
++                kCVPixelBufferIOSurfacePropertiesKey: [:],
++            ] as CFDictionary
++        XCTAssertEqual(
++            CVPixelBufferCreate(
++                kCFAllocatorDefault, 64, 64, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
++                attributes, &pixelBuffer), kCVReturnSuccess)
+         let buffer = try XCTUnwrap(pixelBuffer)
+         CVPixelBufferLockBaseAddress(buffer, [])
+         for plane in 0..<CVPixelBufferGetPlaneCount(buffer) {
+             if let bytes = CVPixelBufferGetBaseAddressOfPlane(buffer, plane) {
+-                memset(bytes, plane == 0 ? 16 : 128,
++                memset(
++                    bytes, plane == 0 ? 16 : 128,
+                     CVPixelBufferGetBytesPerRowOfPlane(buffer, plane)
+                         * CVPixelBufferGetHeightOfPlane(buffer, plane))
+             }
+@@ -63,7 +286,8 @@
+         CVPixelBufferUnlockBaseAddress(buffer, [])
+         let delivery = StreamingNativeFrameDelivery(
+             renderer: surface.renderer,
+-            frame: RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: buffer),
++            frame: RTCVideoFrame(
++                buffer: RTCCVPixelBuffer(pixelBuffer: buffer),
+                 rotation: ._0, timeStampNs: 0))
+         await Task.detached { delivery.deliver() }.value
+         for _ in 0..<150 {
+@@ -71,6 +295,19 @@
+             try await Task.sleep(for: .milliseconds(20))
+         }
+         XCTAssertTrue(didPresent)
++        healthReports.removeAll()
++        for _ in 0..<30 {
++            await Task.detached { delivery.deliver() }.value
++            try await Task.sleep(for: .milliseconds(20))
++        }
++        try await Task.sleep(for: .milliseconds(200))
++        let tail = try XCTUnwrap(healthReports.last?.1)
++        XCTAssertGreaterThan(tail.presentCount, 10)
++        XCTAssertEqual(tail.submitCount, tail.presentCount)
++        XCTAssertLessThan(healthReports.count, Int(tail.presentCount))
++        for (previous, next) in zip(healthReports, healthReports.dropFirst()) {
++            XCTAssertGreaterThanOrEqual(next.0 - previous.0, 90)
++        }
+     }
+ 
+     func testSdpDiagnosticSummaryKeepsPayloadsScopedToMediaSections() {
+@@ -2261,6 +2498,16 @@
+         XCTAssertFalse(traceContext.attemptID.isEmpty)
+         XCTAssertGreaterThan(traceContext.generation, 0)
+         XCTAssertGreaterThan(traceContext.peerEpoch, 0)
++        var notifications: [StreamingFeatureState] = []
++        let observation = store.$state.sink { notifications.append($0) }
++        for _ in 0..<600 {
++            store.handlePresentationEvent(.displayHealth(traceContext, .zero))
++        }
++        try await Task.sleep(for: .milliseconds(150))
++        XCTAssertEqual(notifications, [.playing])
++        observation.cancel()
++        store.stop()
++        try await waitUntil { store.state == .idle }
+     }
+ 
+     @MainActor

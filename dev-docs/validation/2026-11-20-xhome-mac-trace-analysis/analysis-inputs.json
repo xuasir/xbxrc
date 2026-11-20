@@ -1,0 +1,12 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120",
+  "sources": [
+    {
+      "pathAtCollection": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json",
+      "bytes": 80831157,
+      "sha256": "2254ff154fae3338d724ae87201da40099c1fd81ec3de9e20dc172dbd24dd7a1",
+      "sourceType": "macOS unified log"
+    }
+  ],
+  "neededInput": "latest complete app Runtime Trace export"
+}

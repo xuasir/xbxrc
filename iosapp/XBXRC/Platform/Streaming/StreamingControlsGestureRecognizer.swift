@@ -1,9 +1,52 @@
+import SwiftUI
 import UIKit
 
 enum StreamingControlsRevealSource: String, Sendable {
-    case singleTap
     case twoFingerInward
     case accessibility
+}
+
+/// 手势覆盖串流宿主，触点落在虚拟手柄上也能唤出菜单。
+struct StreamingControlsGestureLayer: UIViewRepresentable {
+    let onReveal: @MainActor () -> Void
+
+    func makeUIView(context: Context) -> GestureView {
+        let view = GestureView()
+        view.isUserInteractionEnabled = false
+        view.onReveal = onReveal
+        return view
+    }
+
+    func updateUIView(_ view: GestureView, context: Context) { view.onReveal = onReveal }
+
+    static func dismantleUIView(_ view: GestureView, coordinator: ()) { view.detach() }
+
+    final class GestureView: UIView, UIGestureRecognizerDelegate {
+        var onReveal: (@MainActor () -> Void)?
+        private weak var gestureWindow: UIWindow?
+        private lazy var gesture = StreamingInwardGestureRecognizer(
+            target: self, action: #selector(reveal))
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            detach()
+            guard let window else { return }
+            gesture.cancelsTouchesInView = false
+            gesture.delegate = self
+            window.addGestureRecognizer(gesture)
+            gestureWindow = window
+        }
+
+        func detach() {
+            gestureWindow?.removeGestureRecognizer(gesture)
+            gestureWindow = nil
+        }
+        @objc private func reveal() { if gesture.state == .recognized { onReveal?() } }
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool { true }
+    }
 }
 
 final class StreamingInwardGestureRecognizer: UIGestureRecognizer {
@@ -75,9 +118,8 @@ final class StreamingInwardGestureRecognizer: UIGestureRecognizer {
             leftEnd: leftEnd,
             rightEnd: rightEnd,
             startDeltaMilliseconds: abs(leftStart.timestamp - rightStart.timestamp) * 1_000,
-            durationMilliseconds: (
-                latestTimestamp - min(leftStart.timestamp, rightStart.timestamp)
-            ) * 1_000,
+            durationMilliseconds: (latestTimestamp - min(leftStart.timestamp, rightStart.timestamp))
+                * 1_000,
             viewWidth: view.bounds.width
         )
         if StreamingInwardGesturePolicy.recognizes(sample) {
@@ -112,7 +154,7 @@ final class StreamingInwardGestureRecognizer: UIGestureRecognizer {
     }
 
     private func traceRejection(reason: String, durationMilliseconds: Double? = nil) {
-        guard !didTraceTerminal else { return }
+        guard didTraceStart, !didTraceTerminal else { return }
         didTraceTerminal = true
         var payload: [String: IOSRuntimeTraceValue] = [
             "reason": .string(reason),

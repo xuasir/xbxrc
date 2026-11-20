@@ -1,0 +1,128 @@
+Test Suite 'Selected tests' started at 2026-11-18 14:32:24.332.
+Test Suite 'XBXRCTests.xctest' started at 2026-11-18 14:32:24.333.
+Test Suite 'CapabilityMigrationTests' started at 2026-11-18 14:32:24.333.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testHostOverviewRendersAtPhoneWindowTabletAndAccessibilitySizes]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testHostOverviewRendersAtPhoneWindowTabletAndAccessibilitySizes]' passed (7.213 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testNavigationBackgroundAndReadingPagesRenderAcrossLayouts]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testNavigationBackgroundAndReadingPagesRenderAcrossLayouts]' passed (71.397 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPlainBackKeepsNativeEdgePopAndReentry]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPlainBackKeepsNativeEdgePopAndReentry]' passed (2.532 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPrimarySwitchGatesInactiveNavigationAndRestoresIt]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPrimarySwitchGatesInactiveNavigationAndRestoresIt]' passed (1.542 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testSettingsAndControllerPagesRenderAcrossWindowAndTextSizes]' passed (109.093 seconds).
+Test Suite 'CapabilityMigrationTests' passed at 2026-11-18 14:35:36.114.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 191.777 (191.781) seconds
+Test Suite 'SettingsAndPersistenceTests' started at 2026-11-18 14:35:36.125.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testAdditionalButtonsAndAxesSupportAliasesAndFullRangeTriggers]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testAdditionalButtonsAndAxesSupportAliasesAndFullRangeTriggers]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCaptureSessionAutomaticallySavesAndCancelsOnDeviceChange]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCaptureSessionAutomaticallySavesAndCancelsOnDeviceChange]' passed (0.042 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testChoosingMappingTargetImmediatelyCapturesAndReleasesInput]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testChoosingMappingTargetImmediatelyCapturesAndReleasesInput]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCloudCatalogCacheKeyDoesNotExposeAccountOrRegion]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCloudCatalogCacheKeyDoesNotExposeAccountOrRegion]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testControllerHistoryRecordsPressEdgesAndKeepsLastTenInputs]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testControllerHistoryRecordsPressEdgesAndKeepsLastTenInputs]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureRetentionKeepsThreeRecords]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureRetentionKeepsThreeRecords]' passed (0.026 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureWorksWithBackgroundOffAndKeepsRedaction]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureWorksWithBackgroundOffAndKeepsRedaction]' passed (0.017 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticsShortcutSuppressesLifecycleAndWaitsForNeutralAfterRebinding]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticsShortcutSuppressesLifecycleAndWaitsForNeutralAfterRebinding]' passed (0.022 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testFailureDiagnosticsSaveRedactedSnapshotWithoutManualCapture]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testFailureDiagnosticsSaveRedactedSnapshotWithoutManualCapture]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSavePreservesExistingOverlayAndBaseTimestamp]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSavePreservesExistingOverlayAndBaseTimestamp]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSaveUpdatesBaseWithoutCreatingOverlay]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSaveUpdatesBaseWithoutCreatingOverlay]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMenuDurationUsesTheFixedTriggerThreshold]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMenuDurationUsesTheFixedTriggerThreshold]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMobilePreferencesKeepValuesWhenNewSettingsAreAdded]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMobilePreferencesKeepValuesWhenNewSettingsAreAdded]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLightweightDiagnosticsRetainsFailuresAndManualCaptureDetail]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLightweightDiagnosticsRetainsFailuresAndManualCaptureDetail]' passed (0.005 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLocaleNormalizerProducesStableAchievementCacheLocales]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLocaleNormalizerProducesStableAchievementCacheLocales]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingProfilesRemainSeparateAndRejectInvalidChordTargets]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingProfilesRemainSeparateAndRejectInvalidChordTargets]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingSwapsSingleBindingsAndAbsorbsChordComponents]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingSwapsSingleBindingsAndAbsorbsChordComponents]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMetalPictureShadersCompileOnAvailableDevice]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMetalPictureShadersCompileOnAvailableDevice]' passed (0.160 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPhysicalCaptureIgnoresStartAAndKeepsMaximumSimultaneousChord]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPhysicalCaptureIgnoresStartAAndKeepsMaximumSimultaneousChord]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPictureNormalizationKeepsFiniteBoundedValuesAndIndependentEffects]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPictureNormalizationKeepsFiniteBoundedValuesAndIndependentEffects]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testRemappedShortcutsRecordAndTriggerTheSameXboxProjection]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testRemappedShortcutsRecordAndTriggerTheSameXboxProjection]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSelectedControllerChordPausesInputAndOpensOnceAfterHold]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSelectedControllerChordPausesInputAndOpensOnceAfterHold]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsExposePCBoundsAndPreserveDefaultLanguageInStreamSnapshot]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsExposePCBoundsAndPreserveDefaultLanguageInStreamSnapshot]' passed (0.013 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsMigrationNormalizesAndWritesBackInvalidLegacyValues]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsMigrationNormalizesAndWritesBackInvalidLegacyValues]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMatcherUsesActualTriggerThresholdAndRearmsAfterFullRelease]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMatcherUsesActualTriggerThresholdAndRearmsAfterFullRelease]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMigrationNormalizationAndConflictPreserveMenu]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMigrationNormalizationAndConflictPreserveMenu]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTraceWriterCanReleaseLastReferenceOnItsIOQueue]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTraceWriterCanReleaseLastReferenceOnItsIOQueue]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTurnImportValidatesEntireConfigurationAndSize]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTurnImportValidatesEntireConfigurationAndSize]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testVibrationPresetsMatchPCValuesBeforeHapticsRoutingAndPreserveLegacyGain]' started.
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testVibrationPresetsMatchPCValuesBeforeHapticsRoutingAndPreserveLegacyGain]' passed (0.001 seconds).
+Test Suite 'SettingsAndPersistenceTests' passed at 2026-11-18 14:35:36.479.
+	 Executed 29 tests, with 0 failures (0 unexpected) in 0.346 (0.353) seconds
+Test Suite 'StreamingFrameFeedbackTests' started at 2026-11-18 14:35:36.479.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testMetadataRequiresMatchingDecodeAndCompletedRendering]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testMetadataRequiresMatchingDecodeAndCompletedRendering]' passed (0.015 seconds).
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testWrapperForwardsOriginalDecoderFramesAndLifecycle]' started.
+Test Case '-[XBXRCTests.StreamingFrameFeedbackTests testWrapperForwardsOriginalDecoderFramesAndLifecycle]' passed (0.013 seconds).
+Test Suite 'StreamingFrameFeedbackTests' passed at 2026-11-18 14:35:36.518.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.037 (0.039) seconds
+Test Suite 'XBXRCTests.xctest' passed at 2026-11-18 14:35:36.518.
+	 Executed 40 tests, with 0 failures (0 unexpected) in 192.160 (192.185) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 14:35:36.518.
+	 Executed 40 tests, with 0 failures (0 unexpected) in 192.160 (192.186) seconds
+Test Suite 'Selected tests' started at 2026-11-18 14:35:45.054.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-18 14:35:45.055.
+Test Suite 'PCPageInteractionTests' started at 2026-11-18 14:35:45.055.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testHostSwitcherUpdatesHeroActionsAndInstalledTarget]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testHostSwitcherUpdatesHeroActionsAndInstalledTarget]' passed (16.560 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepAvatarTitleAndNavigationHeightAligned]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepAvatarTitleAndNavigationHeightAligned]' passed (29.545 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry]' passed (17.096 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' passed (19.268 seconds).
+Test Suite 'PCPageInteractionTests' passed at 2026-11-18 14:37:07.531.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 82.468 (82.476) seconds
+Test Suite 'SettingsInteractionTests' started at 2026-11-18 14:37:07.531.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' passed (10.014 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testControllerInputEntriesAndDirectMappingSelection]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testControllerInputEntriesAndDirectMappingSelection]' passed (21.573 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testLanguageSelectionAppliesToControllerPagesAndDurationUnits]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testLanguageSelectionAppliesToControllerPagesAndDurationUnits]' passed (41.355 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testPCResolutionAndAspectChoicesAreAvailable]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testPCResolutionAndAspectChoicesAreAvailable]' passed (19.530 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' passed (18.256 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testVibrationPictureAndShortcutRecordingStayInline]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testVibrationPictureAndShortcutRecordingStayInline]' passed (25.309 seconds).
+Test Suite 'SettingsInteractionTests' passed at 2026-11-18 14:39:23.575.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 136.037 (136.044) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-18 14:39:23.576.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 218.505 (218.521) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 14:39:23.578.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 218.505 (218.524) seconds
+** TEST SUCCEEDED **

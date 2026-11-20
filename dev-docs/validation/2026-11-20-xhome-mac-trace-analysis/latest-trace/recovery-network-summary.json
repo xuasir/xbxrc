@@ -1,0 +1,47 @@
+{
+  "supFresh": {
+    "true": 122,
+    "false": 5
+  },
+  "supNetworkState": {
+    "unknown": 62,
+    "stable": 65
+  },
+  "supQualityState": {
+    "unknown": 62,
+    "stable": 65
+  },
+  "supConnectionRecovery": {
+    "false": 127
+  },
+  "supDecodePressureMaxMs": 0,
+  "supDecodeRecoveryEligible": {
+    "false": 127
+  },
+  "recent5SecondLoss": {
+    "samples": 145,
+    "meanPercent": 0.08687391423676477,
+    "maxPercent": 1.2295081967213115
+  },
+  "endingRtc": {
+    "packetsLost": 165,
+    "packetsReceived": 317777,
+    "nack": 123,
+    "pli": 3,
+    "fir": 0
+  },
+  "absentRecoveryProjection": [
+    "ReferenceChain",
+    "RecoveryLedger",
+    "cleanAnchorCommitted",
+    "DisplayStable"
+  ],
+  "appLaunchPayloadKeys": [
+    "appVersion",
+    "buildConfiguration",
+    "buildNumber",
+    "platform",
+    "sourceMonotonicMs",
+    "writerQueueDelayMs"
+  ]
+}

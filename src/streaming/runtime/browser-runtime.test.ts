@@ -1,9 +1,15 @@
+import type { StreamStats } from '../../player'
 import type { PresentedVideoFrameMetadata } from '../../player/domain/media'
+import type { StreamingDecideRecoveryParams, StreamingDecideRecoveryResult } from '../../shared/rpc/streaming'
 import type { RuntimeLaunchSpec } from '../types'
+import type { BrowserNetworkAction } from './browser-network-policy'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { productionTraceEvents } from '../../shared/diagnostics/production-trace-contract'
+import { BrowserNetworkPolicy, classifyBrowserNetworkPressure } from './browser-network-policy'
+import { BrowserSoftRecoveryGate, evaluateBrowserRecoveryProbe } from './browser-recovery-policy'
 import { createBrowserRuntime } from './browser-runtime'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
+import { shouldRecoverMediaConnection } from './runtime-host-policy'
 import { resolveSuperResolutionTierPlan } from './super-resolution-ladder'
 
 const testState = vi.hoisted(() => {
@@ -167,7 +173,7 @@ const testState = vi.hoisted(() => {
         exchangeOffer: vi.fn(async () => ({ answer: { sdp: 'v=0\r\n' } })),
         submitIce: vi.fn(async () => ({})),
         pollIce: vi.fn(async () => ({ candidates: [] })),
-        decideRecovery: vi.fn(async () => ({ action: 'observe' })),
+        decideRecovery: vi.fn(async (_params: StreamingDecideRecoveryParams) => ({} as StreamingDecideRecoveryResult)),
       },
       gamepad: {
       },
@@ -279,6 +285,65 @@ describe('browser-runtime super resolution state', () => {
   const originalResizeObserver = globalThis.ResizeObserver
 
   beforeEach(() => {
+    // RPC 假体沿已验证的 PC 基准；公共 Rust 使用相同事实独立回放。
+    const gate = new BrowserSoftRecoveryGate()
+    let actionAt: number | undefined
+    let eligibleSince = 0
+    let previousSample: string | undefined
+    const network = new BrowserNetworkPolicy()
+    let networkFlight: BrowserNetworkAction | undefined
+    let networkBaseline: StreamStats | undefined
+    let networkActionID = 0
+    let stallEvidenceObserved = false
+    testState.rpc.streaming.decideRecovery.mockImplementation(async (params) => {
+      if (params.fact.type !== 'supervision')
+        return { shouldReconnect: false }
+      const sample = params.fact.sample
+      const stats = {
+        statsSampleId: sample.sampleId,
+        statsSampledAtMs: sample.sampledAtMs,
+        statsSampleAgeMs: sample.nowMs - (sample.sampledAtMs ?? sample.nowMs),
+        statsObservationState: sample.observationFresh ? 'fresh' as const : 'unavailable' as const,
+        statsPeerGeneration: sample.peerGeneration,
+        statsVideoGeneration: sample.videoGeneration,
+        networkRttMs: sample.rttMs,
+        browserStatsWindows: { short: { sampleCount: 3, durationMs: 3000, ...sample.short }, long: { sampleCount: 15, durationMs: 15000, ...sample.long } },
+        videoPresentAgeMs: sample.videoPresentAgeMs,
+      } as StreamStats
+      if (sample.previousActionAtMs !== actionAt) {
+        actionAt = sample.previousActionAtMs
+        if (actionAt !== undefined)
+          gate.markAction(actionAt)
+        else gate.reset()
+      }
+      if (sample.eligibleSinceMs !== eligibleSince) {
+        eligibleSince = sample.eligibleSinceMs
+        if (eligibleSince)
+          gate.invalidate(eligibleSince)
+      }
+      if (sample.qualityCompletion && networkFlight && networkBaseline && sample.qualityCompletion.id === networkActionID) {
+        network.complete(networkFlight, sample.qualityCompletion.result, networkBaseline, sample.qualityCompletion.previousLevel, sample.qualityCompletion.completedAtMs)
+        networkFlight = undefined
+      }
+      const networkAction = network.observe(stats, { nowMs: sample.nowMs, level: sample.qualityLevel ?? 0, warmupUntilMs: sample.warmupUntilMs, qualitySupported: sample.qualitySupported ?? false })
+      if (networkAction) {
+        networkActionID += 1
+        networkFlight = networkAction
+        networkBaseline = stats
+      }
+      const duplicate = previousSample === sample.sampleId
+      previousSample = sample.sampleId
+      const decode = gate.observe(stats)
+      const progress = stallEvidenceObserved && ((sample.inboundVideoFps ?? 0) >= 1 || (sample.decodeFps ?? 0) >= 1)
+      const threshold = sample.connectedElapsedMs < 15000 ? 8000 : sample.frameIntervalMs === undefined ? 5000 : Math.max(1500, Math.min(7000, sample.frameIntervalMs * 12))
+      if (sample.inactivityElapsedMs >= threshold)
+        stallEvidenceObserved = true
+      const mediaConnectionEligible = shouldRecoverMediaConnection({ connectionState: sample.connectionState as RTCPeerConnectionState, controlChannelState: sample.controlChannelState, hasInboundProgress: progress, inboundVideoFps: sample.inboundVideoFps, decodeFps: sample.decodeFps, packetAgeMs: sample.packetAgeMs })
+      return {
+        shouldReconnect: mediaConnectionEligible,
+        supervision: { quality: { state: network.state, reason: network.reason, rttBaselineMs: network.rttBaselineMs, rttDeltaMs: network.rttDeltaMs, effect: network.effect, action: networkAction ? { ...networkAction, id: networkActionID } : undefined }, fresh: sample.observationFresh, duplicate, stallThresholdMs: sample.connectedElapsedMs < 15000 ? 8000 : sample.frameIntervalMs === undefined ? 5000 : Math.max(1500, Math.min(7000, sample.frameIntervalMs * 12)), hasInboundProgress: progress, decodeRecoveryEligible: decode && sample.nowMs >= sample.warmupUntilMs, decodePressureSustainedMs: gate.actionEvidence(stats).sustainedMs, healthyEpisodeComplete: gate.healthyEpisodeComplete, mediaConnectionEligible, networkPressure: classifyBrowserNetworkPressure(stats.browserStatsWindows?.short, sample.rttBaselineMs) as 'stable' | 'warning' | 'congested' | 'unknown', probeEffect: sample.probe ? evaluateBrowserRecoveryProbe(sample.probe as any, stats, sample.nowMs) : undefined },
+      }
+    })
     testState.rpc.config.get.mockResolvedValue({ runtime_trace_mode: 'dev' })
     testState.MockPlayerClient.instances.length = 0
     testState.frameTrackingHandler = undefined
@@ -652,7 +717,7 @@ describe('browser-runtime super resolution state', () => {
       expect(client.rebuildVideoPlayback).toHaveBeenCalledTimes(1)
       expect((await runtime.snapshotStats()).recoveryEpochId).not.toBe(exhausted.recoveryEpochId)
       expect(testState.MockPlayerClient.instances).toHaveLength(1)
-      expect(testState.rpc.streaming.decideRecovery).not.toHaveBeenCalled()
+      expect(testState.rpc.streaming.decideRecovery.mock.calls.filter(([request]) => request.fact.type !== 'supervision')).toHaveLength(0)
     }
     finally {
       await runtime.stop()

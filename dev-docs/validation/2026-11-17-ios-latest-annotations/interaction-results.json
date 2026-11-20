@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 2,
+  "basis": "last observed result per UI method; semantic final theme run, final dark My and calibration layouts recorded separately",
+  "devices": {
+    "phone": {
+      "methods": {
+        "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testCloudFavoritesProductLanguagesAndScreenshotPreview": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testFriendComparisonAndSecretAchievementReveal": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testHostSwitcherUpdatesHeroActionsAndInstalledTarget": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testInformationActionsStayCompactAtWideSizes": {
+          "state": "skipped",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testInformationPagesExposeHeroAndKeepLibraryActionsReachable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testInstalledStorageFilterAndFourSectionDetail": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testInstalledUpperRegionAndInlineSearch": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testMyAlbumSubpageOpensMediaAndRestoresNavigation": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-final-my-dark.log",
+          "logSha256": "123764d9009e983b79ee7ed800b00d972ec30be9061a47f21e918f2811841066"
+        },
+        "PCPageInteractionTests/testWideSidebarKeepsPrimaryNavigationAndSecondarySelection": {
+          "state": "skipped",
+          "log": "/tmp/xbxrc-ios-annotations-phone-final.log",
+          "logSha256": "ddbd208925f4552177d7d0b0ac517d80caa370eeb6e597c6d1642ff98682c273"
+        },
+        "SettingsInteractionTests/testBottomNavigationReservesSpaceAndFinalRowIsReachable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        },
+        "SettingsInteractionTests/testControllerInputEntriesAndDirectMappingSelection": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        },
+        "SettingsInteractionTests/testLanguageSelectionAppliesToControllerPagesAndDurationUnits": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        },
+        "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        },
+        "SettingsInteractionTests/testTogglePickerAndNavigationRespondAtRowEdges": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        },
+        "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-phone-final.log",
+          "logSha256": "14a6372639481c034c394e38a518eed3235e53df5b39bcbad2d20cbb174cdef3"
+        }
+      },
+      "counts": {
+        "passed": 16,
+        "skipped": 2
+      }
+    },
+    "ipad": {
+      "methods": {
+        "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testCloudFavoritesProductLanguagesAndScreenshotPreview": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testFriendComparisonAndSecretAchievementReveal": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testHostSwitcherUpdatesHeroActionsAndInstalledTarget": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testInformationActionsStayCompactAtWideSizes": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testInformationPagesExposeHeroAndKeepLibraryActionsReachable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testInstalledStorageFilterAndFourSectionDetail": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testInstalledUpperRegionAndInlineSearch": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testMyAlbumSubpageOpensMediaAndRestoresNavigation": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "PCPageInteractionTests/testWideSidebarKeepsPrimaryNavigationAndSecondarySelection": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-ipad.log",
+          "logSha256": "fe36d3d8aceadeb31158c7afc739b01b2a304395d5b019d5b44cc0759f370fe1"
+        },
+        "SettingsInteractionTests/testBottomNavigationReservesSpaceAndFinalRowIsReachable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "SettingsInteractionTests/testControllerInputEntriesAndDirectMappingSelection": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "SettingsInteractionTests/testLanguageSelectionAppliesToControllerPagesAndDurationUnits": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "SettingsInteractionTests/testTogglePickerAndNavigationRespondAtRowEdges": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        },
+        "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline": {
+          "state": "passed",
+          "log": "/tmp/xbxrc-ios-annotations-theme-ipad-final.log",
+          "logSha256": "d19c242aa7fe83acb62624dbd31d2ae4304060df5a2c4b054aaf9221b1d437fd"
+        }
+      },
+      "counts": {
+        "passed": 18,
+        "skipped": 0
+      }
+    }
+  }
+}

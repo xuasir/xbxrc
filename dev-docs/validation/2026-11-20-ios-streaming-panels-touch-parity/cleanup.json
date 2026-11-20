@@ -1,0 +1,33 @@
+{
+  "completedAtUTC": "2026-11-20T08:47:09.411646+00:00",
+  "removedRoots": [
+    "/private/tmp/xbxrc-ios-streaming-panels-20261120"
+  ],
+  "removedRounds": [
+    "r1",
+    "r2",
+    "r3"
+  ],
+  "removedItems": [
+    "本轮 Simulator/Device DerivedData",
+    "本轮 xcresult 结果包",
+    "重复截图及截图导出",
+    "本轮构建/测试日志",
+    "iPad 查看缩略图"
+  ],
+  "processCheck": "所有本轮 xcodebuild/编译/导出进程已结束",
+  "removedFileCount": 10143,
+  "removedLogicalBytes": 1256350600,
+  "removedAllocatedKiB": 1257716,
+  "diskFreeBytesBefore": 66355200000,
+  "diskFreeBytesAfter": 67584000000,
+  "diskFreeDeltaBytes": 1228800000,
+  "pathVerification": "本轮临时根已删除",
+  "retained": [
+    "dev-docs/validation/2026-11-20-ios-streaming-panels-touch-parity",
+    "target/ios",
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "/private/tmp/xbxrc-settings-swift-format.json（共享格式配置）",
+    "其他任务的工作区及临时目录"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "root": "/private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs",
+  "paths": [
+    "temporary-manifest.json",
+    "index-before.json",
+    "r1",
+    "Localizable.before.xcstrings",
+    "swift-checks.json",
+    "r2"
+  ],
+  "cleanupScope": "本轮唯一临时根目录整体；共享WebRTC/Rust缓存保留"
+}

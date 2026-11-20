@@ -1,0 +1,126 @@
+{
+  "date": "2026-11-20",
+  "taskState": "Validation Pending",
+  "pollingStackFixDelivered": true,
+  "screenshotCrashRootCause": "operation polling stack amplification is supported by screenshot and baseline size gate; exact stopped-process fault and call stack require fresh runtime evidence",
+  "scopeFuture": {
+    "beforeBytes": 24944,
+    "afterBytes": 816,
+    "reductionPercent": 96.729,
+    "credentialAccessBytes": 6104,
+    "credentialRenewalBytes": 5200,
+    "budgetBytes": 8192
+  },
+  "startupStages": {
+    "beforeBytes": {
+      "prepare_start_plan": 6144,
+      "home_context": 28960,
+      "session_execution": 31768
+    },
+    "afterBytes": {
+      "prepare_start_plan": 6144,
+      "home_context": 1568,
+      "session_execution": 6880
+    },
+    "budgetBytes": 8192
+  },
+  "publicEntryFutureCount": 15,
+  "publicEntryBudgetBytes": 8192,
+  "largeOperation": {
+    "payloadBytes": 65536,
+    "wrapperBytes": {
+      "cancel": 400,
+      "scope": 816,
+      "nested": 816
+    },
+    "budgetBytes": 4096
+  },
+  "smallStack": {
+    "bytes": 557056,
+    "cases": 20,
+    "scopes": {
+      "existingFfiLifecycle": 6,
+      "cloudFfiHttp": 1,
+      "homeFfiHttp": 1,
+      "credentialProvider": 4,
+      "actualAuthFlowTransportError": 2,
+      "largeNestedLifecycle": 6
+    },
+    "newTests": 5,
+    "totalStackTests": 11
+  },
+  "rustTests": {
+    "xboxIosBridge": 76,
+    "xboxStreaming": 178,
+    "xboxStreamingProtocol": 10,
+    "total": 264,
+    "failed": 0,
+    "ignored": 0,
+    "evidence": "rust-tests.txt"
+  },
+  "homeHttp": {
+    "actualGeneratedFfi": true,
+    "productionAuthAndSessionFlow": true,
+    "realConsoleConnection": false,
+    "requests": [
+      "stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1",
+      "stack_fixture_request POST /v5/sessions/cloud/play HTTP/1.1",
+      "stack_fixture_request GET /v5/sessions/cloud/stack-fixture/state HTTP/1.1",
+      "stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1",
+      "stack_fixture_request CONNECT xccs.xboxlive.com:443 HTTP/1.1",
+      "stack_fixture_request GET /v6/servers/home?mr=50 HTTP/1.1",
+      "stack_fixture_request POST /v5/sessions/home/play HTTP/1.1",
+      "stack_fixture_request GET /v5/sessions/home/stack-fixture/state HTTP/1.1",
+      "stack_fixture_request DELETE /v5/sessions/cloud/stack-fixture HTTP/1.1",
+      "stack_fixture_request DELETE /v5/sessions/home/stack-fixture HTTP/1.1",
+      "stack_fixture_request CONNECT login.live.com:443 HTTP/1.1",
+      "stack_fixture_request CONNECT login.live.com:443 HTTP/1.1"
+    ],
+    "authFlowConnectRequests": 2,
+    "authFlowErrorCode": 503,
+    "freshFixtureOutcome": "Provisioned then remote close",
+    "credentialUpdatesOnTransportError": false,
+    "proxyEnvironment": "isolated child processes; all network through loopback"
+  },
+  "deviceBuild": {
+    "result": "Passed",
+    "target": "generic/platform=iOS",
+    "configuration": "Debug",
+    "codeSigningAllowed": false,
+    "summary": "device-build.summary.txt",
+    "fullLog": "device-build.log"
+  },
+  "deviceFrames": {
+    "functions": 107,
+    "maxBytes": {
+      "async": 13696,
+      "constructor": 15264
+    },
+    "scope": "individual constructor/async frames; complete runtime call-chain peak pending"
+  },
+  "checks": {
+    "cargoFmt": "Passed",
+    "sessionBoundary": "Passed",
+    "diffWhitespace": "Passed",
+    "adjacentSources": "unchanged vs task baseline",
+    "archivedSourceHashes": "Passed",
+    "deviceBinaryHash": "Passed"
+  },
+  "deviceAcceptance": "fresh My Mac Designed for iPad Home run; xCloud/xHome first frame, exit/reconnect and six-dimension trace checklist",
+  "cleanup": "cleanup.json",
+  "pcIntegration": {
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "xbxrc",
+      "--target-dir",
+      "target/browser"
+    ],
+    "exitCode": 0,
+    "result": "Passed",
+    "evidence": "pc-tauri-check.txt"
+  },
+  "continuationVerification": "continuation-checks.json",
+  "cleanupState": "Completed"
+}

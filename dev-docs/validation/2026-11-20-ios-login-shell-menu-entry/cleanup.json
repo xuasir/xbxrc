@@ -1,0 +1,17 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs",
+  "removed": true,
+  "allocatedBytesRemoved": 664182784,
+  "allocatedMiBRemoved": 633.41,
+  "freeBytesBefore": 63488000000,
+  "freeBytesAfter": 64307200000,
+  "freeBytesDelta": 819200000,
+  "retained": [
+    "仓库最终证据目录",
+    "共享WebRTC SourcePackages",
+    "现有Rust target缓存"
+  ],
+  "stagingPreserved": true,
+  "existingLocalizationPreserved": true,
+  "sourceHashesVerified": true
+}

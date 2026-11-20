@@ -41,6 +41,9 @@
                ReferencedContainer = "container:XBXRC.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference skipped="NO" parallelizable="NO">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="F30000000000000000000001" BuildableName="XBXRCUITests.xctest" BlueprintName="XBXRCUITests" ReferencedContainer="container:XBXRC.xcodeproj"/>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

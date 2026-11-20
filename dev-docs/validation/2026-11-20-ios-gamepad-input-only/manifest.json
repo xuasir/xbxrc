@@ -1,0 +1,32 @@
+[
+  {
+    "file": "controller-mobile-input-menu.png",
+    "test": "TouchLayoutInteractionTests/testControllerPagesExposeTouchAndExternalGamepadControls()",
+    "device": "iPhone 17e"
+  },
+  {
+    "file": "controller-mobile-input-mapping.png",
+    "test": "TouchLayoutInteractionTests/testControllerPagesExposeTouchAndExternalGamepadControls()",
+    "device": "iPhone 17e"
+  },
+  {
+    "file": "controller-mobile-input-touch.png",
+    "test": "TouchLayoutInteractionTests/testControllerPagesExposeTouchAndExternalGamepadControls()",
+    "device": "iPhone 17e"
+  },
+  {
+    "file": "controller-mobile-input-connection.png",
+    "test": "TouchLayoutInteractionTests/testControllerPagesExposeTouchAndExternalGamepadControls()",
+    "device": "iPhone 17e"
+  },
+  {
+    "file": "controller-mobile-input-sections.png",
+    "test": "TouchLayoutInteractionTests/testControllerPagesExposeTouchAndExternalGamepadControls()",
+    "device": "iPhone 17e"
+  },
+  {
+    "file": "actual-portrait-standard-touch-lower-half.png",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "device": "iPhone 17e"
+  }
+]

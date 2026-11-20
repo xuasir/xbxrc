@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-20",
+  "result": "Passed",
+  "uiRegressionTests": 4,
+  "nativeRenderingChecks": 1,
+  "orientationSetupChecks": 1,
+  "renderedNativeLayouts": 24,
+  "representativeVisualReview": [
+    "filters-light.png",
+    "filters-dark.png",
+    "filters-narrow-accessibility.png",
+    "filters-wide-accessibility.png",
+    "phone-cloud-filters.png",
+    "phone-history-filters.png",
+    "phone-achievement-filters.png"
+  ],
+  "swiftFormatLint": "Passed",
+  "frontendLintFix": "Passed",
+  "diffCheck": "Passed",
+  "minimumTextContrast": 4.95,
+  "temporaryTestHelpersRemoved": true
+}

@@ -41,18 +41,19 @@ struct AppearanceSettingsView: View {
     @State private var actionError: String?
 
     var body: some View {
-        Form {
+        AppSettingsForm {
             Section {
-                Picker("应用外观", selection: $settingsStore.appearanceMode) {
+                AppSettingsPicker(
+                    "应用外观", selection: $settingsStore.appearanceMode,
+                    selectedTitle: settingsStore.appearanceMode.title
+                ) {
                     ForEach(AppAppearanceMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                        Text(LocalizedStringKey(mode.title)).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
+                .appSettingsHint("跟随系统外观，立即生效并保存", identifier: "appearance-theme")
             } header: {
                 Text("外观")
-            } footer: {
-                Text("跟随系统会根据设备的外观自动切换。选择会立即生效并在下次启动恢复。")
             }
 
             Section {
@@ -62,16 +63,16 @@ struct AppearanceSettingsView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: preset.systemImage)
-                                .font(.title3.weight(.semibold))
+                                .appFont(.title, weight: .semibold)
                                 .foregroundStyle(AppThemePalette.brand)
                                 .frame(width: 28)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(preset.title)
+                                Text(LocalizedStringKey(preset.title))
                                     .foregroundStyle(.primary)
-                                Text(preset.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(LocalizedStringKey(preset.description))
+                                    .appFont(.caption, weight: .regular)
+                                    .foregroundStyle(AppThemePalette.textSecondary)
                             }
 
                             Spacer(minLength: 8)
@@ -85,19 +86,17 @@ struct AppearanceSettingsView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(AppSettingsRowButtonStyle(inset: 16))
+                    .containerValue(\.appSettingsRowOwnsPadding, true)
                     .disabled(isApplyingIcon || settingsStore.appIconPreset == preset)
                 }
             } header: {
                 Text("应用图标")
-            } footer: {
-                Text("图标切换由系统完成。设备或构建环境不支持时，当前图标和设置会保持不变。")
             }
         }
         .scrollContentBackground(.hidden)
         .appThemeCanvas()
-        .navigationTitle("外观与图标")
-        .navigationBarTitleDisplayMode(.inline)
+        .appPageToolbar("外观与图标")
         .alert(
             "设置操作失败",
             isPresented: Binding(
@@ -111,7 +110,7 @@ struct AppearanceSettingsView: View {
         ) {
             Button("知道了", role: .cancel) {}
         } message: {
-            Text(actionError ?? "设置暂时不可用")
+            Text(LocalizedStringKey(actionError ?? "设置暂时不可用"))
         }
     }
 
@@ -128,237 +127,119 @@ struct AppearanceSettingsView: View {
     }
 }
 
-struct CloudGamingSettingsView: View {
-    @EnvironmentObject private var settingsStore: AppSettingsStore
-    @EnvironmentObject private var authStore: AuthStore
-    @EnvironmentObject private var cloudStore: CloudLibraryStore
-
-    @Binding var isApplyingRegion: Bool
-    @State private var selectedRegion: CloudRegionPreset = .default
-    @State private var actionError: String?
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("地区路由", selection: $selectedRegion) {
-                    ForEach(CloudRegionPreset.allCases) { preset in
-                        Text(preset.title).tag(preset)
-                    }
-                }
-
-                LabeledContent("云访问状态", value: cloudAccessStatus)
-
-                Button {
-                    applyRegion()
-                } label: {
-                    HStack {
-                        Label("应用地区设置", systemImage: "network")
-                        Spacer()
-                        if isApplyingRegion {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                }
-                .disabled(isApplyingRegion)
-            } header: {
-                Text("地区路由")
-            } footer: {
-                Text("地区路由会影响 Xbox streaming token 与云游戏区域选择。应用后会刷新当前会话和游戏库。")
-            }
-
-            Section {
-                Picker("游戏语言", selection: $settingsStore.preferredGameLocale) {
-                    ForEach(PreferredGameLanguageCatalog.all) { option in
-                        Text(option.title).tag(option.code)
-                    }
-                }
-
-                Picker("云游戏分辨率", selection: $settingsStore.cloudResolution) {
-                    ForEach(StreamingResolutionOption.cloudChoices) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-
-                Picker("主机串流分辨率", selection: $settingsStore.homeResolution) {
-                    ForEach(StreamingResolutionOption.homeChoices) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-            } header: {
-                Text("会话偏好")
-            } footer: {
-                Text("这些设置会在下一次启动云游戏或主机串流时生效。")
-            }
-
-            Section {
-                Toggle("优先 IPv6", isOn: $settingsStore.preferIPv6)
-
-                Picker("视频 Codec 档位", selection: $settingsStore.codecPreference) {
-                    ForEach(StreamingCodecOption.allCases) { option in
-                        Text("\(option.title) · \(option.summary)").tag(option)
-                    }
-                }
-
-                Toggle("允许 xHome 使用 TURN 中继", isOn: $settingsStore.homeTurnFallbackEnabled)
-            } header: {
-                Text("网络与协商")
-            } footer: {
-                Text("这组设置会直接进入共享 Rust plan，影响候选排序、视频编码档位和 xHome 的中继兜底。")
-            }
-
-            Section {
-                Picker("主机视频码率模式", selection: $settingsStore.homeBitrateMode) {
-                    ForEach(StreamingBitrateMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                if settingsStore.homeBitrateMode == .custom {
-                    Stepper(value: $settingsStore.homeBitrateMbps, in: 1...200) {
-                        LabeledContent("主机视频上限", value: "\(settingsStore.homeBitrateMbps) Mb/s")
-                    }
-                }
-
-                Picker("云游戏视频码率模式", selection: $settingsStore.cloudBitrateMode) {
-                    ForEach(StreamingBitrateMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                if settingsStore.cloudBitrateMode == .custom {
-                    Stepper(value: $settingsStore.cloudBitrateMbps, in: 1...200) {
-                        LabeledContent("云游戏视频上限", value: "\(settingsStore.cloudBitrateMbps) Mb/s")
-                    }
-                }
-
-                Picker("音频码率模式", selection: $settingsStore.audioBitrateMode) {
-                    ForEach(StreamingBitrateMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                if settingsStore.audioBitrateMode == .custom {
-                    Stepper(value: $settingsStore.audioBitrateKbps, in: 1...512) {
-                        LabeledContent("音频上限", value: "\(settingsStore.audioBitrateKbps) kb/s")
-                    }
-                }
-            } header: {
-                Text("码率上限")
-            } footer: {
-                Text("自动模式沿共享策略默认值运行；手动模式会把上限带入云游戏、主机串流和 SDP 音频码率。")
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .appThemeCanvas()
-        .navigationTitle("云游戏与串流")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isApplyingRegion)
-        .onAppear {
-            selectedRegion = settingsStore.cloudRegionPreset
-        }
-        .alert(
-            "设置操作失败",
-            isPresented: Binding(
-                get: { actionError != nil },
-                set: { presented in
-                    if !presented {
-                        actionError = nil
-                    }
-                }
-            )
-        ) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text(actionError ?? "设置暂时不可用")
-        }
-    }
-
-    private var cloudAccessStatus: String {
-        MySettingsPresentation.cloudAccessStatus(
-            for: authStore.session.map { Int($0.appLevel) }
-        )
-    }
-
-    private func applyRegion() {
-        guard !isApplyingRegion else { return }
-        isApplyingRegion = true
-        actionError = nil
-        let preset = selectedRegion
-        settingsStore.setCloudRegionPreset(preset)
-        Task {
-            await cloudStore.clear()
-            if authStore.isSignedIn {
-                let renewed = await authStore.refreshForRegionChange()
-                if renewed {
-                    await cloudStore.activate(session: authStore.session) {
-                        try await authStore.prepareCloudAccess()
-                    }
-                    actionError = cloudStore.errorMessage
-                } else {
-                    actionError = authStore.errorMessage ?? "当前地区无法建立云游戏访问"
-                }
-            }
-            isApplyingRegion = false
-        }
-    }
-}
-
-struct LoginPreferencesView: View {
-    @EnvironmentObject private var settingsStore: AppSettingsStore
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle(
-                    "使用无 Cookie 临时会话",
-                    isOn: $settingsStore.usesEphemeralLoginSession
-                )
-            } footer: {
-                Text("开启后，下一次登录不会复用 Microsoft 登录 Cookie 和上次账号信息。现有 Xbox 会话保持有效，退出后重新登录生效。")
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .appThemeCanvas()
-        .navigationTitle("登录偏好")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 struct DiagnosticsSettingsView: View {
+    @Environment(\.locale) private var locale
     @Binding var traceProfile: IOSRuntimeTraceProfile
 
     @State private var traceExportItem: TraceExportItem?
     @State private var actionError: String?
     @State private var isPreparingTraceExport = false
     @State private var showsTraceClearConfirmation = false
+    @AppStorage("ios.diagnostics.lightweight") private var lightweight = false
+    @State private var records: [IOSDiagnosticRecord] = []
+    @State private var now = Date()
+    @State private var capturing = false
+    private var activeRecord: IOSDiagnosticRecord? { records.first { $0.isActive } }
 
     var body: some View {
-        Form {
+        AppSettingsForm {
             Section {
-                Picker("Trace 记录级别", selection: $traceProfile) {
+                AppSettingsToggle("轻量后台记录", isOn: $lightweight)
+                LabeledContent {
+                    if activeRecord == nil { Text("就绪") } else { Text("正在录制 \(remainingTime)") }
+                } label: {
+                    Text("记录状态")
+                }
+                .accessibilityIdentifier("diagnostic-record-status").appSettingsInformation()
+                AppSettingsActionButton(activeRecord == nil ? "开始诊断录制" : "停止并导出") {
+                    toggleCapture()
+                }
+                .disabled(capturing || isPreparingTraceExport)
+                .appSettingsHint("离开页面后继续录制", identifier: "diagnostics-recording")
+                AppFactGroup(facts: [("单次上限", "5 分钟"), ("保留记录", "3 份"), ("自动清理", "7 天")])
+                    .appSettingsInformation()
+            } header: {
+                Text("诊断录制")
+            }
+            Section {
+                if records.isEmpty {
+                    Text("完成录制后，记录会显示在这里。").appFont(.caption).appSettingsInformation()
+                }
+                ForEach(records) { record in
+                    Button {
+                        exportRecord(record)
+                    } label: {
+                        HStack(spacing: 12) {
+                            AppIconView(.pulse, size: 22)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Text(
+                                        LocalizedStringKey(
+                                            record.operation == nil ? "手动录制" : "问题诊断"))
+                                    Text(
+                                        LocalizedStringKey(
+                                            record.isActive
+                                                ? "录制中" : record.endedAt == nil ? "已中断" : "已完成")
+                                    )
+                                    .appFont(.caption).foregroundStyle(
+                                        AppThemePalette.textSecondary)
+                                }
+                                Text(
+                                    record.startedAt.formatted(
+                                        Date.FormatStyle(date: .abbreviated, time: .shortened)
+                                            .locale(locale))
+                                )
+                                .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+                            }
+                            Spacer(minLength: 8)
+                            AppIconView(.share, size: 22)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .accessibilityHint("导出诊断记录")
+                    .buttonStyle(AppSettingsRowButtonStyle(inset: 16))
+                    .containerValue(\.appSettingsRowOwnsPadding, true)
+                    .disabled(capturing || isPreparingTraceExport)
+                }
+            } header: {
+                Text("最近记录")
+            }
+            Section {
+                AppSettingsPicker(
+                    "Trace 记录级别", selection: $traceProfile, selectedTitle: traceProfile.title
+                ) {
                     ForEach(IOSRuntimeTraceProfile.allCases) { profile in
-                        Text(profile.title).tag(profile)
+                        Text(LocalizedStringKey(profile.title)).tag(profile)
                     }
                 }
 
-                Button("导出当前 Trace", systemImage: "square.and.arrow.up") {
+                AppSettingsActionButton("导出当前 Trace", systemImage: "square.and.arrow.up") {
                     prepareTraceExport(allFiles: false)
                 }
                 .disabled(isPreparingTraceExport)
 
-                Button("导出全部 Trace", systemImage: "archivebox") {
+                AppSettingsActionButton("导出全部 Trace", systemImage: "archivebox") {
                     prepareTraceExport(allFiles: true)
                 }
                 .disabled(isPreparingTraceExport)
 
-                Button("清理 Trace", systemImage: "trash", role: .destructive) {
+                AppSettingsActionButton("清理 Trace", systemImage: "trash", role: .destructive) {
                     showsTraceClearConfirmation = true
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .appThemeCanvas()
-        .navigationTitle("诊断")
-        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: traceProfile) { _, profile in
             IOSRuntimeTrace.setProfile(profile)
+        }
+        .onChange(of: lightweight) { _, value in IOSRuntimeTrace.setLightweight(value) }
+        .task {
+            while !Task.isCancelled {
+                records = await IOSRuntimeTrace.diagnosticRecords()
+                now = Date()
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
         .confirmationDialog(
             "清理全部 iOS Trace？",
@@ -366,7 +247,10 @@ struct DiagnosticsSettingsView: View {
             titleVisibility: .visible
         ) {
             Button("清理 Trace", role: .destructive) {
-                Task { await IOSRuntimeTrace.clearFiles() }
+                Task {
+                    await IOSRuntimeTrace.clearFiles()
+                    records = await IOSRuntimeTrace.diagnosticRecords()
+                }
             }
         } message: {
             Text("历史诊断文件会被删除，当前 profile 会继续生效。")
@@ -387,7 +271,43 @@ struct DiagnosticsSettingsView: View {
         ) {
             Button("知道了", role: .cancel) {}
         } message: {
-            Text(actionError ?? "设置暂时不可用")
+            Text(LocalizedStringKey(actionError ?? "设置暂时不可用"))
+        }
+    }
+
+    private var remainingTime: String {
+        let seconds = max(0, 300 - Int(now.timeIntervalSince(activeRecord?.startedAt ?? now)))
+        return "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+    }
+
+    private func toggleCapture() {
+        guard !capturing else { return }
+        capturing = true
+        Task {
+            do {
+                if let record = activeRecord {
+                    _ = await IOSRuntimeTrace.stopCapture()
+                    traceExportItem = TraceExportItem(
+                        url: try await IOSRuntimeTrace.diagnosticExport(record))
+                } else {
+                    try await IOSRuntimeTrace.startCapture()
+                }
+                actionError = nil
+            } catch { actionError = "诊断操作失败，请重试。" }
+            records = await IOSRuntimeTrace.diagnosticRecords()
+            capturing = false
+        }
+    }
+
+    private func exportRecord(_ record: IOSDiagnosticRecord) {
+        guard !isPreparingTraceExport else { return }
+        isPreparingTraceExport = true
+        Task {
+            do {
+                traceExportItem = TraceExportItem(
+                    url: try await IOSRuntimeTrace.diagnosticExport(record))
+            } catch { actionError = "诊断导出失败，请重试。" }
+            isPreparingTraceExport = false
         }
     }
 
@@ -414,23 +334,36 @@ struct DiagnosticsSettingsView: View {
 }
 
 struct AboutSettingsView: View {
+    @Environment(\.openURL) private var openURL
     var body: some View {
-        Form {
+        AppSettingsForm {
             Section {
-                LabeledContent("应用", value: "XBXRC")
-                LabeledContent("版本", value: versionText)
+                AppFactGroup(facts: [("应用", "XBXRC"), ("版本", versionText)])
+                    .appSettingsInformation()
+            }
+            Section("应用更新") {
+                AppSettingsExternalLink(
+                    "查看版本与更新说明",
+                    destination: URL(string: "https://github.com/xuasir/xbxrc/releases")!)
+                Text("通过安装应用时的分发渠道更新。TestFlight 版本可在 TestFlight 中查看新构建。")
+                    .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+                    .appSettingsInformation()
+            }
+            Section("支持") {
+                AppSettingsExternalLink(
+                    "项目主页", destination: URL(string: "https://github.com/xuasir/xbxrc")!)
             }
         }
         .scrollContentBackground(.hidden)
         .appThemeCanvas()
-        .navigationTitle("关于")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var versionText: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+        let version =
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
             as? String ?? "unknown"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
+        let build =
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
             as? String ?? "unknown"
         return "\(version) (\(build))"
     }

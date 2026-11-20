@@ -1,0 +1,52 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "754F69D9-2451-47ED-95AB-69596D404F2D",
+        "deviceName" : "iPad Pro 11-inch (M5)",
+        "modelName" : "iPad Pro 11-inch (M5)",
+        "osBuildNumber" : "24A434",
+        "osVersion" : "27.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 3,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.0",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1795168312.837,
+  "passedTests" : 3,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795168144.469,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertTrue failed",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 4,
+      "testIdentifierString" : "TouchLayoutInteractionTests/testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden",
+      "testName" : "testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 4
+}

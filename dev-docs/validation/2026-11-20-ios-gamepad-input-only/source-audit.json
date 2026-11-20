@@ -1,0 +1,25 @@
+{
+  "appKeyboardGameInputOccurrences": {
+    "StreamingKeyboard": [],
+    "GCKeyboard": [],
+    "streamKeyboardDefaults": [],
+    "stream_keyboard_defaults": [],
+    "keyboardMapping": [],
+    "StreamingInputPreference": [],
+    "case controller, keyboard": []
+  },
+  "runtimeSources": [
+    "controller",
+    "touch",
+    "idle"
+  ],
+  "legacyPreferenceHandling": "旧桌面输入字段由解码器忽略，重新保存省略这些字段",
+  "controllerRoutes": [
+    "connection",
+    "touch",
+    "sticks",
+    "mapping",
+    "vibration",
+    "menu"
+  ]
+}

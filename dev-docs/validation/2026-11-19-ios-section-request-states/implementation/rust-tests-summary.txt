@@ -1,0 +1,2 @@
+test query_failure::tests::classifications_keep_transport_facts_and_discard_raw_payloads ... ok
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s

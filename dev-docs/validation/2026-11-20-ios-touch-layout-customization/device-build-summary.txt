@@ -1,0 +1,2 @@
+iPhoneOS Debug / arm64 / deployment target iOS 26.0 / CODE_SIGNING_ALLOWED=NO
+** BUILD SUCCEEDED **

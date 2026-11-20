@@ -1,3 +1,4 @@
+import type { StreamingRuntimeSupervisionDecision } from '@shared/rpc/streaming'
 import type {
   PlayerClient,
   PresentedVideoFrameMetadata,
@@ -7,6 +8,7 @@ import type {
 } from '../../player'
 import type { BrowserWebRtcStatsSample } from '../../player/domain/stats'
 import type { RuntimeLaunchSpec } from '../types'
+import type { NetworkPressure } from './browser-network-policy'
 import type { BrowserRecoveryProbe } from './browser-recovery-policy'
 import type { BrowserRenderCause } from './browser-render-health'
 import type { BrowserRendererPlan } from './browser-render-policy'
@@ -32,9 +34,8 @@ import { monotonicNowMs } from '../clock'
 import { withOperationTimeout } from '../execution/async-operation'
 import { normalizeDisplayOptions } from '../utils'
 import { createBrowserNegotiation } from './browser-negotiation'
-import { BrowserNetworkPolicy } from './browser-network-policy'
 import { createBrowserPlaybackTrace } from './browser-playback-trace'
-import { BrowserSoftRecoveryGate, createBrowserRecoveryProbe, evaluateBrowserRecoveryProbe } from './browser-recovery-policy'
+import { createBrowserRecoveryProbe } from './browser-recovery-policy'
 import { BrowserRenderHealth, resolveBrowserRenderCause } from './browser-render-health'
 import {
   planToRendererAttachSpec,
@@ -70,7 +71,6 @@ import {
 } from './browser-video-display'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
 import { observeRenderState } from './render-state'
-import { shouldRecoverMediaConnection } from './runtime-host-policy'
 import { createSerialOperationQueue } from './serial-operation'
 
 import {
@@ -328,7 +328,9 @@ export function createBrowserRuntime(options: {
   let recoverySuppressedBy: RecoverySuppressedBy | undefined
   let keyframeBudgetRemaining = 0
   let playbackRebuildBudgetRemaining = 0
-  const softRecoveryGate = new BrowserSoftRecoveryGate()
+  let supervisionEligibleSinceMs = 0
+  let lastRecoveryActionAtMs: number | undefined
+  let latestSupervisionDecision: StreamingRuntimeSupervisionDecision | undefined
   let pendingActionEffectProbe: BrowserRecoveryProbe | undefined
   let lastRecoveryActionEffect: 'improved' | 'neutral' | 'degraded' | 'unknown' | undefined
   let lastRecoveryActionEffectScore: number | undefined
@@ -426,7 +428,8 @@ export function createBrowserRuntime(options: {
     dynamic: 'steady',
     contentFpsClass: 'contentUnknown',
   }
-  const networkPolicy = new BrowserNetworkPolicy()
+  let networkPolicy: { state: NetworkPressure, reason: string, rttBaselineMs?: number, rttDeltaMs?: number, effect?: 'improved' | 'neutral' | 'degraded' | 'unknown' } = { state: 'unknown', reason: 'observationUnavailable' }
+  let qualityCompletion: { id: number, result: 'applied' | 'failed' | 'unsupported', previousLevel: number, completedAtMs: number } | undefined
   const renderHealth = new BrowserRenderHealth()
   const runtimeTrace = createBrowserRuntimeTrace({
     write: params => rpc.runtimeTrace.recordEvent(params),
@@ -843,8 +846,8 @@ export function createBrowserRuntime(options: {
       if (document.visibilityState === 'hidden') {
         const at = monotonicNowMs()
         finishRecoveryProbe({ result: 'unknown', reason: 'documentHidden' }, at)
-        softRecoveryGate.invalidate(at)
-        networkPolicy.invalidate(at)
+        supervisionEligibleSinceMs = at
+        networkPolicy = { state: 'unknown', reason: 'observationUnavailable' }
         renderHealth.invalidate(at)
         visibilityBudgetActive = true
         supervision.clearFirstFrameGuard()
@@ -856,8 +859,8 @@ export function createBrowserRuntime(options: {
       }
       visibilityBudgetActive = false
       const resumedAt = monotonicNowMs()
-      softRecoveryGate.invalidate(resumedAt)
-      networkPolicy.invalidate(resumedAt)
+      supervisionEligibleSinceMs = resumedAt
+      networkPolicy = { state: 'unknown', reason: 'observationUnavailable' }
       renderHealth.invalidate(resumedAt)
       supervision.resetEpisode()
       supervision.deferUntil(monotonicNowMs() + MEDIA_STALL_EVIDENCE_GRACE_MS)
@@ -1477,7 +1480,8 @@ export function createBrowserRuntime(options: {
     emit({ type: 'renderStateChanged', state: { engine: null, superResolution: false, pending: false } })
     lastBrowserRendererPlan = null
     renderHealth.reset()
-    networkPolicy.reset()
+    networkPolicy = { state: 'unknown', reason: 'observationUnavailable' }
+    qualityCompletion = undefined
     sdpDownshiftLevel = 0
     qualityControl = { qualityRequestedBitrateKbps: baseVideoBitrateKbps }
     const nextClient = createPlayerClient(playerElementId, spec, audioVolume)
@@ -1546,18 +1550,8 @@ export function createBrowserRuntime(options: {
 
   function beginRecoveryActionEffectProbe(action: RecoveryAction, now: number, stats: StreamStats): void {
     pendingActionEffectProbe = createBrowserRecoveryProbe(action, stats, now)
-    softRecoveryGate.markAction(now)
+    lastRecoveryActionAtMs = now
     lastRecoveryActionEffect = lastRecoveryActionEffectScore = lastRecoveryActionEffectReason = undefined
-  }
-
-  function evaluateRecoveryActionEffect(now: number, stats: StreamStats): void {
-    const probe = pendingActionEffectProbe
-    if (!probe)
-      return
-    const effect = evaluateBrowserRecoveryProbe(probe, stats, now)
-    if (!effect)
-      return
-    finishRecoveryProbe(effect, now, stats)
   }
 
   function finishRecoveryProbe(effect: { result: 'improved' | 'neutral' | 'degraded' | 'unknown', reason: string, score?: number }, now: number, stats = latestPolicyStats): void {
@@ -1688,7 +1682,7 @@ export function createBrowserRuntime(options: {
       inactivityElapsedMs: context.inactivityElapsedMs,
       stallThresholdMs: context.stallThresholdMs,
       budgetRemaining: formatRecoveryBudget(),
-      evidence: softRecoveryGate.actionEvidence(context.stats),
+      evidence: { domain: 'decode', observedAtMs: context.stats.statsSampledAtMs, sampleId: context.stats.statsSampleId, coverageMs: Math.min(context.stats.browserStatsWindows?.short.receivedCoverageMs ?? 0, context.stats.browserStatsWindows?.short.decodeCoverageMs ?? 0), sustainedMs: latestSupervisionDecision?.decodePressureSustainedMs ?? 0, previousActionAtMs: lastRecoveryActionAtMs },
     }))
     markRecoveryAction(action, 'planned')
 
@@ -1715,7 +1709,7 @@ export function createBrowserRuntime(options: {
       }
       const requestResult = assertClient().requestVideoKeyframe()
       if (!requestResult.sent) {
-        softRecoveryGate.markAction(now)
+        lastRecoveryActionAtMs = now
         markRecoveryAction(action, 'failed')
         recordRuntimeTraceEvent('recoveryActionSuppressed', () => ({
           triggerSource: 'stallChecker',
@@ -1837,26 +1831,29 @@ export function createBrowserRuntime(options: {
     effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
     const previousBandwidth = networkPolicy.state
     const previousNetworkEffect = networkPolicy.effect
-    const previousNetworkEvidence = networkPolicy.effectEvidence
     const remoteCap = client?.getRemoteVideoBitrateCapKbps()
     qualityControl.qualityControlMode ??= remoteCap === undefined ? 'assessment-only' : 'sdp'
     qualityControl.qualityRequestedBitrateKbps ??= baseVideoBitrateKbps
     qualityControl.qualityNegotiatedBitrateKbps = remoteCap
-    const networkAction = networkPolicy.observe(stats, { nowMs: now, level: sdpDownshiftLevel, warmupUntilMs, qualitySupported: remoteCap !== undefined })
+    const quality = latestSupervisionDecision?.quality
+    if (quality) {
+      networkPolicy = { state: quality.state, reason: quality.reason, rttBaselineMs: quality.rttBaselineMs ?? undefined, rttDeltaMs: quality.rttDeltaMs ?? undefined, effect: quality.effect ?? undefined }
+    }
+    const networkAction = quality?.action
     if (previousBandwidth !== networkPolicy.state)
       recordRuntimeTraceEvent('bandwidthStateChanged', () => ({ previous: previousBandwidth, next: networkPolicy.state, reason: networkPolicy.reason, rttBaselineMs: networkPolicy.rttBaselineMs, rttDeltaMs: networkPolicy.rttDeltaMs }))
-    if (previousNetworkEffect !== networkPolicy.effect || previousNetworkEvidence !== networkPolicy.effectEvidence)
-      recordRuntimeTraceEvent('qualityActionEffectEvaluated', () => ({ result: networkPolicy.effect, ...networkPolicy.effectEvidence, sampleId: stats.statsSampleId, reason: networkPolicy.reason }))
+    if (previousNetworkEffect !== networkPolicy.effect)
+      recordRuntimeTraceEvent('qualityActionEffectEvaluated', () => ({ result: networkPolicy.effect, observedAtMs: now, sampleId: stats.statsSampleId, reason: networkPolicy.reason }))
     if (networkAction) {
-      recordRuntimeTraceEvent('qualityActionPlanned', () => ({ ...networkAction, qualitySupported: remoteCap !== undefined }))
+      recordRuntimeTraceEvent('qualityActionPlanned', () => ({ ...networkAction, qualitySupported: remoteCap !== undefined, sharedPressure: latestSupervisionDecision?.networkPressure }))
       const previousLevel = sdpDownshiftLevel
       void applySdpDownshift(networkAction.level).then(() => {
         if (currentSpec !== spec || stats.statsPeerGeneration !== latestPolicyStats?.statsPeerGeneration)
           return
-        networkPolicy.complete(networkAction, sdpDownshiftLevel === networkAction.level ? 'applied' : qualityControl.qualityActionResult === 'unsupported' ? 'unsupported' : 'failed', stats, previousLevel, monotonicNowMs())
+        qualityCompletion = { id: networkAction.id, result: sdpDownshiftLevel === networkAction.level ? 'applied' : qualityControl.qualityActionResult === 'unsupported' ? 'unsupported' : 'failed', previousLevel, completedAtMs: Math.floor(monotonicNowMs()) }
         if (sdpDownshiftLevel !== networkAction.level)
           recordRuntimeTraceEvent('qualityActionEffectEvaluated', () => ({ result: networkPolicy.effect, reason: networkPolicy.reason, sampleId: stats.statsSampleId }))
-      }).catch(() => networkPolicy.complete(networkAction, 'failed', stats, previousLevel, monotonicNowMs()))
+      }).catch(() => { qualityCompletion = { id: networkAction.id, result: 'failed', previousLevel, completedAtMs: Math.floor(monotonicNowMs()) } })
     }
     const previousRenderWarning = renderHealth.warning
     const renderAction = renderHealth.observe(stats, now, warmupUntilMs)
@@ -1951,11 +1948,69 @@ export function createBrowserRuntime(options: {
     if (generation !== resourceGeneration || currentSpec !== spec)
       return
     const now = monotonicNowMs()
-    evaluateRecoveryActionEffect(now, stats)
+    const integer = (value: number | undefined) => value === undefined ? undefined : Math.max(0, Math.floor(value))
+    const window = (value: NonNullable<StreamStats['browserStatsWindows']>['short'] | undefined) => Object.fromEntries(Object.entries(value ?? {}).filter(([, item]) => typeof item === 'number' && Number.isFinite(item)).map(([key, item]) => [key, key.endsWith('CoverageMs') ? integer(item as number) : item]))
+    const probe = pendingActionEffectProbe
+    let decision: StreamingRuntimeSupervisionDecision | undefined
+    try {
+      const response = await rpc.streaming.decideRecovery({
+        sessionId: spec.sessionId,
+        fact: { type: 'supervision', sample: {
+          nowMs: Math.floor(now),
+          sampledAtMs: integer(stats.statsSampledAtMs),
+          sampleId: stats.statsSampleId,
+          observationFresh: stats.statsObservationState === 'fresh',
+          visible: !document.hidden,
+          isClosing: false,
+          connectionState: transportState,
+          controlChannelState: assertClient().getControlChannelHealthSnapshot().state,
+          connectedElapsedMs: Math.floor(Math.max(0, now - connectedAt)),
+          inactivityElapsedMs: Math.floor(Math.max(0, now - (lastMediaActivityAt ?? connectedAt))),
+          frameIntervalMs: frameIntervalEstimateMs ?? undefined,
+          inboundBytesTotal: stats.inboundBytesTotal,
+          inboundVideoPacketCountTotal: stats.inboundVideoPacketCountTotal,
+          inboundVideoFps: stats.inboundVideoFps,
+          decodeFps: stats.decodeFps,
+          videoPresentAgeMs: stats.videoPresentAgeMs,
+          packetAgeMs: stats.packetAgeMs,
+          peerGeneration: stats.statsPeerGeneration ?? generation,
+          videoGeneration: stats.statsVideoGeneration ?? generation,
+          warmupUntilMs: Math.floor(Math.max(0, warmupUntilMs)),
+          previousActionAtMs: integer(lastRecoveryActionAtMs),
+          eligibleSinceMs: Math.floor(supervisionEligibleSinceMs),
+          short: window(stats.browserStatsWindows?.short),
+          long: window(stats.browserStatsWindows?.long),
+          rttBaselineMs: networkPolicy.rttBaselineMs,
+          rttMs: stats.networkRttMs,
+          pathId: `${stats.statsPeerGeneration}:${stats.statsCandidatePairId ?? stats.transportPath ?? 'unknown'}`,
+          qualityLevel: sdpDownshiftLevel,
+          qualitySupported: assertClient().getRemoteVideoBitrateCapKbps() !== undefined,
+          qualityCompletion,
+          probe: probe ? { ...probe, startedAtMs: Math.floor(probe.startedAtMs), observeMs: Math.floor(probe.observeMs), requiredObserveMs: Math.floor(probe.requiredObserveMs) } : undefined,
+        } },
+        isClosing: false,
+      })
+      if (generation !== resourceGeneration || currentSpec !== spec)
+        return
+      decision = response.supervision
+    }
+    catch (error) {
+      recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ reason: 'supervisionUnavailable', error: error instanceof Error ? error.message : String(error) }))
+      return
+    }
+    if (!decision) {
+      recordRuntimeTraceEvent('mediaObservationUnavailable', () => ({ reason: 'supervisionContractUnavailable' }))
+      return
+    }
+    latestSupervisionDecision = decision
+    if (decision.duplicate)
+      return
+    if (decision.probeEffect && pendingActionEffectProbe === probe)
+      finishRecoveryProbe({ ...decision.probeEffect, score: decision.probeEffect.score ?? undefined }, now, stats)
     if (stats.statsObservationState !== 'fresh') {
       finishRecoveryProbe({ result: 'unknown', reason: 'observationUnavailable' }, now, stats)
-      softRecoveryGate.invalidate(now)
-      networkPolicy.invalidate(now)
+      supervisionEligibleSinceMs = now
+      networkPolicy = { state: 'unknown', reason: 'observationUnavailable' }
       const previousFallback = renderHealth.fallback
       renderHealth.invalidate(now)
       if (previousFallback !== renderHealth.fallback)
@@ -1964,33 +2019,33 @@ export function createBrowserRuntime(options: {
       return
     }
     const channelHealth = assertClient().getControlChannelHealthSnapshot()
-    const decodeRecoveryEligible = softRecoveryGate.observe(stats) && now >= warmupUntilMs
-    if (softRecoveryGate.healthyEpisodeComplete && recoveryEpochId && !pendingActionEffectProbe) {
+    const decodeRecoveryEligible = decision.decodeRecoveryEligible
+    if (decision.healthyEpisodeComplete && recoveryEpochId && !pendingActionEffectProbe) {
       recordRuntimeTraceEvent('recoveryEpochCompleted', () => ({ epochId: recoveryEpochId, reason: 'healthyLongWindow', sampleId: stats.statsSampleId }))
       recoveryEpochId = undefined
       keyframeBudgetRemaining = playbackRebuildBudgetRemaining = 0
-      softRecoveryGate.reset()
+      supervisionEligibleSinceMs = 0
+      lastRecoveryActionAtMs = undefined
     }
     refreshFrontEndPolicyState(now, spec, stats, channelHealth)
-    evaluateRecoveryActionEffect(now, stats)
     if (supervision.isCoolingDown(now)) {
       return
     }
     const lastActivity = lastMediaActivityAt ?? connectedAt
     const inactivityElapsedMs = Math.max(0, now - lastActivity)
-    const stallThresholdMs = supervision.stallThreshold(now, connectedAt, frameIntervalEstimateMs)
+    const stallThresholdMs = decision.stallThresholdMs
     if (inactivityElapsedMs < stallThresholdMs) {
       return
     }
-    const { snapshot: evidenceSnapshot, hasInboundProgress } = supervision.observeEvidence(stats)
+    const hasInboundProgress = decision.hasInboundProgress
     if (hasInboundProgress && inactivityElapsedMs < stallThresholdMs + MEDIA_STALL_EVIDENCE_GRACE_MS) {
       supervision.deferUntil(now + 2_000)
       recordRuntimeTraceEvent('stallRecoverySuppressedByInboundProgress', () => ({
         inactivityElapsedMs,
         stallThresholdMs,
         graceMs: MEDIA_STALL_EVIDENCE_GRACE_MS,
-        inboundBytesTotal: evidenceSnapshot.inboundBytesTotal ?? 0,
-        inboundVideoPacketCountTotal: evidenceSnapshot.inboundVideoPacketCountTotal ?? 0,
+        inboundBytesTotal: stats.inboundBytesTotal ?? 0,
+        inboundVideoPacketCountTotal: stats.inboundVideoPacketCountTotal ?? 0,
       }))
       return
     }
@@ -2015,7 +2070,7 @@ export function createBrowserRuntime(options: {
     if (actionHandled) {
       return
     }
-    if (!shouldRecoverMediaConnection({ connectionState: transportState, controlChannelState: channelHealth.state, hasInboundProgress, inboundVideoFps: stats.inboundVideoFps, decodeFps: stats.decodeFps, packetAgeMs: stats.packetAgeMs })) {
+    if (!decision.mediaConnectionEligible) {
       recordRuntimeTraceEvent('recoveryArbiterSuppressed', () => ({ factKey: 'mediaHealth', suppressedBy: 'localFaultDomain', recoveryCause, hasInboundProgress }))
       return
     }
@@ -2084,7 +2139,9 @@ export function createBrowserRuntime(options: {
     recoverySuppressedBy = undefined
     keyframeBudgetRemaining = 0
     playbackRebuildBudgetRemaining = 0
-    softRecoveryGate.reset()
+    supervisionEligibleSinceMs = 0
+    lastRecoveryActionAtMs = undefined
+    latestSupervisionDecision = undefined
     if (!retainConnectionProbe || pendingActionEffectProbe?.action !== 'reconnect')
       pendingActionEffectProbe = undefined
     lastRecoveryActionEffect = undefined
@@ -2108,7 +2165,8 @@ export function createBrowserRuntime(options: {
     bandwidthAction = 'none'
     baseVideoBitrateKbps = videoBitrateKbps
     latestPolicyStats = undefined
-    networkPolicy.reset()
+    networkPolicy = { state: 'unknown', reason: 'observationUnavailable' }
+    qualityCompletion = undefined
     sdpDownshiftLevel = 0
     qualityControl = { qualityRequestedBitrateKbps: baseVideoBitrateKbps }
     renderHealth.reset()

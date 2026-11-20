@@ -14,7 +14,8 @@ final class XBXRCAppDelegate: NSObject, UIApplicationDelegate {
         _: UIApplication,
         supportedInterfaceOrientationsFor window: UIWindow?
     ) -> UIInterfaceOrientationMask {
-        let idiom = window?.windowScene?.traitCollection.userInterfaceIdiom
+        let idiom =
+            window?.windowScene?.traitCollection.userInterfaceIdiom
             ?? UIDevice.current.userInterfaceIdiom
         return Self.supportedMask(for: idiom)
     }
@@ -24,7 +25,7 @@ final class XBXRCAppDelegate: NSObject, UIApplicationDelegate {
         case .application:
             idiom == .pad ? .all : .allButUpsideDown
         case .streaming:
-            .landscape
+            idiom == .pad ? .all : .landscape
         }
     }
 
@@ -36,7 +37,7 @@ final class XBXRCAppDelegate: NSObject, UIApplicationDelegate {
         case .application:
             idiom == .pad ? .all : .portrait
         case .streaming:
-            .landscape
+            idiom == .pad ? .all : .landscape
         }
     }
 }
@@ -69,6 +70,8 @@ final class AppOrientationCoordinator {
             for window in scene.windows {
                 window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
+            // iPad 保持当前窗口几何，由分屏和台前调度管理方向。
+            guard scene.traitCollection.userInterfaceIdiom != .pad else { continue }
             let mask = XBXRCAppDelegate.requestedGeometryMask(
                 for: scene.traitCollection.userInterfaceIdiom,
                 mode: mode

@@ -1,0 +1,902 @@
+{
+  "8B483949-999E-4BBA-8B98-0BBA2F7B489A": {
+    "generation": 1,
+    "startedAtMs": 1795166382774,
+    "lastAtMs": 1795166432034,
+    "rtcSnapshots": 15,
+    "displaySnapshots": 12,
+    "supervisionSnapshots": 0,
+    "acceptedFrames": 548,
+    "submittedFrames": 548,
+    "presentedFrames": 547,
+    "ingressDropEvents": 33,
+    "ingressDropFrames": {
+      "ingressCoalesced": 108
+    },
+    "stateCounts": {
+      "preparingAccess": 1,
+      "creatingSession": 1,
+      "suspending": 3,
+      "recovering": 1,
+      "connecting": 1,
+      "waitingForFirstFrame": 1,
+      "failed": 1
+    },
+    "metrics": {
+      "rtc.rttMs": {
+        "n": 14,
+        "min": 11,
+        "mean": 42.42857142857143,
+        "p50": 17,
+        "p95": 159,
+        "p99": 159,
+        "max": 159
+      },
+      "rtc.jitterMs": {
+        "n": 15,
+        "min": 0,
+        "mean": 7.8,
+        "p50": 7,
+        "p95": 16,
+        "p99": 16,
+        "max": 18
+      },
+      "rtc.receiveBitrateBps": {
+        "n": 14,
+        "min": 6672796.968845329,
+        "mean": 19528010.44220897,
+        "p50": 19491924.492679525,
+        "p95": 26338801.370914504,
+        "p99": 26338801.370914504,
+        "max": 28464345.624864627
+      },
+      "rtc.frameSupplyDelta": {
+        "n": 14,
+        "min": 14,
+        "mean": 57.214285714285715,
+        "p50": 60,
+        "p95": 67,
+        "p99": 67,
+        "max": 68
+      },
+      "rtc.sampleWindowMs": {
+        "n": 12,
+        "min": 1000.882833302021,
+        "mean": 1002.840444440643,
+        "p50": 1002.0047500133514,
+        "p95": 1005.3834999799728,
+        "p99": 1005.3834999799728,
+        "max": 1005.7705416679382
+      },
+      "display.frameIntervalMs": {
+        "n": 11,
+        "min": 11.30610128475086,
+        "mean": 15.555588852147304,
+        "p50": 16.012521109930674,
+        "p95": 17.45721630993746,
+        "p99": 17.45721630993746,
+        "max": 17.584689877254004
+      },
+      "display.submitToPresentP50Ms": {
+        "n": 11,
+        "min": 0.8386666774749756,
+        "mean": 1.185185594992204,
+        "p50": 1.2286249995231628,
+        "p95": 1.2442499995231628,
+        "p99": 1.2442499995231628,
+        "max": 1.2776666283607483
+      },
+      "display.submitToPresentP95Ms": {
+        "n": 11,
+        "min": 1.1019583344459534,
+        "mean": 1.7319128621708264,
+        "p50": 1.7938750386238098,
+        "p95": 1.9936665892601013,
+        "p99": 1.9936665892601013,
+        "max": 1.9936665892601013
+      },
+      "display.submitToPresentP99Ms": {
+        "n": 11,
+        "min": 1.1019583344459534,
+        "mean": 2.0808333483609287,
+        "p50": 2.15862500667572,
+        "p95": 2.1945000290870667,
+        "p99": 2.1945000290870667,
+        "max": 2.277916729450226
+      },
+      "display.submitToDrawablePresentP50Ms": {
+        "n": 11,
+        "min": 20.436124980449677,
+        "mean": 23.01768938519738,
+        "p50": 22.667916655540466,
+        "p95": 24.66079157590866,
+        "p99": 24.66079157590866,
+        "max": 24.83399999141693
+      },
+      "display.submitToDrawablePresentP95Ms": {
+        "n": 11,
+        "min": 24.111374974250793,
+        "mean": 28.88875757564198,
+        "p50": 28.481124997138977,
+        "p95": 32.27741664648056,
+        "p99": 32.27741664648056,
+        "max": 32.27741664648056
+      },
+      "display.submitToDrawablePresentP99Ms": {
+        "n": 11,
+        "min": 24.111374974250793,
+        "mean": 30.784693186933342,
+        "p50": 31.146250009536743,
+        "p95": 35.41358333826065,
+        "p99": 35.41358333826065,
+        "max": 35.41358333826065
+      },
+      "display.sampleWindowMs": {
+        "n": 10,
+        "min": 1000.882833302021,
+        "mean": 1002.928545832634,
+        "p50": 1002.0047500133514,
+        "p95": 1005.3834999799728,
+        "p99": 1005.3834999799728,
+        "max": 1005.7705416679382
+      },
+      "sup.inboundFps": {
+        "n": 0
+      },
+      "sup.decodeFps": {
+        "n": 0
+      },
+      "sup.presentFps": {
+        "n": 0
+      },
+      "sup.videoPresentAgeMs": {
+        "n": 0
+      },
+      "present.completionHandlerDelayMs": {
+        "n": 0
+      },
+      "rtc.framesReceivedDeltaFps": {
+        "n": 12,
+        "min": 13.97927863216637,
+        "mean": 56.58300056846169,
+        "p50": 59.83959497756499,
+        "p95": 66.94090234214502,
+        "p99": 66.94090234214502,
+        "max": 67.60985451734442,
+        "weightedMean": 56.58926134720623
+      },
+      "rtc.framesDecodedDeltaFps": {
+        "n": 12,
+        "min": 13.97927863216637,
+        "mean": 56.58300056846169,
+        "p50": 59.83959497756499,
+        "p95": 66.94090234214502,
+        "p99": 66.94090234214502,
+        "max": 67.60985451734442,
+        "weightedMean": 56.58926134720623
+      },
+      "display.submitCountDeltaFps": {
+        "n": 10,
+        "min": 6.989639316083185,
+        "mean": 49.14727378556604,
+        "p50": 52.71620232583462,
+        "p95": 61.64427911875521,
+        "p99": 61.64427911875521,
+        "max": 61.87595418003145,
+        "weightedMean": 49.15604427140022
+      },
+      "display.presentCountDeltaFps": {
+        "n": 10,
+        "min": 6.989639316083185,
+        "mean": 49.147548220099836,
+        "p50": 52.858308896849074,
+        "p95": 61.64427911875521,
+        "p99": 61.64427911875521,
+        "max": 61.87595418003145,
+        "weightedMean": 49.15604427140022
+      },
+      "display.drawablePresentCountDeltaFps": {
+        "n": 10,
+        "min": 3.994079609190391,
+        "mean": 44.371526378149106,
+        "p50": 51.86098231388966,
+        "p95": 61.64427911875521,
+        "p99": 61.64427911875521,
+        "max": 61.87595418003145,
+        "weightedMean": 44.37006024497586
+      },
+      "rtc.last": {
+        "attemptId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "counterReset": false,
+        "firCount": 0,
+        "firstMediaAtMs": 290025108.86537504,
+        "frameSupplyDelta": 61,
+        "framesDecoded": 801,
+        "framesDecodedDelta": null,
+        "framesDropped": 0,
+        "framesReceived": 801,
+        "framesReceivedDelta": null,
+        "freezeCount": 2,
+        "freezeDurationMs": 520,
+        "generation": 1,
+        "inboundAudioBytes": 80747,
+        "inboundVideoBytes": 34263560,
+        "jitterMs": 6,
+        "lastMediaAtMs": 290038144.4909167,
+        "mediaTimeSource": "rtcStatisticsObservation",
+        "nackCount": 20,
+        "observedFramesDecoded": 801,
+        "operationId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "packetStatisticsScope": "video",
+        "packetsLost": 157,
+        "packetsLostDelta": null,
+        "packetsReceived": 31299,
+        "packetsReceivedDelta": null,
+        "peerEpoch": 2,
+        "platform": "ios",
+        "pliCount": 2,
+        "receiveBitrateBps": 19491924.492679525,
+        "rttMs": 11,
+        "sampleClock": "monotonic",
+        "sampleCount": 1,
+        "sampleId": "2:2:290038144.4909167",
+        "sampleWindowMs": null,
+        "sampledAtMonotonicMs": 290038144.4909167,
+        "selectedCandidatePairAddressFamily": "local:ipv4,remote:ipv4",
+        "selectedCandidatePairProtocol": "udp",
+        "selectedLocalCandidateType": "srflx",
+        "selectedRemoteCandidateType": "srflx",
+        "sourceMonotonicMs": 290038145.864,
+        "videoPacketsLost": 157,
+        "windowEndMonotonicMs": 290038144.4909167,
+        "windowStartMonotonicMs": null,
+        "writerQueueDelayMs": 0.6929999589920044
+      },
+      "display.last": {
+        "attemptId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "counterReset": false,
+        "currentDrawableBusy": false,
+        "displayedFrameDelta": null,
+        "drawablePresentCount": 481,
+        "drawablePresentCountDelta": null,
+        "drawablePresentationObserved": true,
+        "drawableSampleCount": 240,
+        "drawableTimestampSource": "drawablePresentedTime",
+        "drawableWindowEndMonotonicMs": 290038109.9344584,
+        "drawableWindowStartMonotonicMs": 290029593.3532501,
+        "dropCountByReason": {
+          "ingressCoalesced": 97
+        },
+        "frameIntervalMs": 16.221401459474137,
+        "frameIntervalSource": "commandBufferCompletion",
+        "generation": 1,
+        "lastDrawablePresentAtMs": 290038109.9344584,
+        "lastPresentAtMs": 290038143.5347917,
+        "lastSubmitAtMs": 290038142.25295836,
+        "latencySampleCount": 240,
+        "latencyWindowEndMonotonicMs": 290038143.5347917,
+        "latencyWindowStartMonotonicMs": 290030552.1617501,
+        "mailboxOverwriteCount": 0,
+        "operationId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "peerEpoch": 2,
+        "platform": "ios",
+        "presentCount": 536,
+        "presentCountDelta": null,
+        "presentTimestampSource": "commandBufferCompletion",
+        "sampleClock": "monotonic",
+        "sampleCount": 1,
+        "sampleId": "2:2:290038144.4909167",
+        "sampleWindowMs": null,
+        "sampledAtMonotonicMs": 290038144.4909167,
+        "sourceMonotonicMs": 290038145.9272917,
+        "submitCount": 536,
+        "submitCountDelta": null,
+        "submitToDrawablePresentP50Ms": 24.529458343982697,
+        "submitToDrawablePresentP95Ms": 32.27741664648056,
+        "submitToDrawablePresentP99Ms": 35.41358333826065,
+        "submitToPresentP50Ms": 1.1459166407585144,
+        "submitToPresentP95Ms": 1.9936665892601013,
+        "submitToPresentP99Ms": 2.277916729450226,
+        "windowEndMonotonicMs": 290038144.4909167,
+        "windowStartMonotonicMs": null,
+        "writerQueueDelayMs": 1.4423749446868896
+      },
+      "supervision.last": null,
+      "perFrameSubmitToCompletionMs": {
+        "n": 547,
+        "min": 0.5353333353996277,
+        "mean": 1.21091423021592,
+        "p50": 1.1996667385101318,
+        "p95": 1.7958333492279053,
+        "p99": 2.21150004863739,
+        "max": 3.849916636943817
+      },
+      "writerQueueDelayMs": {
+        "n": 1815,
+        "min": 0.06562501192092896,
+        "mean": 0.3526549122550271,
+        "p50": 0.2436249852180481,
+        "p95": 0.8485000133514404,
+        "p99": 2.225291669368744,
+        "max": 18.902458369731903
+      }
+    },
+    "frameSizeCounts": {
+      "(2560, 1440)": 547
+    }
+  },
+  "66094F47-5B13-43DE-9CA0-5742886EC40D": {
+    "generation": 2,
+    "startedAtMs": 1795166434287,
+    "lastAtMs": 1795166607606,
+    "rtcSnapshots": 146,
+    "displaySnapshots": 146,
+    "supervisionSnapshots": 127,
+    "acceptedFrames": 2661,
+    "submittedFrames": 2661,
+    "presentedFrames": 2660,
+    "ingressDropEvents": 2500,
+    "ingressDropFrames": {
+      "ingressCoalesced": 5990
+    },
+    "stateCounts": {
+      "preparingAccess": 1,
+      "creatingSession": 1,
+      "negotiating": 1,
+      "connecting": 1,
+      "waitingForFirstFrame": 1,
+      "playing": 15926,
+      "stopping": 1
+    },
+    "metrics": {
+      "rtc.rttMs": {
+        "n": 145,
+        "min": 10,
+        "mean": 15.806896551724138,
+        "p50": 13,
+        "p95": 21,
+        "p99": 137,
+        "max": 137
+      },
+      "rtc.jitterMs": {
+        "n": 146,
+        "min": 0,
+        "mean": 4.082191780821918,
+        "p50": 3,
+        "p95": 7,
+        "p99": 12,
+        "max": 80
+      },
+      "rtc.receiveBitrateBps": {
+        "n": 145,
+        "min": 256475.08171583762,
+        "mean": 19025663.709137063,
+        "p50": 20385518.287736323,
+        "p95": 29458324.73326039,
+        "p99": 30192615.848729514,
+        "max": 34189347.05955252
+      },
+      "rtc.frameSupplyDelta": {
+        "n": 145,
+        "min": 0,
+        "mean": 59.351724137931036,
+        "p50": 60,
+        "p95": 62,
+        "p99": 65,
+        "max": 73
+      },
+      "rtc.sampleWindowMs": {
+        "n": 145,
+        "min": 997.5216249227524,
+        "mean": 1008.1470086208706,
+        "p50": 1004.8314999938011,
+        "p95": 1021.5255833864212,
+        "p99": 1027.8195416927338,
+        "max": 1189.7241250276566
+      },
+      "display.frameIntervalMs": {
+        "n": 145,
+        "min": 36.26691421746047,
+        "mean": 55.138263626801006,
+        "p50": 53.756835585973455,
+        "p95": 71.15187963167966,
+        "p99": 87.3548022119581,
+        "max": 110.8640121125475
+      },
+      "display.submitToPresentP50Ms": {
+        "n": 145,
+        "min": 0.784166693687439,
+        "mean": 0.822749715015806,
+        "p50": 0.8246666193008423,
+        "p95": 0.8523333668708801,
+        "p99": 0.8567916750907898,
+        "max": 0.8568750023841858
+      },
+      "display.submitToPresentP95Ms": {
+        "n": 145,
+        "min": 0.9602500200271606,
+        "mean": 1.8887982705543782,
+        "p50": 1.7829167246818542,
+        "p95": 2.622583329677582,
+        "p99": 2.6637500524520874,
+        "max": 2.6637500524520874
+      },
+      "display.submitToPresentP99Ms": {
+        "n": 145,
+        "min": 0.9617499709129333,
+        "mean": 2.372734191910974,
+        "p50": 2.6607083082199097,
+        "p95": 3.297249972820282,
+        "p99": 3.412041664123535,
+        "max": 3.412041664123535
+      },
+      "display.submitToDrawablePresentP50Ms": {
+        "n": 145,
+        "min": 19.82316666841507,
+        "mean": 20.938179888396427,
+        "p50": 20.95424997806549,
+        "p95": 21.628791630268097,
+        "p99": 22.01891666650772,
+        "max": 22.42849999666214
+      },
+      "display.submitToDrawablePresentP95Ms": {
+        "n": 145,
+        "min": 23.835541605949402,
+        "mean": 24.39659539913309,
+        "p50": 24.33595836162567,
+        "p95": 25.03104168176651,
+        "p99": 25.056124925613403,
+        "max": 25.056124925613403
+      },
+      "display.submitToDrawablePresentP99Ms": {
+        "n": 145,
+        "min": 23.988041639328003,
+        "mean": 26.366335342670308,
+        "p50": 24.924416661262512,
+        "p95": 30.635249972343445,
+        "p99": 30.706875026226044,
+        "max": 30.706875026226044
+      },
+      "display.sampleWindowMs": {
+        "n": 145,
+        "min": 997.5216249227524,
+        "mean": 1008.1470086208706,
+        "p50": 1004.8314999938011,
+        "p95": 1021.5255833864212,
+        "p99": 1027.8195416927338,
+        "max": 1189.7241250276566
+      },
+      "sup.inboundFps": {
+        "n": 103,
+        "min": 32.27345309381237,
+        "mean": 58.98569783553844,
+        "p50": 59.89362405021473,
+        "p95": 60.396039603960396,
+        "p99": 60.45589692765114,
+        "max": 60.756972111553786
+      },
+      "sup.decodeFps": {
+        "n": 103,
+        "min": 32.27345309381237,
+        "mean": 58.98569783553844,
+        "p50": 59.89362405021473,
+        "p95": 60.396039603960396,
+        "p99": 60.45589692765114,
+        "max": 60.756972111553786
+      },
+      "sup.presentFps": {
+        "n": 103,
+        "min": 12.963406520292747,
+        "mean": 21.022328197498425,
+        "p50": 20.714938030006525,
+        "p95": 24.788505747126436,
+        "p99": 25.222551928783382,
+        "max": 26.679841897233203
+      },
+      "sup.videoPresentAgeMs": {
+        "n": 127,
+        "min": 54.74799996614456,
+        "mean": 150.60243268322756,
+        "p50": 128.19020825624466,
+        "p95": 197.28999990224838,
+        "p99": 816.226499915123,
+        "max": 1446.630624949932
+      },
+      "present.completionHandlerDelayMs": {
+        "n": 0
+      },
+      "rtc.framesReceivedDeltaFps": {
+        "n": 145,
+        "min": 0.0,
+        "mean": 58.8795635877593,
+        "p50": 59.89973532849908,
+        "p95": 60.91642773842201,
+        "p99": 64.48563037097561,
+        "max": 72.10919011065172,
+        "weightedMean": 58.872092691246756
+      },
+      "rtc.framesDecodedDeltaFps": {
+        "n": 145,
+        "min": 0.0,
+        "mean": 58.8795635877593,
+        "p50": 59.89973532849908,
+        "p95": 60.91642773842201,
+        "p99": 64.48563037097561,
+        "max": 72.10919011065172,
+        "weightedMean": 58.872092691246756
+      },
+      "display.submitCountDeltaFps": {
+        "n": 145,
+        "min": 0.0,
+        "mean": 18.084810743440624,
+        "p50": 17.864063409646146,
+        "p95": 22.98441656481283,
+        "p99": 23.98522410272088,
+        "max": 25.546956656240138,
+        "weightedMean": 18.08028596130202
+      },
+      "display.presentCountDeltaFps": {
+        "n": 145,
+        "min": 0.9951323928850025,
+        "mean": 18.077709258154435,
+        "p50": 17.860725042021254,
+        "p95": 22.96848914727387,
+        "p99": 23.98522410272088,
+        "max": 25.546956656240138,
+        "weightedMean": 18.073445141793393
+      },
+      "display.drawablePresentCountDeltaFps": {
+        "n": 145,
+        "min": 0.9951323928850025,
+        "mean": 18.049277993091113,
+        "p50": 17.860725042021254,
+        "p95": 22.98583976510751,
+        "p99": 24.5643814002309,
+        "max": 24.96560883521877,
+        "weightedMean": 18.046081863758882
+      },
+      "rtc.last": {
+        "attemptId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "counterReset": false,
+        "firCount": 0,
+        "firstMediaAtMs": 290067148.77175003,
+        "frameSupplyDelta": 60,
+        "framesDecoded": 8606,
+        "framesDecodedDelta": 60,
+        "framesDropped": 0,
+        "framesReceived": 8606,
+        "framesReceivedDelta": 60,
+        "freezeCount": 5,
+        "freezeDurationMs": 3431,
+        "generation": 2,
+        "inboundAudioBytes": 807097,
+        "inboundVideoBytes": 348040147,
+        "jitterMs": 1,
+        "lastMediaAtMs": 290213330.08800006,
+        "mediaTimeSource": "rtcStatisticsObservation",
+        "nackCount": 123,
+        "observedFramesDecoded": 8606,
+        "operationId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "packetStatisticsScope": "video",
+        "packetsLost": 165,
+        "packetsLostDelta": 0,
+        "packetsReceived": 317777,
+        "packetsReceivedDelta": 60,
+        "peerEpoch": 3,
+        "platform": "ios",
+        "pliCount": 3,
+        "receiveBitrateBps": 414297.58994660317,
+        "rttMs": 22,
+        "sampleClock": "monotonic",
+        "sampleCount": 2,
+        "sampleId": "3:3:290213330.08800006",
+        "sampleWindowMs": 1001.5988749861717,
+        "sampledAtMonotonicMs": 290213330.08800006,
+        "selectedCandidatePairAddressFamily": "local:ipv4,remote:ipv4",
+        "selectedCandidatePairProtocol": "udp",
+        "selectedLocalCandidateType": "srflx",
+        "selectedRemoteCandidateType": "srflx",
+        "sourceMonotonicMs": 290213330.754,
+        "videoPacketsLost": 165,
+        "windowEndMonotonicMs": 290213330.08800006,
+        "windowStartMonotonicMs": 290212328.4891251,
+        "writerQueueDelayMs": 0.4491666555404663
+      },
+      "display.last": {
+        "attemptId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "counterReset": false,
+        "currentDrawableBusy": true,
+        "displayedFrameDelta": 21,
+        "drawablePresentCount": 2638,
+        "drawablePresentCountDelta": 21,
+        "drawablePresentationObserved": true,
+        "drawableSampleCount": 240,
+        "drawableTimestampSource": "drawablePresentedTime",
+        "drawableWindowEndMonotonicMs": 290213220.64062506,
+        "drawableWindowStartMonotonicMs": 290199745.7849584,
+        "dropCountByReason": {
+          "ingressCoalesced": 5957
+        },
+        "frameIntervalMs": 48.06917129906954,
+        "frameIntervalSource": "commandBufferCompletion",
+        "generation": 2,
+        "lastDrawablePresentAtMs": 290213220.64062506,
+        "lastPresentAtMs": 290213200.1661667,
+        "lastSubmitAtMs": 290213248.7450834,
+        "latencySampleCount": 240,
+        "latencyWindowEndMonotonicMs": 290213200.1661667,
+        "latencyWindowStartMonotonicMs": 290199725.45604175,
+        "mailboxOverwriteCount": 0,
+        "operationId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "peerEpoch": 3,
+        "platform": "ios",
+        "presentCount": 2642,
+        "presentCountDelta": 21,
+        "presentTimestampSource": "commandBufferCompletion",
+        "sampleClock": "monotonic",
+        "sampleCount": 2,
+        "sampleId": "3:3:290213330.08800006",
+        "sampleWindowMs": 1001.5988749861717,
+        "sampledAtMonotonicMs": 290213330.08800006,
+        "sourceMonotonicMs": 290213330.77466667,
+        "submitCount": 2643,
+        "submitCountDelta": 21,
+        "submitToDrawablePresentP50Ms": 20.93250000476837,
+        "submitToDrawablePresentP95Ms": 24.153499960899353,
+        "submitToDrawablePresentP99Ms": 24.875749945640564,
+        "submitToPresentP50Ms": 0.8006666302680969,
+        "submitToPresentP95Ms": 1.753708302974701,
+        "submitToPresentP99Ms": 2.650083363056183,
+        "windowEndMonotonicMs": 290213330.08800006,
+        "windowStartMonotonicMs": 290212328.4891251,
+        "writerQueueDelayMs": 0.9358333349227905
+      },
+      "supervision.last": {
+        "attemptId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "connectionRecoveryActive": false,
+        "decodeFps": 60.34455445544555,
+        "decodePressureSustainedMs": 0,
+        "decodeRecoveryEligible": false,
+        "fresh": true,
+        "generation": 2,
+        "inboundFps": 60.34455445544555,
+        "keyframeBudget": 2,
+        "networkPressure": "stable",
+        "operationId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "peerEpoch": 3,
+        "platform": "ios",
+        "playbackBudget": 1,
+        "presentFps": 20.550495049504953,
+        "qualityEffect": null,
+        "qualityState": "stable",
+        "rttBaselineMs": 12.001,
+        "rttDeltaMs": 4.017000000000001,
+        "sampleId": "3:290212328",
+        "sampledAtMonotonicMs": 290212328,
+        "sourceMonotonicMs": 290213196.38075006,
+        "stallThresholdMs": 1500,
+        "videoGeneration": 3,
+        "videoPresentAgeMs": 100.6582083106041,
+        "writerQueueDelayMs": 0.37595832347869873
+      },
+      "perFrameSubmitToCompletionMs": {
+        "n": 2660,
+        "min": 0.43291664123535156,
+        "mean": 0.9764260334403891,
+        "p50": 0.8237916231155396,
+        "p95": 2.052000045776367,
+        "p99": 2.830958306789398,
+        "max": 23.244708359241486
+      },
+      "writerQueueDelayMs": {
+        "n": 27070,
+        "min": 0.04920834302902222,
+        "mean": 0.36057761501332336,
+        "p50": 0.281416654586792,
+        "p95": 0.643958330154419,
+        "p99": 1.0740416049957275,
+        "max": 41.04725003242493
+      }
+    },
+    "frameSizeCounts": {
+      "(2560, 1440)": 2660
+    }
+  },
+  "writerQueueDelayMsAll": {
+    "n": 36194,
+    "min": 0.015500009059906006,
+    "mean": 0.33574431865868887,
+    "p50": 0.22820836305618286,
+    "p95": 0.6372083425521851,
+    "p99": 1.2577500343322754,
+    "max": 47.46629160642624
+  },
+  "deviceConfigurations": [
+    {
+      "allowedCandidateTypes": [
+        "host",
+        "srflx",
+        "relay"
+      ],
+      "audioBitrateKbps": 128,
+      "audioCodecCapabilityRole": "receiver",
+      "audioDirection": "receiveOnly",
+      "deviceModel": "iPad8,6",
+      "h264Profiles": [
+        "64"
+      ],
+      "iceTransportPolicy": "all",
+      "maxVideoBitrateKbps": 80000,
+      "osVersion": "版本27.0（版号26A428）",
+      "peerSnapshot": {
+        "audioReceiverTrackCount": 1,
+        "dataChannels": {
+          "controlReady": false,
+          "handshakeAcknowledged": false,
+          "inputStarted": false,
+          "phases": {
+            "chat": "created",
+            "control": "created",
+            "input": "created",
+            "message": "created"
+          },
+          "readyStates": {
+            "chat": "connecting",
+            "control": "connecting",
+            "input": "connecting",
+            "message": "connecting"
+          },
+          "terminalReason": null
+        },
+        "iceConnectionState": "new",
+        "iceGatheringState": "new",
+        "localDescriptionSet": false,
+        "remoteDescriptionSet": false,
+        "signalingState": "stable",
+        "transceiverCount": 2,
+        "videoReceiverTrackCount": 1
+      },
+      "platform": "ios",
+      "preferIPv6": false,
+      "preventResolutionDrops": false,
+      "requiredVideoRtcpFeedback": [
+        "nack",
+        "nack pli",
+        "ccm fir",
+        "goog-remb",
+        "transport-cc"
+      ],
+      "sourceMonotonicMs": 290018141.3958334,
+      "stereoAudio": true,
+      "targetVideoHeight": 1440,
+      "targetVideoWidth": 2560,
+      "videoCodecCapabilityRole": "receiver",
+      "videoDirection": "receiveOnly",
+      "writerQueueDelayMs": 0.8190416693687439
+    },
+    {
+      "allowedCandidateTypes": [
+        "host",
+        "srflx",
+        "relay"
+      ],
+      "audioBitrateKbps": 128,
+      "audioCodecCapabilityRole": "receiver",
+      "audioDirection": "receiveOnly",
+      "deviceModel": "iPad8,6",
+      "h264Profiles": [
+        "64"
+      ],
+      "iceTransportPolicy": "all",
+      "maxVideoBitrateKbps": 80000,
+      "osVersion": "版本27.0（版号26A428）",
+      "peerSnapshot": {
+        "audioReceiverTrackCount": 1,
+        "dataChannels": {
+          "controlReady": false,
+          "handshakeAcknowledged": false,
+          "inputStarted": false,
+          "phases": {
+            "chat": "created",
+            "control": "created",
+            "input": "created",
+            "message": "created"
+          },
+          "readyStates": {
+            "chat": "connecting",
+            "control": "connecting",
+            "input": "connecting",
+            "message": "connecting"
+          },
+          "terminalReason": null
+        },
+        "iceConnectionState": "new",
+        "iceGatheringState": "new",
+        "localDescriptionSet": false,
+        "remoteDescriptionSet": false,
+        "signalingState": "stable",
+        "transceiverCount": 2,
+        "videoReceiverTrackCount": 1
+      },
+      "platform": "ios",
+      "preferIPv6": false,
+      "preventResolutionDrops": false,
+      "requiredVideoRtcpFeedback": [
+        "nack",
+        "nack pli",
+        "ccm fir",
+        "goog-remb",
+        "transport-cc"
+      ],
+      "sourceMonotonicMs": 290021009.593375,
+      "stereoAudio": true,
+      "targetVideoHeight": 1440,
+      "targetVideoWidth": 2560,
+      "videoCodecCapabilityRole": "receiver",
+      "videoDirection": "receiveOnly",
+      "writerQueueDelayMs": 0.8310416340827942
+    },
+    {
+      "allowedCandidateTypes": [
+        "host",
+        "srflx",
+        "relay"
+      ],
+      "audioBitrateKbps": 128,
+      "audioCodecCapabilityRole": "receiver",
+      "audioDirection": "receiveOnly",
+      "deviceModel": "iPad8,6",
+      "h264Profiles": [
+        "64"
+      ],
+      "iceTransportPolicy": "all",
+      "maxVideoBitrateKbps": 80000,
+      "osVersion": "版本27.0（版号26A428）",
+      "peerSnapshot": {
+        "audioReceiverTrackCount": 1,
+        "dataChannels": {
+          "controlReady": false,
+          "handshakeAcknowledged": false,
+          "inputStarted": false,
+          "phases": {
+            "chat": "created",
+            "control": "created",
+            "input": "created",
+            "message": "created"
+          },
+          "readyStates": {
+            "chat": "connecting",
+            "control": "connecting",
+            "input": "connecting",
+            "message": "connecting"
+          },
+          "terminalReason": null
+        },
+        "iceConnectionState": "new",
+        "iceGatheringState": "new",
+        "localDescriptionSet": false,
+        "remoteDescriptionSet": false,
+        "signalingState": "stable",
+        "transceiverCount": 2,
+        "videoReceiverTrackCount": 1
+      },
+      "platform": "ios",
+      "preferIPv6": false,
+      "preventResolutionDrops": false,
+      "requiredVideoRtcpFeedback": [
+        "nack",
+        "nack pli",
+        "ccm fir",
+        "goog-remb",
+        "transport-cc"
+      ],
+      "sourceMonotonicMs": 290064683.15133333,
+      "stereoAudio": true,
+      "targetVideoHeight": 1440,
+      "targetVideoWidth": 2560,
+      "videoCodecCapabilityRole": "receiver",
+      "videoDirection": "receiveOnly",
+      "writerQueueDelayMs": 2.149583339691162
+    }
+  ]
+}

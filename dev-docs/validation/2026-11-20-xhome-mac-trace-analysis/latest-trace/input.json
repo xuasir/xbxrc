@@ -1,0 +1,10 @@
+{
+  "source": "/Users/guo.xu/Downloads/runtime-trace-ios-1795166210528-1.jsonl",
+  "localCopy": "/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+  "bytes": 19554765,
+  "sha256": "126e80ac00474f98f467eb95bc01a63d3958372518b1a71a041187159cb650db",
+  "temporaryRoot": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r2",
+  "runTarget": "My Mac (Designed for iPad)",
+  "runTargetEvidence": "用户本轮明确确认",
+  "deviceModelInterpretation": "日志iPad8,6是兼容运行目标标识；设备能力结合Mac运行目标解释。"
+}

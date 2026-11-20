@@ -22,7 +22,7 @@ struct CircularCardCarousel<Item: Identifiable, Card: View>: View where Item.ID:
 
     var body: some View {
         GeometryReader { geometry in
-            GlassEffectContainer(spacing: 0) {
+            Group {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: metrics.cardSpacing) {
                         ForEach(items) { item in
@@ -53,9 +53,10 @@ struct CircularCardCarousel<Item: Identifiable, Card: View>: View where Item.ID:
                 event: "detailCarouselSelectionChanged",
                 payload: [
                     "items": .integer(Int64(items.count)),
-                    "selectedIndex": .integer(Int64(
-                        items.firstIndex { $0.id == newSelection } ?? 0
-                    )),
+                    "selectedIndex": .integer(
+                        Int64(
+                            items.firstIndex { $0.id == newSelection } ?? 0
+                        )),
                 ],
                 dimension: .frontend,
                 importance: .debug
@@ -126,7 +127,8 @@ actor RemoteImageLoader {
         let key = normalizedURL as NSURL
 
         if let entry = memoryCache.object(forKey: key) {
-            traceCacheHit(url: normalizedURL, source: Source.memory.rawValue, byteCount: entry.byteCount)
+            traceCacheHit(
+                url: normalizedURL, source: Source.memory.rawValue, byteCount: entry.byteCount)
             return Result(image: entry.image, source: .memory)
         }
 
@@ -239,7 +241,8 @@ actor RemoteImageLoader {
         components.host = components.host?.lowercased()
         components.fragment = nil
         if (components.scheme == "https" && components.port == 443)
-            || (components.scheme == "http" && components.port == 80) {
+            || (components.scheme == "http" && components.port == 80)
+        {
             components.port = nil
         }
         return components.url?.standardized ?? url.absoluteURL.standardized
@@ -276,7 +279,7 @@ private enum RemoteImageLoaderError: Error {
 
     var errorDomain: String {
         switch self {
-        case let .httpStatus(code): "http." + String(code)
+        case .httpStatus(let code): "http." + String(code)
         case .invalidImage: "invalidImage"
         }
     }
@@ -494,8 +497,8 @@ struct CloudGameRemoteImage: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    AppThemePalette.canvasTop,
-                    AppThemePalette.canvasBottom,
+                    AppThemePalette.panel,
+                    AppThemePalette.canvas,
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

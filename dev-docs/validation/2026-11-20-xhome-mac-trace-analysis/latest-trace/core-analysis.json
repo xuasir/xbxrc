@@ -1,0 +1,2492 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 19554765,
+        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "runtime-logs/ios",
+        "files": 1,
+        "maxFiles": 6,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "streamingCoreViolations": 2
+  },
+  "gate": "FAIL",
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "files": [
+      "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl"
+    ],
+    "firstTsMs": 1795166210527,
+    "lastTsMs": 1795166631844,
+    "profiles": {
+      "dev": 36195
+    },
+    "rows": 36195,
+    "sessions": [
+      "1F8676E1-B9BB-48C2-B07B-C0B5762389B6"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "1F8676E1-B9BB-48C2-B07B-C0B5762389B6": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 36195,
+        "regressions": 0,
+        "rows": 36195
+      }
+    },
+    "violations": []
+  },
+  "streamingCore": {
+    "attempts": [
+      {
+        "attemptId": "66094F47-5B13-43DE-9CA0-5742886EC40D",
+        "cleanup": {
+          "accessReleased": [
+            {
+              "event": "accessReleased",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 36191,
+              "seq": 36191,
+              "tsMs": 1795166607606
+            }
+          ],
+          "iceTasksCancelled": [
+            {
+              "event": "iceTasksCancelled",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 36188,
+              "seq": 36188,
+              "tsMs": 1795166606974
+            }
+          ],
+          "peerClosed": [
+            {
+              "event": "peerClosed",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 36189,
+              "seq": 36189,
+              "tsMs": 1795166607261
+            }
+          ],
+          "remoteSessionClosed": [
+            {
+              "event": "remoteSessionClosed",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 36190,
+              "seq": 36190,
+              "tsMs": 1795166607606
+            }
+          ]
+        },
+        "completePeerEpochs": [
+          3
+        ],
+        "contextViolations": [],
+        "generation": 2,
+        "passed": true,
+        "peerEpochs": [
+          {
+            "checks": {
+              "answerApplied": {
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3455,
+                    "seq": 3455,
+                    "tsMs": 1795166458900
+                  }
+                ],
+                "passed": true
+              },
+              "controlBootstrapCompleted": {
+                "details": {
+                  "count": 1,
+                  "preHandshakeObserved": [
+                    {
+                      "event": "controlBootstrapPreHandshakeCompleted",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3481,
+                      "seq": 3481,
+                      "tsMs": 1795166459761
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "controlBootstrapCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3514,
+                    "seq": 3514,
+                    "tsMs": 1795166460078
+                  }
+                ],
+                "passed": true
+              },
+              "controlReady": {
+                "details": {
+                  "count": 1,
+                  "events": [
+                    "controlReady"
+                  ],
+                  "ignoredLegacyCount": 1,
+                  "legacyFallback": false
+                },
+                "observed": [
+                  {
+                    "event": "controlReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3513,
+                    "seq": 3513,
+                    "tsMs": 1795166460078
+                  }
+                ],
+                "passed": true
+              },
+              "displayFirstPresent": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "displayFirstPresent",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3530,
+                    "seq": 3530,
+                    "tsMs": 1795166460163
+                  }
+                ],
+                "passed": true
+              },
+              "displayHealthSnapshot": {
+                "details": {
+                  "observedCount": 146,
+                  "positivePresentSnapshots": {
+                    "archivedListItemCount": 145,
+                    "first": [
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 3709,
+                        "seq": 3709,
+                        "tsMs": 1795166460976
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 4020,
+                        "seq": 4020,
+                        "tsMs": 1795166461994
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 4270,
+                        "seq": 4270,
+                        "tsMs": 1795166462996
+                      }
+                    ],
+                    "last": [
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 35511,
+                        "seq": 35511,
+                        "tsMs": 1795166604146
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 35718,
+                        "seq": 35718,
+                        "tsMs": 1795166605152
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 35976,
+                        "seq": 35976,
+                        "tsMs": 1795166606154
+                      }
+                    ],
+                    "omittedItems": 139
+                  }
+                },
+                "observed": {
+                  "archivedListItemCount": 146,
+                  "first": [
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3492,
+                      "seq": 3492,
+                      "tsMs": 1795166459973
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3709,
+                      "seq": 3709,
+                      "tsMs": 1795166460976
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 4020,
+                      "seq": 4020,
+                      "tsMs": 1795166461994
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35511,
+                      "seq": 35511,
+                      "tsMs": 1795166604146
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35718,
+                      "seq": 35718,
+                      "tsMs": 1795166605152
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35976,
+                      "seq": 35976,
+                      "tsMs": 1795166606154
+                    }
+                  ],
+                  "omittedItems": 140
+                },
+                "passed": true
+              },
+              "displayPipelineReady": {
+                "observed": [
+                  {
+                    "event": "displayPipelineReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3459,
+                    "seq": 3459,
+                    "tsMs": 1795166458900
+                  }
+                ],
+                "passed": true
+              },
+              "displayPresent": {
+                "details": {
+                  "count": 2660
+                },
+                "observed": {
+                  "archivedListItemCount": 2660,
+                  "first": [
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3529,
+                      "seq": 3529,
+                      "tsMs": 1795166460163
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3532,
+                      "seq": 3532,
+                      "tsMs": 1795166460167
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3545,
+                      "seq": 3545,
+                      "tsMs": 1795166460322
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36141,
+                      "seq": 36141,
+                      "tsMs": 1795166606801
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36153,
+                      "seq": 36153,
+                      "tsMs": 1795166606825
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36172,
+                      "seq": 36172,
+                      "tsMs": 1795166606917
+                    }
+                  ],
+                  "omittedItems": 2654
+                },
+                "passed": true
+              },
+              "displaySubmit": {
+                "details": {
+                  "count": 2661
+                },
+                "observed": {
+                  "archivedListItemCount": 2661,
+                  "first": [
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3521,
+                      "seq": 3521,
+                      "tsMs": 1795166460083
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3531,
+                      "seq": 3531,
+                      "tsMs": 1795166460165
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3544,
+                      "seq": 3544,
+                      "tsMs": 1795166460258
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36146,
+                      "seq": 36146,
+                      "tsMs": 1795166606803
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36164,
+                      "seq": 36164,
+                      "tsMs": 1795166606872
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36175,
+                      "seq": 36175,
+                      "tsMs": 1795166606920
+                    }
+                  ],
+                  "omittedItems": 2655
+                },
+                "passed": true
+              },
+              "firstVideoFrame": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "firstVideoFrame",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3494,
+                    "seq": 3494,
+                    "tsMs": 1795166460029
+                  }
+                ],
+                "passed": true
+              },
+              "fourChannelProfile": {
+                "details": {
+                  "snapshots": [
+                    {
+                      "errors": [],
+                      "profiles": {
+                        "chat": {
+                          "ordered": true,
+                          "protocol": "chatV1"
+                        },
+                        "control": {
+                          "ordered": true,
+                          "protocol": "controlV1"
+                        },
+                        "input": {
+                          "ordered": true,
+                          "protocol": "1.0"
+                        },
+                        "message": {
+                          "ordered": true,
+                          "protocol": "messageV1"
+                        }
+                      },
+                      "reference": {
+                        "event": "dataChannelProfilesCreated",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 3469,
+                        "seq": 3469,
+                        "tsMs": 1795166459676
+                      },
+                      "valid": true
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "dataChannelProfilesCreated",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3469,
+                    "seq": 3469,
+                    "tsMs": 1795166459676
+                  }
+                ],
+                "passed": true
+              },
+              "localIceCompleted": {
+                "observed": [
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3496,
+                    "seq": 3496,
+                    "tsMs": 1795166460047
+                  }
+                ],
+                "passed": true
+              },
+              "localIcePaired": {
+                "details": {
+                  "completed": 1,
+                  "started": 1
+                },
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3456,
+                    "seq": 3456,
+                    "tsMs": 1795166458900
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3496,
+                    "seq": 3496,
+                    "tsMs": 1795166460047
+                  }
+                ],
+                "passed": true
+              },
+              "localIceStarted": {
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3456,
+                    "seq": 3456,
+                    "tsMs": 1795166458900
+                  }
+                ],
+                "passed": true
+              },
+              "messageHandshakeAcked": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messageHandshakeAcked",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3499,
+                    "seq": 3499,
+                    "tsMs": 1795166460077
+                  }
+                ],
+                "passed": true
+              },
+              "messageHandshakeSent": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messageHandshakeSent",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3486,
+                    "seq": 3486,
+                    "tsMs": 1795166459761
+                  }
+                ],
+                "passed": true
+              },
+              "messagePostHandshakeCompleted": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messagePostHandshakeCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3507,
+                    "seq": 3507,
+                    "tsMs": 1795166460078
+                  }
+                ],
+                "passed": true
+              },
+              "negotiationPaired": {
+                "details": {
+                  "answers": 1,
+                  "localIceCompleted": 1,
+                  "localIceStarted": 1
+                },
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3455,
+                    "seq": 3455,
+                    "tsMs": 1795166458900
+                  },
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3456,
+                    "seq": 3456,
+                    "tsMs": 1795166458900
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3496,
+                    "seq": 3496,
+                    "tsMs": 1795166460047
+                  }
+                ],
+                "passed": true
+              },
+              "peerConnected": {
+                "observed": [
+                  {
+                    "event": "peerConnected",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3468,
+                    "seq": 3468,
+                    "tsMs": 1795166459676
+                  }
+                ],
+                "passed": true
+              },
+              "remoteIceApplied": {
+                "details": {
+                  "sources": [
+                    "remoteIceBatchApplied",
+                    "selectedRemoteCandidate"
+                  ]
+                },
+                "observed": {
+                  "archivedListItemCount": 146,
+                  "first": [
+                    {
+                      "event": "remoteIceBatchApplied",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3466,
+                      "seq": 3466,
+                      "tsMs": 1795166459584
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3491,
+                      "seq": 3491,
+                      "tsMs": 1795166459973
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3708,
+                      "seq": 3708,
+                      "tsMs": 1795166460976
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35510,
+                      "seq": 35510,
+                      "tsMs": 1795166604146
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35717,
+                      "seq": 35717,
+                      "tsMs": 1795166605152
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35975,
+                      "seq": 35975,
+                      "tsMs": 1795166606154
+                    }
+                  ],
+                  "omittedItems": 140
+                },
+                "passed": true
+              },
+              "remoteIceBatchReceived": {
+                "observed": [
+                  {
+                    "event": "remoteIceBatchReceived",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3464,
+                    "seq": 3464,
+                    "tsMs": 1795166459580
+                  }
+                ],
+                "passed": true
+              },
+              "remoteIceCompleted": {
+                "observed": [
+                  {
+                    "event": "remoteIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3467,
+                    "seq": 3467,
+                    "tsMs": 1795166459584
+                  }
+                ],
+                "passed": true
+              },
+              "simulatorI420Evidence": {
+                "details": {
+                  "active": false
+                },
+                "observed": [],
+                "passed": true
+              },
+              "steadyMediaObserved": {
+                "observed": [
+                  {
+                    "event": "steadyMediaObserved",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3731,
+                    "seq": 3731,
+                    "tsMs": 1795166461040
+                  }
+                ],
+                "passed": true
+              },
+              "videoFrameAcceptedToMailbox": {
+                "details": {
+                  "count": 2661
+                },
+                "observed": {
+                  "archivedListItemCount": 2661,
+                  "first": [
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3520,
+                      "seq": 3520,
+                      "tsMs": 1795166460079
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3526,
+                      "seq": 3526,
+                      "tsMs": 1795166460161
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3543,
+                      "seq": 3543,
+                      "tsMs": 1795166460257
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36145,
+                      "seq": 36145,
+                      "tsMs": 1795166606803
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36163,
+                      "seq": 36163,
+                      "tsMs": 1795166606872
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 36174,
+                      "seq": 36174,
+                      "tsMs": 1795166606919
+                    }
+                  ],
+                  "omittedItems": 2655
+                },
+                "passed": true
+              },
+              "videoSurfaceAttached": {
+                "observed": {
+                  "archivedListItemCount": 148,
+                  "first": [
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3460,
+                      "seq": 3460,
+                      "tsMs": 1795166458900
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3461,
+                      "seq": 3461,
+                      "tsMs": 1795166458932
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3493,
+                      "seq": 3493,
+                      "tsMs": 1795166459975
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35525,
+                      "seq": 35525,
+                      "tsMs": 1795166604189
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35732,
+                      "seq": 35732,
+                      "tsMs": 1795166605193
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 35989,
+                      "seq": 35989,
+                      "tsMs": 1795166606170
+                    }
+                  ],
+                  "omittedItems": 142
+                },
+                "passed": true
+              },
+              "videoSurfaceRendererReady": {
+                "details": {
+                  "observedCount": 1,
+                  "positiveFrames": [
+                    {
+                      "event": "videoSurfaceRendererReady",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3518,
+                      "seq": 3518,
+                      "tsMs": 1795166460078
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "videoSurfaceRendererReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3518,
+                    "seq": 3518,
+                    "tsMs": 1795166460078
+                  }
+                ],
+                "passed": true
+              },
+              "videoSurfaceSized": {
+                "details": {
+                  "observedCount": 1,
+                  "positiveSizes": [
+                    {
+                      "event": "videoSurfaceSized",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3458,
+                      "seq": 3458,
+                      "tsMs": 1795166458900
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "videoSurfaceSized",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3458,
+                    "seq": 3458,
+                    "tsMs": 1795166458900
+                  }
+                ],
+                "passed": true
+              }
+            },
+            "failedChecks": [],
+            "firstSeq": 3431,
+            "lastSeq": 36181,
+            "orderingViolations": [],
+            "passed": true,
+            "peerEpoch": 3,
+            "rows": 11126,
+            "toleratedReorders": [
+              {
+                "expected": "controlBootstrapCompleted < controlReady",
+                "observed": [
+                  {
+                    "event": "controlBootstrapCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3514,
+                    "seq": 3514,
+                    "tsMs": 1795166460078
+                  },
+                  {
+                    "event": "controlReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 3513,
+                    "seq": 3513,
+                    "tsMs": 1795166460078
+                  }
+                ],
+                "reorderRows": 1,
+                "type": "streaming-order"
+              }
+            ]
+          }
+        ],
+        "playingStates": {
+          "archivedListItemCount": 15926,
+          "first": [
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 3533,
+                "seq": 3533,
+                "tsMs": 1795166460168
+              },
+              "reorderRows": 0,
+              "reordered": false
+            },
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 3534,
+                "seq": 3534,
+                "tsMs": 1795166460254
+              },
+              "reorderRows": 0,
+              "reordered": false
+            },
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 3535,
+                "seq": 3535,
+                "tsMs": 1795166460254
+              },
+              "reorderRows": 0,
+              "reordered": false
+            }
+          ],
+          "last": [
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 36169,
+                "seq": 36169,
+                "tsMs": 1795166606917
+              },
+              "reorderRows": 0,
+              "reordered": false
+            },
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 36170,
+                "seq": 36170,
+                "tsMs": 1795166606917
+              },
+              "reorderRows": 0,
+              "reordered": false
+            },
+            {
+              "evidence": {
+                "controlReady": {
+                  "event": "controlReady",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3513,
+                  "seq": 3513,
+                  "tsMs": 1795166460078
+                },
+                "displayFirstPresent": {
+                  "event": "displayFirstPresent",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3530,
+                  "seq": 3530,
+                  "tsMs": 1795166460163
+                },
+                "peerConnected": {
+                  "event": "peerConnected",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3468,
+                  "seq": 3468,
+                  "tsMs": 1795166459676
+                },
+                "videoFrameAcceptedToMailbox": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                  "line": 3520,
+                  "seq": 3520,
+                  "tsMs": 1795166460079
+                }
+              },
+              "peerEpoch": 3,
+              "playing": {
+                "event": "streamingStateChanged",
+                "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                "line": 36171,
+                "seq": 36171,
+                "tsMs": 1795166606917
+              },
+              "reorderRows": 0,
+              "reordered": false
+            }
+          ],
+          "omittedItems": 15920
+        },
+        "rows": 27070,
+        "sessionId": "1F8676E1-B9BB-48C2-B07B-C0B5762389B6",
+        "sessionReady": [
+          {
+            "event": "sessionReady",
+            "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+            "line": 3429,
+            "seq": 3429,
+            "tsMs": 1795166457362
+          }
+        ],
+        "targets": [
+          "home"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+            "line": 36181,
+            "seq": 36181,
+            "tsMs": 1795166606972
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": []
+      },
+      {
+        "attemptId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "cleanup": {
+          "accessReleased": [
+            {
+              "event": "accessReleased",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 3415,
+              "seq": 3415,
+              "tsMs": 1795166432034
+            }
+          ],
+          "iceTasksCancelled": [
+            {
+              "event": "iceTasksCancelled",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 3412,
+              "seq": 3412,
+              "tsMs": 1795166431395
+            }
+          ],
+          "peerClosed": [
+            {
+              "event": "peerClosed",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 3413,
+              "seq": 3413,
+              "tsMs": 1795166431690
+            }
+          ],
+          "remoteSessionClosed": [
+            {
+              "event": "remoteSessionClosed",
+              "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+              "line": 3414,
+              "seq": 3414,
+              "tsMs": 1795166432034
+            }
+          ]
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 1,
+        "passed": false,
+        "peerEpochs": [
+          {
+            "checks": {
+              "answerApplied": {
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 545,
+                    "seq": 545,
+                    "tsMs": 1795166412928
+                  }
+                ],
+                "passed": true
+              },
+              "controlBootstrapCompleted": {
+                "details": {
+                  "count": 0,
+                  "preHandshakeObserved": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "controlReady": {
+                "details": {
+                  "count": 0,
+                  "events": [],
+                  "ignoredLegacyCount": 0,
+                  "legacyFallback": false
+                },
+                "observed": [],
+                "passed": false
+              },
+              "displayFirstPresent": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "displayHealthSnapshot": {
+                "details": {
+                  "observedCount": 0,
+                  "positivePresentSnapshots": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "displayPipelineReady": {
+                "observed": [
+                  {
+                    "event": "displayPipelineReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 541,
+                    "seq": 541,
+                    "tsMs": 1795166412927
+                  }
+                ],
+                "passed": true
+              },
+              "displayPresent": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "displaySubmit": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "firstVideoFrame": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "fourChannelProfile": {
+                "details": {
+                  "snapshots": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "localIceCompleted": {
+                "observed": [],
+                "passed": false
+              },
+              "localIcePaired": {
+                "details": {
+                  "completed": 0,
+                  "started": 1
+                },
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 546,
+                    "seq": 546,
+                    "tsMs": 1795166412928
+                  }
+                ],
+                "passed": false
+              },
+              "localIceStarted": {
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 546,
+                    "seq": 546,
+                    "tsMs": 1795166412928
+                  }
+                ],
+                "passed": true
+              },
+              "messageHandshakeAcked": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "messageHandshakeSent": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "messagePostHandshakeCompleted": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "negotiationPaired": {
+                "details": {
+                  "answers": 1,
+                  "localIceCompleted": 0,
+                  "localIceStarted": 1
+                },
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 545,
+                    "seq": 545,
+                    "tsMs": 1795166412928
+                  },
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 546,
+                    "seq": 546,
+                    "tsMs": 1795166412928
+                  }
+                ],
+                "passed": false
+              },
+              "peerConnected": {
+                "observed": [],
+                "passed": false
+              },
+              "remoteIceApplied": {
+                "details": {
+                  "sources": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "remoteIceBatchReceived": {
+                "observed": [],
+                "passed": false
+              },
+              "remoteIceCompleted": {
+                "observed": [],
+                "passed": false
+              },
+              "simulatorI420Evidence": {
+                "details": {
+                  "active": false
+                },
+                "observed": [],
+                "passed": true
+              },
+              "steadyMediaObserved": {
+                "observed": [],
+                "passed": false
+              },
+              "videoFrameAcceptedToMailbox": {
+                "details": {
+                  "count": 0
+                },
+                "observed": [],
+                "passed": false
+              },
+              "videoSurfaceAttached": {
+                "observed": [
+                  {
+                    "event": "videoSurfaceAttached",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 542,
+                    "seq": 542,
+                    "tsMs": 1795166412927
+                  },
+                  {
+                    "event": "videoSurfaceAttached",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 549,
+                    "seq": 549,
+                    "tsMs": 1795166413011
+                  }
+                ],
+                "passed": true
+              },
+              "videoSurfaceRendererReady": {
+                "details": {
+                  "observedCount": 0,
+                  "positiveFrames": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "videoSurfaceSized": {
+                "details": {
+                  "observedCount": 1,
+                  "positiveSizes": [
+                    {
+                      "event": "videoSurfaceSized",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 540,
+                      "seq": 540,
+                      "tsMs": 1795166412927
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "videoSurfaceSized",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 540,
+                    "seq": 540,
+                    "tsMs": 1795166412927
+                  }
+                ],
+                "passed": true
+              }
+            },
+            "failedChecks": {
+              "archivedListItemCount": 21,
+              "first": [
+                "controlBootstrapCompleted",
+                "controlReady",
+                "displayFirstPresent"
+              ],
+              "last": [
+                "steadyMediaObserved",
+                "videoFrameAcceptedToMailbox",
+                "videoSurfaceRendererReady"
+              ],
+              "omittedItems": 15
+            },
+            "firstSeq": 517,
+            "lastSeq": 552,
+            "orderingViolations": [],
+            "passed": false,
+            "peerEpoch": 1,
+            "rows": 18,
+            "toleratedReorders": []
+          },
+          {
+            "checks": {
+              "answerApplied": {
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 581,
+                    "seq": 581,
+                    "tsMs": 1795166415917
+                  }
+                ],
+                "passed": true
+              },
+              "controlBootstrapCompleted": {
+                "details": {
+                  "count": 1,
+                  "preHandshakeObserved": [
+                    {
+                      "event": "controlBootstrapPreHandshakeCompleted",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 605,
+                      "seq": 605,
+                      "tsMs": 1795166417228
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "controlBootstrapCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 634,
+                    "seq": 634,
+                    "tsMs": 1795166417591
+                  }
+                ],
+                "passed": true
+              },
+              "controlReady": {
+                "details": {
+                  "count": 1,
+                  "events": [
+                    "controlReady"
+                  ],
+                  "ignoredLegacyCount": 1,
+                  "legacyFallback": false
+                },
+                "observed": [
+                  {
+                    "event": "controlReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 633,
+                    "seq": 633,
+                    "tsMs": 1795166417591
+                  }
+                ],
+                "passed": true
+              },
+              "displayFirstPresent": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "displayFirstPresent",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 650,
+                    "seq": 650,
+                    "tsMs": 1795166417776
+                  }
+                ],
+                "passed": true
+              },
+              "displayHealthSnapshot": {
+                "details": {
+                  "observedCount": 12,
+                  "positivePresentSnapshots": {
+                    "archivedListItemCount": 11,
+                    "first": [
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 681,
+                        "seq": 681,
+                        "tsMs": 1795166417932
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 994,
+                        "seq": 994,
+                        "tsMs": 1795166418936
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 1275,
+                        "seq": 1275,
+                        "tsMs": 1795166419940
+                      }
+                    ],
+                    "last": [
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 2803,
+                        "seq": 2803,
+                        "tsMs": 1795166425956
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 3072,
+                        "seq": 3072,
+                        "tsMs": 1795166426960
+                      },
+                      {
+                        "event": "displayHealthSnapshot",
+                        "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                        "line": 3339,
+                        "seq": 3339,
+                        "tsMs": 1795166430968
+                      }
+                    ],
+                    "omittedItems": 5
+                  }
+                },
+                "observed": {
+                  "archivedListItemCount": 12,
+                  "first": [
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 592,
+                      "seq": 592,
+                      "tsMs": 1795166416930
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 681,
+                      "seq": 681,
+                      "tsMs": 1795166417932
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 994,
+                      "seq": 994,
+                      "tsMs": 1795166418936
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 2803,
+                      "seq": 2803,
+                      "tsMs": 1795166425956
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3072,
+                      "seq": 3072,
+                      "tsMs": 1795166426960
+                    },
+                    {
+                      "event": "displayHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3339,
+                      "seq": 3339,
+                      "tsMs": 1795166430968
+                    }
+                  ],
+                  "omittedItems": 6
+                },
+                "passed": true
+              },
+              "displayPipelineReady": {
+                "observed": [
+                  {
+                    "event": "displayPipelineReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 585,
+                    "seq": 585,
+                    "tsMs": 1795166415917
+                  }
+                ],
+                "passed": true
+              },
+              "displayPresent": {
+                "details": {
+                  "count": 547
+                },
+                "observed": {
+                  "archivedListItemCount": 547,
+                  "first": [
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 649,
+                      "seq": 649,
+                      "tsMs": 1795166417776
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 652,
+                      "seq": 652,
+                      "tsMs": 1795166417779
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 658,
+                      "seq": 658,
+                      "tsMs": 1795166417815
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3386,
+                      "seq": 3386,
+                      "tsMs": 1795166431219
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3391,
+                      "seq": 3391,
+                      "tsMs": 1795166431228
+                    },
+                    {
+                      "event": "displayPresent",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3396,
+                      "seq": 3396,
+                      "tsMs": 1795166431239
+                    }
+                  ],
+                  "omittedItems": 541
+                },
+                "passed": true
+              },
+              "displaySubmit": {
+                "details": {
+                  "count": 548
+                },
+                "observed": {
+                  "archivedListItemCount": 548,
+                  "first": [
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 646,
+                      "seq": 646,
+                      "tsMs": 1795166417772
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 651,
+                      "seq": 651,
+                      "tsMs": 1795166417777
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 654,
+                      "seq": 654,
+                      "tsMs": 1795166417814
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3390,
+                      "seq": 3390,
+                      "tsMs": 1795166431226
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3395,
+                      "seq": 3395,
+                      "tsMs": 1795166431237
+                    },
+                    {
+                      "event": "displaySubmit",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3406,
+                      "seq": 3406,
+                      "tsMs": 1795166431346
+                    }
+                  ],
+                  "omittedItems": 542
+                },
+                "passed": true
+              },
+              "firstVideoFrame": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "firstVideoFrame",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 645,
+                    "seq": 645,
+                    "tsMs": 1795166417761
+                  }
+                ],
+                "passed": true
+              },
+              "fourChannelProfile": {
+                "details": {
+                  "snapshots": []
+                },
+                "observed": [],
+                "passed": false
+              },
+              "localIceCompleted": {
+                "observed": [
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 616,
+                    "seq": 616,
+                    "tsMs": 1795166417574
+                  }
+                ],
+                "passed": true
+              },
+              "localIcePaired": {
+                "details": {
+                  "completed": 1,
+                  "started": 1
+                },
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 582,
+                    "seq": 582,
+                    "tsMs": 1795166415917
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 616,
+                    "seq": 616,
+                    "tsMs": 1795166417574
+                  }
+                ],
+                "passed": true
+              },
+              "localIceStarted": {
+                "observed": [
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 582,
+                    "seq": 582,
+                    "tsMs": 1795166415917
+                  }
+                ],
+                "passed": true
+              },
+              "messageHandshakeAcked": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messageHandshakeAcked",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 619,
+                    "seq": 619,
+                    "tsMs": 1795166417589
+                  }
+                ],
+                "passed": true
+              },
+              "messageHandshakeSent": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messageHandshakeSent",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 610,
+                    "seq": 610,
+                    "tsMs": 1795166417229
+                  }
+                ],
+                "passed": true
+              },
+              "messagePostHandshakeCompleted": {
+                "details": {
+                  "count": 1
+                },
+                "observed": [
+                  {
+                    "event": "messagePostHandshakeCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 627,
+                    "seq": 627,
+                    "tsMs": 1795166417591
+                  }
+                ],
+                "passed": true
+              },
+              "negotiationPaired": {
+                "details": {
+                  "answers": 1,
+                  "localIceCompleted": 1,
+                  "localIceStarted": 1
+                },
+                "observed": [
+                  {
+                    "event": "answerApplied",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 581,
+                    "seq": 581,
+                    "tsMs": 1795166415917
+                  },
+                  {
+                    "event": "localIceStarted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 582,
+                    "seq": 582,
+                    "tsMs": 1795166415917
+                  },
+                  {
+                    "event": "localIceCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 616,
+                    "seq": 616,
+                    "tsMs": 1795166417574
+                  }
+                ],
+                "passed": true
+              },
+              "peerConnected": {
+                "observed": [],
+                "passed": false
+              },
+              "remoteIceApplied": {
+                "details": {
+                  "sources": [
+                    "remoteIceBatchApplied",
+                    "selectedRemoteCandidate"
+                  ]
+                },
+                "observed": {
+                  "archivedListItemCount": 15,
+                  "first": [
+                    {
+                      "event": "remoteIceBatchApplied",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 595,
+                      "seq": 595,
+                      "tsMs": 1795166417084
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 680,
+                      "seq": 680,
+                      "tsMs": 1795166417932
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 993,
+                      "seq": 993,
+                      "tsMs": 1795166418935
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3114,
+                      "seq": 3114,
+                      "tsMs": 1795166428965
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3126,
+                      "seq": 3126,
+                      "tsMs": 1795166429972
+                    },
+                    {
+                      "event": "rtcHealthSnapshot",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3338,
+                      "seq": 3338,
+                      "tsMs": 1795166430968
+                    }
+                  ],
+                  "omittedItems": 9
+                },
+                "passed": true
+              },
+              "remoteIceBatchReceived": {
+                "observed": {
+                  "archivedListItemCount": 11,
+                  "first": [
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 593,
+                      "seq": 593,
+                      "tsMs": 1795166417082
+                    },
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 838,
+                      "seq": 838,
+                      "tsMs": 1795166418403
+                    },
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 1234,
+                      "seq": 1234,
+                      "tsMs": 1795166419815
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3108,
+                      "seq": 3108,
+                      "tsMs": 1795166428461
+                    },
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3122,
+                      "seq": 3122,
+                      "tsMs": 1795166429772
+                    },
+                    {
+                      "event": "remoteIceBatchReceived",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3349,
+                      "seq": 3349,
+                      "tsMs": 1795166431090
+                    }
+                  ],
+                  "omittedItems": 5
+                },
+                "passed": true
+              },
+              "remoteIceCompleted": {
+                "observed": [],
+                "passed": false
+              },
+              "simulatorI420Evidence": {
+                "details": {
+                  "active": false
+                },
+                "observed": [],
+                "passed": true
+              },
+              "steadyMediaObserved": {
+                "observed": [
+                  {
+                    "event": "steadyMediaObserved",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 684,
+                    "seq": 684,
+                    "tsMs": 1795166417983
+                  }
+                ],
+                "passed": true
+              },
+              "videoFrameAcceptedToMailbox": {
+                "details": {
+                  "count": 548
+                },
+                "observed": {
+                  "archivedListItemCount": 548,
+                  "first": [
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 644,
+                      "seq": 644,
+                      "tsMs": 1795166417761
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 648,
+                      "seq": 648,
+                      "tsMs": 1795166417774
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 653,
+                      "seq": 653,
+                      "tsMs": 1795166417779
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3389,
+                      "seq": 3389,
+                      "tsMs": 1795166431226
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3394,
+                      "seq": 3394,
+                      "tsMs": 1795166431237
+                    },
+                    {
+                      "event": "videoFrameAcceptedToMailbox",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3405,
+                      "seq": 3405,
+                      "tsMs": 1795166431344
+                    }
+                  ],
+                  "omittedItems": 542
+                },
+                "passed": true
+              },
+              "videoSurfaceAttached": {
+                "observed": {
+                  "archivedListItemCount": 16,
+                  "first": [
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 586,
+                      "seq": 586,
+                      "tsMs": 1795166415917
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 587,
+                      "seq": 587,
+                      "tsMs": 1795166415986
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 682,
+                      "seq": 682,
+                      "tsMs": 1795166417933
+                    }
+                  ],
+                  "last": [
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3115,
+                      "seq": 3115,
+                      "tsMs": 1795166428967
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3128,
+                      "seq": 3128,
+                      "tsMs": 1795166430190
+                    },
+                    {
+                      "event": "videoSurfaceAttached",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 3340,
+                      "seq": 3340,
+                      "tsMs": 1795166430970
+                    }
+                  ],
+                  "omittedItems": 10
+                },
+                "passed": true
+              },
+              "videoSurfaceRendererReady": {
+                "details": {
+                  "observedCount": 1,
+                  "positiveFrames": [
+                    {
+                      "event": "videoSurfaceRendererReady",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 643,
+                      "seq": 643,
+                      "tsMs": 1795166417761
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "videoSurfaceRendererReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 643,
+                    "seq": 643,
+                    "tsMs": 1795166417761
+                  }
+                ],
+                "passed": true
+              },
+              "videoSurfaceSized": {
+                "details": {
+                  "observedCount": 1,
+                  "positiveSizes": [
+                    {
+                      "event": "videoSurfaceSized",
+                      "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                      "line": 584,
+                      "seq": 584,
+                      "tsMs": 1795166415917
+                    }
+                  ]
+                },
+                "observed": [
+                  {
+                    "event": "videoSurfaceSized",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 584,
+                    "seq": 584,
+                    "tsMs": 1795166415917
+                  }
+                ],
+                "passed": true
+              }
+            },
+            "failedChecks": [
+              "fourChannelProfile",
+              "peerConnected",
+              "remoteIceCompleted"
+            ],
+            "firstSeq": 557,
+            "lastSeq": 3406,
+            "orderingViolations": [],
+            "passed": false,
+            "peerEpoch": 2,
+            "rows": 1775,
+            "toleratedReorders": [
+              {
+                "expected": "controlBootstrapCompleted < controlReady",
+                "observed": [
+                  {
+                    "event": "controlBootstrapCompleted",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 634,
+                    "seq": 634,
+                    "tsMs": 1795166417591
+                  },
+                  {
+                    "event": "controlReady",
+                    "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+                    "line": 633,
+                    "seq": 633,
+                    "tsMs": 1795166417591
+                  }
+                ],
+                "reorderRows": 1,
+                "type": "streaming-order"
+              }
+            ]
+          }
+        ],
+        "playingStates": [],
+        "rows": 1815,
+        "sessionId": "1F8676E1-B9BB-48C2-B07B-C0B5762389B6",
+        "sessionReady": [
+          {
+            "event": "sessionReady",
+            "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+            "line": 515,
+            "seq": 515,
+            "tsMs": 1795166410555
+          }
+        ],
+        "targets": [
+          "home"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+            "line": 3401,
+            "seq": 3401,
+            "tsMs": 1795166431261
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "peerEpochs": [
+              {
+                "failedChecks": {
+                  "archivedListItemCount": 21,
+                  "first": [
+                    "controlBootstrapCompleted",
+                    "controlReady",
+                    "displayFirstPresent"
+                  ],
+                  "last": [
+                    "steadyMediaObserved",
+                    "videoFrameAcceptedToMailbox",
+                    "videoSurfaceRendererReady"
+                  ],
+                  "omittedItems": 15
+                },
+                "orderingViolations": 0,
+                "peerEpoch": 1
+              },
+              {
+                "failedChecks": [
+                  "fourChannelProfile",
+                  "peerConnected",
+                  "remoteIceCompleted"
+                ],
+                "orderingViolations": 0,
+                "peerEpoch": 2
+              }
+            ],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          }
+        ]
+      }
+    ],
+    "contextViolations": [],
+    "gate": "FAIL",
+    "generationViolations": [],
+    "rows": 35676,
+    "violations": [
+      {
+        "attemptId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "generation": 1,
+        "peerEpochs": [
+          {
+            "failedChecks": {
+              "archivedListItemCount": 21,
+              "first": [
+                "controlBootstrapCompleted",
+                "controlReady",
+                "displayFirstPresent"
+              ],
+              "last": [
+                "steadyMediaObserved",
+                "videoFrameAcceptedToMailbox",
+                "videoSurfaceRendererReady"
+              ],
+              "omittedItems": 15
+            },
+            "orderingViolations": 0,
+            "peerEpoch": 1
+          },
+          {
+            "failedChecks": [
+              "fourChannelProfile",
+              "peerConnected",
+              "remoteIceCompleted"
+            ],
+            "orderingViolations": 0,
+            "peerEpoch": 2
+          }
+        ],
+        "sessionId": "1F8676E1-B9BB-48C2-B07B-C0B5762389B6",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "8B483949-999E-4BBA-8B98-0BBA2F7B489A",
+        "expected": "at least 1",
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "1F8676E1-B9BB-48C2-B07B-C0B5762389B6",
+        "type": "streaming-anchor-count"
+      }
+    ]
+  },
+  "archiveNote": "保留原gate/check/violations；大观测列表按首尾各3条与总数精简。原始JSONL完整保留，可使用check-streaming-core-trace.py重生成完整报告。",
+  "compactedObservationLists": [
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayHealthSnapshot.details.positivePresentSnapshots",
+      "items": 145
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayHealthSnapshot.observed",
+      "items": 146
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayPresent.observed",
+      "items": 2660
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displaySubmit.observed",
+      "items": 2661
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.remoteIceApplied.observed",
+      "items": 146
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.videoFrameAcceptedToMailbox.observed",
+      "items": 2661
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.videoSurfaceAttached.observed",
+      "items": 148
+    },
+    {
+      "path": "root.streamingCore.attempts[].playingStates",
+      "items": 15926
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].failedChecks",
+      "items": 21
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayHealthSnapshot.details.positivePresentSnapshots",
+      "items": 11
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayHealthSnapshot.observed",
+      "items": 12
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displayPresent.observed",
+      "items": 547
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.displaySubmit.observed",
+      "items": 548
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.remoteIceApplied.observed",
+      "items": 15
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.remoteIceBatchReceived.observed",
+      "items": 11
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.videoFrameAcceptedToMailbox.observed",
+      "items": 548
+    },
+    {
+      "path": "root.streamingCore.attempts[].peerEpochs[].checks.videoSurfaceAttached.observed",
+      "items": 16
+    },
+    {
+      "path": "root.streamingCore.attempts[].violations[].peerEpochs[].failedChecks",
+      "items": 21
+    },
+    {
+      "path": "root.streamingCore.violations[].peerEpochs[].failedChecks",
+      "items": 21
+    }
+  ]
+}

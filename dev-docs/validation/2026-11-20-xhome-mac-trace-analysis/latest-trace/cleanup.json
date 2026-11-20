@@ -1,0 +1,27 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r2",
+  "analysisProcessesFinished": true,
+  "analyzerExitCodes": {
+    "base": 2,
+    "core": 2
+  },
+  "exitCodeMeaning": "严格gate检测到已归档的图片配对与第一段连接异常；两进程已结束。",
+  "removed": true,
+  "logicalBytesRemoved": 27809754,
+  "freeBytesBefore": 65945600000,
+  "freeBytesAfter": 65945600000,
+  "retained": [
+    {
+      "path": "/Users/guo.xu/Downloads/runtime-trace-ios-1795166210528-1.jsonl",
+      "exists": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+      "exists": true
+    },
+    {
+      "path": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json",
+      "exists": true
+    }
+  ]
+}

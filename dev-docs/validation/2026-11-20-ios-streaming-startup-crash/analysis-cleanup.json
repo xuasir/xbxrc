@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-20",
+  "completedAt": "2026-11-20T10:38:51.095176+08:00",
+  "status": "complete",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-ips-analysis-20261120",
+  "products": [
+    {
+      "path": "r1/captured-code-disassembly.txt",
+      "bytes": 1100,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "r1/captured-code.o",
+      "bytes": 456,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "r1/captured-code.s",
+      "bytes": 427,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "r1/future-size-probe",
+      "bytes": 1188064,
+      "allocatedBytes": 1191936
+    },
+    {
+      "path": "r1/future-size-probe-build.log",
+      "bytes": 0,
+      "allocatedBytes": 0
+    },
+    {
+      "path": "r1/future-size-probe.log",
+      "bytes": 58,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "r1/future-size-probe.rs",
+      "bytes": 464,
+      "allocatedBytes": 4096
+    }
+  ],
+  "allocatedBytesRemoved": 1212416,
+  "processCheck": "独立 ps 核验仅匹配查询命令和 rg 进程；本轮 rustc/clang/llvm-objdump 已结束",
+  "temporaryRootExistsAfter": false,
+  "diskFreeBytesBefore": 66764800000,
+  "diskFreeBytesAfter": 66764800000,
+  "retained": [
+    "device-crash-analysis.md",
+    "device-crash-analysis.json",
+    "diagnostics/device-ips-code-disassembly.txt",
+    "diagnostics/device-ips-future-size.rs",
+    "diagnostics/device-ips-future-size.log"
+  ],
+  "originalReportRetainedAt": "/Users/guo.xu/Downloads/XBXRC-2026-11-19-184559.ips",
+  "originalReportExistsAfter": true,
+  "cachedRustLibraryRetained": true
+}

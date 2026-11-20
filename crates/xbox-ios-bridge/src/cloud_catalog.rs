@@ -1,8 +1,10 @@
 use crate::cloud_access::{load_scoped_stream_access, StreamingAccessContext};
 use crate::XboxBridgeError;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use xbox_cloud_catalog_flow::{CloudCatalogScope, XboxCloudCatalogFlow};
 use xbox_streaming::Target;
+use xbox_webapi::{GamePassApi, WebApiError};
 
 const INITIAL_HYDRATION_SIZE: usize = 75;
 
@@ -22,6 +24,10 @@ pub struct XboxCloudGame {
     pub has_entitlement: Option<bool>,
     pub is_recently_played: Option<bool>,
     pub is_new: Option<bool>,
+    pub recent_rank: Option<u32>,
+    pub new_rank: Option<u32>,
+    pub popular_rank: Option<u32>,
+    pub leaving_rank: Option<u32>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -34,6 +40,8 @@ pub struct XboxCloudCatalogSnapshot {
     pub fetched_at_ms: u64,
     pub failed_hydration_chunks: u32,
     pub pending_hydration_product_ids: Vec<String>,
+    pub unavailable_sources: Vec<String>,
+    pub source_failures: Vec<crate::XboxSourceFailure>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -62,10 +70,50 @@ pub async fn fetch_cloud_catalog(
         language: language.clone(),
     };
     let flow = XboxCloudCatalogFlow::new(context.host.clone(), context.bearer_token);
-    let overlay = flow
-        .load_overlay(&scope)
-        .await
-        .map_err(|error| XboxBridgeError::Data(error.to_string()))?;
+    let (overlay, popular, leaving) = tokio::join!(
+        flow.load_overlay(&scope),
+        discovery_ranks("e7590b22-e299-44db-ae22-25c61405454c", &scope),
+        discovery_ranks("393f05bf-e596-4ef6-9487-6d4fa0eab987", &scope),
+    );
+    let overlay = overlay.map_err(|error| match error {
+        xbox_cloud_catalog_flow::CloudCatalogFlowError::WebApi(error) => {
+            crate::query_failure::query_error(error)
+        }
+    })?;
+    let mut unavailable_sources = Vec::new();
+    let mut source_failures = overlay
+        .source_failures
+        .iter()
+        .map(|failure| crate::XboxSourceFailure {
+            source: match failure.source {
+                "recentTitles" => "recent",
+                "newestSigl" => "newest",
+                _ => "products",
+            }
+            .into(),
+            failure: crate::XboxQueryFailure::from_safe_summary(&failure.error),
+        })
+        .collect::<Vec<_>>();
+    for (source, result) in [("popular", &popular), ("leaving", &leaving)] {
+        if let Err(error) = result {
+            source_failures.push(crate::XboxSourceFailure {
+                source: source.into(),
+                failure: crate::XboxQueryFailure::from_web_api(error),
+            });
+        }
+    }
+    if !overlay.recent_source_available {
+        unavailable_sources.push("recent".into());
+    }
+    if !overlay.newest_source_available {
+        unavailable_sources.push("newest".into());
+    }
+    if popular.is_err() {
+        unavailable_sources.push("popular".into());
+    }
+    if leaving.is_err() {
+        unavailable_sources.push("leaving".into());
+    }
     let initial_product_ids = overlay
         .product_ids
         .iter()
@@ -109,8 +157,20 @@ pub async fn fetch_cloud_catalog(
                     .unwrap_or_default(),
                 supported_input_types: entry.supported_input_types,
                 has_entitlement: entry.entitlement_known.then_some(entry.has_entitlement),
-                is_recently_played: Some(entry.is_recently_played),
-                is_new: Some(entry.is_new),
+                is_recently_played: overlay
+                    .recent_source_available
+                    .then_some(entry.is_recently_played),
+                is_new: overlay.newest_source_available.then_some(entry.is_new),
+                recent_rank: entry.recent_rank.map(|rank| rank as u32),
+                new_rank: entry.new_rank.map(|rank| rank as u32),
+                popular_rank: popular
+                    .as_ref()
+                    .ok()
+                    .and_then(|ranks| ranks.get(&entry.product_id).copied()),
+                leaving_rank: leaving
+                    .as_ref()
+                    .ok()
+                    .and_then(|ranks| ranks.get(&entry.product_id).copied()),
             }
         })
         .collect::<Vec<_>>();
@@ -130,6 +190,8 @@ pub async fn fetch_cloud_catalog(
         fetched_at_ms: now_ms(),
         failed_hydration_chunks: hydration.failed_chunk_count as u32,
         pending_hydration_product_ids,
+        unavailable_sources,
+        source_failures,
     })
 }
 
@@ -245,4 +307,21 @@ mod tests {
         assert!(require_cloud_catalog_target(Target::Cloud).is_ok());
         assert!(require_cloud_catalog_target(Target::Home).is_err());
     }
+}
+
+async fn discovery_ranks(
+    id: &str,
+    scope: &CloudCatalogScope,
+) -> Result<HashMap<String, u32>, WebApiError> {
+    let value = GamePassApi::new()
+        .get_sigl(id, &scope.market, &scope.language)
+        .await?;
+    if !value.is_array() {
+        return Err(WebApiError::parse("invalid discovery collection"));
+    }
+    Ok(xbox_cloud_catalog_flow::extract_newest_product_ids(&value)
+        .into_iter()
+        .enumerate()
+        .map(|(rank, product)| (product, rank as u32))
+        .collect())
 }

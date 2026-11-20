@@ -1,0 +1,78 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_ios_bridge-49bf9d6897d5987d)
+
+running 55 tests
+test cloud_catalog::tests::cloud_catalog_rejects_home_access_target ... ok
+test cloud_access::tests::expiry_is_bounded_even_when_token_duration_is_long ... ok
+test cloud_access::tests::web_token_not_after_caps_streaming_lease_expiry ... ok
+test cloud_catalog::tests::locale_parts_use_bounded_defaults ... ok
+test cloud_catalog::tests::non_empty_trims_values ... ok
+test cloud_access::tests::missing_cloud_token_is_rejected ... ok
+test cloud_catalog::tests::initial_hydration_keeps_first_page_bounded ... ok
+test data::tests::deduplicates_and_validates_playtime_title_ids ... ok
+test data::tests::maps_console_power_result_for_uniffi ... ok
+test data::tests::maps_achievement_details ... ok
+test data::tests::maps_nested_hosts_and_storage_variants ... ok
+test data::tests::maps_game_history_and_filters_apps ... ok
+test data::tests::validates_and_normalizes_console_command_identity ... ok
+test data::tests::maps_top_level_and_group_playtime_variants ... ok
+test streaming::startup::tests::queue_projection_keeps_only_safe_state_and_timing ... ok
+test data::tests::maps_home_identity_capability_and_console_addresses ... ok
+test cloud_access::tests::scoped_lease_rejects_target_and_cross_account_mismatch ... ok
+test cloud_access::tests::lease_expiry_discards_context_and_retains_non_sensitive_tombstone ... ok
+test cloud_access::tests::lease_release_discards_context_and_is_idempotent ... ok
+test streaming::startup::tests::observer_discards_old_generation_and_ignores_details ... ok
+test cloud_access::tests::new_owner_generation_revokes_stale_lease ... ok
+test streaming::tests::console_text_is_trimmed_and_bounded_before_network_use ... ok
+test data::tests::power_commands_reject_invalid_console_identity_before_network_access ... ok
+test cloud_access::tests::resolves_home_access_from_xhome_token ... ok
+test streaming::tests::cloud_plan_does_not_inject_console_address_candidates ... ok
+test cloud_access::tests::resolves_default_region_and_stable_xid ... ok
+test streaming::tests::control_plan_uses_domain_compiler_and_desktop_headers ... ok
+test streaming::tests::control_plan_projects_consumed_cloud_streaming_settings ... ok
+test streaming::tests::control_plan_projects_consumed_home_streaming_settings ... ok
+test streaming::tests::explicit_remote_ice_end_is_projected_with_fresh_candidates ... ok
+test streaming::tests::control_plan_builds_home_target_with_desktop_profile ... ok
+test streaming::tests::failed_restart_offer_keeps_rebuild_on_same_restart_generation ... ok
+test streaming::tests::ios_snapshot_implements_domain_runtime_binding ... ok
+test streaming::tests::monitor_terminal_projection_rejects_stale_session_callbacks ... ok
+test streaming::tests::official_stun_is_platform_default ... ok
+test streaming::tests::remote_session_terminal_ignores_ready_and_recovering_states ... ok
+test streaming::tests::home_plan_rejects_explicitly_disabled_streaming_capability ... ok
+test streaming::tests::home_plan_projects_fallback_turn_into_ice_servers ... ok
+test streaming::tests::clarity_preference_reaches_shared_input_and_ios_runtime_projection ... ok
+test streaming::tests::remote_session_terminal_maps_timeout_and_terminal_states_without_server_text ... ok
+test streaming::tests::rust_owns_remote_ice_deduplication_and_completion ... ok
+test streaming::tests::second_offer_starts_restart_generation_and_resets_remote_ice ... ok
+test streaming::tests::home_console_addresses_are_injected_once_per_signaling_epoch ... ok
+test streaming::tests::ios_pc_ranges_reach_shared_plan_for_home_1440_and_zero_auto_bitrates ... ok
+test streaming::tests::target_id_is_trimmed_and_validated ... ok
+test streaming::tests::web_rtc_plan_projects_receive_only_audio_codec_feedback_and_ice_policy ... ok
+test tests::maps_profile_settings ... ok
+test streaming::tests::custom_turn_is_validated_and_overrides_home_fallback ... ok
+test tests::normalizes_configured_force_region_ip ... ok
+test tests::normalizes_empty_force_region_ip ... ok
+test tests::resolves_web_token_identity ... ok
+test tests::validates_xal_callback_destination ... ok
+test streaming::tests::mark_connected_is_idempotent ... ok
+test streaming::tests::cancel_invalidates_generation ... ok
+test streaming::tests::cloud_and_home_share_the_same_rust_session_flow_adapter ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_streaming_protocol-54c7972eb120012b)
+
+running 10 tests
+test frame_feedback::tests::clarity_policy_preserves_observations_and_render_delay_at_thresholds ... ok
+test remote_profile::tests::dynamic_subprofile_string_contract_is_stable ... ok
+test remote_profile::tests::cloud_target_overrides_transport_path ... ok
+test remote_profile::tests::home_target_defaults_to_home_lan_without_transport_path ... ok
+test frame_feedback::tests::timestamps_wrap_after_adjustment_and_invalid_facts_are_rejected ... ok
+test remote_profile::tests::home_target_uses_relay_path_as_refinement ... ok
+test frame_feedback::tests::metadata_precedes_gamepad_and_preserves_sequence_and_release_payload ... ok
+test remote_profile::tests::effective_profile_label_composes_baseline_and_dynamic ... ok
+test stream_data_channel::tests::handshake_ack_parser_and_dimensions_are_bounded ... ok
+test stream_data_channel::tests::profile_and_bootstrap_payloads_match_xbox_contract ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

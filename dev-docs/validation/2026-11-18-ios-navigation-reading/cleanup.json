@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-18",
+  "removedRoot": "/private/tmp/xbxrc-ios-navigation-reading-20261118",
+  "removedAllocatedBytes": 5288587264,
+  "removedLogicalBytes": 5254301598,
+  "freeBytesBefore": 78643200000,
+  "freeBytesAfter": 83558400000,
+  "freeBytesIncrease": 4915200000,
+  "rootExistsAfter": false,
+  "retainedDependencyCache": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "cacheExistsAfter": true,
+  "retainedEvidencePngs": 11,
+  "retainedPreviews": 2,
+  "buildAndExportProcessesFinished": true
+}

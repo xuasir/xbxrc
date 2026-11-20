@@ -78,7 +78,7 @@ export class BrowserNetworkPolicy {
     }
   }
 
-  observe(stats: StreamStats, input: { nowMs: number, level: number, warmupUntilMs: number, qualitySupported: boolean }): BrowserNetworkAction | undefined {
+  observe(stats: StreamStats, input: { nowMs: number, level: number, warmupUntilMs: number, qualitySupported: boolean, sharedPressure?: NetworkPressure }): BrowserNetworkAction | undefined {
     const path = `${stats.statsPeerGeneration}:${stats.statsCandidatePairId ?? stats.transportPath ?? 'unknown'}`
     if (this.path !== path) {
       this.reset()
@@ -91,7 +91,7 @@ export class BrowserNetworkPolicy {
       this.pressureSinceMs = this.healthySinceMs = undefined
     this.evidence.acknowledgeContinuity()
     const short = stats.browserStatsWindows?.short
-    const pressure = accepted === 'new' && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= this.eligibleSinceMs ? classifyBrowserNetworkPressure(short, this.rttBaselineMs) : 'unknown'
+    const pressure = accepted === 'new' && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= this.eligibleSinceMs ? input.sharedPressure ?? classifyBrowserNetworkPressure(short, this.rttBaselineMs) : 'unknown'
     this.state = pressure
     this.reason = pressure === 'unknown' ? 'networkEvidenceIncomplete' : pressure === 'stable' ? 'pathStable' : 'transportLoss'
     const now = input.nowMs

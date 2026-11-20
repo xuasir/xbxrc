@@ -1,4 +1,3 @@
-#if canImport(WebRTC)
 import CoreHaptics
 import Foundation
 import GameController
@@ -15,6 +14,9 @@ final class XboxStreamDataChannels: NSObject {
     private static let inputPollInterval = Duration.milliseconds(8)
     private static let bootstrapRetryDelay = Duration.milliseconds(100)
 
+    private let inputSession: StreamInputSession
+    private let frameFeedback: StreamingFrameFeedbackSession?
+    private var lastFeedbackTraceAtMilliseconds: Double = 0
     private let eventSink: @MainActor @Sendable (String, String) -> Void
     private let failureSink: @MainActor @Sendable (String) -> Void
     private let postHandshakePayloads: [String]
@@ -26,6 +28,7 @@ final class XboxStreamDataChannels: NSObject {
     private var inputTask: Task<Void, Never>?
     private var initialGamepadAnnouncementPending = false
     private var gamepadConnected = false
+    private weak var announcedController: GCController?
     private var locallyClosing = false
     private var inputAndHapticsStopped = false
     private var inputSequence: UInt32 = 0
@@ -35,11 +38,15 @@ final class XboxStreamDataChannels: NSObject {
     private weak var hapticsController: GCController?
 
     init(
+        inputSession: StreamInputSession = StreamInputSession(),
+        frameFeedback: StreamingFrameFeedbackSession? = nil,
         targetVideoWidth: Int = 1_920,
         targetVideoHeight: Int = 1_080,
         eventSink: @escaping @MainActor @Sendable (String, String) -> Void,
         failureSink: @escaping @MainActor @Sendable (String) -> Void = { _ in }
     ) {
+        self.inputSession = inputSession
+        self.frameFeedback = frameFeedback
         self.eventSink = eventSink
         self.failureSink = failureSink
         postHandshakePayloads = streamPostHandshakePayloads(
@@ -53,6 +60,14 @@ final class XboxStreamDataChannels: NSObject {
         )
     }
 
+    func requestVideoKeyframe() -> Bool {
+        guard !locallyClosing, let channel = channels["control"], channel.readyState == .open else {
+            return false
+        }
+        return sendText(
+            "{\"message\":\"videoKeyframeRequested\",\"ifrRequested\":true}", on: channel)
+    }
+
     func createChannels(on peerConnection: RTCPeerConnection) {
         locallyClosing = false
         inputAndHapticsStopped = false
@@ -60,10 +75,12 @@ final class XboxStreamDataChannels: NSObject {
             let configuration = RTCDataChannelConfiguration()
             configuration.isOrdered = profile.ordered
             configuration.`protocol` = profile.protocolName
-            guard let channel = peerConnection.dataChannel(
-                forLabel: profile.label,
-                configuration: configuration
-            ) else {
+            guard
+                let channel = peerConnection.dataChannel(
+                    forLabel: profile.label,
+                    configuration: configuration
+                )
+            else {
                 eventSink(profile.label, "createFailed")
                 failureSink(StreamingTerminalReason.runtimeFailure.code)
                 continue
@@ -94,6 +111,7 @@ final class XboxStreamDataChannels: NSObject {
     func stopInputAndHaptics() {
         guard !inputAndHapticsStopped else { return }
         inputAndHapticsStopped = true
+        frameFeedback?.invalidate()
         delayedGamepadAddedTask?.cancel()
         delayedGamepadAddedTask = nil
         initialGamepadAnnouncementPending = false
@@ -170,12 +188,14 @@ final class XboxStreamDataChannels: NSObject {
         }
         guard input.readyState == .open else { return .inputUnavailable }
         let now = ProcessInfo.processInfo.systemUptime * 1_000
-        guard inputGate.shouldSend(
-            state: .neutral,
-            bufferedAmount: input.bufferedAmount,
-            nowMilliseconds: now,
-            force: true
-        ) else { return .sendFailed }
+        guard
+            inputGate.shouldSend(
+                state: .neutral,
+                bufferedAmount: input.bufferedAmount,
+                nowMilliseconds: now,
+                force: true
+            )
+        else { return .sendFailed }
         inputSequence &+= 1
         let frame = IOSStreamInputPacketEncoder.encodeGamepad(
             sequence: inputSequence,
@@ -201,13 +221,16 @@ final class XboxStreamDataChannels: NSObject {
                 guard let self else { return }
                 self.initialGamepadAnnouncementPending = false
                 guard let channel, channel.readyState == .open else { return }
-                let added = self.currentGamepad() != nil
+                let added = self.currentGamepad() != nil || self.inputSession.showsTouchController
                 let sent = self.sendText(
                     streamControlGamepadChangedPayload(added: added),
                     on: channel
                 )
                 self.eventSink("control", sent ? "gamepadAddedSent" : "gamepadAddedFailed")
-                if sent { self.gamepadConnected = added }
+                if sent {
+                    self.gamepadConnected = added
+                    self.announcedController = self.currentGamepadController()
+                }
             } catch is CancellationError {
                 self?.initialGamepadAnnouncementPending = false
                 return
@@ -237,37 +260,43 @@ final class XboxStreamDataChannels: NSObject {
             let succeeded: Bool
             switch action {
             case .sendMessageHandshake:
-                succeeded = channel(.message).map {
-                    sendText(streamMessageHandshakePayload(), on: $0)
-                } ?? false
+                succeeded =
+                    channel(.message).map {
+                        sendText(streamMessageHandshakePayload(), on: $0)
+                    } ?? false
                 if succeeded { eventSink("message", "handshakeSent") }
-            case let .sendPostHandshake(index):
-                succeeded = channel(.message).map {
-                    sendText(postHandshakePayloads[index], on: $0)
-                } ?? false
+            case .sendPostHandshake(let index):
+                succeeded =
+                    channel(.message).map {
+                        sendText(postHandshakePayloads[index], on: $0)
+                    } ?? false
                 if succeeded, index + 1 == postHandshakePayloads.count {
                     eventSink("message", "postHandshakeCompleted")
                 }
-            case let .sendControlBootstrap(stage, index):
-                succeeded = channel(.control).map {
-                    sendText(controlBootstrapPayloads[index], on: $0)
-                } ?? false
+            case .sendControlBootstrap(let stage, let index):
+                succeeded =
+                    channel(.control).map {
+                        sendText(controlBootstrapPayloads[index], on: $0)
+                    } ?? false
                 if succeeded, index + 1 == controlBootstrapPayloads.count {
-                    let event = switch stage {
-                    case .preHandshake: "bootstrapPreHandshakeSent"
-                    case .postHandshake: "bootstrapSent"
-                    }
+                    let event =
+                        switch stage {
+                        case .preHandshake: "bootstrapPreHandshakeSent"
+                        case .postHandshake: "bootstrapSent"
+                        }
                     eventSink("control", event)
                 }
-            case let .sendInputMetadata(stage):
-                succeeded = channel(.input).map {
-                    sendBinary(Data(streamInputMetadataBootstrapPayload()), on: $0)
-                } ?? false
+            case .sendInputMetadata(let stage):
+                succeeded =
+                    channel(.input).map {
+                        sendBinary(Data(streamInputMetadataBootstrapPayload()), on: $0)
+                    } ?? false
                 if succeeded {
-                    let event = switch stage {
-                    case .preHandshake: "metadataPreHandshakeSent"
-                    case .postHandshake: "metadataBootstrapSent"
-                    }
+                    let event =
+                        switch stage {
+                        case .preHandshake: "metadataPreHandshakeSent"
+                        case .postHandshake: "metadataBootstrapSent"
+                        }
                     eventSink("input", event)
                 }
             case .announceControlReady:
@@ -310,7 +339,9 @@ final class XboxStreamDataChannels: NSObject {
     }
 
     private func channel(_ label: StreamingDataChannelLabel) -> RTCDataChannel? {
-        guard let channel = channels[label.rawValue], channel.readyState == .open else { return nil }
+        guard let channel = channels[label.rawValue], channel.readyState == .open else {
+            return nil
+        }
         return channel
     }
 
@@ -350,44 +381,92 @@ final class XboxStreamDataChannels: NSObject {
     private func startInputLoopIfReady() {
         let snapshot = stateMachine.snapshot
         guard inputTask == nil, snapshot.handshakeAcknowledged,
-              snapshot.controlReady,
-              snapshot.postHandshakeInputMetadataSent else { return }
+            snapshot.controlReady,
+            snapshot.postHandshakeInputMetadataSent
+        else { return }
         inputTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self,
-                      let input = self.channels["input"], input.readyState == .open else { return }
+                    let input = self.channels["input"], input.readyState == .open
+                else { return }
                 let controller = self.currentGamepadController()
-                let connected = controller?.extendedGamepad != nil
-                if !connected, self.hapticsController != nil {
+                let connected =
+                    controller?.extendedGamepad != nil || self.inputSession.showsTouchController
+                if !self.hapticEngines.isEmpty,
+                    controller == nil || self.hapticsController !== controller
+                {
                     self.resetHaptics()
                 }
                 if !self.initialGamepadAnnouncementPending,
-                   connected != self.gamepadConnected,
-                   let control = self.channels["control"], control.readyState == .open,
-                   self.sendText(
-                       streamControlGamepadChangedPayload(added: connected),
-                       on: control
-                   )
+                    connected != self.gamepadConnected || controller !== self.announcedController,
+                    let control = self.channels["control"], control.readyState == .open,
+                    self.sendText(
+                        streamControlGamepadChangedPayload(added: connected),
+                        on: control
+                    )
                 {
                     self.gamepadConnected = connected
+                    self.announcedController = controller
                     self.eventSink("control", connected ? "gamepadAddedSent" : "gamepadRemovedSent")
                 }
-                let now = ProcessInfo.processInfo.systemUptime * 1_000
-                let state = self.gamepadState(controller?.extendedGamepad)
+                let now =
+                    self.frameFeedback == nil
+                    ? ProcessInfo.processInfo.systemUptime * 1_000
+                    : StreamingFrameFeedbackClock.nowMilliseconds
+                let state = self.inputSession.outputState(now: now)
+                if self.inputSession.isSuppressed || !self.inputSession.preferences.vibrationEnabled
+                {
+                    if !self.hapticPlayers.isEmpty { self.resetHaptics() }
+                }
                 let wasBlocked = self.inputGate.blocked
+                // Metadata 在原包中消费剩余预算，游戏按键与中立释放继续拥有发送余量。
+                let metadataBudget = max(
+                    0,
+                    Int(
+                        (Double(IOSStreamInputSendGate.highWatermarkBytes)
+                            - Double(input.bufferedAmount) - 39) / 28))
+                let feedbackFrames =
+                    self.frameFeedback?.pendingFrames(
+                        maximumCount: metadataBudget, nowMilliseconds: now) ?? []
                 if self.inputGate.shouldSend(
                     state: state,
                     bufferedAmount: input.bufferedAmount,
-                    nowMilliseconds: now
+                    nowMilliseconds: now,
+                    hasFrameFeedback: !feedbackFrames.isEmpty
                 ) {
                     self.inputSequence &+= 1
-                    let frame = IOSStreamInputPacketEncoder.encodeGamepad(
+                    var frame = IOSStreamInputPacketEncoder.encodeGamepad(
                         sequence: self.inputSequence,
                         timestampMilliseconds: now,
                         state: state
                     )
+                    var encodedFeedback = false
+                    if !feedbackFrames.isEmpty {
+                        do {
+                            frame = try streamInputFrameFeedbackPayload(
+                                gamepadPayload: frame, frames: feedbackFrames.map(\.metadata),
+                                timestampMs: now,
+                                preventResolutionDrops: self.frameFeedback?.preventResolutionDrops
+                                    ?? false)
+                            encodedFeedback = true
+                        } catch {
+                            self.eventSink("input", "frameFeedbackInvalid")
+                        }
+                    }
                     if self.sendBinary(frame, on: input) {
                         self.inputGate.markSent(state: state, at: now)
+                        if encodedFeedback {
+                            self.frameFeedback?.markSent(feedbackFrames, wirePayload: frame)
+                            if now - self.lastFeedbackTraceAtMilliseconds >= 1_000,
+                                let snapshot = self.frameFeedback?.snapshot()
+                            {
+                                self.lastFeedbackTraceAtMilliseconds = now
+                                IOSRuntimeTrace.snapshot(
+                                    domain: "ios-streaming", event: "frameFeedback",
+                                    payload: snapshot.tracePayload(), dimension: .presentation,
+                                    importance: .debug)
+                            }
+                        }
                         self.eventSink(
                             "input",
                             state == .neutral ? "neutralFrameSent" : "frameSent"
@@ -409,46 +488,18 @@ final class XboxStreamDataChannels: NSObject {
     }
 
     private func currentGamepadController() -> GCController? {
-        if let current = GCController.current, current.extendedGamepad != nil {
-            return current
-        }
-        return GCController.controllers().first { $0.extendedGamepad != nil }
+        inputSession.currentController
     }
 
     private func currentGamepad() -> GCExtendedGamepad? {
         currentGamepadController()?.extendedGamepad
     }
 
-    private func gamepadState(_ gamepad: GCExtendedGamepad?) -> IOSStreamGamepadState {
-        guard let gamepad else { return .neutral }
-        var buttonMask: UInt16 = 0
-        if gamepad.buttonHome?.isPressed == true { buttonMask |= 2 }
-        if gamepad.buttonMenu.isPressed { buttonMask |= 4 }
-        if gamepad.buttonOptions?.isPressed == true { buttonMask |= 8 }
-        if gamepad.buttonA.isPressed { buttonMask |= 16 }
-        if gamepad.buttonB.isPressed { buttonMask |= 32 }
-        if gamepad.buttonX.isPressed { buttonMask |= 64 }
-        if gamepad.buttonY.isPressed { buttonMask |= 128 }
-        if gamepad.dpad.up.isPressed { buttonMask |= 256 }
-        if gamepad.dpad.down.isPressed { buttonMask |= 512 }
-        if gamepad.dpad.left.isPressed { buttonMask |= 1024 }
-        if gamepad.dpad.right.isPressed { buttonMask |= 2048 }
-        if gamepad.leftShoulder.isPressed { buttonMask |= 4096 }
-        if gamepad.rightShoulder.isPressed { buttonMask |= 8192 }
-        if gamepad.leftThumbstickButton?.isPressed == true { buttonMask |= 16384 }
-        if gamepad.rightThumbstickButton?.isPressed == true { buttonMask |= 32768 }
-        return IOSStreamGamepadState(
-            buttonMask: buttonMask,
-            leftThumbX: gamepad.leftThumbstick.xAxis.value,
-            leftThumbY: gamepad.leftThumbstick.yAxis.value,
-            rightThumbX: gamepad.rightThumbstick.xAxis.value,
-            rightThumbY: gamepad.rightThumbstick.yAxis.value,
-            leftTrigger: gamepad.leftTrigger.value,
-            rightTrigger: gamepad.rightTrigger.value
-        )
-    }
-
     private func handleInputPayload(_ data: Data) {
+        guard !inputSession.isSuppressed, inputSession.preferences.vibrationEnabled else {
+            resetHaptics()
+            return
+        }
         for effect in IOSStreamRumblePacketDecoder.decode(data) {
             eventSink("input", "rumbleParsed")
             if effect.isStop {
@@ -476,7 +527,7 @@ final class XboxStreamDataChannels: NSObject {
                 continue
             }
             let pulses = IOSStreamHapticsRouter.pulses(
-                for: effect,
+                for: inputSession.preferences.vibrationEffect(effect),
                 supportedRoutes: supportedHapticsRoutes(for: controller)
             )
             let transition = IOSStreamHapticsTransitionPlanner.plan(
@@ -510,14 +561,14 @@ final class XboxStreamDataChannels: NSObject {
         stopHaptics(routes: transition.routesToStop)
     }
 
-    private func gamepadController(for index: UInt8?) -> GCController? {
-        guard let index else { return currentGamepadController() }
-        if index == 0, let current = currentGamepadController() { return current }
-        let controllers = GCController.controllers().filter { $0.extendedGamepad != nil }
-        return Int(index) < controllers.count ? controllers[Int(index)] : nil
+    func gamepadController(for index: UInt8?) -> GCController? {
+        // 当前会话公告一个逻辑slot 0，输入和四路震动共同归属所选设备。
+        guard index == nil || index == 0 else { return nil }
+        return inputSession.currentController
     }
 
-    private func supportedHapticsRoutes(for controller: GCController) -> Set<IOSStreamHapticsRoute> {
+    private func supportedHapticsRoutes(for controller: GCController) -> Set<IOSStreamHapticsRoute>
+    {
         guard let haptics = controller.haptics else { return [] }
         var routes: Set<IOSStreamHapticsRoute> = [.defaultLocality]
         let localities = haptics.supportedLocalities
@@ -537,33 +588,41 @@ final class XboxStreamDataChannels: NSObject {
             resetHaptics()
         }
         hapticsController = controller
-        let locality: GCHapticsLocality = switch pulse.route {
-        case .leftHandle: .leftHandle
-        case .rightHandle: .rightHandle
-        case .leftTrigger: .leftTrigger
-        case .rightTrigger: .rightTrigger
-        case .handles: .handles
-        case .triggers: .triggers
-        case .defaultLocality: .default
-        }
-        guard let engine = hapticEngines[pulse.route] ?? haptics.createEngine(withLocality: locality) else {
+        let locality: GCHapticsLocality =
+            switch pulse.route {
+            case .leftHandle: .leftHandle
+            case .rightHandle: .rightHandle
+            case .leftTrigger: .leftTrigger
+            case .rightTrigger: .rightTrigger
+            case .handles: .handles
+            case .triggers: .triggers
+            case .defaultLocality: .default
+            }
+        guard
+            let engine = hapticEngines[pulse.route] ?? haptics.createEngine(withLocality: locality)
+        else {
             eventSink("input", "rumbleFailed")
             return false
         }
         hapticEngines[pulse.route] = engine
         do {
             try engine.start()
-            let pattern = try CHHapticPattern(events: [
+            let events = pulse.startTimesMilliseconds.map { startTime in
                 CHHapticEvent(
                     eventType: .hapticContinuous,
                     parameters: [
-                        CHHapticEventParameter(parameterID: .hapticIntensity, value: pulse.intensity),
-                        CHHapticEventParameter(parameterID: .hapticSharpness, value: pulse.sharpness),
+                        CHHapticEventParameter(
+                            parameterID: .hapticIntensity,
+                            value: pulse.intensity
+                                * Float(inputSession.preferences.vibrationIntensity)),
+                        CHHapticEventParameter(
+                            parameterID: .hapticSharpness, value: pulse.sharpness),
                     ],
-                    relativeTime: 0,
-                    duration: max(0.01, Double(pulse.durationMilliseconds) / 1_000)
-                ),
-            ], parameters: [])
+                    relativeTime: Double(startTime) / 1_000,
+                    duration: Double(pulse.durationMilliseconds) / 1_000
+                )
+            }
+            let pattern = try CHHapticPattern(events: events, parameters: [])
             try? hapticPlayers[pulse.route]?.stop(atTime: 0)
             let player = try engine.makePlayer(with: pattern)
             hapticPlayers[pulse.route] = player
@@ -642,4 +701,3 @@ extension XboxStreamDataChannels: RTCDataChannelDelegate {
         }
     }
 }
-#endif

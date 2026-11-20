@@ -1,0 +1,71 @@
+{
+  "count": 11,
+  "images": [
+    {
+      "index": 1,
+      "page": "连接与测试",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-465314d0-521e-4572-81bf-817bc5cafd0b.png",
+      "sha256": "9b66d0534f87cf0a4ad3afe76238e03eab08b6a6b443e685a6063a3299f840fc"
+    },
+    {
+      "index": 2,
+      "page": "菜单操作",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-3528f7e7-f0b3-4022-8056-5bf2033f52f4.png",
+      "sha256": "3208043718a4d5f7d1c3eef7ff7ee13ebbef269a7e8badbd4eb7a2934eb92859"
+    },
+    {
+      "index": 3,
+      "page": "震动",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-badf030c-5101-4345-83ed-750cdd638fe1.png",
+      "sha256": "bc299c868ba545e248e08a2e437c957eb011c7fac487e16e53e016ee107f5cd3"
+    },
+    {
+      "index": 4,
+      "page": "游戏输入",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-31af6088-1a2d-4489-98de-08fa72b1d8ae.png",
+      "sha256": "97b347571eacc7a679a27704dd4df221d35050823ff5ecfb2749f675840ca426"
+    },
+    {
+      "index": 5,
+      "page": "我的账户",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-c18bdd17-1168-4858-8a60-df00e7de3f45.png",
+      "sha256": "1616d2aa13d052fe9a3debad6d434182a3b628b34d199f7d623ba186039e63f1"
+    },
+    {
+      "index": 6,
+      "page": "游玩统计",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-5a91179e-15f1-4c47-a2d9-c8431783d220.png",
+      "sha256": "66cff38c4407942293f8a6b59438ee3fa97f3df86bbb6ff321f053179aac2f6f"
+    },
+    {
+      "index": 7,
+      "page": "玩家详情",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-5e87d2ae-9b4f-41ea-a2d3-8088564f41c9.png",
+      "sha256": "eb5372db776991cc21f94054e50111e330436e50569b85738b666a839d80794b"
+    },
+    {
+      "index": 8,
+      "page": "游戏概览",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-6a6c381d-b1bc-41d0-aa12-04da38d68f7e.png",
+      "sha256": "149ad2e728d2b68a88f88b9156562ff7e7e5ba38f92015186a5be0519f9f073a"
+    },
+    {
+      "index": 9,
+      "page": "游戏相册",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-5005efad-4b2b-43c8-ad1e-7f39fdfc1865.png",
+      "sha256": "c64d923d656b7bcf8f694ee50cbd2d5678d26240014a66f2a34d20dfbab3ef06"
+    },
+    {
+      "index": 10,
+      "page": "安装库",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-e2b2ccd8-8c16-45bf-ac4d-bec56befdb28.png",
+      "sha256": "75659a893ac58f60b8581210257d954e68ead2b9d855e3157cf5b0a0f5a060e9"
+    },
+    {
+      "index": 11,
+      "page": "主机",
+      "original": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/codex-clipboard-b471785e-3427-4642-af12-b1b14687aa93.png",
+      "sha256": "c65aaa3d4516388080388d49a8fdd9ea930160df7f20b302816b87a76c329ca8"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+   Compiling xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+   Compiling xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.45s
+note: Run script build phase 'Build Rust bridge' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'XBXRC' from project 'XBXRC')
+** BUILD SUCCEEDED **

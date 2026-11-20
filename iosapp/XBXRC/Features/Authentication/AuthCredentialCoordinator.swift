@@ -29,6 +29,8 @@ enum AuthRenewalFailureDisposition: String {
 
         if let bridgeError = error as? XboxBridgeError {
             switch bridgeError {
+            case .Query(let failure):
+                self = failure.retriable ? .retryable : .terminal
             case .RetryableAuthentication:
                 self = .retryable
             case .InvalidData, .Profile, .Data:

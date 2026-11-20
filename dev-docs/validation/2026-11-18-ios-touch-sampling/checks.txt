@@ -1,0 +1,6 @@
+最终源码检查：
+- 八个 Swift 文件 swift-format lint --strict 通过，采用四空格缩进。
+- project.pbxproj plutil -lint 通过。
+- check-streaming-session-boundary.sh 通过。
+- git diff --check 通过。
+- generic/platform=iOS 未签名 build 成功；实际设备运行由用户验收。

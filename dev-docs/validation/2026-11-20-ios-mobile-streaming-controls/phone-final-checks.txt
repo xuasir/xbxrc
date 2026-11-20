@@ -1,0 +1,8 @@
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (26.789 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testSignedOutLogoAndWideLoginButton]' passed (12.007 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' failed (13.594 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden]' passed (10.315 seconds).
+	 Executed 4 tests, with 1 failure (0 unexpected) in 62.705 (62.728) seconds
+	 Executed 4 tests, with 1 failure (0 unexpected) in 62.705 (62.750) seconds
+	 Executed 4 tests, with 1 failure (0 unexpected) in 62.705 (62.835) seconds
+** TEST FAILED **

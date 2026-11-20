@@ -1,0 +1,6 @@
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (25.515 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (42.864 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 68.379 (68.476) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 68.379 (68.478) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 68.379 (68.496) seconds
+** TEST EXECUTE SUCCEEDED **

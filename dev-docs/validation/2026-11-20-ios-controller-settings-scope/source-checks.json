@@ -1,0 +1,36 @@
+{
+  "sourceFiles": [
+    {
+      "path": "iosapp/XBXRC/Features/Controllers/ControllerView.swift",
+      "beforeSha256": "e1b3eb43a993812fc0cd9d98d705ca6e41186521db956f3cc8994dc30b61ae43",
+      "afterSha256": "8c5b241b551d0c7f141d06b54cc336fc5a292e43e126b42ee39ff8aca0781259"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobilePreferences.swift",
+      "beforeSha256": "a00ff391c8ee228825199426f4a2f1693e532ef75749cdb433ff17ca730204ed",
+      "afterSha256": "5ccd0260657a29353c21bc52506af5e3e7506d316de02ca68a997d5e4862eae3"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "beforeSha256": "d9815db201b749091681597f17c5dfd7b61ade0e0b025ae73cf7a3cedd693d2d",
+      "afterSha256": "e354fc108dfdc09ad207a50bb6a7ba2bf15a515b766f616e425d21a656019841"
+    },
+    {
+      "path": "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift",
+      "beforeSha256": "82d99f5fa743b68fa667428bd6f902982b2a311ac9ccf930fa83b43667c8c40d",
+      "afterSha256": "712538e9a2333fc197ab8708551f39007ce421c6575666b9725fb18584353ee1"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+      "beforeSha256": "25541aabe9a5013356e3003611612a9c13e6c8aa2143623c1f1241cc15bc495f",
+      "afterSha256": "8e223f7f27a530b0fcc08f5b8110d4d02d9d56d2ae053c8d4eb2b1d363c34098"
+    }
+  ],
+  "stagedDiffPreserved": true,
+  "stagedDiffSha256": "932a462abc222f8a1e4a0cb7208d0c774d239db12e999bfa3da7f3eced8bf0fb",
+  "screenshots": {
+    "controller-sections.png": "588d15485b8dc9b511cce2e36829df508a7ab1a6a0efafb604bac24c0200048f",
+    "controller-standard-touch-settings.png": "c783b55fa29271e75361d5709a23218de604f669f11164899b7d00f16076f130",
+    "forza-playground.png": "b65d7807e91c2d040047f2be8a31552400f10f2a8026d0e28a331830cf741035"
+  }
+}

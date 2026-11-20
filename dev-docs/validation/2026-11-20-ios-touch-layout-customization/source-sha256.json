@@ -1,0 +1,12 @@
+{
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutTemplate.swift": "9e8e2c25840f0b767b0c86c011f19d800bc35589ab57f9ee6926bd1917261d28",
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "2f3257f51d3d12141c15febf8ab6b5396dababe7b24f70daf90646f9dfd60230",
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift": "d4628978b05a760fcb041d2cd378ecac9201bf2421746e73036a588915a8a27a",
+  "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift": "39bbf2ea5738912305877072f689cb8671192a4fdbd28c194566c5337a406ff9",
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": "36288f3c42932462bd504ec19f0328ca0594cb04aa762dffa5081532dc782034",
+  "iosapp/XBXRC/Features/Controllers/ControllerView.swift": "481be153c0685cddc18dc825bc5d32ab8b9e25f3d593f9243380aa99a9c151b7",
+  "iosapp/XBXRC/Features/Settings/MobilePreferences.swift": "638dbfe30cfe4b175a4bf6e218fb65e0b6414d31aca3184d1dbf04854d8f6905",
+  "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": "55572bfe2498a058d0fb7a3aa057835d667bd1cc5a494a9f744531c1d9f9eef3",
+  "iosapp/XBXRCTests/TouchLayoutCustomizationTests.swift": "545900654bba5ab9e1ca5c2d5ce627a7b6812116d9fcf0685d62d459bbdc800f",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "cd9d3dd41195473ac0e39323f700665b6383f583effe7f7b5d53c54be0f79d12"
+}

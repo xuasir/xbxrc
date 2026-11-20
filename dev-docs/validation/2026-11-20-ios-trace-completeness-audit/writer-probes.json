@@ -1,0 +1,44 @@
+{
+  "automaticIssue": {
+    "recordsAfterFailedSuffix": 1,
+    "recordsAfterRuntimeFailureTerminal": 0
+  },
+  "lightweight": {
+    "retainedEvents": [
+      "fileOpened",
+      "terminalSelected"
+    ]
+  },
+  "manualCapture": {
+    "fileOpenedPresent": false,
+    "retainedEvents": [
+      "rtcHealthSnapshot"
+    ]
+  },
+  "openFailure": {
+    "activeFileExists": false,
+    "actualFiles": 0,
+    "after10BufferedRows": 21,
+    "first5BufferedRows": 11,
+    "reportedActiveFile": true
+  },
+  "pressureAfterFlush": {
+    "debugEvents": 0,
+    "keyEvents": 5000,
+    "noticeRows": 1,
+    "reportedDebugDropped": 1,
+    "unreportedDebugDropped": 49
+  },
+  "pressureBeforeResume": {
+    "configuredLimit": 4096,
+    "pendingKeyRows": 5000
+  },
+  "timestamp": {
+    "sourceToTraceDelayMs": 193.802001953125
+  },
+  "writeFailure": {
+    "bufferedRowsAfterFailedWrite": 0,
+    "eventPersisted": false,
+    "sequenceAfterFailedWrite": 2
+  }
+}

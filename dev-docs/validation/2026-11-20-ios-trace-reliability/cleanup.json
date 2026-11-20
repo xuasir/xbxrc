@@ -1,0 +1,151 @@
+{
+  "at": "2026-11-20T16:55:52.036516+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1",
+  "relatedProcessesFinished": true,
+  "removed": true,
+  "filesRemoved": 10319,
+  "logicalBytesRemoved": 1096953746,
+  "freeBytesBefore": 66764800000,
+  "freeBytesAfter": 67584000000,
+  "freeBytesDelta": 819200000,
+  "inventory": [
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/host-tests-final.log",
+      "bytes": 7101
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/device-build-verified.log",
+      "bytes": 88299
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/format-lint-closure.log",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/host-tests-verified.log",
+      "bytes": 6347
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/baseline-concurrent",
+      "bytes": 48863
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/format-lint.log",
+      "bytes": 1201
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/simulator-summary.json",
+      "bytes": 993
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/trace-tests-final.xcresult",
+      "bytes": 29561
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/simulator-tests-closure.log",
+      "bytes": 124687
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/device-build-final.log",
+      "bytes": 110410
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/trace-tests-closure.xcresult",
+      "bytes": 517399
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/baseline",
+      "bytes": 385856
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/final-source.json",
+      "bytes": 1284
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/host-build",
+      "bytes": 122303233
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/format-lint-final.log",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/core-gate-tests.log",
+      "bytes": 2401
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/base-analyzer-tests.log",
+      "bytes": 584
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/HostTests",
+      "bytes": 85323
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/trace-tests.xcresult",
+      "bytes": 544292
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/simulator-tests.log",
+      "bytes": 270126
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/baseline.json",
+      "bytes": 1176
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/DeviceDerivedData",
+      "bytes": 434443572
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/simulator-tests-final.log",
+      "bytes": 128823
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/host-tests.log",
+      "bytes": 4128
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/device-build.log",
+      "bytes": 172669
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/module-cache",
+      "bytes": 31169724
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/format-scope.json",
+      "bytes": 750
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/session-boundary.log",
+      "bytes": 40
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/SimulatorDerivedData",
+      "bytes": 506408675
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/device-build-closure.log",
+      "bytes": 92696
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/simulator-summary-closure.json",
+      "bytes": 994
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1/swift-format.json",
+      "bytes": 2539
+    }
+  ],
+  "retained": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "exists": true
+    },
+    {
+      "path": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json",
+      "exists": true
+    }
+  ]
+}

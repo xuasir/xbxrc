@@ -4,9 +4,9 @@ enum LibraryLayoutMetrics {
     static let heroMinimumHeight: CGFloat = 480
     static let heroMaximumHeight: CGFloat = 540
     static let heroViewportFraction: CGFloat = 0.54
-    static let posterWidth: CGFloat = 112
-    static let posterHeight: CGFloat = 168
-    static let posterCornerRadius: CGFloat = 14
+    static let posterWidth: CGFloat = 152
+    static let posterHeight: CGFloat = 152
+    static let posterCornerRadius: CGFloat = 8
     static let recentCardWidth: CGFloat = 250
     static let recentCardHeight: CGFloat = 148
     static let collectionPageSize = 24
@@ -42,7 +42,7 @@ struct RecentlyPlayedHeroCarousel: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
-            LibraryHeroGlassTransition()
+            LibraryHeroBackgroundFade()
                 .frame(height: 88)
                 .offset(y: 14)
 
@@ -101,7 +101,7 @@ struct RecentlyPlayedHeroCarousel: View {
             return
         }
         guard !Task.isCancelled,
-              let currentIndex = games.firstIndex(where: { $0.id == selection })
+            let currentIndex = games.firstIndex(where: { $0.id == selection })
         else {
             return
         }
@@ -128,33 +128,35 @@ struct LibraryShelf: View {
     let collection: LibraryCollection
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             NavigationLink {
-                LibraryCollectionView(collection: collection)
+                CloudLibraryBrowserView(page: CloudLibraryPage(collection: collection.kind))
                     .toolbar(.visible, for: .navigationBar)
             } label: {
                 HStack(spacing: 8) {
-                    Text(collection.title)
-                        .font(.title2.bold())
+                    Text(LocalizedStringKey(collection.title))
+                        .appFont(.section, weight: .semibold)
                         .foregroundStyle(.primary)
                     Spacer(minLength: 12)
-                    Text("\(collection.games.count)")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.secondary)
+                    Text("查看全部")
+                        .appFont(.bodySmall, weight: .medium)
+                        .foregroundStyle(AppThemePalette.textSecondary)
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(LibraryPressStyle())
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppLayoutPolicy.pageInset)
             .accessibilityLabel("\(collection.title)，共 \(collection.games.count) 个游戏")
             .accessibilityHint("打开完整列表")
 
+            if let source = collection.kind.requestSource {
+                CloudSourceRequestStateView(source: source, title: collection.title)
+                    .padding(.horizontal, AppLayoutPolicy.pageInset)
+            }
+
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 12) {
+                LazyHStack(alignment: .top, spacing: 16) {
                     ForEach(collection.homeGames) { game in
                         NavigationLink {
                             GameDetailView(game: game)
@@ -172,10 +174,11 @@ struct LibraryShelf: View {
                         .buttonStyle(LibraryPressStyle())
                         .accessibilityLabel(gameAccessibilityLabel(game))
                         .accessibilityHint("查看游戏详情")
+                        .accessibilityIdentifier("cloud-game-\(game.productID)")
                     }
                 }
             }
-            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .contentMargins(.horizontal, AppLayoutPolicy.pageInset, for: .scrollContent)
             .scrollIndicators(.hidden)
         }
     }
@@ -189,7 +192,7 @@ struct LibraryShelf: View {
 }
 
 struct LibraryCollectionView: View {
-    @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 42
+    @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 24
 
     let collection: LibraryCollection
     @State private var visibleGameCount = LibraryLayoutMetrics.collectionPageSize
@@ -199,18 +202,18 @@ struct LibraryCollectionView: View {
     }
 
     var body: some View {
-        ScrollView {
+        AppPageScroll {
             LazyVStack(spacing: 12) {
                 Text(collection.title)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 30)
-                    .padding(.bottom, 28)
+                    .font(.system(size: titleSize, weight: .medium))
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, AppLayoutPolicy.pageInset)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
                     .accessibilityAddTraits(.isHeader)
 
-                GlassEffectContainer(spacing: 12) {
+                Group {
                     LazyVStack(spacing: 12) {
                         ForEach(visibleGames) { game in
                             NavigationLink {
@@ -230,7 +233,7 @@ struct LibraryCollectionView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppLayoutPolicy.pageInset)
             }
             .padding(.bottom, 32)
         }
@@ -263,7 +266,7 @@ struct LibraryCollectionView: View {
 
     private func loadMoreIfNeeded(currentGame: CloudLibraryGame) {
         guard currentGame.id == visibleGames.last?.id,
-              visibleGameCount < collection.games.count
+            visibleGameCount < collection.games.count
         else {
             return
         }
@@ -299,7 +302,7 @@ private struct LibraryHeroSlide: View {
                     .clear,
                     .black.opacity(0.14),
                     .black.opacity(0.9),
-                    AppThemePalette.canvasTop.opacity(0.46),
+                    AppThemePalette.panel.opacity(0.46),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -307,13 +310,13 @@ private struct LibraryHeroSlide: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(game.name)
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .appFont(.hero, weight: .bold)
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.35), radius: 5, y: 2)
 
                 Text(recentMetadata)
-                    .font(.subheadline.weight(.medium))
+                    .appFont(.bodySmall, weight: .medium)
                     .foregroundStyle(.white.opacity(0.82))
                     .lineLimit(2)
 
@@ -328,7 +331,7 @@ private struct LibraryHeroSlide: View {
                             Text("\(progress.earnedGamerscore)")
                         }
                     }
-                    .font(.caption.bold().monospacedDigit())
+                    .appFont(.caption, weight: .bold).monospacedDigit()
                     .foregroundStyle(.white.opacity(0.9))
                 }
             }
@@ -362,14 +365,11 @@ private struct LibraryHeroSlide: View {
     }
 }
 
-private struct LibraryHeroGlassTransition: View {
+private struct LibraryHeroBackgroundFade: View {
     var body: some View {
         Rectangle()
-            .fill(AppThemePalette.canvasTop.opacity(0.035))
-            .glassEffect(
-                .regular.tint(AppThemePalette.canvasTop.opacity(0.08)),
-                in: Rectangle()
-            )
+            .fill(AppThemePalette.panel.opacity(0.035))
+            .appSurface(radius: 0)
             .opacity(0.16)
             .mask {
                 LinearGradient(
@@ -410,7 +410,7 @@ private struct LibraryPageIndicator: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .glassEffect(.regular, in: Capsule())
+        .appSurface(radius: 999)
         .animation(.easeInOut(duration: 0.2), value: selection)
         .accessibilityHidden(true)
     }
@@ -418,48 +418,7 @@ private struct LibraryPageIndicator: View {
 
 private struct LibraryRecentCard: View {
     let game: CloudLibraryGame
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            LibraryArtwork(game: game)
-
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.84)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(game.name)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(recentMetadata)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .lineLimit(1)
-            }
-            .padding(12)
-        }
-        .frame(
-            width: LibraryLayoutMetrics.recentCardWidth,
-            height: LibraryLayoutMetrics.recentCardHeight
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.14), radius: 8, y: 4)
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var recentMetadata: String {
-        [
-            LibraryPresentation.metadata(for: game, kind: .recent),
-            XboxPresentation.playtime(game.playtimeMinutes),
-        ].joined(separator: " · ")
-    }
+    var body: some View { LibraryPosterCard(game: game, kind: .recent) }
 }
 
 private struct LibraryPosterCard: View {
@@ -467,36 +426,19 @@ private struct LibraryPosterCard: View {
     let kind: LibraryCollectionKind
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            LibraryArtwork(game: game)
-                .frame(
-                    width: LibraryLayoutMetrics.posterWidth,
-                    height: LibraryLayoutMetrics.posterHeight
-                )
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: LibraryLayoutMetrics.posterCornerRadius,
-                        style: .continuous
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: LibraryLayoutMetrics.posterCornerRadius,
-                        style: .continuous
-                    )
-                        .stroke(.white.opacity(0.16), lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.13), radius: 7, y: 3)
-
-            Text(game.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
+        VStack(alignment: .leading, spacing: 8) {
+            CloudGameRemoteImage(
+                candidates: [game.tileURL, game.artworkURL, game.posterURL].compactMap { $0 },
+                contentMode: .fill
+            )
+            .frame(
+                width: LibraryLayoutMetrics.posterWidth, height: LibraryLayoutMetrics.posterHeight
+            )
+            .clipShape(RoundedRectangle(cornerRadius: LibraryLayoutMetrics.posterCornerRadius))
+            Text(game.name).appFont(.bodySmall, weight: .medium)
+                .foregroundStyle(AppThemePalette.textPrimary).lineLimit(2)
             Text(LibraryPresentation.metadata(for: game, kind: kind))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .appFont(.caption, weight: .regular).foregroundStyle(AppThemePalette.textSecondary)
                 .lineLimit(1)
         }
         .frame(width: LibraryLayoutMetrics.posterWidth, alignment: .leading)
@@ -530,23 +472,20 @@ private struct LibraryListRow: View {
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 108, alignment: .leading)
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(.separator.opacity(0.35), lineWidth: 0.5)
         }
-        .glassEffect(
-            .regular.interactive(),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .appSurface(radius: 8)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
     }
 
     private var artwork: some View {
         LibraryArtwork(game: game)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(.white.opacity(0.15), lineWidth: 0.5)
             }
     }
@@ -554,14 +493,14 @@ private struct LibraryListRow: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(game.name)
-                .font(.headline)
+                .appFont(.body, weight: .semibold)
                 .foregroundStyle(.primary)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(LibraryPresentation.metadata(for: game, kind: kind))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .appFont(.bodySmall, weight: .regular)
+                .foregroundStyle(AppThemePalette.textSecondary)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 

@@ -1,0 +1,17 @@
+{
+  "inspectionDate": "2026-11-13",
+  "documents": [
+    {
+      "file": "docs/references/official-touchscreen-protocol.md",
+      "localLinks": 26,
+      "result": "pass"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-13-official-touchscreen-protocol/README.md",
+      "localLinks": 5,
+      "result": "pass"
+    }
+  ],
+  "excerpts": 5,
+  "result": "pass"
+}

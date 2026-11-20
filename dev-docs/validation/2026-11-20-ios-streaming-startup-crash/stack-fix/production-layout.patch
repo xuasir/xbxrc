@@ -1,0 +1,162 @@
+--- before/crates/xbox-ios-bridge/src/streaming.rs
++++ after/crates/xbox-ios-bridge/src/streaming.rs
+@@ -703,24 +703,13 @@
+             .unwrap_or_else(|poison| poison.into_inner())
+             .clone();
+         let observer = IosStartupObserver::new(Arc::clone(&self.projection), generation);
+-        let plan = match scope
+-            .run("streamContext", Some(Duration::from_secs(90)), async {
+-                let access = self
+-                    .credentials
+-                    .access(self.access.target.as_str(), None, None)
+-                    .await?;
+-                let access = home_context::resolve_home_context(
+-                    access,
+-                    &self.credentials,
+-                    &self.target_id,
+-                    &self.settings,
+-                    &scope,
+-                )
+-                .await?;
+-                control_plan(&access, &self.target_id, &self.settings)
+-                    .map_err(|error| SessionFlowError::message(error.to_string()))
+-            })
+-            .await
++        // UniFFI 在 Swift 小栈线程上按值包装 future；重型阶段分别放到堆上。
++        let plan = match Box::pin(scope.run(
++            "streamContext",
++            Some(Duration::from_secs(90)),
++            self.prepare_start_plan(&scope),
++        ))
++        .await
+         {
+             Ok(plan) => plan,
+             Err(error) => {
+@@ -733,16 +722,14 @@
+             .plan
+             .lock()
+             .unwrap_or_else(|poison| poison.into_inner()) = Some(plan.clone());
+-        let execution = match self
+-            .flow
+-            .start_session_execution_with_scope(
+-                plan.clone(),
+-                |_| (),
+-                |_| (),
+-                Some(&observer),
+-                &scope,
+-            )
+-            .await
++        let execution = match Box::pin(self.flow.start_session_execution_with_scope(
++            plan.clone(),
++            |_| (),
++            |_| (),
++            Some(&observer),
++            &scope,
++        ))
++        .await
+         {
+             Ok(execution) => execution,
+             Err(error) => {
+@@ -795,7 +782,7 @@
+             .max(1_000);
+         let answer = tokio::time::timeout(
+             Duration::from_millis(timeout_ms),
+-            self.flow.exchange_offer(&session_id, None, &sdp, restart),
++            Box::pin(self.flow.exchange_offer(&session_id, None, &sdp, restart)),
+         )
+         .await
+         .map_err(|_| {
+@@ -827,8 +814,10 @@
+         self.ensure_remote_session_active(&session_id)?;
+         let answer = tokio::time::timeout(
+             Duration::from_secs(10),
+-            self.flow
+-                .exchange_offer(&session_id, Some(&kind), &sdp, false),
++            Box::pin(
++                self.flow
++                    .exchange_offer(&session_id, Some(&kind), &sdp, false),
++            ),
+         )
+         .await
+         .map_err(|_| XboxStreamingError::Remote("mediaNegotiationTimeout".into()))?
+@@ -878,7 +867,7 @@
+             .unwrap_or(0);
+         tokio::time::timeout(
+             Duration::from_secs(10),
+-            self.flow.refresh_session_observation(&session_id),
++            Box::pin(self.flow.refresh_session_observation(&session_id)),
+         )
+         .await
+         .map_err(|_| XboxStreamingError::Network("resumeObservationTimeout".into()))?;
+@@ -921,8 +910,7 @@
+             ensure_generation(&self.generation, generation)?;
+             state.active_signaling_restart
+         };
+-        self.flow
+-            .submit_ice(&session_id, &candidates, restart)
++        Box::pin(self.flow.submit_ice(&session_id, &candidates, restart))
+             .await
+             .map_err(map_session_flow_error)?;
+         ensure_generation(&self.generation, generation)
+@@ -954,9 +942,7 @@
+             tokio::time::sleep_until(next_poll_at).await;
+         }
+         ensure_generation(&self.generation, generation)?;
+-        let candidates = self
+-            .flow
+-            .poll_ice(&session_id, restart)
++        let candidates = Box::pin(self.flow.poll_ice(&session_id, restart))
+             .await
+             .map_err(map_session_flow_error)?;
+         let configuration_pending = self.flow.home_configuration_pending(&session_id).await;
+@@ -1101,6 +1087,27 @@
+ }
+ 
+ impl XboxStreamSession {
++    async fn prepare_start_plan(
++        &self,
++        scope: &SessionStartupScope,
++    ) -> Result<Plan, SessionFlowError> {
++        let access = self
++            .credentials
++            .access(self.access.target.as_str(), None, None)
++            .await?;
++        // 发现 future 的构造和轮询也保留小栈余量，避免压力随包装向下传递。
++        let access = Box::pin(home_context::resolve_home_context(
++            access,
++            &self.credentials,
++            &self.target_id,
++            &self.settings,
++            scope,
++        ))
++        .await?;
++        control_plan(&access, &self.target_id, &self.settings)
++            .map_err(|error| SessionFlowError::message(error.to_string()))
++    }
++
+     fn plan_snapshot(&self) -> Result<Plan, XboxStreamingError> {
+         self.plan
+             .lock()
+@@ -1621,6 +1628,10 @@
+ }
+ 
+ #[cfg(test)]
++#[path = "streaming/stack_tests.rs"]
++mod stack_tests;
++
++#[cfg(test)]
+ mod tests {
+     use super::*;
+     use xbox_streaming::policy::session::SessionAccessContext;
+@@ -1674,7 +1685,10 @@
+         assert!(!XboxStreamSettings::default().power_on);
+     }
+ 
+-    fn test_access_for_account(target: Target, account_id: &str) -> StreamingAccessContext {
++    pub(super) fn test_access_for_account(
++        target: Target,
++        account_id: &str,
++    ) -> StreamingAccessContext {
+         let access = StreamingAccessContext {
+             host: "cloud.example.com".to_string(),
+             bearer_token: "gs-token".to_string(),

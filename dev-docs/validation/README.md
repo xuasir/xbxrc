@@ -2,12 +2,17 @@
 
 2026-11-12 整理：保留当前待验资料、近期交付摘要和正式工具依赖。已替代的回放、重复截图、逐场景 JSON 与临时校验输出已清理。
 
+2026-11-18：[iOS 页面验收证据](ios-ui-evidence.md)从设计目录归档并精简，保留进行中批注、待验信息、关键界面与测试摘要，清理 375 个已替代文件，减少约 516 MiB。
+
 已跟踪的历史产物可从[清理前的 Git 基线](https://github.com/xuasir/xbxrc/tree/b864eb1733751b9a57ffdad65ee4bb496175bb71/dev-docs/validation)查询；文档中的历史证据链接绑定清理前文件。任务状态以[当前账本](../../docs/project-task.md)为准。
 
 ## 当前待验与专项资料
 
 | 入口 | 保留用途 |
 | --- | --- |
+| [iOS串流启动闪退修复](2026-11-20-ios-streaming-startup-crash/README.md) | SDP与UniFFI启动/轮询栈修复、20个544KiB案例、264项Rust与设备/PC编译验收、本机及实机复测清单 |
+| [iOS串流行为与设置对齐PC](2026-11-19-ios-streaming-pc-behavior-parity/README.md) | M0～M6交付、19组消费者、双端回归、模拟器trace、清理记录与实机验收清单 |
+| [iOS与PC串流主流程核对](2026-11-19-ios-pc-streaming-main-flow/README.md) | 当前工作区控制主链、媒体恢复、帧反馈、认证与xHome差异及验证摘要 |
 | [帧时钟、诊断调度与供给空窗](2026-11-10-browser-frame-freshness-clock-and-diagnostics/README.md) | 时钟校准、供给配对、CPU/GPU 完成代理与远端长测 |
 | [Worker 新鲜度设备分析](2026-11-10-worker-freshness-latest-trace-analysis.md) · [独立解码供给复验](2026-11-10-decoded-supply-latest-trace-analysis.md) | 当前供给分层、网络/恢复、提交长尾与原始指标复算 |
 | [独立解码供给夹具](../../docs/reports/2026-11-09-browser-decoded-frame-supply.md) · [分辨率与 Worker 回放](2026-11-10-session-resolution-worker-freshness/README.md) | 解码帧交付、能力回退、单帧在途与 latest-only 行为 |

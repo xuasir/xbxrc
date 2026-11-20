@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-20",
+  "unit": {
+    "passed": 91,
+    "failed": 0,
+    "new_customization_tests": 7,
+    "round": "r3"
+  },
+  "phone": {
+    "passed_unique": 5,
+    "failed_required_remaining": 0,
+    "accepted": [
+      {
+        "round": "r2",
+        "test": "testControllerPagesExposeTouchAndExternalGamepadControls"
+      },
+      {
+        "round": "r2",
+        "test": "testInternalLayoutSelectionPressDragAndReset"
+      },
+      {
+        "round": "r2",
+        "test": "testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial"
+      },
+      {
+        "round": "r4",
+        "test": "testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments"
+      },
+      {
+        "round": "r6",
+        "test": "testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft"
+      }
+    ]
+  },
+  "ipad": {
+    "passed": 2,
+    "failed": 0,
+    "round": "r7"
+  },
+  "iphoneos_build": "passed",
+  "checks": {
+    "swift_format": "passed",
+    "lint_fix": "passed",
+    "project_pbxproj": "passed",
+    "streaming_session_boundary": "passed",
+    "diff_check": "passed"
+  },
+  "evidence_images": 11,
+  "manual_followup": "真实本地/云游戏触控手感与外接手柄共同操作",
+  "final_screenshots": 10,
+  "diagnostic_images": 1
+}

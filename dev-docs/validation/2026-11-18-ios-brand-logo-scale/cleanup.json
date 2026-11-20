@@ -1,0 +1,43 @@
+{
+  "completedAt": "2026-11-18T08:27:15.538549+00:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-brand-logo-scale-20261118",
+  "removedItems": {
+    "r1": [
+      "r1/baseline",
+      "r1/derived",
+      "r1/failure-summary.json",
+      "r1/phone.log",
+      "r1/phone.xcresult",
+      "r1/round.json",
+      "r1/swift-format.json"
+    ],
+    "r2": [
+      "r2/ipad-attachments",
+      "r2/ipad-export.log",
+      "r2/ipad-summary.json",
+      "r2/ipad.log",
+      "r2/ipad.xcresult",
+      "r2/phone-attachments",
+      "r2/phone-export.log",
+      "r2/phone-pixel-check.json",
+      "r2/phone-summary.json",
+      "r2/phone.log",
+      "r2/phone.xcresult",
+      "r2/round.json"
+    ]
+  },
+  "removedFileCount": 4253,
+  "removedLogicalBytes": 652941415,
+  "removedAllocatedBytes": 664014848,
+  "freeBytesBefore": 82329600000,
+  "freeBytesAfter": 82739200000,
+  "observedFreeBytesIncrease": 409600000,
+  "temporaryRootExistsAfter": false,
+  "relatedBuildTestExportProcessesEnded": true,
+  "verifiedImageHashes": 3,
+  "verifiedSourceHashes": 3,
+  "retainedDependencyCache": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "retainedDependencyCacheExists": true,
+  "retainedEvidenceRoot": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-18-ios-brand-logo-scale",
+  "indexDiffSha256Preserved": true
+}

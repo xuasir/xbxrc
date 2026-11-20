@@ -1,0 +1,90 @@
+[
+  {
+    "path": "phone-streaming-two-rails-portrait.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "timestamp": 1795185508.149,
+    "sha256": "ff75f3e02fde4fbdfd7664136da0f8047d2b8762245e28c68a8d720bdd8dec30"
+  },
+  {
+    "path": "phone-streaming-picture-bottom-sheet.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185548.653,
+    "sha256": "65a9b9161f9d508cb8fd06d44e6e553981493fb540cf0746982c5a8e043739e2"
+  },
+  {
+    "path": "phone-streaming-diagnostics-upper-right.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185544.289,
+    "sha256": "cb50148deb01dd026ee0483ab5712d63a762f812f82dbe0fb3729aab773c58a5"
+  },
+  {
+    "path": "phone-streaming-two-rails-landscape.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185530.985,
+    "sha256": "f97398fc085433051c88b73d4591bee152395b1c942fdbd554d8fdb0a5da511b"
+  },
+  {
+    "path": "phone-streaming-hidden-landscape.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185527.356,
+    "sha256": "27ba67413e125366aa9100b95f759974ce5bf1076c6bcf2ee751219630506924"
+  },
+  {
+    "path": "phone-streaming-two-finger-gesture.png",
+    "round": "r1",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden()",
+    "timestamp": 1795185562.745,
+    "sha256": "52c4eb9d562c327074f88e5300509a6079a3b28331905b6467095bba086144a5"
+  },
+  {
+    "path": "ipad-streaming-two-rails-landscape.png",
+    "round": "r1",
+    "device": "ipad",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185646.807,
+    "sha256": "4efb819abaa0037d9f5db1405a8a725cf1d19edd200366030608c8494c5176f6"
+  },
+  {
+    "path": "ipad-streaming-hidden-landscape.png",
+    "round": "r1",
+    "device": "ipad",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "timestamp": 1795185642.458,
+    "sha256": "d8c9e367d6f659fcecf7debcc4cb21a299224bc42ee3a27b2e9d1c9c68a3424c"
+  },
+  {
+    "path": "phone-reading-root-hosts.png",
+    "round": "r2",
+    "device": "phone",
+    "test": "PCPageInteractionTests/testRootHeadersKeepBrandTitleAndNavigationHeightAligned()",
+    "timestamp": 1795186585.995,
+    "sha256": "9c3c72af9acc5ed7b1d4b9b945bc5a1ab9f2fbea8b12e1c88515dbfe70e9632e"
+  },
+  {
+    "path": "phone-signed-out-xbxrc-logo-bottom-login.png",
+    "round": "r2",
+    "device": "phone",
+    "test": "TouchLayoutInteractionTests/testSignedOutXBXRCLogoAndBottomLoginButton()",
+    "timestamp": 1795186594.804,
+    "sha256": "24194ef42252c69666009e65a70a1930509d19b15dbad89895294d71e834d95c"
+  },
+  {
+    "path": "ipad-signed-out-xbxrc-logo-bottom-login.png",
+    "round": "r2",
+    "device": "ipad",
+    "test": "TouchLayoutInteractionTests/testSignedOutXBXRCLogoAndBottomLoginButton()",
+    "timestamp": 1795186801.1,
+    "sha256": "1064bd27ab223e4d17dcd49233b0e1b8949c595bb142fd16de407898069e38a5"
+  }
+]

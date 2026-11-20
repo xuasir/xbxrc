@@ -25,19 +25,19 @@ enum HostPowerCommandState: Equatable, Sendable {
     var hostID: String? {
         switch self {
         case .idle: nil
-        case let .executing(hostID, _), let .failed(hostID, _, _): hostID
+        case .executing(let hostID, _), .failed(let hostID, _, _): hostID
         }
     }
 
     var command: HostPowerCommand? {
         switch self {
         case .idle: nil
-        case let .executing(_, command), let .failed(_, command, _): command
+        case .executing(_, let command), .failed(_, let command, _): command
         }
     }
 
     var errorMessage: String? {
-        if case let .failed(_, _, message) = self { message } else { nil }
+        if case .failed(_, _, let message) = self { message } else { nil }
     }
 }
 
@@ -72,19 +72,42 @@ private enum XboxDataSurface: Hashable {
 
 @MainActor
 final class XboxDataStore: ObservableObject {
+    func updateLibraryPlaytimes(_ items: [GameSummary]) {
+        games = items
+    }
+
     @Published private(set) var hosts: [XboxHostSummary] = []
     @Published private(set) var hostPhase: DataLoadPhase = .idle
     @Published private(set) var isRefreshingHosts = false
     @Published private(set) var hostErrorMessage: String?
+    @Published var hostFailure: SectionRequestFailure?
+    @Published var hostsUpdatedAt: Date?
     @Published private(set) var hostPowerCommandState: HostPowerCommandState = .idle
     @Published private(set) var games: [GameSummary] = []
     @Published private(set) var libraryPhase: DataLoadPhase = .idle
     @Published private(set) var isRefreshingLibrary = false
     @Published private(set) var libraryErrorMessage: String?
+    @Published private(set) var libraryContinuation: String?
+    private var librarySeenContinuations: Set<String> = []
 
     @Published private var achievementStates: [AchievementCacheKey: AchievementSurfaceState] = [:]
 
-    private let client: any XboxDataClient
+    @Published var friendsState = XboxNativeDataState<XboxFriendSummary>()
+    @Published var albumStates: [XboxAlbumKind: XboxNativeDataState<XboxAlbumMedia>] = [:]
+    @Published var installedLibraryStates: [String: XboxInstalledLibraryState] = [:]
+    @Published var playerProfiles: [String: XboxSingleDataState<XboxFriendSummary>] = [:]
+    @Published var playerHistoryStates: [String: XboxNativeDataState<GameSummary>] = [:]
+    @Published var libraryGameStates: [String: XboxSingleDataState<GameSummary>] = [:]
+    @Published var playerAchievementStates: [String: XboxNativeDataState<AchievementSummary>] = [:]
+    @Published var playerPlaytimeStates: [String: XboxSingleDataState<Int>] = [:]
+    var nativeRequestIDs: [String: UUID] = [:]
+
+    weak var authentication: AuthStore?
+    @Published var libraryUpdatedAt: Date?
+    @Published var libraryFailure: SectionRequestFailure?
+    var libraryAttempt: SectionRequestAttempt = .initial
+    @Published var historyPlaytimeStates: [String: XboxSingleDataState<Bool>] = [:]
+    let client: any XboxDataClient
     private let preferredGameLocaleProvider: (any PreferredGameLocaleProviding)?
     private var webTokenJSON: String?
     private var boundOwnerGeneration: UInt64?
@@ -231,6 +254,8 @@ final class XboxDataStore: ObservableObject {
             hostPhase = .loading
         }
         hostErrorMessage = nil
+        hostFailure = nil
+        isRefreshingHosts = true
         IOSRuntimeTrace.event(
             domain: "xbox-data",
             event: "hostsRefreshStarted",
@@ -244,12 +269,21 @@ final class XboxDataStore: ObservableObject {
             operationID: operationID
         )
         do {
-            let loadedHosts = try await client.loadHosts(webTokenJSON: requestToken)
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else { return }
+            let loadedHosts = try await performNativeQuery(
+                context: XboxDataRequestContext(
+                    token: requestToken, ownerGeneration: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey)
+            ) { token in
+                try await client.loadHosts(webTokenJSON: token)
+            }
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else { return }
             hosts = loadedHosts
+            hostsUpdatedAt = .now
             hostPhase = .loaded
             isRefreshingHosts = false
             IOSRuntimeTrace.state(
@@ -266,13 +300,18 @@ final class XboxDataStore: ObservableObject {
                 operationID: operationID
             )
         } catch {
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else { return }
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else { return }
             isRefreshingHosts = false
-            hostErrorMessage = "无法载入主机，请稍后重试"
-            hostPhase = hosts.isEmpty ? .failed : .loaded
+            hostFailure =
+                SectionRequestFailure.isCancellation(error)
+                ? nil : SectionRequestFailure(error: error)
+            hostErrorMessage = hostFailure?.message
+            hostPhase = hostsUpdatedAt != nil ? .loaded : hostFailure == nil ? .idle : .failed
             IOSRuntimeTrace.event(
                 domain: "xbox-data",
                 event: "hostsRefreshFailed",
@@ -315,6 +354,9 @@ final class XboxDataStore: ObservableObject {
             return
         }
         let taskID = UUID()
+        nativeRequestIDs["history-self-more"] = nil
+        invalidateHistoryPlaytimes()
+        isRefreshingLibrary = false
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             await self.performRefreshLibrary(reason: reason)
@@ -352,6 +394,8 @@ final class XboxDataStore: ObservableObject {
             libraryPhase = .loading
         }
         libraryErrorMessage = nil
+        libraryFailure = nil
+        libraryAttempt = libraryUpdatedAt == nil ? .initial : .refresh
         IOSRuntimeTrace.event(
             domain: "xbox-data",
             event: "libraryRefreshStarted",
@@ -367,11 +411,21 @@ final class XboxDataStore: ObservableObject {
 
         let loadedGames: [GameSummary]
         do {
-            loadedGames = try await client.loadGameLibrary(webTokenJSON: requestToken)
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
+            let page = try await performNativeQuery(
+                context: XboxDataRequestContext(
+                    token: requestToken, ownerGeneration: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey)
+            ) { token in
+                try await client.loadHistoryPage(
+                    webTokenJSON: token, targetID: nil, continuation: nil)
+            }
+            loadedGames = page.items
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else {
                 IOSRuntimeTrace.decision(
                     domain: "xbox-data",
                     event: "libraryRefreshDiscarded",
@@ -383,14 +437,19 @@ final class XboxDataStore: ObservableObject {
                 return
             }
             games = loadedGames
+            libraryContinuation = page.continuation
+            librarySeenContinuations = []
             libraryPhase = .loaded
-            isRefreshingLibrary = true
+            libraryUpdatedAt = .now
+            libraryFailure = nil
+            isRefreshingLibrary = false
             IOSRuntimeTrace.state(
                 domain: "xbox-data",
                 event: "libraryContentCommitted",
                 payload: [
                     "games": .integer(Int64(loadedGames.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .core,
                 importance: .key,
@@ -398,10 +457,12 @@ final class XboxDataStore: ObservableObject {
             )
 
         } catch {
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else {
                 IOSRuntimeTrace.decision(
                     domain: "xbox-data",
                     event: "libraryErrorDiscarded",
@@ -413,8 +474,13 @@ final class XboxDataStore: ObservableObject {
                 return
             }
             isRefreshingLibrary = false
-            libraryErrorMessage = "无法载入游戏，请稍后重试"
-            libraryPhase = games.isEmpty ? .failed : .loaded
+            libraryFailure =
+                SectionRequestFailure.isCancellation(error)
+                ? nil : SectionRequestFailure(error: error)
+            libraryErrorMessage = libraryFailure?.message
+            libraryPhase =
+                libraryUpdatedAt != nil
+                ? .loaded : SectionRequestFailure.isCancellation(error) ? .idle : .failed
             IOSRuntimeTrace.event(
                 domain: "xbox-data",
                 event: "libraryRefreshFailed",
@@ -422,7 +488,8 @@ final class XboxDataStore: ObservableObject {
                     error,
                     extra: [
                         "hadContent": .bool(hadContent),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .network,
@@ -432,72 +499,8 @@ final class XboxDataStore: ObservableObject {
             return
         }
 
-        do {
-            let playtimes = try await client.loadPlaytimes(
-                webTokenJSON: requestToken,
-                titleIDs: Array(loadedGames.prefix(100).map(\.titleID))
-            )
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
-                IOSRuntimeTrace.decision(
-                    domain: "xbox-data",
-                    event: "libraryRefreshDiscarded",
-                    payload: ["stage": "playtimes"],
-                    dimension: .lifecycle,
-                    importance: .key,
-                    operationID: operationID
-                )
-                return
-            }
-            merge(playtimes: playtimes)
-            isRefreshingLibrary = false
-            IOSRuntimeTrace.state(
-                domain: "xbox-data",
-                event: "libraryRefreshSucceeded",
-                payload: [
-                    "games": .integer(Int64(games.count)),
-                    "playtimes": .integer(Int64(playtimes.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                ],
-                dimension: .core,
-                importance: .key,
-                operationID: operationID
-            )
-        } catch {
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
-                IOSRuntimeTrace.decision(
-                    domain: "xbox-data",
-                    event: "libraryErrorDiscarded",
-                    payload: ["stage": "playtimes"],
-                    dimension: .lifecycle,
-                    importance: .debug,
-                    operationID: operationID
-                )
-                return
-            }
-            isRefreshingLibrary = false
-            libraryErrorMessage = "游戏已载入，游玩时长暂时无法更新"
-            libraryPhase = .loaded
-            IOSRuntimeTrace.event(
-                domain: "xbox-data",
-                event: "playtimeRefreshFailed",
-                payload: CloudLibraryDiagnostics.errorPayload(
-                    error,
-                    extra: [
-                        "games": .integer(Int64(games.count)),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
-                    ]
-                ),
-                dimension: .network,
-                importance: .key,
-                operationID: operationID
-            )
-        }
+        isRefreshingLibrary = false
+        await loadHistoryPlaytimes(refresh: true)
     }
 
     func achievements(for titleID: String) -> [AchievementSummary] {
@@ -635,15 +638,23 @@ final class XboxDataStore: ObservableObject {
             operationID: operationID
         )
         do {
-            let achievements = try await client.loadAchievements(
-                webTokenJSON: requestToken,
-                titleID: game.titleID,
-                locale: cacheKey.locale
-            )
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
+            let achievements = try await performNativeQuery(
+                context: XboxDataRequestContext(
+                    token: requestToken, ownerGeneration: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey)
+            ) { token in
+                try await client.loadAchievements(
+                    webTokenJSON: token,
+                    titleID: game.titleID,
+                    locale: cacheKey.locale
+                )
+            }
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else {
                 IOSRuntimeTrace.decision(
                     domain: "xbox-data",
                     event: "achievementsLoadDiscarded",
@@ -664,22 +675,25 @@ final class XboxDataStore: ObservableObject {
                 event: "achievementsLoadSucceeded",
                 payload: [
                     "achievements": .integer(Int64(achievements.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .core,
                 importance: .debug,
                 operationID: operationID
             )
         } catch {
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ) else {
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                )
+            else {
                 return
             }
             updateAchievementState(for: cacheKey) { state in
                 state.phase = hadContent ? .loaded : .failed
-                state.errorMessage = error.localizedDescription
+                state.errorMessage = SectionRequestFailure(error: error).message
             }
             IOSRuntimeTrace.event(
                 domain: "xbox-data",
@@ -687,7 +701,8 @@ final class XboxDataStore: ObservableObject {
                 payload: CloudLibraryDiagnostics.errorPayload(
                     error,
                     extra: [
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
                     ]
                 ),
                 dimension: .network,
@@ -708,7 +723,8 @@ final class XboxDataStore: ObservableObject {
                 heroURL: game.heroURL,
                 lastPlayedAt: game.lastPlayedAt,
                 playtimeMinutes: values[game.titleID] ?? game.playtimeMinutes,
-                achievementProgress: game.achievementProgress
+                achievementProgress: game.achievementProgress,
+                description: game.description, productID: game.productID, scid: game.scid
             )
         }
     }
@@ -757,8 +773,9 @@ final class XboxDataStore: ObservableObject {
             )
             return
         }
-        guard let commandID = host.commandID?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
+        guard
+            let commandID = host.commandID?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
             !commandID.isEmpty
         else {
             hostPowerCommandState = .failed(
@@ -794,21 +811,34 @@ final class XboxDataStore: ObservableObject {
             let result: HostPowerCommandResult
             switch command {
             case .powerOn:
-                result = try await client.powerOn(
-                    webTokenJSON: requestToken,
-                    consoleID: commandID
-                )
+                result = try await performNativeQuery(
+                    context: XboxDataRequestContext(
+                        token: requestToken, ownerGeneration: requestGeneration,
+                        fallbackOwnerKey: requestFallbackOwnerKey)
+                ) { token in
+                    try await client.powerOn(
+                        webTokenJSON: token,
+                        consoleID: commandID
+                    )
+                }
             case .powerOff:
-                result = try await client.powerOff(
-                    webTokenJSON: requestToken,
-                    consoleID: commandID
-                )
+                result = try await performNativeQuery(
+                    context: XboxDataRequestContext(
+                        token: requestToken, ownerGeneration: requestGeneration,
+                        fallbackOwnerKey: requestFallbackOwnerKey)
+                ) { token in
+                    try await client.powerOff(
+                        webTokenJSON: token,
+                        consoleID: commandID
+                    )
+                }
             }
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ),
-                  hostPowerOperationID == operationID
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                ),
+                hostPowerOperationID == operationID
             else { return }
             guard result.accepted else {
                 throw HostPowerCommandFailure.rejected
@@ -828,19 +858,21 @@ final class XboxDataStore: ObservableObject {
                 operationID: operationID
             )
             await refreshHosts(reason: .commandResult)
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ),
-                  hostPowerOperationID == operationID
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                ),
+                hostPowerOperationID == operationID
             else { return }
             hostPowerCommandState = .idle
         } catch {
-            guard ownsRequest(
-                generation: requestGeneration,
-                fallbackOwnerKey: requestFallbackOwnerKey
-            ),
-                  hostPowerOperationID == operationID
+            guard
+                ownsRequest(
+                    generation: requestGeneration,
+                    fallbackOwnerKey: requestFallbackOwnerKey
+                ),
+                hostPowerOperationID == operationID
             else { return }
             hostPowerCommandState = .failed(
                 hostID: host.id,
@@ -874,6 +906,17 @@ final class XboxDataStore: ObservableObject {
     }
 
     private func clearContent() {
+        friendsState = XboxNativeDataState()
+        playerProfiles = [:]
+        playerHistoryStates = [:]
+        libraryGameStates = [:]
+        playerAchievementStates = [:]
+        playerPlaytimeStates = [:]
+        libraryContinuation = nil
+        librarySeenContinuations = []
+        albumStates = [:]
+        installedLibraryStates = [:]
+        nativeRequestIDs = [:]
         hostRefreshTask?.cancel()
         hostRefreshTask = nil
         hostRefreshTaskID = nil
@@ -889,12 +932,18 @@ final class XboxDataStore: ObservableObject {
         hostPhase = .idle
         isRefreshingHosts = false
         hostErrorMessage = nil
+        hostFailure = nil
+        hostsUpdatedAt = nil
         hostPowerCommandState = .idle
         games = []
         libraryPhase = .idle
         isRefreshingLibrary = false
         libraryErrorMessage = nil
         achievementStates = [:]
+        libraryFailure = nil
+        libraryUpdatedAt = nil
+        libraryAttempt = .initial
+        historyPlaytimeStates = [:]
     }
 
     private func activateOnce(
@@ -915,6 +964,18 @@ final class XboxDataStore: ObservableObject {
             return
         }
         await operation()
+    }
+
+    func nativeQueryContext() -> XboxDataRequestContext? {
+        guard let webTokenJSON else { return nil }
+        return XboxDataRequestContext(
+            token: webTokenJSON, ownerGeneration: boundOwnerGeneration,
+            fallbackOwnerKey: fallbackOwnerKey
+        )
+    }
+
+    func ownsNativeQuery(_ context: XboxDataRequestContext) -> Bool {
+        ownsRequest(generation: context.ownerGeneration, fallbackOwnerKey: context.fallbackOwnerKey)
     }
 
     private func ownsRequest(
@@ -938,4 +999,96 @@ final class XboxDataStore: ObservableObject {
 
 private enum HostPowerCommandFailure: Error {
     case rejected
+}
+
+extension XboxDataStore {
+    func invalidateHistoryPlaytimes(owner: String = "self") {
+        nativeRequestIDs["history-times-\(owner)"] = nil
+        if historyPlaytimeStates[owner]?.isRefreshing == true {
+            historyPlaytimeStates[owner]?.failRequest(CancellationError())
+        }
+    }
+
+    func loadMoreLibrary() async {
+        let key = "history-self-more"
+        guard let context = nativeQueryContext(), let continuation = libraryContinuation,
+            nativeRequestIDs[key] == nil, !isRefreshingLibrary, libraryRefreshTask == nil
+        else { return }
+        let request = UUID()
+        nativeRequestIDs[key] = request
+        isRefreshingLibrary = true
+        libraryAttempt = .nextPage
+        libraryFailure = nil
+        libraryErrorMessage = nil
+        defer {
+            if nativeRequestIDs[key] == request {
+                nativeRequestIDs[key] = nil
+                isRefreshingLibrary = false
+            }
+        }
+        do {
+            let page = try await performNativeQuery(context: context) { token in
+                try await client.loadHistoryPage(
+                    webTokenJSON: token, targetID: nil, continuation: continuation)
+            }
+            guard ownsNativeQuery(context), nativeRequestIDs[key] == request else { return }
+            if let next = page.continuation,
+                next == continuation || librarySeenContinuations.contains(next)
+            {
+                throw XboxNativeQueryError.repeatedContinuation
+            }
+            librarySeenContinuations.insert(continuation)
+            var seen = Set<String>()
+            games = (games + page.items).filter { seen.insert($0.titleID).inserted }
+            libraryContinuation = page.continuation
+            libraryUpdatedAt = .now
+            await loadHistoryPlaytimes()
+        } catch {
+            guard ownsNativeQuery(context), nativeRequestIDs[key] == request else { return }
+            libraryFailure =
+                SectionRequestFailure.isCancellation(error)
+                ? nil : SectionRequestFailure(error: error)
+            libraryErrorMessage = libraryFailure?.message
+        }
+    }
+}
+
+extension XboxDataStore {
+    func performNativeQuery<Value: Sendable>(
+        context: XboxDataRequestContext, operation: (String) async throws -> Value
+    ) async throws -> Value {
+        let operationID = UUID().uuidString
+        IOSRuntimeTrace.event(
+            domain: "xbox-data", event: "sectionQueryStarted", payload: [:], dimension: .network,
+            importance: .debug, operationID: operationID)
+        do {
+            let value: Value
+            do { value = try await operation(context.token) } catch {
+                guard SectionRequestFailure(error: error).kind == .authentication,
+                    let authentication,
+                    let token = try await authentication.recoverDataToken(
+                        rejectedToken: context.token),
+                    ownsNativeQuery(context)
+                else { throw error }
+                value = try await operation(token)
+            }
+            try Task.checkCancellation()
+            IOSRuntimeTrace.event(
+                domain: "xbox-data", event: "sectionQuerySucceeded", payload: [:],
+                dimension: .network,
+                importance: .debug, operationID: operationID)
+            return value
+        } catch {
+            if ownsNativeQuery(context), SectionRequestFailure(error: error).kind == .authentication
+            {
+                authentication?.requireDataSignIn()
+            }
+            IOSRuntimeTrace.event(
+                domain: "xbox-data", event: "sectionQueryFailed",
+                payload: CloudLibraryDiagnostics.errorPayload(error), dimension: .network,
+                importance: .key,
+                operationID: operationID)
+            throw error
+        }
+    }
 }

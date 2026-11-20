@@ -1,0 +1,38 @@
+test_acknowledged_retries_and_partial_previous_write_preserve_exact_bytes (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_acknowledged_retries_and_partial_previous_write_preserve_exact_bytes) ... ok
+test_configuration_is_scoped_to_the_xcode_project (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_configuration_is_scoped_to_the_xcode_project) ... FAIL
+test_filename_project_and_batch_bounds_are_checked (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_filename_project_and_batch_bounds_are_checked) ... ok
+test_gaps_and_different_retries_leave_saved_bytes_intact (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_gaps_and_different_retries_leave_saved_bytes_intact) ... ok
+test_retention_orders_writer_timestamp_and_file_id (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_retention_orders_writer_timestamp_and_file_id) ... ok
+test_symlink_destination_cannot_redirect_trace_writes (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_symlink_destination_cannot_redirect_trace_writes) ... ok
+test_tcp_ack_and_health_follow_durable_append (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_tcp_ack_and_health_follow_durable_append) ... ERROR
+
+======================================================================
+ERROR: test_tcp_ack_and_health_follow_durable_append (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_tcp_ack_and_health_follow_durable_append)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/scripts/tests/test_dev_trace_collector.py", line 83, in test_tcp_ack_and_health_follow_durable_append
+    server = COLLECTOR.TraceServer(0, self.store)
+  File "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/scripts/dev-trace-collector.py", line 92, in __init__
+    super().__init__(("127.0.0.1", port), TraceHandler)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/socketserver.py", line 457, in __init__
+    self.server_bind()
+    ~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/socketserver.py", line 478, in server_bind
+    self.socket.bind(self.server_address)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+FAIL: test_configuration_is_scoped_to_the_xcode_project (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_configuration_is_scoped_to_the_xcode_project)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/scripts/tests/test_dev_trace_collector.py", line 105, in test_configuration_is_scoped_to_the_xcode_project
+    self.assertEqual(root, self.root / "runtime-logs" / "ios")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: PosixPath('/private/var/folders/py/9rf6bdds68140y9lkr[40 chars]ios') != PosixPath('/var/folders/py/9rf6bdds68140y9lkrhkz__400[32 chars]ios')
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.006s
+
+FAILED (failures=1, errors=1)

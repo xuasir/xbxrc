@@ -1,0 +1,8 @@
+{
+  "files": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift": "9c7fd57c96b7270e0cb7b0de1bd860a332f2553d902e830527150003f77a0197",
+    "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift": "089e9455b73d9f921ac7c1c85251ec8b06ae536b749ba08fb7bfa527f3b012c4",
+    "iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift": "7e1cd4ce28becf6275b47657f36bae526659cc9a2b20fe1b095d1a93a3af3367"
+  },
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-pc-behavior-parity/m4/r1"
+}

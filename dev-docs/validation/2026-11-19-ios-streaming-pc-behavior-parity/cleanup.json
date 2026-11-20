@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-19",
+  "timezone": "Asia/Shanghai",
+  "status": "complete",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-pc-behavior-parity",
+  "rounds": [
+    "m1/r1",
+    "m4/r1"
+  ],
+  "resultBundles": [
+    "m1/r1/credentials-repaired.xcresult",
+    "m1/r1/credentials.xcresult",
+    "m1/r1/m5-ipad-signed.xcresult",
+    "m1/r1/m5-phone-repaired.xcresult",
+    "m1/r1/m5-phone.xcresult",
+    "m1/r1/m6-ipad-final.xcresult",
+    "m1/r1/m6-ipad-r2.xcresult",
+    "m1/r1/m6-ipad-r3.xcresult",
+    "m1/r1/m6-ipad-r4.xcresult",
+    "m1/r1/m6-ipad-r5.xcresult",
+    "m1/r1/m6-ipad-r6.xcresult",
+    "m1/r1/m6-ipad-r7.xcresult",
+    "m1/r1/m6-ipad-r8.xcresult",
+    "m1/r1/m6-ipad-r9.xcresult",
+    "m1/r1/m6-ipad-unrestricted.xcresult",
+    "m1/r1/m6-ipad.xcresult",
+    "m1/r1/m6-phone-final.xcresult",
+    "m1/r1/m6-phone-r1.xcresult",
+    "m1/r1/m6-phone-r2.xcresult",
+    "m1/r1/m6-phone-r3.xcresult",
+    "m1/r1/m6-phone-r4.xcresult",
+    "m1/r1/parity-phone-retry.xcresult",
+    "m1/r1/parity-phone.xcresult"
+  ],
+  "derivedData": [
+    "m1/r1/derived",
+    "m1/r1/m6-derived"
+  ],
+  "clonedPackages": [
+    "m1/r1/m6-packages"
+  ],
+  "relatedSystemTemporaryItems": [
+    {
+      "path": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/_private_tmp_xbxrc-ios-streaming-pc-behavior-parity_m1_r1_m6-packages_workspace-state.json.lock",
+      "bytes": 0
+    }
+  ],
+  "processCheck": {
+    "command": "ps -axo pid,etime,command | rg 'xcodebuild|swift-frontend|swift-package|cargo|xcresulttool|XBXRC\\.app/|XBXRCUITests-Runner\\.app/|xbxrc-ios-streaming-pc-behavior-parity'",
+    "matchingBuildTestExportProcesses": 0,
+    "result": "仅检查命令自身；本任务构建、测试、导出及测试宿主均已结束"
+  },
+  "verifiedBeforeCleanup": {
+    "validationSourceHashes": 81,
+    "archivedLogs": 12,
+    "archivedScreenshots": 4,
+    "rawTraceFiles": 12,
+    "deviceChecks": {
+      "phone": 180,
+      "ipad": 180
+    }
+  },
+  "allocatedBytesBefore": 1888403456,
+  "apparentFileBytesBefore": 1836574610,
+  "diskFreeBytesBefore": 62668800000,
+  "retained": [
+    "仓库中的测试摘要、最终日志、失败诊断、4张必要截图、12份原始模拟器trace和源码快照",
+    "复用的Rust target与WebRTC共享依赖缓存"
+  ],
+  "startedAt": "2026-11-19T17:42:10+08:00",
+  "completedAt": "2026-11-19T17:42:12+08:00",
+  "temporaryRootExistsAfter": false,
+  "relatedSystemTemporaryItemsRemaining": [],
+  "allocatedBytesRemoved": 1888403456,
+  "diskFreeBytesAfter": 64716800000,
+  "observedFreeBytesDelta": 2048000000
+}

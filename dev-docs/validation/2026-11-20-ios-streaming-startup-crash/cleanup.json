@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-20",
+  "timezone": "Asia/Shanghai",
+  "status": "complete",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-startup-crash-20261120",
+  "rounds": [
+    "r1"
+  ],
+  "resultBundles": [
+    "r1/native-smoke-final.xcresult",
+    "r1/native-smoke-fixed.xcresult",
+    "r1/native-smoke-r2.xcresult",
+    "r1/native-smoke.xcresult"
+  ],
+  "derivedData": [
+    "r1/derived",
+    "r1/device-derived"
+  ],
+  "processCheck": "xcodebuild/swift/cargo/xcresulttool和测试宿主均已结束，进程列表仅匹配检查命令本身",
+  "allocatedBytesRemoved": 985247744,
+  "relatedTemporaryLocks": [
+    "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/_private_tmp_xbxrc-ios-streaming-startup-crash-20261120_r1_packages_workspace-state.json.lock",
+    "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/_private_tmp_xbxrc-ios-streaming-startup-crash-20261120_r1_packages_artifacts_webrtc_WebRTC.lock"
+  ],
+  "retainedWebRtcCache": {
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+    "bytes": 91025408,
+    "version": "137.7151.04",
+    "workspaceArtifactPathsRelocated": true
+  },
+  "retainedEvidence": "仓库证据目录中的12项测试摘要、最终日志、崩溃前后生产函数复现、19行原始trace与源码哈希",
+  "diskFreeBytesBefore": 69222400000,
+  "completedAt": "2026-11-20T10:12:49+08:00",
+  "temporaryRootExistsAfter": false,
+  "diskFreeBytesAfter": 70041600000,
+  "observedFreeBytesDelta": 819200000
+}

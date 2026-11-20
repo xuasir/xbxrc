@@ -1,0 +1,194 @@
+[
+  {
+    "name": "filters-1024-dark-accessibility-en",
+    "size": [
+      2048,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-dark-accessibility-zh",
+    "size": [
+      2048,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-dark-normal-en",
+    "size": [
+      2048,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-dark-normal-zh",
+    "size": [
+      2048,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-light-accessibility-en",
+    "size": [
+      2048,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-light-accessibility-zh",
+    "size": [
+      2048,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-light-normal-en",
+    "size": [
+      2048,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-1024-light-normal-zh",
+    "size": [
+      2048,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-dark-accessibility-en",
+    "size": [
+      780,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-dark-accessibility-zh",
+    "size": [
+      780,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-dark-normal-en",
+    "size": [
+      780,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-dark-normal-zh",
+    "size": [
+      780,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-light-accessibility-en",
+    "size": [
+      780,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-light-accessibility-zh",
+    "size": [
+      780,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-light-normal-en",
+    "size": [
+      780,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-390-light-normal-zh",
+    "size": [
+      780,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-dark-accessibility-en",
+    "size": [
+      640,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-dark-accessibility-zh",
+    "size": [
+      640,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-dark-normal-en",
+    "size": [
+      640,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-dark-normal-zh",
+    "size": [
+      640,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-light-accessibility-en",
+    "size": [
+      640,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-light-accessibility-zh",
+    "size": [
+      640,
+      1240
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-light-normal-en",
+    "size": [
+      640,
+      880
+    ],
+    "widthMatches": true
+  },
+  {
+    "name": "filters-320-light-normal-zh",
+    "size": [
+      640,
+      880
+    ],
+    "widthMatches": true
+  }
+]

@@ -6,32 +6,57 @@ use xbox_auth_flow::{
 };
 use xbox_webapi::{PeopleApi, ProfileApi, SocialApi, UserPresenceApi};
 
+mod catalog_sources;
 mod cloud_access;
 mod cloud_catalog;
+mod cloud_queries;
 mod data;
+mod installed_queries;
+mod personal;
+mod personal_queries;
+mod profile_queries;
+mod query_failure;
 mod streaming;
 
+pub use catalog_sources::fetch_catalog_source;
 pub use cloud_access::{
-    prepare_cloud_access, prepare_home_access, release_stream_access, CloudAccessResult,
-    HomeAccessResult,
+    prepare_cloud_access, prepare_home_access, release_stream_access, stream_cloud_regions,
+    CloudAccessResult, HomeAccessResult,
 };
 pub use cloud_catalog::{
     fetch_cloud_catalog, hydrate_cloud_catalog_page, XboxCloudCatalogMetadata,
     XboxCloudCatalogSnapshot, XboxCloudGame,
 };
+pub use cloud_queries::{
+    fetch_cloud_product_detail, fetch_cloud_wait_time, resolve_cloud_game,
+    XboxCloudLanguageSupport, XboxCloudProductDetail,
+};
 pub use data::{
     fetch_achievements, fetch_game_library, fetch_hosts, fetch_playtimes, power_off_console,
-    power_on_console, XboxAchievement, XboxAchievementProgress, XboxConsolePowerResult, XboxGame,
-    XboxHost, XboxHostStorageDevice, XboxPlaytime,
+    power_on_console, XboxAchievement, XboxAchievementProgress, XboxAchievementRequirement,
+    XboxConsolePowerResult, XboxGame, XboxHost, XboxHostStorageDevice, XboxPlaytime,
 };
+pub use installed_queries::{fetch_installed_section, XboxInstalledSection, XboxInstalledSource};
+pub use personal::{
+    fetch_friends, fetch_installed_library, fetch_media_page, XboxConsoleStorage, XboxFriend,
+    XboxInstalledGame, XboxInstalledLibrary, XboxMediaItem, XboxMediaPage,
+};
+pub use personal_queries::{
+    fetch_achievement_page, fetch_game_history_page, fetch_library_game, fetch_player_playtimes,
+    fetch_player_profile, XboxAchievementPage, XboxGameHistoryPage, XboxLibraryGame,
+    XboxPlayerPlaytimes,
+};
+pub use profile_queries::{fetch_profile_section, XboxProfileSource};
+pub use query_failure::{XboxQueryFailure, XboxQueryFailureKind, XboxSourceFailure};
 pub use streaming::{
     create_scoped_stream_session, create_stream_session, is_stream_message_handshake_ack,
     stream_control_bootstrap_payloads, stream_control_gamepad_added_payload,
     stream_control_gamepad_changed_payload, stream_data_channel_profiles,
-    stream_input_metadata_bootstrap_payload, stream_message_handshake_payload,
-    stream_post_handshake_payloads, XboxIceCandidate, XboxIceServer, XboxPreparedSignaling,
-    XboxRemoteIceBatch, XboxStreamDataChannelProfile, XboxStreamSession, XboxStreamingError,
-    XboxWebRtcPlan,
+    stream_input_frame_feedback_payload, stream_input_metadata_bootstrap_payload,
+    stream_message_handshake_payload, stream_post_handshake_payloads, XboxIceCandidate,
+    XboxIceServer, XboxPreparedSignaling, XboxRemoteIceBatch, XboxStartupProgress,
+    XboxStreamDataChannelProfile, XboxStreamFrameFeedback, XboxStreamSession,
+    XboxStreamingAuthUpdate, XboxStreamingError, XboxWebRtcPlan,
 };
 
 const XAL_TITLE_ID: &str = "000000004c20a908";
@@ -40,6 +65,8 @@ const XAL_CALLBACK_SCHEME: &str = "ms-xal-000000004c20a908";
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum XboxBridgeError {
+    #[error("Xbox query failed: {failure:?}")]
+    Query { failure: XboxQueryFailure },
     #[error("Retryable authentication failure: {0}")]
     RetryableAuthentication(String),
     #[error("Authentication failed: {0}")]

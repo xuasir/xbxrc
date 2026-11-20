@@ -1,0 +1,50 @@
+[
+  {
+    "beganEdges" : 602,
+    "callbacks" : 601,
+    "elapsedMilliseconds" : 95.87204168201424,
+    "offeredSamples" : 2402,
+    "processing" : {
+      "maximumMilliseconds" : 0.24904165184125304,
+      "meanMilliseconds" : 0.14930199606060524,
+      "p95Milliseconds" : 0.1615833316463977,
+      "p99Milliseconds" : 0.1710833457764238,
+      "totalCount" : 601,
+      "windowCount" : 601
+    },
+    "sourceHz" : 60,
+    "terminalEdges" : 602
+  },
+  {
+    "beganEdges" : 602,
+    "callbacks" : 601,
+    "elapsedMilliseconds" : 134.97445834218524,
+    "offeredSamples" : 3602,
+    "processing" : {
+      "maximumMilliseconds" : 0.968208332778886,
+      "meanMilliseconds" : 0.21315002735485686,
+      "p95Milliseconds" : 0.24033334921114147,
+      "p99Milliseconds" : 0.2971250214613974,
+      "totalCount" : 601,
+      "windowCount" : 601
+    },
+    "sourceHz" : 120,
+    "terminalEdges" : 602
+  },
+  {
+    "beganEdges" : 602,
+    "callbacks" : 601,
+    "elapsedMilliseconds" : 208.54779166984372,
+    "offeredSamples" : 6002,
+    "processing" : {
+      "maximumMilliseconds" : 1.0884583462029696,
+      "meanMilliseconds" : 0.3339573628127346,
+      "p95Milliseconds" : 0.4049583512824029,
+      "p99Milliseconds" : 0.542583322385326,
+      "totalCount" : 601,
+      "windowCount" : 601
+    },
+    "sourceHz" : 240,
+    "terminalEdges" : 602
+  }
+]

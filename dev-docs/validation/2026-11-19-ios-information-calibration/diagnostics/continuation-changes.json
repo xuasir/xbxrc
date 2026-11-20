@@ -1,0 +1,52 @@
+[
+  {
+    "file": "iosapp/DESIGN.md",
+    "added": 100,
+    "removed": 119
+  },
+  {
+    "file": "docs/project-task.md",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "file": "docs/rfcs/2026-11-19-ios-information-calibration.md",
+    "added": 4,
+    "removed": 3
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "added": 2,
+    "removed": 1
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Controllers/ControllerView.swift",
+    "added": 47,
+    "removed": 29
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+    "added": 2,
+    "removed": 1
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "added": 9,
+    "removed": 11
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "added": 1,
+    "removed": 1
+  },
+  {
+    "file": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "added": 40,
+    "removed": 0
+  },
+  {
+    "file": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "added": 23,
+    "removed": 0
+  }
+]

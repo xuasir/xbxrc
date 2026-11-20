@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-20",
+  "task": "2026-11-20-ios-mobile-streaming-controls",
+  "phone": {
+    "device": "iPhone 17e / iOS 27 Simulator",
+    "passedUITests": 4,
+    "layoutSource": "phone-final.xcresult: portrait + login passed",
+    "controlsSource": "phone-accepted.xcresult: complete controls + horizontal two-finger passed"
+  },
+  "ipad": {
+    "device": "iPad Pro 11-inch (M5) / iOS 27 Simulator",
+    "passedUITests": 3,
+    "source": "ipad-ui.xcresult: portrait + login + complete controls passed",
+    "gestureScope": "横向双指唤出由 iPhone 验收；iPad XCTest 通用 pinch 产生垂直漂移，按既有方向合同拒绝。"
+  },
+  "unitTests": {
+    "passed": 18,
+    "source": "unit-final.xcresult",
+    "includes": "17 streaming controls tests + diagnostic capture active flag and redaction lifecycle"
+  },
+  "deviceBuild": {
+    "result": "BUILD SUCCEEDED",
+    "target": "generic/platform=iOS",
+    "minimumOS": "26.0",
+    "signed": false,
+    "source": "device-final.log"
+  },
+  "checks": {
+    "frontendLintFix": "Passed",
+    "swiftFormatScoped": "Passed",
+    "streamingBoundary": "Passed",
+    "gitDiffCheck": "Passed"
+  },
+  "performance": {
+    "runtimeProof": "源码开销修正及界面回归；真实串流性能接续实机复测",
+    "changes": [
+      "根壳层、播放器、快捷栏与画面设置页按字段去重订阅",
+      "运行与诊断指标使用 1 Hz 叶子视图读取",
+      "相同画面参数跳过重复 Metal 同步绘制请求",
+      "快捷栏与诊断浮层采用静态透明色，移除视频背景 Material 合成",
+      "录制活动状态读取加锁布尔值，替换每秒扫描诊断目录",
+      "普通单指点击跳过双指拒绝日志"
+    ]
+  }
+}

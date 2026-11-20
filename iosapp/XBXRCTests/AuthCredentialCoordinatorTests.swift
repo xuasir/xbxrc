@@ -190,6 +190,74 @@ final class AuthCredentialCoordinatorTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testStreamingRenewalPersistsAndRetriesKeychainFailure() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let store = makeStore(keychain: keychain)
+        await store.restore()
+        let update = Self.streamingUpdate()
+        await keychain.failNextSave()
+        do {
+            _ = try await store.persistStreamingAuthUpdate(update, expectedOwnerGeneration: store.ownerGeneration)
+            XCTFail("Keychain failure should retain the pending credential update")
+        } catch {}
+        XCTAssertEqual(store.session?.refreshToken, "renewed-refresh")
+        let result = try await store.persistStreamingAuthUpdate(update, expectedOwnerGeneration: store.ownerGeneration)
+        guard case .committed = result else { return XCTFail("Expected persisted credentials") }
+        let stored = await keychain.currentSession()
+        XCTAssertEqual(stored?.refreshToken, "stream-refresh")
+        XCTAssertEqual(store.session?.webTokenJSON, "stream-web")
+        XCTAssertEqual(store.session?.cloudRegionHost, "cloud.example.com")
+    }
+
+    @MainActor
+    func testStreamingRenewalSynchronizesNewerHostCredentialsAndRejectsWrongOwner() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let store = makeStore(keychain: keychain)
+        await store.restore()
+        let update = Self.streamingUpdate(previous: "older-refresh")
+        let result = try await store.persistStreamingAuthUpdate(update, expectedOwnerGeneration: store.ownerGeneration)
+        guard case .synchronize(let session) = result else { return XCTFail("Expected current host credentials") }
+        XCTAssertEqual(session.refreshToken, "renewed-refresh")
+        XCTAssertEqual(store.session?.refreshToken, "renewed-refresh")
+        for (account, owner) in [("other-account", store.ownerGeneration), ("account", store.ownerGeneration + 1)] {
+            do {
+                _ = try await store.persistStreamingAuthUpdate(Self.streamingUpdate(account: account), expectedOwnerGeneration: owner)
+                XCTFail("Credential owner should be checked before persistence")
+            } catch { XCTAssertTrue(AuthStoreError.isStale(error)) }
+        }
+    }
+
+    @MainActor
+    func testSignOutInvalidatesStreamingCredentialSaveAndDeletesItsResult() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let store = makeStore(keychain: keychain)
+        await store.restore()
+        let owner = store.ownerGeneration
+        let gate = AuthTestGate()
+        await keychain.delayNextSave(gate)
+        let save = Task { @MainActor in
+            try await store.persistStreamingAuthUpdate(Self.streamingUpdate(), expectedOwnerGeneration: owner)
+        }
+        await gate.waitUntilEntered()
+        let signOut = Task { @MainActor in await store.signOut() }
+        for _ in 0 ..< 100 where store.ownerGeneration == owner { await Task.yield() }
+        XCTAssertNotEqual(store.ownerGeneration, owner)
+        await gate.open()
+        do { _ = try await save.value; XCTFail("Revoked renewal should discard its commit") }
+        catch { XCTAssertTrue(AuthStoreError.isStale(error)) }
+        await signOut.value
+        let stored = await keychain.currentSession()
+        XCTAssertNil(stored)
+        XCTAssertNil(store.session)
+    }
+
+    private static func streamingUpdate(previous: String = "renewed-refresh", account: String = "account") -> XboxStreamingAuthUpdate {
+        XboxStreamingAuthUpdate(revision: 1, accountId: account, ownerGeneration: 1,
+            previousRefreshToken: previous, authSession: AuthSession(refreshToken: "stream-refresh",
+                seedJson: "seed", webTokenJson: "stream-web", appLevel: 2))
+    }
+
     private static let storedSession = StoredAuthSession(
         refreshToken: "stored-refresh",
         seedJSON: "seed",
@@ -257,6 +325,8 @@ private actor AuthTestSessionStore: AuthSessionStoring {
     private var session: StoredAuthSession?
     private var remainingDeleteFailures: Int
     private var deletes = 0
+    private var nextSaveGate: AuthTestGate?
+    private var remainingSaveFailures = 0
 
     init(session: StoredAuthSession? = nil, deleteFailures: Int = 0) {
         self.session = session
@@ -268,8 +338,18 @@ private actor AuthTestSessionStore: AuthSessionStoring {
     }
 
     func save(_ session: StoredAuthSession) async throws {
+        let gate = nextSaveGate
+        nextSaveGate = nil
+        await gate?.wait()
+        if remainingSaveFailures > 0 {
+            remainingSaveFailures -= 1
+            throw AuthTestError.deleteFailed
+        }
         self.session = session
     }
+
+    func failNextSave() { remainingSaveFailures = 1 }
+    func delayNextSave(_ gate: AuthTestGate) { nextSaveGate = gate }
 
     func delete() async throws {
         deletes += 1

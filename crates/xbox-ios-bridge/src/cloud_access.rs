@@ -46,6 +46,7 @@ pub(crate) struct StreamingAccessContext {
     pub(crate) bearer_token: String,
     pub(crate) account_id: String,
     pub(crate) refresh_token: String,
+    pub(crate) auth_seed: Option<AuthFlowSeed>,
     pub(crate) target: Target,
     pub(crate) session_access: SessionAccessContext,
     pub(crate) force_region_ip: String,
@@ -158,6 +159,7 @@ pub async fn prepare_cloud_access(
         &output.auth_bundle.web_token,
     )?;
     context.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
+    context.auth_seed = Some(seed.clone());
     context.force_region_ip = force_region_ip;
     let access_handle = next_handle();
     let account_id = context.account_id.clone();
@@ -216,6 +218,7 @@ pub async fn prepare_home_access(
         &output.auth_bundle.web_token,
     )?;
     context.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
+    context.auth_seed = Some(seed.clone());
     context.force_region_ip = force_region_ip;
     context.fallback_turn = FallbackTurnProvider::new()
         .get_by_target_type(Target::Home.as_str())
@@ -245,6 +248,20 @@ pub async fn prepare_home_access(
 #[uniffi::export]
 pub fn release_stream_access(access_handle: String) -> Result<(), XboxBridgeError> {
     stream_access_registry()?.release(access_handle.trim(), now_ms())
+}
+
+#[uniffi::export]
+pub fn stream_cloud_regions(access_handle: String) -> Result<Vec<String>, XboxBridgeError> {
+    let access = load_stream_access(&access_handle)?;
+    if access.target != Target::Cloud {
+        return Err(XboxBridgeError::InvalidData("cloud access required".into()));
+    }
+    Ok(access
+        .session_access
+        .regions
+        .iter()
+        .map(|region| region.name.clone())
+        .collect())
 }
 
 pub(crate) fn load_stream_access(
@@ -326,6 +343,7 @@ fn resolve_cloud_access_context(
         bearer_token: bearer_token.to_string(),
         account_id,
         refresh_token: String::new(),
+        auth_seed: None,
         target: Target::Cloud,
         session_access,
         force_region_ip: String::new(),
@@ -375,6 +393,7 @@ fn resolve_home_access_context(
         bearer_token: bearer_token.to_string(),
         account_id,
         refresh_token: String::new(),
+        auth_seed: None,
         target: Target::Home,
         session_access,
         force_region_ip: String::new(),
@@ -551,7 +570,10 @@ impl StreamAccessRegistry {
             .leases
             .get_mut(handle)
             .ok_or_else(|| XboxBridgeError::InvalidData("streamAccessHandleInvalid".to_string()))?;
-        if lease.metadata.terminal.is_none() {
+        if matches!(
+            lease.metadata.terminal,
+            None | Some(StreamAccessLeaseTerminal::Expired)
+        ) {
             lease.revoke(StreamAccessLeaseTerminal::Released);
         }
         Ok(())
@@ -571,6 +593,120 @@ impl StreamAccessRegistry {
             }
         }
     }
+}
+
+/// 已绑定会话按账户/代次校验；短期访问租约仅限制新会话装配。
+pub(crate) fn validate_bound_stream_access(
+    handle: &str,
+    context: &StreamingAccessContext,
+) -> Result<(), XboxBridgeError> {
+    stream_access_registry()?.validate_bound(handle, context)
+}
+
+#[cfg(test)]
+pub(crate) fn register_test_stream_access(
+    mut context: StreamingAccessContext,
+) -> (String, StreamingAccessContext) {
+    let handle = next_handle();
+    let metadata = stream_access_registry().unwrap().insert(
+        handle.clone(),
+        context.clone(),
+        now_ms(),
+        u64::MAX,
+    );
+    context.owner_generation = metadata.owner_generation;
+    context.expires_at_ms = u64::MAX;
+    (handle, context)
+}
+
+impl StreamAccessRegistry {
+    fn validate_bound(
+        &self,
+        handle: &str,
+        context: &StreamingAccessContext,
+    ) -> Result<(), XboxBridgeError> {
+        let lease = self
+            .leases
+            .get(handle)
+            .ok_or_else(|| XboxBridgeError::InvalidData("streamAccessHandleInvalid".into()))?;
+        if lease.metadata.account_id != context.account_id
+            || lease.metadata.target != context.target
+            || lease.metadata.owner_generation != context.owner_generation
+            || self
+                .owner_generations
+                .get(&(
+                    context.account_id.clone(),
+                    context.target.as_str().to_string(),
+                ))
+                .copied()
+                != Some(context.owner_generation)
+            || matches!(
+                lease.metadata.terminal,
+                Some(StreamAccessLeaseTerminal::Released | StreamAccessLeaseTerminal::Superseded)
+            )
+        {
+            return Err(XboxBridgeError::InvalidData("streamAccessRevoked".into()));
+        }
+        Ok(())
+    }
+}
+
+pub(crate) async fn renew_bound_stream_access(
+    context: &StreamingAccessContext,
+) -> Result<(StreamingAccessContext, AuthSession), XboxBridgeError> {
+    let seed = context.auth_seed.clone().ok_or_else(|| {
+        XboxBridgeError::Authentication("streaming authentication seed unavailable".into())
+    })?;
+    let output = AuthFlow::new()
+        .refresh_and_finalize(RefreshAndFinalizeInput {
+            refresh_token: context.refresh_token.clone(),
+            seed: seed.clone(),
+            force_region_ip: context.force_region_ip.clone(),
+            include_streaming_tokens: true,
+        })
+        .await
+        .map_err(crate::authentication_error)?;
+    let mut renewed = match context.target {
+        Target::Cloud => resolve_cloud_access_context(
+            &output.auth_bundle.stream_tokens,
+            &output.auth_bundle.web_token,
+        )?,
+        Target::Home => resolve_home_access_context(
+            &output.auth_bundle.stream_tokens,
+            &output.auth_bundle.web_token,
+        )?,
+    };
+    if renewed.account_id != context.account_id {
+        return Err(XboxBridgeError::Authentication(
+            "streaming account changed during renewal".into(),
+        ));
+    }
+    let created_at_ms = now_ms();
+    let token = match context.target {
+        Target::Cloud => output
+            .auth_bundle
+            .stream_tokens
+            .get("xCloudToken")
+            .or_else(|| output.auth_bundle.stream_tokens.get("xcloudToken")),
+        Target::Home => output
+            .auth_bundle
+            .stream_tokens
+            .get("xHomeToken")
+            .or_else(|| output.auth_bundle.stream_tokens.get("xhomeToken")),
+    };
+    renewed.created_at_ms = created_at_ms;
+    renewed.expires_at_ms = cap_expiry_with_web_token(
+        resolve_access_expiry_ms(token, created_at_ms),
+        &output.auth_bundle.web_token,
+        created_at_ms,
+    );
+    renewed.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
+    renewed.auth_seed = Some(seed.clone());
+    renewed.owner_generation = context.owner_generation;
+    renewed.force_region_ip = context.force_region_ip.clone();
+    renewed.fallback_turn = context.fallback_turn.clone();
+    let auth = auth_session_from_bundle(output.auth_bundle, &seed)?;
+    Ok((renewed, auth))
 }
 
 impl StreamAccessLease {
@@ -677,6 +813,7 @@ mod tests {
             bearer_token: "gs-token".to_string(),
             account_id: account_id.to_string(),
             refresh_token: "refresh-token".to_string(),
+            auth_seed: None,
             target,
             session_access: SessionAccessContext {
                 gs_token: Some("gs-token".to_string()),
@@ -693,6 +830,42 @@ mod tests {
     }
 
     #[test]
+    fn bound_session_survives_lease_expiry_and_observes_explicit_revocation() {
+        let mut registry = StreamAccessRegistry::default();
+        registry.insert(
+            "handle".into(),
+            fixture_context("account", Target::Cloud),
+            0,
+            120_000,
+        );
+        let bound = registry.load("handle", None, None, None, 0).unwrap();
+        registry.expire_leases(120_000);
+        assert!(registry.load("handle", None, None, None, 120_000).is_err());
+        assert!(registry.validate_bound("handle", &bound).is_ok());
+        registry.release("handle", 120_000).unwrap();
+        assert!(registry.validate_bound("handle", &bound).is_err());
+    }
+
+    #[test]
+    fn replacing_expired_lease_revokes_bound_session_by_owner_generation() {
+        let mut registry = StreamAccessRegistry::default();
+        registry.insert(
+            "first".into(),
+            fixture_context("account", Target::Home),
+            0,
+            120_000,
+        );
+        let bound = registry.load("first", None, None, None, 0).unwrap();
+        registry.insert(
+            "second".into(),
+            fixture_context("account", Target::Home),
+            120_000,
+            240_000,
+        );
+        assert!(registry.validate_bound("first", &bound).is_err());
+    }
+
+    #[test]
     fn resolves_default_region_and_stable_xid() {
         let context = resolve_cloud_access_context(
             &json!({
@@ -701,9 +874,10 @@ mod tests {
                         "gsToken": "cloud-token",
                         "offeringSettings": {
                             "regions": [
-                                { "baseUri": "https://first.example.com" },
+                                { "name": "FIRST", "baseUri": "https://first.example.com" },
                                 {
                                     "isDefault": true,
+                                    "name": "DEFAULT",
                                     "baseUri": "https://default.example.com/"
                                 }
                             ]

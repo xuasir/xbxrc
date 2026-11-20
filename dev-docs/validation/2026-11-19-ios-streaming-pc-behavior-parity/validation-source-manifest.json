@@ -1,0 +1,330 @@
+{
+  "capturedAt": "2026-11-19T16:47:49.085633+08:00",
+  "finalPhoneTestStartedAt": 1795073253.645,
+  "files": {
+    "crates/xbox-ios-bridge/src/cloud_access.rs": {
+      "sha256": "529267998790f1d45805e578bfbba462cb4877b83cfde691e0dca5ca39dea0ff",
+      "modifiedAt": 1795054649.8806136
+    },
+    "crates/xbox-ios-bridge/src/lib.rs": {
+      "sha256": "f6ffc16b3e62bc6af77b844dd498cfbb1154a2f73d2ea821a222dfc4c3e9e74b",
+      "modifiedAt": 1795054649.89276
+    },
+    "crates/xbox-ios-bridge/src/streaming/credentials.rs": {
+      "sha256": "c22f5973a81ab2878e180b11420c78135d8b39b30b30ab559777decafa0ea687",
+      "modifiedAt": 1795055839.029751
+    },
+    "crates/xbox-ios-bridge/src/streaming/frame_feedback.rs": {
+      "sha256": "4b2026a556875fa806d1c7707a491a042b4acc61682ea9c8c9f69d62db8d6725",
+      "modifiedAt": 1794969233.3563297
+    },
+    "crates/xbox-ios-bridge/src/streaming/home_context.rs": {
+      "sha256": "8d426a7d8173de4895d9f06bb3ed878f6dcd87a432182b5a62ed7a1c1b690fbe",
+      "modifiedAt": 1795055839.0326042
+    },
+    "crates/xbox-ios-bridge/src/streaming/startup.rs": {
+      "sha256": "044490fd78687f8ca9597a5d8109129484362d5ee679e673b8cb0d383c35f055",
+      "modifiedAt": 1794878037.4981532
+    },
+    "crates/xbox-ios-bridge/src/streaming.rs": {
+      "sha256": "18cd8085b39de4310ad57f179db4f607a91ced833feb05365696b3620126b45d",
+      "modifiedAt": 1795072904.796735
+    },
+    "crates/xbox-streaming/src/session/flow.rs": {
+      "sha256": "445f692d908124e2d087d999b229ec2a0ef37faae72d22f217aabc5403f11e72",
+      "modifiedAt": 1795064893.6378806
+    },
+    "crates/xbox-streaming/src/session/recovery/observation.rs": {
+      "sha256": "28bbf0f9e57d6473e235e152d9a6f8c2ce399deab7176b075165a9e2fba8efb7",
+      "modifiedAt": 1795065743.4464014
+    },
+    "crates/xbox-streaming/src/session/recovery/quality.rs": {
+      "sha256": "4a856704688294564745e5abe9af853079bc3f137031853e99ec12adb579ac27",
+      "modifiedAt": 1795068063.9972982
+    },
+    "crates/xbox-streaming/src/session/recovery/supervision.rs": {
+      "sha256": "4557d41ff24d0893a88d14c010fb6b8c560a8821457917c41f736d69823c41bd",
+      "modifiedAt": 1795072904.82312
+    },
+    "crates/xbox-streaming/src/session/recovery/supervision.test.rs": {
+      "sha256": "df95ced73fcb700ae92e70c93e9ba45f42e21b82baeba7fdaf0b19cc6855af73",
+      "modifiedAt": 1795071342.8630564
+    },
+    "crates/xbox-streaming/src/session/recovery.rs": {
+      "sha256": "d3bba458e6b170cb8a35658f815a9c20609856f79d481fd2f2be737e0e730cd8",
+      "modifiedAt": 1795065743.4531503
+    },
+    "crates/xbox-streaming-protocol/src/frame_feedback.rs": {
+      "sha256": "a77967035448ea140575a7c28897a17c1023abca32a7eadaf443309153f1dd8f",
+      "modifiedAt": 1794969233.3694417
+    },
+    "crates/xbox-streaming-protocol/src/lib.rs": {
+      "sha256": "91105c8403873fb9d8c6e3e16c3782b088e0f9e3ceee8d93de6365747f2e36ff",
+      "modifiedAt": 1794969233.3695776
+    },
+    "iosapp/XBXRC/Features/Authentication/AuthCredentialCoordinator.swift": {
+      "sha256": "611e457a02b25e4926ecb371acdeba3807718a10439c6259bfb37aa6094ddf3a",
+      "modifiedAt": 1795053239.9860837
+    },
+    "iosapp/XBXRC/Features/Authentication/AuthStore.swift": {
+      "sha256": "6ee4a380a20ab28c0fb68c286e272c72451ce296c098f2d1c2764bf511ec4e02",
+      "modifiedAt": 1795055500.4762268
+    },
+    "iosapp/XBXRC/Features/Authentication/WebAuthenticationPresenter.swift": {
+      "sha256": "d4d93be8535b19ee06f315cae80035046b037bc7794b7ec9d33b0ad21e35d180",
+      "modifiedAt": 1794792309.0010421
+    },
+    "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift": {
+      "sha256": "0b480f41bc36c77a49557087e100064d40e996864b3215cca3b249f230c2b5e1",
+      "modifiedAt": 1794963776.8815575
+    },
+    "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift": {
+      "sha256": "5fab2fba013f79805b582c0bebd2178f657673b73796ecb06d25bfe248eb9196",
+      "modifiedAt": 1795055052.6718407
+    },
+    "iosapp/XBXRC/Features/Settings/MobileControllerTools.swift": {
+      "sha256": "369a8b8484f049f5a87d4c0d849768ca6f35d884042882db36563b4a09e9ad7e",
+      "modifiedAt": 1794968750.387864
+    },
+    "iosapp/XBXRC/Features/Settings/MobilePreferences.swift": {
+      "sha256": "a00ff391c8ee228825199426f4a2f1693e532ef75749cdb433ff17ca730204ed",
+      "modifiedAt": 1795057231.1390707
+    },
+    "iosapp/XBXRC/Features/Settings/MobileSettingsControls.swift": {
+      "sha256": "c808b975fca213cddd4fee6e354bb02160381ac866816ddd4d4622aa2367f698",
+      "modifiedAt": 1794968643.244917
+    },
+    "iosapp/XBXRC/Features/Settings/MobileSettingsModels.swift": {
+      "sha256": "d51955351091a21e3a0b9eb96634469eb264596748eae20106b9e565c8a3b2a1",
+      "modifiedAt": 1794879375.9946415
+    },
+    "iosapp/XBXRC/Features/Settings/MobileTurnSettingsView.swift": {
+      "sha256": "3342b049dd7a464b52a7091b1bdd0dcd928afbba6d8bd45b07a0e703753eb1d2",
+      "modifiedAt": 1794968643.2689915
+    },
+    "iosapp/XBXRC/Features/Settings/SettingsPersistence.swift": {
+      "sha256": "8e9084f2067a5a7b0432dec7bfd18b8d9ec3ad592573b8035328d82ecfdedb3a",
+      "modifiedAt": 1794879376.0510278
+    },
+    "iosapp/XBXRC/Features/Settings/SettingsRootView.swift": {
+      "sha256": "258e1afcf0483c5f967df81dbca3b966b5589bb28d6355f68df7e01672ef0bd4",
+      "modifiedAt": 1795061280.855487
+    },
+    "iosapp/XBXRC/Features/Settings/SettingsView.swift": {
+      "sha256": "e82a6034620d10ecc52bbe43638dcaedebe68e2a50eb1a11e6e56a5151d1b445",
+      "modifiedAt": 1794968643.218402
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift": {
+      "sha256": "34334d038b3361c365211a8c10deeb43d0b70983511fdd5ca0854fe1dd502832",
+      "modifiedAt": 1794972961.0987432
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift": {
+      "sha256": "6d2e0ac3712ad0a68b0ad9081f3172248adcb23726ba425761974dff9c4a9be4",
+      "modifiedAt": 1794990414.6149027
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchInputDiagnostics.swift": {
+      "sha256": "9a3f6df3136494c064d7f21be456a86dd178729401c72634233be047954f30b2",
+      "modifiedAt": 1794990310.9155705
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayout.swift": {
+      "sha256": "6af6b49f1e3d1f788ede90c7242f18cd12ba3324244e914bb54aa109e1b67143",
+      "modifiedAt": 1794973052.7884817
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutCatalog.swift": {
+      "sha256": "d23a837012c7b8a26a1753fdaff7f361092af60428182c63a9a67c52d81644be",
+      "modifiedAt": 1794972961.1396623
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift": {
+      "sha256": "29ccf7198fa02bbcf78894ad6e08c97c5f1487bd05927de1d17b5e02309b7779",
+      "modifiedAt": 1794973330.1788146
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift": {
+      "sha256": "e5d4508665b2be7ad97593332a0ef1a6c37d789f77b9525cf22ef7404f195806",
+      "modifiedAt": 1794973095.2635593
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutPlaygroundView.swift": {
+      "sha256": "6d67a862bb8ebea70dc8cb0641fb1395eb569538382983114747f42d12456aef",
+      "modifiedAt": 1794990131.553936
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutRecorder.swift": {
+      "sha256": "d92e44f0608e022efe5671606044b78e9ae4506ce595ee541d52c6bf9b2c2932",
+      "modifiedAt": 1795057307.5511084
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutResolver.swift": {
+      "sha256": "d5f67a63c72a890d10ce5a97dbf3153a52930b773aa7ea588525389d4d791ef8",
+      "modifiedAt": 1794972961.2053025
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": {
+      "sha256": "b8cda362ee94444b532df74e3dc251b8a24faf916af5efbeb879a28d584f721a",
+      "modifiedAt": 1794990131.5330207
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchSampleBatch.swift": {
+      "sha256": "1388b051577d631edeb8af8856638c6a58700fc79d836aabae863a3914d87e7b",
+      "modifiedAt": 1794990310.9584837
+    },
+    "iosapp/XBXRC/Platform/RustBridge/CloudProductDataClient.swift": {
+      "sha256": "02f97ecaf25159d7eef97bb8640042b37c0ae463d6bb58986629b16efe60f301",
+      "modifiedAt": 1794879376.173388
+    },
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": {
+      "sha256": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+      "modifiedAt": 1795072923.9562826
+    },
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": {
+      "sha256": "71165b2293d7f9d34c8867b3d7f97fa67ef53c120b2138dc8135ab80b9e00eb8",
+      "modifiedAt": 1795072923.9716022
+    },
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": {
+      "sha256": "be734f094e36ae769981345bff4c492b13e1f099618ce723f1e052b0dca07897",
+      "modifiedAt": 1795072923.972986
+    },
+    "iosapp/XBXRC/Platform/RustBridge/Support/XBXRC-Bridging-Header.h": {
+      "sha256": "cd498a4091fd6811192777861938872c93b9c5e11ef961491e2e711947537f10",
+      "modifiedAt": 1792560235.6643598
+    },
+    "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift": {
+      "sha256": "9f29f4bcb67c94903218e60743834c3d6708f8909d37f720e2fdbe0293787e15",
+      "modifiedAt": 1795056597.975017
+    },
+    "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift": {
+      "sha256": "431fb177474d55972710b964824255e1928bb3a8bfdd6e65436679bd62bb940f",
+      "modifiedAt": 1795054153.936272
+    },
+    "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift": {
+      "sha256": "338624ffea4e0c94718fc41d344b69322e5d26ca347a3a6f8993c5984ef99b83",
+      "modifiedAt": 1795053316.5566213
+    },
+    "iosapp/XBXRC/Platform/RustBridge/XboxPersonalDataClient.swift": {
+      "sha256": "ea5fbf5483204fda4b51fc102333040a1f8be2d1c5b2e8ab3defae99868f9de7",
+      "modifiedAt": 1795056597.9687932
+    },
+    "iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift": {
+      "sha256": "0bbf0c6e0d98c9996e60ca7eaf557cf0f6ca92c70d6b34406318d6e2a1c2252d",
+      "modifiedAt": 1794969391.0147984
+    },
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": {
+      "sha256": "3a6fa1f65cfab5db12f80413748f825f2162e3b03f03eae8554b0162799afd3c",
+      "modifiedAt": 1795070940.1200025
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift": {
+      "sha256": "641d5aaf00216b833427f73cf24119b125e219f4a545c736ee25b6d92933a99c",
+      "modifiedAt": 1795057231.1627357
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": {
+      "sha256": "5f449087cfd2b91c5aa1c6f2ce9dc8c66d206b84faf209a1e4b1aa90b7f7e35e",
+      "modifiedAt": 1795073146.978807
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift": {
+      "sha256": "ced7829fb7e10a34e1a46d7d77ec81c25704bad4d5ce94e626f267b6ec3500ff",
+      "modifiedAt": 1795057631.046323
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleState.swift": {
+      "sha256": "cfe17f8d00696fff5dec909951b7968eff2120490d55c0a1ab1df4b1d07a7872",
+      "modifiedAt": 1792560235.666569
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift": {
+      "sha256": "721eb1951a4fd4dcdb8a8f424808b0e0946493eae747321e93d16c0012a788fc",
+      "modifiedAt": 1795072711.065267
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": {
+      "sha256": "e7970dc42b413432ffc854f7636f3863d1c6eb283991fdf8a0f869345656c0ca",
+      "modifiedAt": 1792560235.6671035
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": {
+      "sha256": "caa83cd155747187a07f61560808bdbe93dd64c3866bba6040e3f55c91ea3c03",
+      "modifiedAt": 1795072151.3373513
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": {
+      "sha256": "09848434750e8691fba3d2e27c23dce8d0bfe397f642c3f664080d5d167d275a",
+      "modifiedAt": 1795072150.6609337
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift": {
+      "sha256": "2a5f15bb1406200fbd50d39226b6d0fbb6e2af7536a31ecb92477b4193439f77",
+      "modifiedAt": 1795056164.7024117
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingKeyboardInput.swift": {
+      "sha256": "cbf5e769d24bc0ef04557437d35894028223482c06c2894034dfd613abe675ee",
+      "modifiedAt": 1795057231.11403
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": {
+      "sha256": "651fe944f1241b1e1a6bc95adbbdd780987f19415fa62120427452f6e8a76743",
+      "modifiedAt": 1795072150.606411
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": {
+      "sha256": "d9815db201b749091681597f17c5dfd7b61ade0e0b025ae73cf7a3cedd693d2d",
+      "modifiedAt": 1795067084.4408247
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": {
+      "sha256": "5d171c666652f3535ffc691060743fe5b11595eef2d070a30b29d47cc8bb9ab5",
+      "modifiedAt": 1795072757.0405746
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingSessionState.swift": {
+      "sha256": "6d2e3b35ffda1c29d2d3154cafa17339719b4cc88d770d18f65112aa82bfbdbb",
+      "modifiedAt": 1792560235.6688533
+    },
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": {
+      "sha256": "50f7d4f255bcc5846508e71b2670760d6ec416aabcbeef4eb80bfcad55cfb27f",
+      "modifiedAt": 1794879377.197396
+    },
+    "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift": {
+      "sha256": "237a0ce7ca6bd69f6f68a36ecf96a9f05b3384be7ec3b47456005ccd6c4272a7",
+      "modifiedAt": 1795067084.4250028
+    },
+    "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift": {
+      "sha256": "37c1b5af6538bda9f8604b354c145f93e3e448026ab06a0f043a2ecf753ce630",
+      "modifiedAt": 1795054094.7197304
+    },
+    "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift": {
+      "sha256": "82d99f5fa743b68fa667428bd6f902982b2a311ac9ccf930fa83b43667c8c40d",
+      "modifiedAt": 1795071062.0779278
+    },
+    "iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift": {
+      "sha256": "bd3d173b94b02b17e02442b37b9bee0630a9cab6c76fabc874e13a1c25fe1d6a",
+      "modifiedAt": 1795056216.4494014
+    },
+    "iosapp/XBXRCTests/TouchLayoutTests.swift": {
+      "sha256": "dcad2ce5d8fc52ec36ae9cd64096caf6b19677ae5b55f5d716daf0c7e6a2b8dc",
+      "modifiedAt": 1794990414.4910016
+    },
+    "iosapp/XBXRCTests/XBXRCTests.swift": {
+      "sha256": "7e83a812dff18b61abde37232e932800b712385a61e89b80d873e564eb9dd77f",
+      "modifiedAt": 1795073178.9356096
+    },
+    "iosapp/XBXRCUITests/SettingsInteractionTests.swift": {
+      "sha256": "6ed75432ff1d25444ecaf07f07c98b8b28dcf5857bde428fb388c8adf9cbaed5",
+      "modifiedAt": 1794902926.7161124
+    },
+    "iosapp/scripts/check-streaming-session-boundary.sh": {
+      "sha256": "2c54ebd5720a6d1eda840bc9334ca6dd39f42980683bdf24a0f5b4c3e4dd8786",
+      "modifiedAt": 1795068063.5022151
+    },
+    "src/shared/rpc/streaming.ts": {
+      "sha256": "e1d16cb451889e1bf9160c6183d2d8d39c723c83026bc60923368671c22ebcb3",
+      "modifiedAt": 1795065808.171159
+    },
+    "src/streaming/runtime/browser-network-policy.ts": {
+      "sha256": "18531208538eec401f14e9b53b53f22cb216ff304d6deaf6a5fc9de2b8938e4b",
+      "modifiedAt": 1795064952.5506408
+    },
+    "src/streaming/runtime/browser-runtime.test.ts": {
+      "sha256": "52cdc00f965f960665c94e35037ab5c60b753cf14a1e1ae7a533751ebee0fb7c",
+      "modifiedAt": 1795071706.011722
+    },
+    "src/streaming/runtime/browser-runtime.ts": {
+      "sha256": "ab36e66bde07c79e7c85383c10a51433e9807c22b193433f6b3c12325ec29446",
+      "modifiedAt": 1795066260.9200704
+    },
+    "src/streaming/runtime/shared-supervision-baseline.test.ts": {
+      "sha256": "1ba23074967b62925df9f265f5488b5adbbd4e682579379aab1e1c7a32611b5f",
+      "modifiedAt": 1795071466.6618576
+    },
+    "src-tauri/src/mods/streaming/service.rs": {
+      "sha256": "dfd60373951f2c08ebe0a4213fe6e444c72ad149033d136c985d20a51008948c",
+      "modifiedAt": 1795064893.9066107
+    },
+    "src-tauri/src/mods/streaming/types.rs": {
+      "sha256": "9a61ff0c6c47000b2dd6987dae0e82128a34a75c35681450c5441ef42e904276",
+      "modifiedAt": 1795064857.4041324
+    }
+  }
+}

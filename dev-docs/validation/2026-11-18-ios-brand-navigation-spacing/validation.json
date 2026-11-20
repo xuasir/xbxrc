@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-18",
+  "actualBottomGapPt": 24,
+  "horizontalPageInsetPt": 24,
+  "logoSlotPt": 40,
+  "titleGapPt": 12,
+  "maximumNavigationWidthPt": 560,
+  "results": {
+    "phone": {
+      "passedTests": 4,
+      "result": "Passed"
+    },
+    "ipad": {
+      "passedTests": 4,
+      "result": "Passed"
+    },
+    "deviceBuild": "Passed",
+    "swiftFormat": "Passed",
+    "lintFix": "Passed",
+    "streamingBoundary": "Passed"
+  },
+  "images": [
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-navigation-spacing/ipad-settings.png",
+      "sha256": "88a130e55c5d1a8baeaeff4b34fea03af1a098c6ff421f87259024fa9fa5258e"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-navigation-spacing/phone-hosts.png",
+      "sha256": "73081056d8a7b11e5823ec8e4266e6494df535fbe1846cce6fb8c3aa7a9fc1f3"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-navigation-spacing/phone-final-row.png",
+      "sha256": "a4e64d4a7cd4aa8faacf5782f0dbed166b4b4c99c07d0a7b6c4d249ba53c9f51"
+    }
+  ],
+  "sources": [
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+      "sha256": "b27bd315759770e45dc887bd0efd9221ee55dba3166e2d21edabfe6a50d2cd8b"
+    },
+    {
+      "path": "iosapp/XBXRC/App/AppRootView.swift",
+      "sha256": "bfdc2b64d5eeeb533279f017083fdc9439fa54a7f113d776e621767ef7325b6d"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+      "sha256": "40d6fa0fe6b17daac9b355756e6dfa3a3dd74ab3828cbd5c05906293f1ac0eec"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+      "sha256": "94f56f7a284f94b8c85d536692c8cf8c21af069e84ee4b9ec7a95882d25c90ac"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+      "sha256": "829310c09207e81c59f3026b2c2f6cedb32f80c330a283ed84ba39ac79501660"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+      "sha256": "a26132addec235cbe87932831872fa45f14a770ce6825bf4f93b3ca8e740e4ad"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+      "sha256": "a7e2571654a896b83c4f7f61a18eac10a04930bdd2e6e96fac98a014319ef9fa"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "358d8e4b9a9f084f24afbb9b948fc0bd75cb84680372c2321ad45610b4af24f1"
+    },
+    {
+      "path": "iosapp/XBXRC/Resources/Assets.xcassets/XboxLogo.imageset/icon.svg",
+      "sha256": "e0aebb34fe6fd6e9fd8bc8889d4acc16a9a3eb2682ba6c19b3266b07e699f331"
+    },
+    {
+      "path": "iosapp/XBXRC/Resources/Assets.xcassets/XboxLogo.imageset/Contents.json",
+      "sha256": "bf314d9e7a0eb2ef3e08f730e0ef90eb12bf8d2d2bb5603e6b8460f9cabfa8a2"
+    },
+    {
+      "path": "src/assets/nav/xbox-logo.svg",
+      "sha256": "e0aebb34fe6fd6e9fd8bc8889d4acc16a9a3eb2682ba6c19b3266b07e699f331"
+    }
+  ]
+}

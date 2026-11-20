@@ -1,0 +1,34 @@
+
+/private/tmp/xbxrc-ios-streaming-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000000b60d48 <_uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start>:
+  b60d48: a9be6ffc     	stp	x28, x27, [sp, #-0x20]!
+  b60d4c: a9017bfd     	stp	x29, x30, [sp, #0x10]
+  b60d50: 910043fd     	add	x29, sp, #0x10
+  b60d54: d13383ff     	sub	sp, sp, #0xce0
+  b60d58: f90003ff     	str	xzr, [sp]
+  b60d5c: 910023e8     	add	x8, sp, #0x8
+  b60d60: 97ffd6d5     	bl	0xb568b4 <__ZN15xbox_ios_bridge9streaming56uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start28_$u7b$$u7b$closure$u7d$$u7d$17hfccf2a3993e20df1E>
+  b60d64: 14000002     	b	0xb60d6c <_uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start+0x24>
+  b60d68: 9431df46     	bl	0x17d8a80 <__ZN4core9panicking19panic_cannot_unwind17h1e870064807e292eE>
+  b60d6c: 3cc083e0     	ldur	q0, [sp, #0x8]
+  b60d70: 910083e0     	add	x0, sp, #0x20
+  b60d74: 3d800be0     	str	q0, [sp, #0x20]
+  b60d78: f9400fe8     	ldr	x8, [sp, #0x18]
+  b60d7c: f9001be8     	str	x8, [sp, #0x30]
+  b60d80: 393323ff     	strb	wzr, [sp, #0xcc8]
+  b60d84: 97fe7dd9     	bl	0xb004e8 <__ZN11uniffi_core3ffi10rustfuture15rust_future_new17h462899a26c482f30E>
+  b60d88: f90003e0     	str	x0, [sp]
+  b60d8c: 14000006     	b	0xb60da4 <_uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start+0x5c>
+  b60d90: 9431df3c     	bl	0x17d8a80 <__ZN4core9panicking19panic_cannot_unwind17h1e870064807e292eE>
+  b60d94: f81e03a0     	stur	x0, [x29, #-0x20]
+  b60d98: aa0103e8     	mov	x8, x1
+  b60d9c: b81e83a8     	stur	w8, [x29, #-0x18]
+  b60da0: 17fffffc     	b	0xb60d90 <_uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start+0x48>
+  b60da4: f94003e0     	ldr	x0, [sp]
+  b60da8: 913383ff     	add	sp, sp, #0xce0
+  b60dac: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+  b60db0: a8c26ffc     	ldp	x28, x27, [sp], #0x20
+  b60db4: d65f03c0     	ret

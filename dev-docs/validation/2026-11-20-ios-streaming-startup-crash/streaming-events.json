@@ -1,0 +1,116 @@
+{
+  "source": "runtime-trace-ios-1795139006155-1.jsonl",
+  "totalRows": 19,
+  "streamingEventCounts": {
+    "videoSurfaceSized": 1,
+    "displayPipelineReady": 1,
+    "videoSurfaceRendererReady": 1,
+    "videoFrameAcceptedToMailbox": 1,
+    "displaySubmit": 1,
+    "displayPresent": 1,
+    "displayFirstPresent": 1
+  },
+  "presentation": [
+    {
+      "seq": 13,
+      "tsMs": 1795139009779,
+      "event": "videoSurfaceSized",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "generation": 1,
+        "height": 180,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "renderer": "metalSimulatorI420Compatibility",
+        "width": 320
+      }
+    },
+    {
+      "seq": 14,
+      "tsMs": 1795139009798,
+      "event": "displayPipelineReady",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "renderer": "metalSimulatorI420Compatibility"
+      }
+    },
+    {
+      "seq": 15,
+      "tsMs": 1795139009799,
+      "event": "videoSurfaceRendererReady",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "frameHeight": 64,
+        "frameWidth": 64,
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "renderer": "metalSimulatorI420Compatibility"
+      }
+    },
+    {
+      "seq": 16,
+      "tsMs": 1795139009799,
+      "event": "videoFrameAcceptedToMailbox",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "frameHeight": 64,
+        "frameWidth": 64,
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "rotationDegrees": 0
+      }
+    },
+    {
+      "seq": 17,
+      "tsMs": 1795139009803,
+      "event": "displaySubmit",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "frameHeight": 64,
+        "frameWidth": 64,
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "submitCount": 1
+      }
+    },
+    {
+      "seq": 18,
+      "tsMs": 1795139009807,
+      "event": "displayPresent",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "frameHeight": 64,
+        "frameWidth": 64,
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "presentCount": 1
+      }
+    },
+    {
+      "seq": 19,
+      "tsMs": 1795139009807,
+      "event": "displayFirstPresent",
+      "payload": {
+        "attemptId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "generation": 1,
+        "operationId": "39B2EEB2-33DC-4A50-B540-66BD4BFBE3EF",
+        "peerEpoch": 1,
+        "platform": "ios",
+        "presentCount": 1
+      }
+    }
+  ]
+}

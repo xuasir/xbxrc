@@ -1,0 +1,11 @@
+{
+  "scope": "temporary validation harness",
+  "diagnostics": [
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:910:29: error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "    |                             `- error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:911:29: error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "    |                             `- error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit",
+    "** TEST FAILED **"
+  ],
+  "repair": "显式 self.measure 引用"
+}

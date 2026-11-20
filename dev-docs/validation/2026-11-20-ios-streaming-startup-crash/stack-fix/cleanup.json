@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-20",
+  "status": "complete",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-stack-fix-20261120",
+  "products": [
+    {
+      "path": "/private/tmp/xbxrc-ios-streaming-stack-fix-20261120",
+      "allocatedBytes": 436453376,
+      "entries": 4810,
+      "existsBefore": true,
+      "existsAfter": false
+    },
+    {
+      "path": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-20-11_11-21-0004.xcresult",
+      "allocatedBytes": 28672,
+      "entries": 9,
+      "existsBefore": true,
+      "existsAfter": false
+    }
+  ],
+  "allocatedBytesRemoved": 436482048,
+  "measurement": "unique inode st_blocks × 512; disk free change recorded separately",
+  "processCheck": {
+    "command": "ps -axo pid,etime,command",
+    "checkedAt": "2026-11-20T11:41:11+08:00",
+    "result": "Passed",
+    "matchingBuildTestExportProcesses": 0
+  },
+  "deviceBinaryHashVerifiedBeforeCleanup": true,
+  "sourceHashesVerifiedBeforeCleanup": true,
+  "evidenceFilesRetained": [
+    "bridge-tests.log",
+    "bridge-tests-final.log",
+    "rust-tests.log",
+    "device-build.log",
+    "baseline-layout.log",
+    "bindings-validation.log",
+    "bindings-validation.json",
+    "device-future-disassembly.txt",
+    "device-start-disassembly.txt",
+    "device-future-prologues.json",
+    "device-stack-layout.json",
+    "validation.json",
+    "source-manifest.json",
+    "production-layout.patch",
+    "setup-diagnostics.json",
+    "sandbox-diagnostic.txt",
+    "README.md"
+  ],
+  "diskFreeBytesBefore": 67174400000,
+  "originalReport": {
+    "path": "/Users/guo.xu/Downloads/XBXRC-2026-11-19-184559.ips",
+    "existsBefore": false,
+    "analysisRecordedSha256": "bce69acef365a5bf9d5b023edacddc63dd392579866aa631fb152260836d5c34",
+    "analysisArchive": "../device-crash-analysis.json",
+    "existsAfter": false,
+    "hashVerifiedThisCleanup": false,
+    "stateAtCleanup": "报告原路径在清理前已为空；分析摘录、机器码与原始哈希已保留"
+  },
+  "completedAt": "2026-11-20T11:41:34.103660+08:00",
+  "diskFreeBytesAfter": 67584000000,
+  "retained": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-20-ios-streaming-startup-crash/stack-fix",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-20-ios-streaming-startup-crash/device-crash-analysis.json",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-20-ios-streaming-startup-crash/diagnostics/device-ips-code-disassembly.txt",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen",
+      "existsAfter": true
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/browser",
+      "existsAfter": true
+    }
+  ]
+}

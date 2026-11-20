@@ -1,0 +1,34 @@
+{
+  "time": "2026-11-20T15:45:38.439537+08:00",
+  "userDecision": "Use existing Trace export; withdraw development collector",
+  "restoredFiles": [
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+      "matchesTaskBaseline": true
+    },
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "matchesTaskBaseline": true
+    },
+    {
+      "path": "iosapp/XBXRC.xcodeproj/xcshareddata/xcschemes/XBXRC.xcscheme",
+      "matchesTaskBaseline": true
+    },
+    {
+      "path": "iosapp/README.md",
+      "matchesTaskBaseline": true
+    },
+    {
+      "path": "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift",
+      "matchesTaskBaseline": true
+    }
+  ],
+  "removedFiles": [
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceDevelopmentSink.swift",
+    "iosapp/scripts/dev-trace-collector.py",
+    "iosapp/scripts/tests/test_dev_trace_collector.py",
+    "docs/rfcs/2026-11-20-ios-dev-trace-directory.md"
+  ],
+  "runningCollector": "none; only in-process test listener was started and has exited",
+  "remainingWorkflow": "export all Trace to runtime-logs/ios"
+}

@@ -1,0 +1,62 @@
+{
+  "checkedAt": "2026-11-20T11:43:10.531656+08:00",
+  "result": "Passed",
+  "parsedJsonFiles": 17,
+  "sourceHashes": {
+    "crates/xbox-ios-bridge/src/streaming.rs": true,
+    "crates/xbox-ios-bridge/src/streaming/stack_tests.rs": true
+  },
+  "taskState": "Validation Pending",
+  "publicFutureCount": 15,
+  "boxedStartupStageCount": 3,
+  "rustTestCount": 259,
+  "targetMarkdownLinksChecked": 83,
+  "missingLinks": [],
+  "temporaryPathsAbsent": true,
+  "retainedPathsPresent": true,
+  "historicalAnalysisFlagPreserved": true,
+  "originalReportExistsAtCleanup": false,
+  "logResults": {
+    "bridge-tests.log": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 1.03s",
+      "test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "bridge-tests-final.log": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 1.02s",
+      "test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "rust-tests.log": [
+      "test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s",
+      "test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+      "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "device-build.log": [
+      "** BUILD SUCCEEDED **"
+    ]
+  },
+  "artifactSha256": {
+    "README.md": "9e97e2a715aac12881320b20522cdb0a7074f9e9358e8d85506c10748c400f88",
+    "baseline-layout.log": "9d5a67c5c1856040d76d3c391953dff6a586d6cc51ee18a1a88483ba84077c9e",
+    "bindings-validation.json": "deba85273751b76de396c8c24d3b422ffe1cf6ada5b7802d8ab818818a2322b2",
+    "bindings-validation.log": "5b599cf0868e78a3d45a3a5d3f8146327dc38fe6ef4c8d93db10efdc02bf74ad",
+    "bridge-tests-final.log": "ecc40f80913eb3426661ae1d2a6913367e0cd9c9dda2de54220d564922f57316",
+    "bridge-tests.log": "928d00ddb348e53f67268ad0f5bbdaaf1e2b8babd072606abafbc071d8eb9936",
+    "cleanup.json": "a0dfc6206d15f7de489228399d9eeb819755c0e4c0b09b138d1aa47555a7162a",
+    "device-build.log": "2c123c937dd3f5594deabed46f59cc4ac924e15e5d908ccd5757e829166315a5",
+    "device-future-disassembly.txt": "9f060d2effea3a77fd5feaf44605cd8698b61a1e6f85e4676c5934acbd51b8b9",
+    "device-future-prologues.json": "c013db79bf7cc4c4579d38422c5fdbb43a4b1877c3489ac9ad5ef9e330a11ebf",
+    "device-stack-layout.json": "188bd3a8bb94bd9a3abf02416de99cc0e9a94da8247e178232d6757e9d8c30fa",
+    "device-start-disassembly.txt": "b412f5eca584bde0f0bb54d3f802f5855a51e9d4a619f43413f121413d69aa03",
+    "production-layout.patch": "75b77a115010a23400c476f97c1405c37f1e64f843fc8bb74f8445e41b3ff92d",
+    "rust-tests.log": "b5d2496baa6cfcdb7f3432290398edc377c74bd1017c04dab43638c18f6688c1",
+    "sandbox-diagnostic.txt": "54e7bee1600f798d333e3d06b94e31040c1b8916e438c0dc3674d8dad774cb1b",
+    "setup-diagnostics.json": "51b1418305319cb70cec75764b88db8e04b20396079327557a58c1b9aba00e47",
+    "source-manifest.json": "6d98db46a4bbd2ccdc0604bc039d588d2ea2b3e0234306b08478b47742445ed4",
+    "validation.json": "11d8592dd3c8979567fa3589546e245db05599a82773bf551db58bcaae15ff80"
+  }
+}

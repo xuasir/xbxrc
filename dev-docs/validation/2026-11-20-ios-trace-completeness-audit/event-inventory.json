@@ -1,0 +1,1847 @@
+[
+  {
+    "file": "iosapp/XBXRC/App/XBXRCApp.swift",
+    "line": 79,
+    "category": "event",
+    "event": "appLaunchStarted",
+    "domain": "ios-app",
+    "importance": "essential",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/App/XBXRCApp.swift",
+    "line": 169,
+    "category": "state",
+    "event": "scenePhaseChanged",
+    "domain": "ios-app",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 132,
+    "category": "event",
+    "event": "cacheDiskLoadStarted",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 151,
+    "category": "snapshot",
+    "event": "cacheDiskOverlayMissing",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 171,
+    "category": "decision",
+    "event": "cacheDiskOverlayRejected",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 251,
+    "category": "snapshot",
+    "event": "cacheDiskLoadSucceeded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 272,
+    "category": "event",
+    "event": "cacheDiskSaveStarted",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 289,
+    "category": "event",
+    "event": "cacheDiskSaveFailed",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 306,
+    "category": "event",
+    "event": "cacheDiskSaveSucceeded",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+    "line": 361,
+    "category": "event",
+    "event": "cacheOverlayCleared",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 68,
+    "category": "event",
+    "event": "cacheRestoreStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 88,
+    "category": "decision",
+    "event": "cacheRestoreSkipped",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 98,
+    "category": "decision",
+    "event": "cacheRestoreRejected",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 116,
+    "category": "decision",
+    "event": "cacheRestoreSkipped",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 134,
+    "category": "decision",
+    "event": "cacheRestoreScopeChanged",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 157,
+    "category": "snapshot",
+    "event": "cacheRestoreMiss",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 188,
+    "category": "snapshot",
+    "event": "cacheRestoreHit",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 209,
+    "category": "event",
+    "event": "cacheRestoreFailed",
+    "domain": "cloud-library",
+    "importance": "essential",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 231,
+    "category": "event",
+    "event": "catalogActivationStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 245,
+    "category": "decision",
+    "event": "catalogActivationSkipped",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 255,
+    "category": "decision",
+    "event": "catalogActivationSkipped",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 269,
+    "category": "decision",
+    "event": "catalogActivationRefreshRequired",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 294,
+    "category": "decision",
+    "event": "catalogRefreshCoalesced",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 344,
+    "category": "event",
+    "event": "catalogRefreshStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 377,
+    "category": "decision",
+    "event": "catalogAccessRenewRequired",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "recovery"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 414,
+    "category": "decision",
+    "event": "catalogRefreshDiscarded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 434,
+    "category": "snapshot",
+    "event": "catalogRemoteSnapshotReceived",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 526,
+    "category": "state",
+    "event": "catalogRefreshCommitted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 564,
+    "category": "decision",
+    "event": "catalogRefreshCancelled",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 579,
+    "category": "decision",
+    "event": "catalogRefreshDiscarded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 609,
+    "category": "event",
+    "event": "catalogRefreshFailed",
+    "domain": "cloud-library",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 630,
+    "category": "state",
+    "event": "libraryStateChanged",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 649,
+    "category": "snapshot",
+    "event": "activityOverlayStarted",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 665,
+    "category": "state",
+    "event": "activityOverlayCommitted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 689,
+    "category": "state",
+    "event": "preferredImageUpdated",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 711,
+    "category": "event",
+    "event": "libraryClearStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 728,
+    "category": "state",
+    "event": "libraryStateChanged",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 853,
+    "category": "event",
+    "event": "metadataHydrationStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 867,
+    "category": "decision",
+    "event": "metadataHydrationStopped",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 884,
+    "category": "event",
+    "event": "metadataPageStarted",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 904,
+    "category": "decision",
+    "event": "metadataPageDiscarded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 922,
+    "category": "snapshot",
+    "event": "metadataPageUnchanged",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 953,
+    "category": "decision",
+    "event": "metadataPageDiscarded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 979,
+    "category": "state",
+    "event": "metadataPageCommitted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 998,
+    "category": "decision",
+    "event": "metadataPageCancelled",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 1018,
+    "category": "event",
+    "event": "metadataPageFailed",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "line": 1039,
+    "category": "snapshot",
+    "event": "metadataHydrationCompleted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 137,
+    "category": "state",
+    "event": "dataStoreCleared",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 155,
+    "category": "decision",
+    "event": "dataSyncSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 165,
+    "category": "event",
+    "event": "dataSessionBound",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 199,
+    "category": "decision",
+    "event": "hostsRefreshCoalesced",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 230,
+    "category": "decision",
+    "event": "hostsRefreshSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 259,
+    "category": "event",
+    "event": "hostsRefreshStarted",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 289,
+    "category": "state",
+    "event": "hostsRefreshSucceeded",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 315,
+    "category": "event",
+    "event": "hostsRefreshFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 346,
+    "category": "decision",
+    "event": "libraryRefreshCoalesced",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 375,
+    "category": "decision",
+    "event": "libraryRefreshSkipped",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 399,
+    "category": "event",
+    "event": "libraryRefreshStarted",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 429,
+    "category": "decision",
+    "event": "libraryRefreshDiscarded",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 446,
+    "category": "state",
+    "event": "libraryContentCommitted",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 466,
+    "category": "decision",
+    "event": "libraryErrorDiscarded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 484,
+    "category": "event",
+    "event": "libraryRefreshFailed",
+    "domain": "xbox-data",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 560,
+    "category": "decision",
+    "event": "achievementsRefreshCoalesced",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 575,
+    "category": "decision",
+    "event": "achievementsLoadSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 608,
+    "category": "decision",
+    "event": "achievementsLoadSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 628,
+    "category": "event",
+    "event": "achievementsLoadStarted",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 658,
+    "category": "decision",
+    "event": "achievementsLoadDiscarded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 673,
+    "category": "state",
+    "event": "achievementsLoadSucceeded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 698,
+    "category": "event",
+    "event": "achievementsLoadFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 756,
+    "category": "decision",
+    "event": "hostPowerCommandSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 801,
+    "category": "event",
+    "event": "hostPowerCommandStarted",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 847,
+    "category": "event",
+    "event": "hostPowerCommandSucceeded",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 882,
+    "category": "event",
+    "event": "hostPowerCommandFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 957,
+    "category": "decision",
+    "event": "surfaceActivationSkipped",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 1061,
+    "category": "event",
+    "event": "sectionQueryStarted",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 1076,
+    "category": "event",
+    "event": "sectionQuerySucceeded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+    "line": 1086,
+    "category": "event",
+    "event": "sectionQueryFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 51,
+    "category": "state",
+    "event": "detailCarouselSelectionChanged",
+    "domain": "library-ui",
+    "importance": "debug",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 150,
+    "category": "event",
+    "event": "imageNetworkCoalesced",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 169,
+    "category": "event",
+    "event": "imageNetworkStarted",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 197,
+    "category": "event",
+    "event": "imageNetworkCompleted",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 214,
+    "category": "event",
+    "event": "imageNetworkCompleted",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 252,
+    "category": "event",
+    "event": "imageCacheHit",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 344,
+    "category": "decision",
+    "event": "imageCandidatesExhausted",
+    "domain": "image",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 365,
+    "category": "event",
+    "event": "imageCandidateStarted",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 388,
+    "category": "event",
+    "event": "imageCandidateSucceeded",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 404,
+    "category": "event",
+    "event": "imageCandidateFailed",
+    "domain": "image",
+    "importance": "key(default)",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 427,
+    "category": "decision",
+    "event": "imageCandidatesExhausted",
+    "domain": "image",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "line": 454,
+    "category": "event",
+    "event": "imageViewPhase",
+    "domain": "image",
+    "importance": "debug",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/SettingsView.swift",
+    "line": 319,
+    "category": "event",
+    "event": "exportRequested",
+    "domain": "trace",
+    "importance": "essential",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+    "line": 321,
+    "category": "state",
+    "event": "appearanceModeChanged",
+    "domain": "settings",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+    "line": 338,
+    "category": "state",
+    "event": "ephemeralLoginSessionChanged",
+    "domain": "settings",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+    "line": 527,
+    "category": "state",
+    "event": "appIconPresetChanged",
+    "domain": "settings",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+    "line": 544,
+    "category": "state",
+    "event": "cloudRegionPresetChanged",
+    "domain": "settings",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift",
+    "line": 628,
+    "category": "state",
+    "event": "streamingSettingChanged",
+    "domain": "settings",
+    "importance": "key",
+    "dimension": "core"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/LibraryComponents.swift",
+    "line": 82,
+    "category": "state",
+    "event": "heroSelectionNormalized",
+    "domain": "library-ui",
+    "importance": "debug",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/LibraryComponents.swift",
+    "line": 114,
+    "category": "event",
+    "event": "heroAutoAdvanced",
+    "domain": "library-ui",
+    "importance": "debug",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/LibraryComponents.swift",
+    "line": 247,
+    "category": "event",
+    "event": "collectionPageAppeared",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/LibraryComponents.swift",
+    "line": 277,
+    "category": "snapshot",
+    "event": "collectionPageExpanded",
+    "domain": "library-ui",
+    "importance": "debug",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 85,
+    "category": "event",
+    "event": "libraryPageAppeared",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 148,
+    "category": "state",
+    "event": "contentPresented",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 226,
+    "category": "event",
+    "event": "libraryActivationRequested",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 237,
+    "category": "snapshot",
+    "event": "libraryActivationCompleted",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 253,
+    "category": "event",
+    "event": "userRefreshRequested",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 267,
+    "category": "snapshot",
+    "event": "userRefreshCompleted",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "line": 412,
+    "category": "state",
+    "event": "skeletonPresented",
+    "domain": "library-ui",
+    "importance": "key",
+    "dimension": "frontend"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 84,
+    "category": "decision",
+    "event": "authRestoreSkipped",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 98,
+    "category": "event",
+    "event": "authRestoreStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 112,
+    "category": "state",
+    "event": "authRestoreSucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 130,
+    "category": "decision",
+    "event": "authRestoreSessionFound",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 148,
+    "category": "state",
+    "event": "authRestoreSucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 164,
+    "category": "event",
+    "event": "authRestoreFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 182,
+    "category": "decision",
+    "event": "authSignInSkipped",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 196,
+    "category": "event",
+    "event": "authSignInStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 239,
+    "category": "state",
+    "event": "authSignInSucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 257,
+    "category": "decision",
+    "event": "authSignInCancelled",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 274,
+    "category": "event",
+    "event": "authSignInFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 296,
+    "category": "decision",
+    "event": "profileActivationSkipped",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 317,
+    "category": "decision",
+    "event": "profileRefreshSkipped",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 327,
+    "category": "decision",
+    "event": "profileRefreshCoalesced",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 453,
+    "category": "decision",
+    "event": "cloudAccessBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 465,
+    "category": "event",
+    "event": "cloudAccessBoundaryStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 492,
+    "category": "event",
+    "event": "cloudAccessBoundarySucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 506,
+    "category": "event",
+    "event": "cloudAccessBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 526,
+    "category": "decision",
+    "event": "homeAccessBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 538,
+    "category": "event",
+    "event": "homeAccessBoundaryStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 565,
+    "category": "event",
+    "event": "homeAccessBoundarySucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 581,
+    "category": "event",
+    "event": "homeAccessBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 703,
+    "category": "event",
+    "event": "cloudRegionSessionRefreshStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 729,
+    "category": "decision",
+    "event": "authSignOutSkipped",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 745,
+    "category": "event",
+    "event": "authSignOutStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 782,
+    "category": "event",
+    "event": "authSignOutFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 794,
+    "category": "state",
+    "event": "authSignedOut",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 815,
+    "category": "event",
+    "event": "authSessionRenewStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 863,
+    "category": "decision",
+    "event": "authSessionRenewFailed",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 897,
+    "category": "state",
+    "event": "authSessionFallbackSucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "line": 911,
+    "category": "state",
+    "event": "authSessionRenewSucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "line": 222,
+    "category": "state",
+    "event": "streamControlsVisibilityChanged",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "input"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "line": 258,
+    "category": "state",
+    "event": "streamControlsVisibilityChanged",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "input"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+    "line": 465,
+    "category": "snapshot",
+    "event": "frameFeedback",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 636,
+    "category": "state",
+    "event": "streamingStateChanged",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "lifecycle"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 660,
+    "category": "event",
+    "event": "<dynamic>",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "input"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 681,
+    "category": "state",
+    "event": "<dynamic>",
+    "domain": "ios-streaming",
+    "importance": "key(default)",
+    "dimension": "core(default)"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 846,
+    "category": "event",
+    "event": "signalingOfferStarted",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 856,
+    "category": "event",
+    "event": "signalingOfferSucceeded",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 869,
+    "category": "event",
+    "event": "signalingOfferFailed",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 889,
+    "category": "event",
+    "event": "signalingIceBatchStarted",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 911,
+    "category": "event",
+    "event": "signalingIceBatchSucceeded",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 923,
+    "category": "event",
+    "event": "signalingIceBatchFailed",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 943,
+    "category": "event",
+    "event": "signalingIceCompletionStarted",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 953,
+    "category": "event",
+    "event": "signalingIceCompletionSucceeded",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "line": 964,
+    "category": "event",
+    "event": "signalingIceCompletionFailed",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "line": 103,
+    "category": "event",
+    "event": "streamControlsGestureRecognized",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "input"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "line": 223,
+    "category": "state",
+    "event": "videoSurfaceAttached",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 906,
+    "category": "state",
+    "event": "videoFrameAcceptedToMailbox",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 921,
+    "category": "state",
+    "event": "mailboxOverwrite",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1024,
+    "category": "state",
+    "event": "displaySubmit",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1119,
+    "category": "state",
+    "event": "displayPresent",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1137,
+    "category": "state",
+    "event": "displayFirstPresent",
+    "domain": "ios-streaming",
+    "importance": "essential",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1169,
+    "category": "state",
+    "event": "displayPresentSkipped",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1419,
+    "category": "state",
+    "event": "spatialScalerConfigured",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1551,
+    "category": "state",
+    "event": "videoFrameDropped",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1584,
+    "category": "state",
+    "event": "videoSurfaceSized",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1652,
+    "category": "state",
+    "event": "displayPipelineReady",
+    "domain": "ios-streaming",
+    "importance": "essential",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "line": 1667,
+    "category": "state",
+    "event": "videoSurfaceRendererReady",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "presentation"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift",
+    "line": 128,
+    "category": "event",
+    "event": "<dynamic>",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "input"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 783,
+    "category": "state",
+    "event": "dataChannelStateChanged",
+    "domain": "ios-streaming",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 837,
+    "category": "snapshot",
+    "event": "peerRuntimeConfigured",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 880,
+    "category": "state",
+    "event": "localOfferPrepared",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 905,
+    "category": "state",
+    "event": "remoteDescriptionApplyStarted",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 920,
+    "category": "state",
+    "event": "remoteDescriptionSetWillDispatch",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 930,
+    "category": "state",
+    "event": "remoteDescriptionSetDispatched",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 940,
+    "category": "state",
+    "event": "remoteDescriptionSetInvoking",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 951,
+    "category": "state",
+    "event": "remoteDescriptionApplyCallback",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 974,
+    "category": "state",
+    "event": "remoteDescriptionApplyCompleted",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 1033,
+    "category": "event",
+    "event": "remoteIceCandidatesApplied",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "line": 1520,
+    "category": "state",
+    "event": "receiverTrackDiscovered",
+    "domain": "ios-streaming",
+    "importance": "key",
+    "dimension": "mediaSupply"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "line": 2237,
+    "category": "snapshot",
+    "event": "<dynamic>",
+    "domain": "ios-streaming",
+    "importance": "key(default)",
+    "dimension": "core(default)"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "line": 2276,
+    "category": "state",
+    "event": "<dynamic>",
+    "domain": "ios-streaming",
+    "importance": "key(default)",
+    "dimension": "core(default)"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+    "line": 78,
+    "category": "event",
+    "event": "uniffiBoundaryStarted",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+    "line": 88,
+    "category": "event",
+    "event": "uniffiBoundarySucceeded",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+    "line": 102,
+    "category": "event",
+    "event": "uniffiBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 113,
+    "category": "event",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 127,
+    "category": "event",
+    "event": "cloudAccessUniFFIBoundarySucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 151,
+    "category": "event",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 176,
+    "category": "event",
+    "event": "homeAccessUniFFIBoundaryStarted",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 190,
+    "category": "event",
+    "event": "homeAccessUniFFIBoundarySucceeded",
+    "domain": "auth",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 215,
+    "category": "event",
+    "event": "homeAccessUniFFIBoundaryFailed",
+    "domain": "auth",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 244,
+    "category": "event",
+    "event": "catalogRequestBoundaryStarted",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 263,
+    "category": "event",
+    "event": "catalogRequestBoundaryFailed",
+    "domain": "cloud-library",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 322,
+    "category": "snapshot",
+    "event": "catalogRequestBoundarySucceeded",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 347,
+    "category": "event",
+    "event": "metadataPageBoundaryStarted",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 377,
+    "category": "snapshot",
+    "event": "metadataPageBoundarySucceeded",
+    "domain": "cloud-library",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 392,
+    "category": "event",
+    "event": "metadataPageBoundaryFailed",
+    "domain": "cloud-library",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 414,
+    "category": "event",
+    "event": "cloudAccessReleaseStarted",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "line": 423,
+    "category": "event",
+    "event": "cloudAccessReleaseCompleted",
+    "domain": "auth",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 179,
+    "category": "event",
+    "event": "gameLibraryBoundaryStarted",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 208,
+    "category": "event",
+    "event": "gameLibraryBoundarySucceeded",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 222,
+    "category": "event",
+    "event": "gameLibraryBoundaryFailed",
+    "domain": "xbox-data",
+    "importance": "essential",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 246,
+    "category": "event",
+    "event": "playtimesBoundaryStarted",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 264,
+    "category": "event",
+    "event": "playtimesBoundarySucceeded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 279,
+    "category": "event",
+    "event": "playtimesBoundaryFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 305,
+    "category": "event",
+    "event": "achievementsBoundaryStarted",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 342,
+    "category": "event",
+    "event": "achievementsBoundarySucceeded",
+    "domain": "xbox-data",
+    "importance": "debug",
+    "dimension": "network"
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+    "line": 356,
+    "category": "event",
+    "event": "achievementsBoundaryFailed",
+    "domain": "xbox-data",
+    "importance": "key",
+    "dimension": "network"
+  }
+]

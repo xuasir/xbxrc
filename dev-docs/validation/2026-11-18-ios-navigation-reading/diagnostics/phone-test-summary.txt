@@ -1,0 +1,37 @@
+Test Suite 'Selected tests' started at 2026-11-18 14:36:59.804.
+Test Suite 'XBXRCTests.xctest' started at 2026-11-18 14:36:59.807.
+Test Suite 'CapabilityMigrationTests' started at 2026-11-18 14:36:59.807.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPlainBackKeepsNativeEdgePopAndReentry]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPlainBackKeepsNativeEdgePopAndReentry]' passed (2.413 seconds).
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPrimarySwitchGatesInactiveNavigationAndRestoresIt]' started.
+Test Case '-[XBXRCTests.CapabilityMigrationTests testPrimarySwitchGatesInactiveNavigationAndRestoresIt]' passed (1.546 seconds).
+Test Suite 'CapabilityMigrationTests' passed at 2026-11-18 14:37:03.768.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 3.959 (3.961) seconds
+Test Suite 'XBXRCTests.xctest' passed at 2026-11-18 14:37:03.771.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 3.959 (3.964) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 14:37:03.771.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 3.959 (3.967) seconds
+Test Suite 'Selected tests' started at 2026-11-18 14:37:07.328.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-18 14:37:07.329.
+Test Suite 'PCPageInteractionTests' started at 2026-11-18 14:37:07.329.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testHostSwitcherUpdatesHeroActionsAndInstalledTarget]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testHostSwitcherUpdatesHeroActionsAndInstalledTarget]' passed (13.974 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepAvatarTitleAndNavigationHeightAligned]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepAvatarTitleAndNavigationHeightAligned]' passed (31.427 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSettingsHintsStayWithControlsAndMenuShortcutsHaveOneEntry]' passed (18.946 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent]' passed (18.631 seconds).
+Test Suite 'PCPageInteractionTests' passed at 2026-11-18 14:38:30.312.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 82.979 (82.983) seconds
+Test Suite 'SettingsInteractionTests' started at 2026-11-18 14:38:30.313.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testBottomNavigationReservesSpaceAndFinalRowIsReachable]' passed (11.185 seconds).
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' started.
+Test Case '-[XBXRCUITests.SettingsInteractionTests testTogglePickerAndNavigationRespondAtRowEdges]' passed (17.754 seconds).
+Test Suite 'SettingsInteractionTests' passed at 2026-11-18 14:38:59.254.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 28.938 (28.941) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-18 14:38:59.255.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 111.917 (111.926) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 14:38:59.256.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 111.917 (111.928) seconds

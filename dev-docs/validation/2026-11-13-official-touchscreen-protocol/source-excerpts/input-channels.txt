@@ -1,0 +1,182 @@
+// 来源 web-rtc-stream.d6f6b903.chunk.js；原文 SHA-256 0e1d97750113681c7c2d1edfc7910c1b2915055450a7cfde8fc7a0a54fef73d2
+class I {
+    constructor() { s()(this, "runningSum", 0), s()(this, "runningMin", Number.MAX_SAFE_INTEGER), s()(this, "runningMax", Number.MIN_SAFE_INTEGER), s()(this, "runningCount", 0); }
+    addValue(e) { this.runningCount++, this.runningSum += e, this.runningMin = Math.min(e, this.runningMin), this.runningMax = Math.max(e, this.runningMax); }
+    getCurrentValuesAndReset() { const e = this.runningCount > 0 ? this.runningSum / this.runningCount : 0, t = this.runningMin, i = this.runningMax, n = this.runningCount; return this.runningSum = 0, this.runningCount = 0, this.runningMax = Number.MIN_SAFE_INTEGER, this.runningMin = Number.MAX_SAFE_INTEGER, { avg: e, min: t, max: i, count: n }; }
+}
+
+class W {
+    constructor(e, t, i) { var n; s()(this, "dataChannel", void 0), s()(this, "element", void 0), s()(this, "configuration", void 0), s()(this, "hasReceivedServerMetadata", void 0), s()(this, "serverHeight", void 0), s()(this, "serverWidth", void 0), s()(this, "inputFeedbackHandler", void 0), s()(this, "videoFrameLatencySource", void 0), s()(this, "inputReporter", void 0), s()(this, "logger", void 0), s()(this, "flushSummaryLogIntervalID", void 0), s()(this, "telemetryErrorLogged", void 0), s()(this, "maxTouchPoints", void 0), s()(this, "maxTouchPointsLimit", 255), s()(this, "lastSummaryLogTimestamp", void 0), s()(this, "gamePadsSent", void 0), s()(this, "gamePadsReceived", void 0), s()(this, "keyboardEventsSent", void 0), s()(this, "keyboardEventsReceived", void 0), s()(this, "pointerEventsSent", void 0), s()(this, "pointerEventsReceived", void 0), s()(this, "mouseEventsSent", void 0), s()(this, "mouseEventsReceived", void 0), s()(this, "absoluteMouseEventsReceived", void 0), s()(this, "sensorEventsSent", void 0), s()(this, "sensorEventsReceived", void 0), s()(this, "flushSummaryLog", (() => { const e = performance.now(); this.logger.info(`Gamepads Received ${this.gamePadsReceived} Gamepads Successfully sent ${this.gamePadsSent}`), this.logger.info(`Keyboard Received ${this.keyboardEventsReceived} Keyboard Successfully sent ${this.keyboardEventsSent}`), this.logger.info(`Pointers Received ${this.pointerEventsReceived} Pointers Successfully sent ${this.pointerEventsSent}`), this.logger.info(`Mouse Received ${this.mouseEventsReceived} (${this.absoluteMouseEventsReceived} absolute) Mouse Successfully sent ${this.mouseEventsSent}`), this.logger.info(`Sensor Received ${this.sensorEventsReceived} Sensor Successfully sent ${this.sensorEventsSent}`), this.logger.info(`Over the last ${e - this.lastSummaryLogTimestamp} milliseconds`), this.gamePadsSent = 0, this.gamePadsReceived = 0, this.keyboardEventsSent = 0, this.keyboardEventsReceived = 0, this.pointerEventsSent = 0, this.pointerEventsReceived = 0, this.mouseEventsSent = 0, this.mouseEventsReceived = 0, this.absoluteMouseEventsReceived = 0, this.sensorEventsSent = 0, this.sensorEventsReceived = 0, this.lastSummaryLogTimestamp = e; })), this.dataChannel = e, this.element = t, this.configuration = i, this.logger = u.r.Instance, this.hasReceivedServerMetadata = !1, this.serverHeight = 0, this.serverWidth = 0, this.inputReporter = new O, this.maxTouchPoints = null !== (n = i.maxTouchPoints) && void 0 !== n ? n : 0, this.gamePadsSent = 0, this.gamePadsReceived = 0, this.keyboardEventsSent = 0, this.keyboardEventsReceived = 0, this.pointerEventsSent = 0, this.pointerEventsReceived = 0, this.mouseEventsSent = 0, this.mouseEventsReceived = 0, this.absoluteMouseEventsReceived = 0, this.sensorEventsSent = 0, this.sensorEventsReceived = 0; const a = performance.now(); this.lastSummaryLogTimestamp = a, this.flushSummaryLogIntervalID = setInterval(this.flushSummaryLog, 3e4), this.telemetryErrorLogged = new Set; }
+    close() { var e; clearInterval(this.flushSummaryLogIntervalID), this.flushSummaryLogIntervalID = void 0, this.flushSummaryLog(), this.dataChannel.close(), null === (e = this.inputFeedbackHandler) || void 0 === e || e.stop(); }
+    setInputFeedbackHandler(e) { this.inputFeedbackHandler = e; }
+    setVideoFrameLatencySource(e) { this.videoFrameLatencySource = e; }
+    receive(e, t, i) { t.isOpen() ? this.processMessage(e) : this.logger.info(`${i} received data after it was closed`); }
+    processMessage(e) { const t = new DataView(e); let i = 0; if (i = this.dataChannel.version >= 8 ? _ : G, t.byteLength < i)
+        return void (this.telemetryErrorLogged.has("smallPacket") || (this.logger.error(`Input channel got a message packet that was smaller than the header size. ${t.byteLength}`), this.telemetryErrorLogged.add("smallPacket"))); let n = 0, a = c.$B.None; if (this.dataChannel.version >= 8 ? (a = t.getUint16(n, !0), n += _) : (a = t.getUint8(n), n += G), n != i && (this.telemetryErrorLogged.has("wrongHeaderSize") || (this.logger.error(`Input channel parsed a packet header that wasn't the expected size. Expected ${i}, Actually ${n}.`), this.telemetryErrorLogged.add("wrongHeaderSize"))), a & c.$B.ServerMetadata) {
+        const e = Uint32Array.BYTES_PER_ELEMENT + Uint32Array.BYTES_PER_ELEMENT;
+        if (t.byteLength < i + e)
+            return void (this.telemetryErrorLogged.has("smallServerMetadata") || (this.logger.error(`Input channel got a ServerMetadata packet that was smaller than the required size. ${t.byteLength}`), this.telemetryErrorLogged.add("smallServerMetadata")));
+        const a = t.getUint32(n, !0);
+        n += Uint32Array.BYTES_PER_ELEMENT;
+        const r = t.getUint32(n, !0);
+        n += Uint32Array.BYTES_PER_ELEMENT, this.serverHeight = a, this.serverWidth = r, this.hasReceivedServerMetadata = !0, n != i + e && (this.telemetryErrorLogged.has("wrongSizeServerMetadata") || (this.logger.error(`Input channel parsed a ServerMetadata packet that wasn't the expected size. Expected ${i + e}, Actually ${n}.`), this.telemetryErrorLogged.add("wrongSizeServerMetadata")));
+    }
+    else if (a & c.$B.Vibration) {
+        if (null == this.inputFeedbackHandler)
+            return void (this.telemetryErrorLogged.has("nullInputFeedbackHandler") || (this.logger.error("Input channel got a vibration packet but the inputFeedbackHandler is null"), this.telemetryErrorLogged.add("nullInputFeedbackHandler")));
+        const e = Uint8Array.BYTES_PER_ELEMENT;
+        if (t.byteLength < i + e)
+            return void (this.telemetryErrorLogged.has("smallVibration") || (this.logger.error(`Input channel got a vibration packet of ${t.byteLength} bytes but the minimum size for the vibration header is ${i + e} bytes.`), this.telemetryErrorLogged.add("smallVibration")));
+        const a = t.getUint8(n);
+        if (n += Uint8Array.BYTES_PER_ELEMENT, a == c.VU.FourMotorRumble) {
+            const a = Uint8Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT + Uint16Array.BYTES_PER_ELEMENT + Uint16Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT;
+            if (t.byteLength < i + e + a)
+                return void (this.telemetryErrorLogged.has("wrongSizeVibration") || (this.logger.error(`Input channel got a vibration packet of ${t.byteLength} bytes but the minimum size for four motor rumble is ${i + e + a} bytes.`), this.telemetryErrorLogged.add("wrongSizeVibration")));
+            const r = t.getUint8(n);
+            n += Uint8Array.BYTES_PER_ELEMENT;
+            const s = t.getUint8(n) / 100;
+            n += Uint8Array.BYTES_PER_ELEMENT;
+            const o = t.getUint8(n) / 100;
+            n += Uint8Array.BYTES_PER_ELEMENT;
+            const d = t.getUint8(n) / 100;
+            n += Uint8Array.BYTES_PER_ELEMENT;
+            const h = t.getUint8(n) / 100;
+            n += Uint8Array.BYTES_PER_ELEMENT;
+            const l = t.getUint16(n, !0);
+            n += Uint16Array.BYTES_PER_ELEMENT;
+            const c = t.getUint16(n, !0);
+            n += Uint16Array.BYTES_PER_ELEMENT;
+            const u = t.getUint8(n);
+            n += Uint8Array.BYTES_PER_ELEMENT, n != i + e + a && (this.telemetryErrorLogged.has("wrongSizeFourMotorRumble") || (this.logger.error(`Input channel parsed a four motor rumble packet that wasn't the expected size. Expected ${i + e + a}, Actually ${n}.`), this.telemetryErrorLogged.add("wrongSizeFourMotorRumble"))), this.inputFeedbackHandler.onVibration(r, { leftMotorPercent: s, rightMotorPercent: o, leftTriggerMotorPercent: d, rightTriggerMotorPercent: h, durationMs: l, delayMs: c, repeat: u });
+        }
+        else
+            this.telemetryErrorLogged.has("unexpectedVibrationType") || (this.logger.error(`Input channel got an unexpected vibration type from the server, vibrationType: ${a}`), this.telemetryErrorLogged.add("unexpectedVibrationType"));
+    }
+    else if (a & c.$B.UnreliableInputAck) {
+        const e = Uint32Array.BYTES_PER_ELEMENT;
+        if (t.byteLength < i + e)
+            return void (this.telemetryErrorLogged.has("smallUnreliableInputAck") || (this.logger.error(`Input channel got a unreliable input ack packet of ${t.byteLength} bytes which is smaller than the required size of ${i + e} bytes.`), this.telemetryErrorLogged.add("smallUnreliableInputAck")));
+        const a = t.getUint32(n, !0);
+        n += Uint32Array.BYTES_PER_ELEMENT, n != i + e && (this.telemetryErrorLogged.has("wrongSizeUnreliableInputAck") || (this.logger.error(`Input channel parsed an unreliable input acknowledgement packet that wasn't the expected size. Expected ${i + e}, Actually ${n}.`), this.telemetryErrorLogged.add("wrongSizeUnreliableInputAck"))), this.ackFrame(a);
+    }
+    else
+        this.telemetryErrorLogged.has(`${a}`) || (this.logger.error(`Input channel got an unexpected message from the server, messageType: ${a}`), this.telemetryErrorLogged.add(`${a}`)); }
+    sendClientMetadataReport(e) { this.dataChannel.version >= 3 && (this.maxTouchPoints > this.maxTouchPointsLimit && (this.logger.warning(`Input channel maxTouchPoints was set to ${this.maxTouchPoints} but will be capped to ${this.maxTouchPointsLimit}`), this.maxTouchPoints = this.maxTouchPointsLimit), e.send(this.inputReporter.generateClientMetadataReport(this.dataChannel.version, this.maxTouchPoints))); }
+    countDirtyGamepads(e) { let t = 0; for (const i of e)
+        i.Dirty && t++; return t; }
+}
+
+class K extends W {
+    constructor(e, t, i) { super(e, t, i), s()(this, "keyboardEvents", void 0), s()(this, "pointerEvents", void 0), s()(this, "gamepadEvents", void 0), s()(this, "sensorEvents", void 0), s()(this, "pointerEventLength", void 0), s()(this, "mouseEvents", []), s()(this, "flushDataErrorLogged", void 0), s()(this, "lastInputFrameSentTime", void 0), s()(this, "flushData", (e => { let t; var i; e && (t = null === (i = this.videoFrameLatencySource) || void 0 === i ? void 0 : i.getUnreportedRenderedFrameMetadata()); const n = performance.now(); try {
+        this.hasReceivedServerMetadata || (this.pointerEventLength = 0);
+        let i = 0;
+        this.gamepadEvents && (i = this.countDirtyGamepads(this.gamepadEvents)), this.dataChannel.isOpen() && (t && t.length > 0 || this.pointerEventLength > 0 || i > 0 || this.keyboardEvents.length > 0 || this.mouseEvents.length > 0 || this.sensorEvents.length > 0) && (this.dataChannel.send(this.inputReporter.generateInputReport(this.dataChannel.version, n, this.pointerEventLength, this.serverHeight, this.serverWidth, t, this.gamepadEvents, this.pointerEvents, this.mouseEvents, this.keyboardEvents, this.sensorEvents)), e || (this.lastInputFrameSentTime = n), this.keyboardEventsSent += this.keyboardEvents.length, this.pointerEventsSent += this.pointerEventLength, this.mouseEventsSent += this.mouseEvents.length, this.sensorEventsSent += this.sensorEvents.length, this.gamePadsSent += i);
+    }
+    catch (a) {
+        const e = (0, U.A)(a);
+        this.flushDataErrorLogged.has(e) || (this.logger.error(`Input Channel: Flush Data. Error:${e}`), this.flushDataErrorLogged.add(e));
+    } this.keyboardEvents.length = 0, this.pointerEventLength = 0, this.gamepadEvents = void 0, this.mouseEvents.length = 0, this.sensorEvents.length = 0; })), this.dataChannel.setOpenedCallback((t => { this.sendClientMetadataReport(e); })), this.dataChannel.setMessageReceivedCallback(((t, i) => { this.receive(i, e, "Input channel"); })), this.keyboardEvents = new Array, this.pointerEvents = new Array, this.sensorEvents = new Array, this.pointerEventLength = 0, this.hasReceivedServerMetadata = !1, this.serverHeight = 0, this.serverWidth = 0, this.lastInputFrameSentTime = 0, this.flushDataErrorLogged = new Set; }
+    throttleInputOrFlushData() { var e; performance.now() - this.lastInputFrameSentTime >= (null !== (e = this.configuration.minTimeBetweenInputFramesMs) && void 0 !== e ? e : 8) && this.flushData(!1); }
+    sendGamepadInput(e, t) { this.gamepadEvents = t, this.gamePadsReceived += this.countDirtyGamepads(t), this.flushData(!1); }
+    sendKeyboardInput(e) { this.dataChannel.version >= 5 && (this.keyboardEvents.push(e), this.keyboardEventsReceived++, this.flushData(!1)); }
+    syncLockKeysState(e) { if (this.dataChannel.version >= 10) {
+        this.logger.verbose(`InputChannelV1 - Syncing Server Lock keys to the following state. CapsLock = ${e.capsLock}. NumLock = ${e.numLock}. ScrollLock = ${e.scrollLock}.`);
+        const t = { reportType: c.dr.KeyboardReportType, isPressed: e.capsLock, keyCode: c.dr.CapsLockKeyCode, keyString: c.dr.CapsLockKeyString, windowsKey: c.dr.CapsLockWindowsKey };
+        this.keyboardEvents.push(t);
+        const i = { reportType: c.dr.KeyboardReportType, isPressed: e.numLock, keyCode: c.dr.NumLockKeyCode, keyString: c.dr.NumLockKeyString, windowsKey: c.dr.NumLockWindowsKey };
+        this.keyboardEvents.push(i);
+        const n = { reportType: c.dr.KeyboardReportType, isPressed: e.scrollLock, keyCode: c.dr.ScrollLockKeyCode, keyString: c.dr.ScrollLockKeyString, windowsKey: c.dr.ScrollLockWindowsKey };
+        this.keyboardEvents.push(n), this.keyboardEventsReceived += 3, this.flushData(!1);
+    } }
+    sendSensorInput(e) { this.dataChannel.version >= 8 && (this.sensorEvents.push(e), this.sensorEventsReceived++, this.flushData(!1)); }
+    sendMetadata() { this.flushData(!0); }
+    queuePointerInput(e, t) { for (const i of t)
+        i.clientHeight || (i.clientHeight = this.element.scrollHeight), i.clientWidth || (i.clientWidth = this.element.scrollWidth); this.pointerEvents[this.pointerEventLength] = { events: t }, this.pointerEventLength++, this.pointerEventsReceived++, this.throttleInputOrFlushData(); }
+    queueMouseInput(e) { this.dataChannel.version >= 4 && this.mouseEvents.push(e), this.mouseEventsReceived++, e.Type === c.W8.Absolute && this.absoluteMouseEventsReceived++, this.throttleInputOrFlushData(); }
+    updateGamepads(e, t) { }
+    ackFrame(e) { }
+    getInputChannelStats() { }
+}
+
+class Y extends W {
+    constructor(e, t, i, n) { super(e, i, n), s()(this, "reliableChannel", void 0), s()(this, "currentFrameState", void 0), s()(this, "acknowledgedFrameState", void 0), s()(this, "isPointerMovingMap", void 0), s()(this, "prevMouseReadingType", c.W8.Relative), s()(this, "mouseXRelativeSum", 0), s()(this, "mouseYRelativeSum", 0), s()(this, "ackQueue", void 0), s()(this, "maxAckQueueSize", 2500), s()(this, "ackQueueLengthStats", void 0), s()(this, "inputFrameIdAtLastStatsReport", 0), s()(this, "inputFrameRetransmitCount", 0), s()(this, "lastKnownGamepadMappings", void 0), s()(this, "flushDataErrorLogged", void 0), s()(this, "lastKnownMouseButtonsPressed", 0), s()(this, "lastInputFrameSentTime", void 0), this.reliableChannel = t, this.currentFrameState = new c.NP(0), this.acknowledgedFrameState = new c.NP(0), this.isPointerMovingMap = new Map, this.lastKnownGamepadMappings = [], this.lastInputFrameSentTime = 0, this.ackQueue = new l.CircularBuffer(120), this.ackQueue.initializeWithFunc((() => new c.NP(0))), this.ackQueueLengthStats = new I, this.flushDataErrorLogged = new Set, this.reliableChannel.setOpenedCallback((e => { this.sendClientMetadataReport(t); })), this.reliableChannel.setMessageReceivedCallback(((e, t) => { this.receive(t, this.reliableChannel, "Reliable input channel"); })), this.dataChannel.setMessageReceivedCallback(((e, t) => { this.receive(t, this.dataChannel, "Unreliable input channel"); })); }
+    close() { super.close(), this.reliableChannel.close(); }
+    updateGamepads(e, t) { if (t) {
+        const t = a()({}, c.iz);
+        t.GamepadIndex = e, this.lastKnownGamepadMappings.push(t);
+    }
+    else {
+        const t = this.lastKnownGamepadMappings.findIndex((t => t.GamepadIndex === e));
+        -1 !== t && this.lastKnownGamepadMappings.splice(t, 1);
+    } }
+    sendGamepadInput(e, t) { this.ackQueueLengthStats.addValue(this.ackQueue.length), this.gamePadsReceived += this.countDirtyGamepads(t), this.updateCurrentGamepadInputFrame(t); const i = this.currentFrameState.calculateChanges(this.acknowledgedFrameState); if (i.isEmpty())
+        return; let n = !0; const a = this.ackQueue.getLastAddedElement(); if (void 0 !== a && (n = this.currentFrameState.isStateChanged(a)), n) {
+        this.currentFrameState.frameId++, this.ackQueue.length === this.ackQueue.maxLength && this.ackQueue.maxLength !== this.maxAckQueueSize && this.ackQueue.resize(Math.min(2 * this.ackQueue.maxLength, this.maxAckQueueSize));
+        this.ackQueue.getNextAvailableElem().copyFrom(this.currentFrameState);
+    }
+    else {
+        var r;
+        if (0 === this.lastInputFrameSentTime)
+            return;
+        const e = performance.now(), t = null !== (r = this.configuration.unreliableInputFrameRetransmissionIntervalMs) && void 0 !== r ? r : 16;
+        if (e - this.lastInputFrameSentTime < t)
+            return;
+        this.inputFrameRetransmitCount++;
+    } try {
+        if (this.dataChannel.isOpen()) {
+            this.dataChannel.send(this.inputReporter.generateUnreliableInputFrameReport(this.dataChannel.version, this.currentFrameState.frameId, i, this.serverHeight, this.serverWidth));
+            const e = performance.now();
+            this.lastInputFrameSentTime = e, this.gamePadsSent += i.changedGamepads.length, this.pointerEventsSent += i.changedPointers.length, this.keyboardEventsSent += i.changedKeyboard ? 1 : 0, this.mouseEventsSent += i.changedMouse ? 1 : 0;
+        }
+    }
+    catch (s) {
+        const e = (0, U.A)(s);
+        this.flushDataErrorLogged.has(e) || (this.logger.error(`InputChannelV2: sendGamepadInput. Error:${e}`), this.flushDataErrorLogged.add(e));
+    } }
+    ackFrame(e) { if (e <= this.acknowledgedFrameState.frameId)
+        return; if (0 === this.ackQueue.length)
+        return void this.logger.warning(`InputChannelV2 received an acknowledgement for frame ${e} eventhough there are no input frames that need to be acknowledged`); let t; do {
+        t = this.ackQueue.shift(), t.frameId >= this.acknowledgedFrameState.frameId && (this.acknowledgedFrameState = t);
+    } while (t.frameId < e && this.ackQueue.length > 0); }
+    updateCurrentGamepadInputFrame(e) { for (const t of e) {
+        if (!t.Dirty)
+            continue;
+        const e = this.lastKnownGamepadMappings.findIndex((e => e.GamepadIndex === t.GamepadIndex));
+        if (-1 === e) {
+            this.logger.error(`InputChannelV2: Gamepad ${t.GamepadIndex} was not added prior to receiving its mapping.`);
+            continue;
+        }
+        const i = this.lastKnownGamepadMappings[e];
+        i.A !== t.A && (this.currentFrameState.gamepad.transitionCount[c.t.A]++, i.A = t.A), i.B !== t.B && (this.currentFrameState.gamepad.transitionCount[c.t.B]++, i.B = t.B), i.X !== t.X && (this.currentFrameState.gamepad.transitionCount[c.t.X]++, i.X = t.X), i.Y !== t.Y && (this.currentFrameState.gamepad.transitionCount[c.t.Y]++, i.Y = t.Y), i.LeftShoulder !== t.LeftShoulder && (this.currentFrameState.gamepad.transitionCount[c.t.LeftShoulder]++, i.LeftShoulder = t.LeftShoulder), i.RightShoulder !== t.RightShoulder && (this.currentFrameState.gamepad.transitionCount[c.t.RightShoulder]++, i.RightShoulder = t.RightShoulder), i.View !== t.View && (this.currentFrameState.gamepad.transitionCount[c.t.View]++, i.View = t.View), i.Menu !== t.Menu && (this.currentFrameState.gamepad.transitionCount[c.t.Menu]++, i.Menu = t.Menu), i.LeftThumb !== t.LeftThumb && (this.currentFrameState.gamepad.transitionCount[c.t.LeftThumb]++, i.LeftThumb = t.LeftThumb), i.RightThumb !== t.RightThumb && (this.currentFrameState.gamepad.transitionCount[c.t.RightThumb]++, i.RightThumb = t.RightThumb), i.DPadUp !== t.DPadUp && (this.currentFrameState.gamepad.transitionCount[c.t.DpadUp]++, i.DPadUp = t.DPadUp), i.DPadDown !== t.DPadDown && (this.currentFrameState.gamepad.transitionCount[c.t.DpadDown]++, i.DPadDown = t.DPadDown), i.DPadLeft !== t.DPadLeft && (this.currentFrameState.gamepad.transitionCount[c.t.DpadLeft]++, i.DPadLeft = t.DPadLeft), i.DPadRight !== t.DPadRight && (this.currentFrameState.gamepad.transitionCount[c.t.DpadRight]++, i.DPadRight = t.DPadRight), i.Nexus !== t.Nexus && (this.currentFrameState.gamepad.transitionCount[c.t.Nexus]++, i.Nexus = t.Nexus), this.currentFrameState.gamepad.triggerLeft = t.LeftTrigger, this.currentFrameState.gamepad.triggerRight = t.RightTrigger, this.currentFrameState.gamepad.thumbLX = t.LeftThumbXAxis, this.currentFrameState.gamepad.thumbLY = t.LeftThumbYAxis, this.currentFrameState.gamepad.thumbRX = t.RightThumbXAxis, this.currentFrameState.gamepad.thumbRY = t.RightThumbYAxis, this.currentFrameState.gamepad.physicalPhysicality = t.PhysicalPhysicality, this.currentFrameState.gamepad.virtualPhysicality = t.VirtualPhysicality, this.currentFrameState.gamepad.markStateChange();
+    } }
+    updateCurrentPointerInputFrame(e) { for (const n of e) {
+        var t, i;
+        let e = this.currentFrameState.pointers.find((e => e.pointerId === n.pointerId));
+        e || (e = new c.qb, e.pointerId = n.pointerId, this.currentFrameState.pointers.push(e), this.isPointerMovingMap.set(n.pointerId, !1));
+        const a = e.isPointerUp();
+        "pointerdown" === n.type && a || "pointerup" === n.type && !a ? (e.pointerStateCountByStateType[c.Qs.PointerUpDown]++, this.isPointerMovingMap.set(n.pointerId, !1)) : "pointermove" !== n.type || this.isPointerMovingMap.get(n.pointerId) || (e.pointerStateCountByStateType[c.Qs.PointerMove]++, this.isPointerMovingMap.set(n.pointerId, !0)), e.x = n.x, e.y = n.y, e.pressure = n.pressure, e.twist = n.twist, e.width = n.width, e.height = n.height, e.clientHeight = null !== (t = n.clientHeight) && void 0 !== t ? t : this.element.scrollHeight, e.clientWidth = null !== (i = n.clientWidth) && void 0 !== i ? i : this.element.scrollWidth, e.markStateChange();
+    } }
+    updateCurrentKeyboardInputFrame(e) { const t = c.pu[e.keyString]; t ? e.isPressed !== this.currentFrameState.keyboard.isKeyDown(t) && (this.currentFrameState.keyboard.transitionCount[t]++, this.currentFrameState.keyboard.markStateChange()) : this.logger.warning(`InputChannelV2: Keyboard reading ${e.keyCode} was not found in ScanCodeToHidMap and will be ignored.`); }
+    updateCurrentMouseInputFrame(e) { if (this.lastKnownMouseButtonsPressed !== e.Buttons) {
+        this.lastKnownMouseButtonsPressed = e.Buttons;
+        0 !== (e.Buttons & c.RE.Left) !== this.currentFrameState.mouse.isButtonDown(c.sl.Left) && this.currentFrameState.mouse.transitionCount[c.sl.Left]++;
+        0 !== (e.Buttons & c.RE.Right) !== this.currentFrameState.mouse.isButtonDown(c.sl.Right) && this.currentFrameState.mouse.transitionCount[c.sl.Right]++;
+        0 !== (e.Buttons & c.RE.Middle) !== this.currentFrameState.mouse.isButtonDown(c.sl.Middle) && this.currentFrameState.mouse.transitionCount[c.sl.Middle]++;
+        0 !== (e.Buttons & c.RE.XButton1) !== this.currentFrameState.mouse.isButtonDown(c.sl.XButton1) && this.currentFrameState.mouse.transitionCount[c.sl.XButton1]++;
+        0 !== (e.Buttons & c.RE.XButton2) !== this.currentFrameState.mouse.isButtonDown(c.sl.XButton2) && this.currentFrameState.mouse.transitionCount[c.sl.XButton2]++;
+    } e.Type === c.W8.Absolute ? (this.currentFrameState.mouse.x = e.X, this.currentFrameState.mouse.y = e.Y, this.prevMouseReadingType = c.W8.Absolute) : (this.prevMouseReadingType === c.W8.Absolute && (this.mouseXRelativeSum = this.currentFrameState.mouse.x, this.mouseYRelativeSum = this.currentFrameState.mouse.y, this.prevMouseReadingType = c.W8.Relative), this.mouseXRelativeSum += e.X, this.mouseYRelativeSum += e.Y, this.currentFrameState.mouse.x = this.mouseXRelativeSum, this.currentFrameState.mouse.y = this.mouseYRelativeSum), this.currentFrameState.mouse.wheelX = e.WheelX, this.currentFrameState.mouse.wheelY = e.WheelY, this.currentFrameState.mouse.type = e.Type, this.currentFrameState.mouse.markStateChange(); }
+    sendMetadata() { var e; const t = null === (e = this.videoFrameLatencySource) || void 0 === e ? void 0 : e.getUnreportedRenderedFrameMetadata(), i = performance.now(); try {
+        this.dataChannel.isOpen() && t && t.length > 0 && this.dataChannel.send(this.inputReporter.generateInputReport(this.dataChannel.version, i, 0, this.serverHeight, this.serverWidth, t));
+    }
+    catch (n) {
+        const e = (0, U.A)(n);
+        this.flushDataErrorLogged.has(e) || (this.logger.error(`InputChannelV2: sendMetadata Error:${e}`), this.flushDataErrorLogged.add(e));
+    } }
+    queuePointerInput(e, t) { this.pointerEventsReceived++, this.updateCurrentPointerInputFrame(t), this.throttleInputOrFlushData(); }
+    queueMouseInput(e) { this.mouseEventsReceived++, e.Type === c.W8.Absolute && this.absoluteMouseEventsReceived++, this.dataChannel.version >= 4 && this.updateCurrentMouseInputFrame(e), this.throttleInputOrFlushData(); }
+    sendKeyboardInput(e) { this.keyboardEventsReceived++, this.dataChannel.version >= 5 && this.updateCurrentKeyboardInputFrame(e); }
+    syncLockKeysState(e) { this.dataChannel.version >= 10 && (this.logger.verbose(`InputChannelV2 - Syncing Server Lock keys to the following state. CapsLock = ${e.capsLock}. NumLock = ${e.numLock}. ScrollLock = ${e.scrollLock}.`), this.currentFrameState.lockKeysState = e); }
+    sendSensorInput(e) { this.sensorEventsReceived++; }
+    getInputChannelStats() { const e = this.ackQueueLengthStats.getCurrentValuesAndReset(), t = this.currentFrameState.frameId - this.inputFrameIdAtLastStatsReport; this.inputFrameIdAtLastStatsReport = this.currentFrameState.frameId; const i = this.inputFrameRetransmitCount; return this.inputFrameRetransmitCount = 0, { ackQueueLengthAvg: e.avg, ackQueueLengthMax: e.max, ackQueueLengthMin: e.min, ackQueueLengthCount: e.count, uniqueInputFramesSentCount: t, inputFrameRetransmitCount: i }; }
+    throttleInputOrFlushData() { var e; performance.now() - this.lastInputFrameSentTime >= (null !== (e = this.configuration.minTimeBetweenInputFramesMs) && void 0 !== e ? e : 8) && this.sendGamepadInput(0, this.lastKnownGamepadMappings); }
+}

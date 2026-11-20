@@ -2,10 +2,22 @@ import Foundation
 
 enum LibraryCollectionKind: String, CaseIterable, Identifiable, Sendable {
     case recent
+    case favorites
     case newlyAdded
+    case popular
+    case leaving
     case all
 
     var id: Self { self }
+    var requestSource: String? {
+        switch self {
+        case .recent: "recent"
+        case .newlyAdded: "newest"
+        case .popular: "popular"
+        case .leaving: "leaving"
+        default: nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -13,6 +25,9 @@ enum LibraryCollectionKind: String, CaseIterable, Identifiable, Sendable {
             "最近游玩"
         case .newlyAdded:
             "新入库"
+        case .favorites: "收藏"
+        case .popular: "热门游戏"
+        case .leaving: "即将离库"
         case .all:
             "全部云游戏"
         }
@@ -36,14 +51,20 @@ enum LibraryPresentation {
         collections(fromCloudGames: games.map(CloudLibraryGame.init(gameSummary:)))
     }
 
-    static func collections(fromCloudGames games: [CloudLibraryGame]) -> [LibraryCollection] {
-        guard !games.isEmpty else {
+    static func collections(
+        fromCloudGames games: [CloudLibraryGame], favorites: [CloudLibraryGame] = [],
+        visibleSources: Set<String> = []
+    ) -> [LibraryCollection] {
+        guard !games.isEmpty || !favorites.isEmpty || !visibleSources.isEmpty else {
             return []
         }
 
         return LibraryCollectionKind.allCases.compactMap { kind in
-            let sortedGames = sorted(games, for: kind)
-            guard !sortedGames.isEmpty || kind == .all else {
+            let sortedGames = kind == .favorites ? favorites : sorted(games, for: kind)
+            guard
+                !sortedGames.isEmpty || kind == .all
+                    || kind.requestSource.map({ visibleSources.contains($0) }) == true
+            else {
                 return nil
             }
             return LibraryCollection(kind: kind, games: sortedGames)
@@ -79,6 +100,9 @@ enum LibraryPresentation {
                 return "Game Pass 新入库 · \(category)"
             }
             return "Game Pass 新入库"
+        case .favorites: return "已收藏"
+        case .popular: return "Game Pass 热门游戏"
+        case .leaving: return "即将离开 Game Pass"
         case .all:
             if let minutes = game.playtimeMinutes {
                 return playtime(minutes)
@@ -102,15 +126,21 @@ enum LibraryPresentation {
         switch kind {
         case .recent:
             if indexedGames.allSatisfy({ $0.element.isRecentlyPlayed != nil }) {
-                return indexedGames
+                return
+                    indexedGames
                     .filter { $0.element.isRecentlyPlayed == true }
+                    .sorted {
+                        ($0.element.recentRank ?? $0.offset) < ($1.element.recentRank ?? $1.offset)
+                    }
                     .map(\.element)
             }
             return indexedGames.compactMap {
                 entry -> (offset: Int, element: CloudLibraryGame)? in
                 // xCloud MRU 是最近游玩栏目的事实来源；旧活动模型缺少该标记时回退日期。
-                guard entry.element.isRecentlyPlayed == true
-                    || (entry.element.isRecentlyPlayed == nil && entry.element.lastPlayedAt != nil)
+                guard
+                    entry.element.isRecentlyPlayed == true
+                        || (entry.element.isRecentlyPlayed == nil
+                            && entry.element.lastPlayedAt != nil)
                 else {
                     return nil
                 }
@@ -135,9 +165,24 @@ enum LibraryPresentation {
                 }
             }.map(\.element)
         case .newlyAdded:
-            return indexedGames
+            return
+                indexedGames
                 .filter { $0.element.isNew == true }
+                .sorted { ($0.element.newRank ?? $0.offset) < ($1.element.newRank ?? $1.offset) }
                 .map(\.element)
+        case .popular:
+            return indexedGames.filter { $0.element.popularRank != nil }
+                .sorted {
+                    ($0.element.popularRank ?? $0.offset) < ($1.element.popularRank ?? $1.offset)
+                }
+                .map(\.element)
+        case .leaving:
+            return indexedGames.filter { $0.element.leavingRank != nil }
+                .sorted {
+                    ($0.element.leavingRank ?? $0.offset) < ($1.element.leavingRank ?? $1.offset)
+                }
+                .map(\.element)
+        case .favorites: return games
         case .all:
             return indexedGames.sorted(by: nameThenIndex).map(\.element)
         }

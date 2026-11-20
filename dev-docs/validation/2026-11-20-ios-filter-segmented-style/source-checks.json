@@ -1,0 +1,26 @@
+{
+  "iosapp/XBXRC/App/AppRootView.swift": {
+    "sha256": "d41b126c24d6f78efc55925c58b1399b5084b4b2a5a5417234f38d434c9de1a4"
+  },
+  "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": {
+    "sha256": "edbd358240aac25f9f114bd002395a9b39dd98cda2b5e8cc24a7c31c17283b6d"
+  },
+  "filterConsumers": [
+    "iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+    "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift"
+  ],
+  "interaction": "现有筛选绑定、44pt目标、横向滚动和无障碍选中标记沿用",
+  "textContrastRatios": {
+    "lightTrack": 12.63,
+    "lightSelection": 15.74,
+    "darkTrack": 10.52,
+    "darkSelection": 4.95
+  },
+  "harnessRemoved": {
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift": true,
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": true
+  }
+}

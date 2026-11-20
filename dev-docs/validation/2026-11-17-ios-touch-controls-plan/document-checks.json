@@ -1,0 +1,311 @@
+{
+  "inspectionDate": "2026-11-17",
+  "branch": "main",
+  "head": "b7f09ec8311d1af46f0b105aef110f461d6a2b0f",
+  "basis": "current working tree",
+  "referencedThread": {
+    "hostId": "local",
+    "threadId": "01a1ced0-9ac3-7f00-8808-b255db4b330f",
+    "read": true,
+    "turnsReviewed": 4
+  },
+  "documents": [
+    {
+      "file": "docs/isu/2026-11-17-ios-touch-controls-implementation-options.md",
+      "localLinks": [
+        {
+          "target": "../references/better-xcloud-touch-layout-protocol.md",
+          "file": "docs/references/better-xcloud-touch-layout-protocol.md"
+        },
+        {
+          "target": "../references/tak-babylon-touch-engine.md",
+          "file": "docs/references/tak-babylon-touch-engine.md"
+        },
+        {
+          "target": "../references/official-touchscreen-protocol.md",
+          "file": "docs/references/official-touchscreen-protocol.md"
+        },
+        {
+          "target": "2026-11-12-pc-to-ios-app-migration-feasibility.md",
+          "file": "docs/isu/2026-11-12-pc-to-ios-app-migration-feasibility.md"
+        },
+        {
+          "target": "../../dev-docs/validation/2026-11-17-ios-touch-controls-plan/README.md",
+          "file": "dev-docs/validation/2026-11-17-ios-touch-controls-plan/README.md"
+        },
+        {
+          "target": "../../iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+          "file": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift"
+        },
+        {
+          "target": "../../iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+          "file": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift"
+        },
+        {
+          "target": "../../iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+          "file": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift"
+        },
+        {
+          "target": "../../iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift",
+          "file": "iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift"
+        },
+        {
+          "target": "../../crates/xbox-streaming-protocol/src/stream_data_channel.rs",
+          "file": "crates/xbox-streaming-protocol/src/stream_data_channel.rs"
+        },
+        {
+          "target": "../../crates/xbox-ios-bridge/src/streaming.rs",
+          "file": "crates/xbox-ios-bridge/src/streaming.rs"
+        },
+        {
+          "target": "../../iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+          "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift"
+        }
+      ],
+      "externalLinks": [
+        "thread://01a1ced0-9ac3-7f00-8808-b255db4b330f?hostId=local"
+      ],
+      "whitespace": "pass",
+      "fences": "pass"
+    },
+    {
+      "file": "dev-docs/validation/2026-11-17-ios-touch-controls-plan/README.md",
+      "localLinks": [
+        {
+          "target": "../../../docs/isu/2026-11-17-ios-touch-controls-implementation-options.md",
+          "file": "docs/isu/2026-11-17-ios-touch-controls-implementation-options.md"
+        },
+        {
+          "target": "document-checks.json",
+          "file": "dev-docs/validation/2026-11-17-ios-touch-controls-plan/document-checks.json"
+        }
+      ],
+      "externalLinks": [],
+      "whitespace": "pass",
+      "fences": "pass"
+    }
+  ],
+  "sources": [
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "sha256": "50f7d4f255bcc5846508e71b2670760d6ec416aabcbeef4eb80bfcad55cfb27f",
+      "lineCount": 222,
+      "anchors": [
+        {
+          "text": "struct TouchGamepadOverlay",
+          "lines": [
+            4
+          ]
+        },
+        {
+          "text": "private final class TouchControlView",
+          "lines": [
+            184
+          ]
+        },
+        {
+          "text": "touchesCancelled",
+          "lines": [
+            205
+          ]
+        }
+      ]
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "sha256": "540984f188534f654437a9b2e9f425125aabda692c32e7b2c70a85558566ffbc",
+      "lineCount": 386,
+      "anchors": [
+        {
+          "text": "func outputState",
+          "lines": [
+            237
+          ]
+        },
+        {
+          "text": "func setTouchButton",
+          "lines": [
+            308
+          ]
+        },
+        {
+          "text": "func releaseTouches",
+          "lines": [
+            343
+          ]
+        },
+        {
+          "text": "virtualState.buttonMask &= ~mask",
+          "lines": [
+            315
+          ]
+        }
+      ]
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+      "sha256": "e4874aebc464b7bc704c496747c857b76512055ce9ccd5d9784b5597a6a565e9",
+      "lineCount": 651,
+      "anchors": [
+        {
+          "text": "inputPollInterval = Duration.milliseconds(8)",
+          "lines": [
+            14
+          ]
+        },
+        {
+          "text": "private func handleMessagePayload",
+          "lines": [
+            227
+          ]
+        },
+        {
+          "text": "private func startInputLoopIfReady",
+          "lines": [
+            364
+          ]
+        }
+      ]
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift",
+      "sha256": "806f0cf7a2489029e5883d5e40aeb11ed66f3de248f69408e2800ca6044495e2",
+      "lineCount": 401,
+      "anchors": [
+        {
+          "text": "enum IOSStreamInputPacketEncoder",
+          "lines": [
+            15
+          ]
+        },
+        {
+          "text": "struct IOSStreamInputSendGate",
+          "lines": [
+            49
+          ]
+        },
+        {
+          "text": "struct IOSStreamInputDrainPolicy",
+          "lines": [
+            95
+          ]
+        }
+      ]
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "77a8b34e3bf3013e3e36bb19d250e7415f8e04bcf66e3e25caba5d3b869ccb03",
+      "lineCount": 1715,
+      "anchors": [
+        {
+          "text": "private func normalizedRenderScale",
+          "lines": [
+            1368
+          ]
+        },
+        {
+          "text": "case .fill:",
+          "lines": [
+            1399
+          ]
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming-protocol/src/stream_data_channel.rs",
+      "sha256": "8d8d932d8ab233f9a30a7934be46570366102641bb05374a72cd4031e0c0b478",
+      "lineCount": 201,
+      "anchors": [
+        {
+          "text": "\"touchInputEnabled\": false",
+          "lines": [
+            76
+          ]
+        },
+        {
+          "text": "/streaming/characteristics/clientdevicecapabilities",
+          "lines": [
+            79
+          ]
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-ios-bridge/src/streaming.rs",
+      "sha256": "ed36c6e873b85aa2d8d0f7383158f9c8406b370732ad58c3c5c77e25019a4881",
+      "lineCount": 2120,
+      "anchors": [
+        {
+          "text": "pub fn stream_input_metadata_bootstrap_payload",
+          "lines": [
+            138
+          ]
+        },
+        {
+          "text": "build_xbox_stream_input_metadata_bootstrap_packet(now_ms_f64(), 64)",
+          "lines": [
+            139
+          ]
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming/src/policy/input/compiler.rs",
+      "sha256": "c83ab08662ada2bf8efce9ae7d41dabbaa956ffb6409689df1eb96991c484f7f",
+      "lineCount": 114,
+      "anchors": [
+        {
+          "text": "let max_touch_points = touch.then_some(10)",
+          "lines": [
+            18
+          ]
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-webapi/src/xcloud_api.rs",
+      "sha256": "4f629ee3c7807b2a631b42f4c04c0b57b299ae512aaeda97ba1ca6e08d94c52e",
+      "lineCount": 210,
+      "anchors": [
+        {
+          "text": "pub async fn input_configs",
+          "lines": [
+            61
+          ]
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-webapi/src/session_api.rs",
+      "sha256": "2a733a31c34246d8a918311fe2b4788c7de2942281b637667da89f00f4a7f753",
+      "lineCount": 294,
+      "anchors": [
+        {
+          "text": "pub async fn input_configs",
+          "lines": [
+            242
+          ]
+        }
+      ]
+    }
+  ],
+  "historicalEvidence": [
+    {
+      "file": "dev-docs/validation/2026-11-12-tak-layout-and-engine/replay-results.json",
+      "sha256": "d802fb6fa43095ddf9d7f6d42c0f7bf81ba29d5ba02b6d9ded4e9c2c6674ecf7",
+      "recordCount": 41,
+      "historicalResult": true,
+      "rerunThisTurn": false
+    },
+    {
+      "file": "dev-docs/validation/2026-11-13-official-touchscreen-protocol/replay-results.json",
+      "sha256": "553fd6e4bc36a85d227c4bd4ece221ed4502cb5578654d51a5e01863f8ecdbd0",
+      "recordCount": 29,
+      "historicalResult": true,
+      "rerunThisTurn": false
+    }
+  ],
+  "validationScope": "document links, whitespace, code anchors and source hashes",
+  "temporaryArtifacts": [],
+  "result": "pass"
+}

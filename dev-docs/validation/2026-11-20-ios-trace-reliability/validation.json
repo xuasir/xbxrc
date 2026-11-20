@@ -1,0 +1,94 @@
+{
+  "taskId": "2026-11-20-ios-trace-reliability",
+  "scope": [
+    "落盘可靠性",
+    "轻量健康快照",
+    "性能统计口径",
+    "队列压力与源时间"
+  ],
+  "simulator": {
+    "passed": 11,
+    "failed": 0,
+    "platform": "iOS Simulator",
+    "device": "iPhone 18 Pro",
+    "osVersion": "27.0",
+    "exitCode": 0
+  },
+  "host": {
+    "passed": 20,
+    "failed": 0,
+    "scope": "11新增回归与9原有Trace回归；诊断源码逐字复制，媒体原始类型提取",
+    "diagnosticSourcesMatchFinal": true,
+    "newTestBlockMatchesFinalExceptWhitespace": true
+  },
+  "deviceBuild": {
+    "result": "Passed",
+    "destination": "generic/platform=iOS",
+    "codeSigningAllowed": false,
+    "exitCode": 0
+  },
+  "pythonCoreGate": {
+    "passed": 14,
+    "failed": 0
+  },
+  "pythonBaseAnalyzer": {
+    "passed": 3,
+    "failed": 0
+  },
+  "diagnosticFormatLint": {
+    "result": "Passed",
+    "exitCode": 0
+  },
+  "sessionBoundary": {
+    "result": "Passed",
+    "exitCode": 0
+  },
+  "taskSourceDiffCheck": {
+    "result": "Passed",
+    "exitCode": 0
+  },
+  "baselineDiff": [
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceEnvelope.swift",
+      "diffLines": 3
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift",
+      "diffLines": 28
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+      "diffLines": 380
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "diffLines": 164
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "diffLines": 46
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "diffLines": 64
+    },
+    {
+      "path": "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift",
+      "diffLines": 343
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingControlsStateTests.swift",
+      "diffLines": 4
+    }
+  ],
+  "additionalChangedTest": "iosapp/XBXRCTests/XBXRCTests.swift：rotation预算1800及sample事件断言",
+  "realSessionValidation": "新版本真实xHome JSONL接续核验网络、恢复、供帧、稳态、呈现长尾和帧delta；本轮自动结果证明采集行为及编译。",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-trace-reliability-20261120/r1",
+  "retained": [
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r1/system-log.json",
+    "其他任务的源代码、暂存状态与临时目录"
+  ],
+  "baselineDiffScope": "共享工作区相对开工快照的差分；SettingsAndPersistenceTests中的其他测试及StreamingControlsStateTests含并发改动，其归属由各任务记录管理。",
+  "sourceManifestScope": "任务源码与相关合同/并发测试上下文的收口哈希。"
+}

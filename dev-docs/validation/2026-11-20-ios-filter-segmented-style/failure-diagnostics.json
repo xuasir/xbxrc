@@ -1,0 +1,37 @@
+[
+  {
+    "log": "pages-unrestricted.log",
+    "lines": [
+      "Test Suite 'Selected tests' started at 2026-11-20 16:04:48.552.",
+      "Test Suite 'XBXRCUITests.xctest' started at 2026-11-20 16:04:48.553.",
+      "Test Suite 'PCPageInteractionTests' started at 2026-11-20 16:04:48.553.",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:842: error: -[XBXRCUITests.PCPageInteractionTests testCloudBrowseCapsulesKeepSearchAndFiltersBound] : XCTAssertEqualWithAccuracy failed: (\"702.0\") is not equal to (\"826.0\") +/- (\"2.0\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:896: error: -[XBXRCUITests.PCPageInteractionTests testInformationFiltersSwitchDirectlyAndKeepSummaryScoped] : XCTAssertEqualWithAccuracy failed: (\"702.0\") is not equal to (\"826.0\") +/- (\"2.0\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:299: error: -[XBXRCUITests.PCPageInteractionTests testMySubpagesRestoreRootAndDetailNavigation] : XCTAssertEqualWithAccuracy failed: (\"118.00000762939453\") is not equal to (\"411.6666564941406\") +/- (\"24.0\")",
+      "Test Suite 'PCPageInteractionTests' failed at 2026-11-20 16:06:38.443.",
+      "Test Suite 'XBXRCUITests.xctest' failed at 2026-11-20 16:06:38.448.",
+      "Test Suite 'Selected tests' failed at 2026-11-20 16:06:38.449.",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "final.log",
+    "lines": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift:1170:18: error: value of type 'any CAMetalDrawable' has no member 'addPresentedHandler'",
+      "     |                  `- error: value of type 'any CAMetalDrawable' has no member 'addPresentedHandler'",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "fixture-initial-failure.log",
+    "lines": [
+      "error[E0463]: can't find crate for `core`",
+      "For more information about this error, try `rustc --explain E0463`.",
+      "error: could not compile `cfg-if` (lib) due to 1 previous error",
+      "error: could not compile `smallvec` (lib) due to 1 previous error",
+      "error: could not compile `subtle` (lib) due to 1 previous error",
+      "error: could not compile `zeroize` (lib) due to 1 previous error",
+      "** TEST FAILED **"
+    ]
+  }
+]

@@ -1,0 +1,95 @@
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testAdditionalButtonsAndAxesSupportAliasesAndFullRangeTriggers]' passed (0.006 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCaptureSessionAutomaticallySavesAndCancelsOnDeviceChange]' passed (0.054 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testChoosingMappingTargetImmediatelyCapturesAndReleasesInput]' passed (0.012 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testCloudCatalogCacheKeyDoesNotExposeAccountOrRegion]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testControllerHistoryRecordsPressEdgesAndKeepsLastTenInputs]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDataTouchLayoutUsesTheVirtualGamepadAndReleasesOnMenu]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureRetentionKeepsThreeRecords]' passed (0.017 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticCaptureWorksWithBackgroundOffAndKeepsRedaction]' passed (0.011 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testDiagnosticsShortcutSuppressesLifecycleAndWaitsForNeutralAfterRebinding]' passed (0.025 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testEveryResolutionCodecAndBitrateBoundaryRestoresIntoNextSession]' passed (0.073 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testFailureDiagnosticsSaveRedactedSnapshotWithoutManualCapture]' passed (0.027 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testFrameIntervalUsesPresentFactsAndIgnoresFreezeGap]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testGamepadInputAndRumbleUseTheSameSelectedDeviceAndLogicalSlot]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSavePreservesExistingOverlayAndBaseTimestamp]' passed (0.010 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testImagePreferenceSaveUpdatesBaseWithoutCreatingOverlay]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testKeyboardDefaultsChordsAndSuppressionReachTheSharedXboxInput]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMenuDurationUsesTheFixedTriggerThreshold]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLegacyMobilePreferencesKeepValuesWhenNewSettingsAreAdded]' passed (0.011 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLightweightDiagnosticsRetainsFailuresAndManualCaptureDetail]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testLocaleNormalizerProducesStableAchievementCacheLocales]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingProfilesRemainSeparateAndRejectInvalidChordTargets]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMappingSwapsSingleBindingsAndAbsorbsChordComponents]' passed (0.021 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testMetalPictureShadersCompileOnAvailableDevice]' passed (0.077 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testNativeIceProjectionKeepsBindingAndSharedSource]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPhysicalCaptureIgnoresStartAAndKeepsMaximumSimultaneousChord]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPictureNormalizationKeepsFiniteBoundedValuesAndIndependentEffects]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testPowerOnPreferencePreservesLegacyValuesAndReachesTheNextSession]' passed (0.013 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testQualityCapClampsH264HintsAndRemoteCapabilityUsesActiveVideo]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testRemappedShortcutsRecordAndTriggerTheSameXboxProjection]' passed (0.011 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testRetiredInputPreferencesRestoreGamepadAndStandardLayout]' passed (0.035 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSelectedControllerChordPausesInputAndOpensOnceAfterHold]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsExposePCBoundsAndPreserveDefaultLanguageInStreamSnapshot]' passed (0.018 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testSettingsMigrationNormalizesAndWritesBackInvalidLegacyValues]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMatcherUsesActualTriggerThresholdAndRearmsAfterFullRelease]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testShortcutMigrationNormalizationAndConflictPreserveMenu]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTraceWriterCanReleaseLastReferenceOnItsIOQueue]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testTurnImportValidatesEntireConfigurationAndSize]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.SettingsAndPersistenceTests testVibrationPresetsMatchPCValuesBeforeHapticsRoutingAndPreserveLegacyGain]' passed (0.001 seconds).
+	 Executed 38 tests, with 0 failures (0 unexpected) in 0.479 (0.491) seconds
+Test Case '-[XBXRCTests.StreamingControlsStateTests testConnectionSummaryKeepsRawMetricsOutOfUserState]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testControlsStateReturnsToDockAfterSheet]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testDiagnosticClipboardUsesFourGroupsAndExcludesRoutes]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testDiagnosticsPlacementPreservesVisibleGameAreaAcrossOrientations]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricsFirstDuplicateStaleAndCounterResetKeepMissingValues]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricsUseDistinctReceiveDecodeSubmitAndPresentCounters]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testMetricZeroProgressShowsZeroAndPartialStatsPreserveUnknown]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testPortraitStreamingViewportPlacesAllGamepadControlsInLowerHalf]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState]' passed (0.005 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStreamingPanelsRenderPhoneTabletAndEnglishLayouts]' passed (5.031 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRecognizesSymmetricMovement]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsInvalidStartRegionsAndDuration]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsSameDirectionMovement]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureRejectsVerticalDriftAndLateStart]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testTwoFingerInwardGestureUsesAdaptiveMinimumTravel]' passed (0.000 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testXboxGuideDrawsStandardAssetAndKeepsSymbolCached]' passed (0.141 seconds).
+	 Executed 17 tests, with 0 failures (0 unexpected) in 5.204 (5.209) seconds
+Test Case '-[XBXRCTests.TouchLayoutTests testAbsoluteJoystickAndExclusivePointer]' passed (0.009 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testCapabilityReportIncludesBehaviorsAndUnknownAxisPath]' passed (0.006 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testClusterNullInheritanceAndBlankReplacement]' passed (0.027 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testCoalescedHistoryUsesOriginalIdentityAndKeepsTerminalOnce]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testDifferentControlsSharingOneActionReleaseIndependently]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testDuplicateAndStaleMovesAreCountedAndAbnormalTerminalReleases]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testEveryVisibleControlCenterHitsItsControlAcrossSizes]' passed (0.011 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testForzaCameraHasPressFeedbackWithTransparentDefaultOutline]' passed (0.242 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testForzaLayerCancelsReplacedControlAndRestoresBase]' passed (0.006 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testHeldFeedbackPersistsAndCancellationClearsIt]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testHighRateStickThrottleAndShortTapReplayPreservesEdges]' passed (0.482 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testInvalidCoordinatesAreDiscardedAndPressureIsFinite]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testLayerHasMultipleIndependentSources]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testLayoutViewportAndBackgroundCancelEverything]' passed (0.008 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testOrdinaryButtonRollsOverAndReleasesOutside]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testRealLayoutsAndCapabilityReports]' passed (0.021 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testRecorderExportsEdgesAndNeutralReset]' passed (0.045 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testRecorderRetainsOrderedEdgesAtCapacityAndDefersPresentation]' passed (0.332 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testShortTapAndHeldPressDrawVisibleFeedbackAndKeepInputReleaseImmediate]' passed (0.176 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testShortTapFeedbackSurvivesNeutralInputUntilMinimumDuration]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testShortTapKeepsBothEdgesWithinOneBatch]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testSimultaneousStickButtonAndTrigger]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testSourceTimingAndCallbackTimingRemainIndependentForMultiplePointers]' passed (0.044 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testSurfaceRendersTransparentLayersAndCancelPublishesNeutral]' passed (0.052 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testThrottleStickyAndBrakeRelease]' passed (0.006 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testTimingWindowBoundsAndNearestRankPercentiles]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testTogglePersistsUntilNextTapAndCancelReleasesIt]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutTests testTwoPointersSharingOneButtonReleaseIndependently]' passed (0.002 seconds).
+	 Executed 28 tests, with 0 failures (0 unexpected) in 1.504 (1.513) seconds
+	 Executed 83 tests, with 0 failures (0 unexpected) in 7.187 (7.216) seconds
+	 Executed 83 tests, with 0 failures (0 unexpected) in 7.187 (7.219) seconds
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testLayoutSelectionPressDragAndResetFromControllerEntry]' passed (57.689 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (12.341 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (36.176 seconds).
+	 Executed 3 tests, with 0 failures (0 unexpected) in 106.206 (106.211) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 106.206 (106.215) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 106.206 (106.218) seconds
+** TEST SUCCEEDED **

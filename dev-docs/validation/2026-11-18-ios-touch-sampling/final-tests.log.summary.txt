@@ -1,0 +1,22 @@
+2026-11-18 16:28:29.835 appintentsmetadataprocessor[26940:3153253] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+2026-11-18 16:28:31.815 appintentsmetadataprocessor[26948:3153363] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+2026-11-18 16:28:32.100 appintentsmetadataprocessor[26951:3153388] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+Test Suite 'Selected tests' started at 2026-11-18 16:29:09.313.
+Test Suite 'XBXRCTests.xctest' started at 2026-11-18 16:29:09.314.
+Test Suite 'TouchLayoutTests' started at 2026-11-18 16:29:09.314.
+Test Suite 'TouchLayoutTests' passed at 2026-11-18 16:29:11.039.
+	 Executed 28 tests, with 0 failures (0 unexpected) in 1.716 (1.725) seconds
+Test Suite 'XBXRCTests.xctest' passed at 2026-11-18 16:29:11.040.
+	 Executed 28 tests, with 0 failures (0 unexpected) in 1.716 (1.725) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 16:29:11.040.
+	 Executed 28 tests, with 0 failures (0 unexpected) in 1.716 (1.726) seconds
+Test Suite 'Selected tests' started at 2026-11-18 16:29:21.035.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-18 16:29:21.035.
+Test Suite 'TouchLayoutInteractionTests' started at 2026-11-18 16:29:21.036.
+Test Suite 'TouchLayoutInteractionTests' passed at 2026-11-18 16:30:13.078.
+	 Executed 1 test, with 0 failures (0 unexpected) in 52.029 (52.042) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-18 16:30:13.079.
+	 Executed 1 test, with 0 failures (0 unexpected) in 52.029 (52.043) seconds
+Test Suite 'Selected tests' passed at 2026-11-18 16:30:13.079.
+	 Executed 1 test, with 0 failures (0 unexpected) in 52.029 (52.044) seconds
+** TEST SUCCEEDED **

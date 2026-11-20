@@ -129,7 +129,7 @@ struct AppSettingsPersistence {
                 key: AppSettingsStore.homeBitrateMbpsKey,
                 cached: cached?.homeBitrateMbps,
                 fallback: 20,
-                range: 1 ... 200
+                range: 0...200
             ),
             cloudBitrateMode: enumRawValue(
                 key: AppSettingsStore.cloudBitrateModeKey,
@@ -141,7 +141,7 @@ struct AppSettingsPersistence {
                 key: AppSettingsStore.cloudBitrateMbpsKey,
                 cached: cached?.cloudBitrateMbps,
                 fallback: 20,
-                range: 1 ... 200
+                range: 0...200
             ),
             audioBitrateMode: enumRawValue(
                 key: AppSettingsStore.audioBitrateModeKey,
@@ -153,12 +153,12 @@ struct AppSettingsPersistence {
                 key: AppSettingsStore.audioBitrateKbpsKey,
                 cached: cached?.audioBitrateKbps,
                 fallback: 20,
-                range: 1 ... 512
+                range: 0...200
             ),
             homeTurnFallbackEnabled: boolValue(
                 key: AppSettingsStore.homeTurnFallbackKey,
                 cached: cached?.homeTurnFallbackEnabled,
-                fallback: true
+                fallback: false
             )
         )
     }
@@ -204,7 +204,7 @@ struct AppSettingsPersistence {
     private func boolValue(key: String, cached: Bool?, fallback: Bool) -> Bool {
         guard let object = defaults.object(forKey: key) else { return cached ?? fallback }
         guard let number = object as? NSNumber,
-              String(cString: number.objCType) == "c"
+            String(cString: number.objCType) == "c"
         else { return fallback }
         return number.boolValue
     }
@@ -218,8 +218,8 @@ struct AppSettingsPersistence {
         let candidate: Int
         if let object = defaults.object(forKey: key) {
             guard let number = object as? NSNumber,
-                  String(cString: number.objCType) != "c",
-                  number.doubleValue.rounded(.towardZero) == number.doubleValue
+                String(cString: number.objCType) != "c",
+                number.doubleValue.rounded(.towardZero) == number.doubleValue
             else { return fallback }
             candidate = number.intValue
         } else {
@@ -237,8 +237,8 @@ struct AppSettingsPersistence {
         let candidate: Int
         if let object = defaults.object(forKey: key) {
             guard let number = object as? NSNumber,
-                  String(cString: number.objCType) != "c",
-                  number.doubleValue.rounded(.towardZero) == number.doubleValue
+                String(cString: number.objCType) != "c",
+                number.doubleValue.rounded(.towardZero) == number.doubleValue
             else { return fallback }
             candidate = number.intValue
         } else {

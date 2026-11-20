@@ -1,0 +1,1068 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-17",
+  "basis": "current working tree",
+  "uiFileCount": 29,
+  "scanMethod": "Locate production SwiftUI files with var body: some View, scan shared UI patterns across every file, then inspect applicable page and shared component assembly.",
+  "validationLevel": "Static source audit plus visual inspection of five user source images. Runtime and new visual verification remain implementation acceptance tasks.",
+  "files": [
+    {
+      "path": "iosapp/XBXRC/App/AppRootView.swift",
+      "sha256": "1efcc70d4c0c83f36cfb552fc9bc69ab618b709599e3397ef0fdfb289f88e9be",
+      "lineCount": 371,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [
+          73,
+          369
+        ],
+        "navigationAndSelection": [
+          167,
+          173,
+          181,
+          252,
+          254,
+          255,
+          260,
+          265,
+          275,
+          305,
+          312,
+          323,
+          325,
+          331,
+          341,
+          343,
+          353,
+          358
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/App/LaunchExperienceView.swift",
+      "sha256": "7b4d6d9d206bcb01c8683816badf6005caab8716a16e938ae83bc5fa6994735d",
+      "lineCount": 68,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [
+          30
+        ],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift",
+      "sha256": "bba6f6304b2a7bd021dfb326f1dc920f9c29f9b57694cd8fd791147d6c6b7eaa",
+      "lineCount": 271,
+      "patternLineNumbers": {
+        "informationRows": [
+          215,
+          217,
+          222
+        ],
+        "settingsForms": [],
+        "surfaces": [
+          143
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          26,
+          57,
+          67,
+          105,
+          108,
+          109
+        ],
+        "refreshActions": [
+          103
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Achievements/AchievementsView.swift",
+      "sha256": "2b61f44b26b7a02030d96f8b4e37f6c71c21fc239dd25b4846547b22645a55a4",
+      "lineCount": 471,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          338,
+          340,
+          435
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          32,
+          90
+        ],
+        "refreshActions": [
+          61,
+          106,
+          116,
+          120,
+          133,
+          142,
+          150
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift",
+      "sha256": "10b4a65889492a5d63c20f83e63c4f8e245890785fac071b011269b33956e02b",
+      "lineCount": 45,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          32,
+          41
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Controllers/ControllerView.swift",
+      "sha256": "5acf68b3116bd7893c74d21dd7ae03ab1c07d3f020ee6995df870180de7567a0",
+      "lineCount": 468,
+      "patternLineNumbers": {
+        "informationRows": [
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          108,
+          112,
+          114,
+          116,
+          128,
+          145,
+          200,
+          204,
+          248,
+          304,
+          307,
+          311,
+          430,
+          440,
+          457
+        ],
+        "settingsForms": [
+          94,
+          213,
+          265,
+          427
+        ],
+        "surfaces": [
+          135
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          35,
+          39,
+          211,
+          216,
+          217,
+          231,
+          232,
+          263,
+          270,
+          280,
+          295,
+          296,
+          297,
+          301,
+          331,
+          332,
+          340,
+          348,
+          363,
+          366
+        ],
+        "refreshActions": [],
+        "captureAndHold": [
+          435
+        ]
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+      "sha256": "fed035ba9b3d738cb4fef0b95448550d90b29910a22c77e363c81bb6509657ea",
+      "lineCount": 322,
+      "patternLineNumbers": {
+        "informationRows": [
+          117,
+          119,
+          126
+        ],
+        "settingsForms": [],
+        "surfaces": [
+          161
+        ],
+        "artworkAndSafeArea": [
+          205,
+          206
+        ],
+        "navigationAndSelection": [
+          14,
+          96,
+          102,
+          235,
+          288,
+          297,
+          298
+        ],
+        "refreshActions": [
+          86,
+          91,
+          101
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+      "sha256": "b2837ac5d39e62e437558dcea6c987e81da763ada479161285221892bb0dc164",
+      "lineCount": 812,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          249,
+          409,
+          678,
+          681,
+          784
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          19,
+          40,
+          63,
+          71,
+          131,
+          139,
+          162,
+          163,
+          164,
+          168,
+          179,
+          191,
+          192,
+          193,
+          194,
+          195,
+          197,
+          198,
+          199,
+          221,
+          227,
+          232,
+          252,
+          253,
+          257,
+          258,
+          274,
+          278,
+          279,
+          471,
+          478,
+          482,
+          487,
+          493
+        ],
+        "refreshActions": [
+          50,
+          57,
+          211,
+          344,
+          346,
+          357,
+          362,
+          370,
+          378
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+      "sha256": "c20a84b1130742e42c72f557082201a8dbd0f0b9f81585580ee89282b0c9d953",
+      "lineCount": 305,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          181,
+          245,
+          248
+        ],
+        "refreshActions": [
+          89,
+          220,
+          225,
+          240
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+      "sha256": "41dd6e8dc3090107d84ca0fcc09713fb69bf59f60384a494bdbaa5a6d19384e8",
+      "lineCount": 413,
+      "patternLineNumbers": {
+        "informationRows": [
+          214
+        ],
+        "settingsForms": [],
+        "surfaces": [
+          307
+        ],
+        "artworkAndSafeArea": [
+          72
+        ],
+        "navigationAndSelection": [
+          13,
+          82,
+          111,
+          112,
+          115,
+          171,
+          233
+        ],
+        "refreshActions": [
+          77,
+          88,
+          94,
+          110,
+          405
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+      "sha256": "d72dc8cf64cb2c146b81b0b1dd4f4f613c3bccae363dcaeccd48ce2796c31048",
+      "lineCount": 433,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          138,
+          227,
+          354,
+          369
+        ],
+        "artworkAndSafeArea": [
+          410
+        ],
+        "navigationAndSelection": [
+          35,
+          46,
+          55
+        ],
+        "refreshActions": [
+          45,
+          54,
+          140,
+          163,
+          167,
+          180,
+          189,
+          197
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/LibraryComponents.swift",
+      "sha256": "3a55f2ee635c7c22d1f5464d0411239db046dea1a13246a9d9976efca277b77f",
+      "lineCount": 543,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          367,
+          408,
+          471,
+          473,
+          484
+        ],
+        "artworkAndSafeArea": [
+          59,
+          239,
+          479
+        ],
+        "navigationAndSelection": [
+          27,
+          31,
+          33,
+          52,
+          67,
+          72,
+          77,
+          80,
+          81,
+          94,
+          104,
+          112,
+          132,
+          156,
+          214,
+          389,
+          396,
+          401,
+          409
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+      "sha256": "603672b41aff2c662813283eefd85317e06278bebefb0fdbb22c8af95262adf1",
+      "lineCount": 427,
+      "patternLineNumbers": {
+        "informationRows": [
+          172,
+          329,
+          382
+        ],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [
+          290
+        ],
+        "navigationAndSelection": [
+          41,
+          46,
+          62,
+          274,
+          275
+        ],
+        "refreshActions": [
+          96,
+          376,
+          409,
+          417
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+      "sha256": "fd4558ef69a8719417ca6cc4c4a9c103f94e8c095c483e1fa7a7091866a01bf3",
+      "lineCount": 302,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [
+          206
+        ],
+        "navigationAndSelection": [
+          44,
+          63,
+          163,
+          178,
+          181,
+          191
+        ],
+        "refreshActions": [
+          80,
+          213
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+      "sha256": "32ad1151a94e0aa355a393b530e162dec849311365b3872e0ceb4c0dd4cfae6c",
+      "lineCount": 251,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [
+          57,
+          58
+        ],
+        "navigationAndSelection": [
+          37,
+          46,
+          68,
+          73,
+          87,
+          135,
+          149,
+          150,
+          176,
+          234
+        ],
+        "refreshActions": [
+          123,
+          228,
+          245
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+      "sha256": "0f07d8bbd6ed15c27d738ef5c838dfe9b0de43ef0dfaf89827385fa9b071df97",
+      "lineCount": 336,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          31,
+          52,
+          53,
+          57,
+          58,
+          80,
+          110,
+          113
+        ],
+        "refreshActions": [
+          108,
+          149,
+          191,
+          197,
+          199,
+          219,
+          222,
+          229,
+          237,
+          260,
+          292
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobileControllerTools.swift",
+      "sha256": "7c26e6dd2e058fb54fca66fafc2f21da87ce50c3bbd8df06a8fed2f0c5ba89e9",
+      "lineCount": 736,
+      "patternLineNumbers": {
+        "informationRows": [
+          475,
+          544,
+          671
+        ],
+        "settingsForms": [],
+        "surfaces": [
+          412,
+          413,
+          423,
+          424,
+          521,
+          522,
+          619,
+          628
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          379,
+          409,
+          495,
+          504,
+          523,
+          568,
+          569,
+          571,
+          598,
+          606,
+          607,
+          608,
+          613,
+          616,
+          620,
+          622,
+          623,
+          626,
+          627,
+          631,
+          642,
+          654,
+          655,
+          657,
+          694,
+          696,
+          699,
+          703,
+          723,
+          724,
+          725
+        ],
+        "refreshActions": [],
+        "captureAndHold": [
+          262,
+          505,
+          520,
+          528,
+          534,
+          535,
+          536,
+          538,
+          541,
+          552,
+          558,
+          565,
+          566,
+          571,
+          577,
+          579,
+          613,
+          615,
+          619,
+          628,
+          631,
+          634,
+          638,
+          639,
+          663,
+          668,
+          681,
+          691,
+          692,
+          702,
+          709,
+          711
+        ]
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobileSettingsControls.swift",
+      "sha256": "6f6be1914a352e2db47c0d51b3596abdb49ece8d4c80d35b0ae4c099fad2c84e",
+      "lineCount": 164,
+      "patternLineNumbers": {
+        "informationRows": [
+          20,
+          79,
+          144
+        ],
+        "settingsForms": [
+          67
+        ],
+        "surfaces": [
+          54
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          82,
+          83,
+          99,
+          106,
+          161
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobileTurnSettingsView.swift",
+      "sha256": "eab02284335ee832fdf82d193ff854b297adabf741d2e0ab76d1b75bbb139e20",
+      "lineCount": 110,
+      "patternLineNumbers": {
+        "informationRows": [
+          17,
+          18,
+          20,
+          58
+        ],
+        "settingsForms": [
+          12
+        ],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/SettingsRootView.swift",
+      "sha256": "907099e46091c5a36eb4bddf7edcca1f416f9ef4d5b40fc8403ba6d6b8d8ce46",
+      "lineCount": 363,
+      "patternLineNumbers": {
+        "informationRows": [
+          143,
+          145,
+          241
+        ],
+        "settingsForms": [
+          62,
+          111,
+          232
+        ],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          35,
+          39,
+          65,
+          66,
+          72,
+          74,
+          75,
+          114,
+          115,
+          122,
+          123,
+          130,
+          131,
+          150,
+          151,
+          158,
+          172,
+          173,
+          185,
+          186,
+          200,
+          201,
+          228,
+          235,
+          256,
+          257,
+          266,
+          267,
+          280,
+          281,
+          286,
+          287,
+          308,
+          315,
+          349
+        ],
+        "refreshActions": [
+          252,
+          263,
+          357
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/SettingsView.swift",
+      "sha256": "719756732bc001d3244f7dd20da8c0b0dfa6a1e4a270cc375e75091f84ecb53a",
+      "lineCount": 379,
+      "patternLineNumbers": {
+        "informationRows": [
+          151,
+          156,
+          168,
+          332,
+          333,
+          341
+        ],
+        "settingsForms": [
+          44,
+          148,
+          330
+        ],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          47,
+          48,
+          200
+        ],
+        "refreshActions": [
+          31
+        ],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+      "sha256": "e1f8479a79856e22f71ce06275d6b9d105dc98e50569298a5ce94e00dc5294ac",
+      "lineCount": 588,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [
+          109,
+          379
+        ],
+        "surfaces": [
+          29,
+          189,
+          344
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          73,
+          108,
+          275,
+          292,
+          303,
+          315,
+          525,
+          526,
+          527
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "sha256": "fa37f6fd4d2377ed20c8ea9d8eed1fead44dcc27bcf9095f0f095e8f4c4f861d",
+      "lineCount": 240,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          62,
+          88
+        ],
+        "artworkAndSafeArea": [
+          18,
+          27
+        ],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "sha256": "50f7d4f255bcc5846508e71b2670760d6ec416aabcbeef4eb80bfcad55cfb27f",
+      "lineCount": 222,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          20,
+          134,
+          157,
+          162
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+      "sha256": "ab86ba963794c195a720ad5d9831d8778736a42dfe7e56da9bf101e0ead31381",
+      "lineCount": 879,
+      "patternLineNumbers": {
+        "informationRows": [
+          687,
+          714,
+          722,
+          726,
+          732,
+          743
+        ],
+        "settingsForms": [
+          598
+        ],
+        "surfaces": [
+          125,
+          284,
+          288,
+          559,
+          592,
+          739
+        ],
+        "artworkAndSafeArea": [
+          110,
+          116,
+          246,
+          275,
+          278,
+          289,
+          292,
+          447,
+          481,
+          486
+        ],
+        "navigationAndSelection": [
+          39,
+          42,
+          52,
+          54,
+          57,
+          61,
+          445,
+          463,
+          465,
+          466,
+          492,
+          502,
+          513,
+          536,
+          545,
+          550,
+          667,
+          668,
+          672,
+          676,
+          677,
+          683,
+          689,
+          703,
+          704,
+          852,
+          860
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+      "sha256": "2abf39a974499ae3bb707a4566f714977f4886429475090d053064ac982c83c6",
+      "lineCount": 390,
+      "patternLineNumbers": {
+        "informationRows": [
+          126
+        ],
+        "settingsForms": [],
+        "surfaces": [
+          184,
+          232,
+          387
+        ],
+        "artworkAndSafeArea": [
+          47,
+          48
+        ],
+        "navigationAndSelection": [
+          160,
+          161,
+          174,
+          177,
+          179,
+          185,
+          193,
+          199,
+          350,
+          351,
+          355,
+          359,
+          360,
+          366,
+          370,
+          377,
+          379
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+      "sha256": "9394cb272577617133470793566dd85d376acd86297d75e6bbba881f0e9c27c0",
+      "lineCount": 516,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          19,
+          38,
+          50,
+          56,
+          65,
+          73,
+          74
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/GamerscoreCoinIcon.swift",
+      "sha256": "8bda53d5857be2c2a4ff7394fcda3d84c6db2582d642c07526aca9e663fb7a22",
+      "lineCount": 15,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/OrbitCardCarousel.swift",
+      "sha256": "a1dfbbbcad3c9b0cb41d6d29a92efb9351db2a5cf72169347930eda741209325",
+      "lineCount": 180,
+      "patternLineNumbers": {
+        "informationRows": [],
+        "settingsForms": [],
+        "surfaces": [
+          82
+        ],
+        "artworkAndSafeArea": [],
+        "navigationAndSelection": [
+          7,
+          21,
+          28,
+          49,
+          140,
+          141,
+          155,
+          159,
+          161,
+          166,
+          167
+        ],
+        "refreshActions": [],
+        "captureAndHold": []
+      }
+    }
+  ],
+  "supplementalFiles": [
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobilePreferences.swift",
+      "sha256": "1d7b18029f9c0a6c772cd2ef010c9906a0524203741682fae20cd4d5f414efde"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Settings/MobileSettingsModels.swift",
+      "sha256": "d51955351091a21e3a0b9eb96634469eb264596748eae20106b9e565c8a3b2a1"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "sha256": "540984f188534f654437a9b2e9f425125aabda692c32e7b2c70a85558566ffbc"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "ea89fc03360c69c8dc6dc9c217becacd9a0a8221a70a6bb3ce9b8c4d1eb482ce"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/SettingsInteractionTests.swift",
+      "sha256": "e0df3faced3fc1314601e14e34b2ab18b1dfa1b0f9c85a4836bf7624233fc74a"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+      "sha256": "4a54dc576bd113c1b4e04f6e1fe46064f1093e5fe87adfc9d3b5cdf286b99387"
+    }
+  ]
+}

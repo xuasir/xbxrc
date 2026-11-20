@@ -1,0 +1,7 @@
+{
+  "source": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+  "methodSha256BeforeFix": "e5a151cdb37099e155ac0337d17bfba8ce5bc2f23df9f9411f2d5f8d99dc94d6",
+  "fixture": "src/player/infra/webrtc/SdpManipulator.test.ts:7",
+  "scope": "从生产源码逐字提取SDP诊断及依赖纯函数，单独复现重复payload",
+  "methodSha256AfterFix": "523df8e95852133bd2f9bcf4b86b3e2490ebf3343336af90c891de1077d5e259"
+}

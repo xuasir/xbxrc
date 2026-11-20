@@ -1,0 +1,20 @@
+{
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift": "690a7e1e2ee0bf661c0575ee411709c78ecd02d693bb45b79c00aa722259ad64",
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "425f21a80b2bdc178f5231a39191a358e6daee65cf5aacc5272ddda7a5386fbf",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "627cd1209d894eb0becf33a6ca2241d1be3031441ae6f232798fec4d53be29d0",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": "41320d37fe65613436d2193494e0626602329b9ad0ff2a252a0adca954134b49",
+  "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": "b3927c7fa1a48d55c25de6c92991ad03cbfe429f489a57c211a040828aea3aef",
+  "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "74d06a2aa94c11484c9644e1e370d2ada9aee656a00bbab5cc32df504162ddf4",
+  "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "60949dcff0404fb647721e8b18cd1041fe02cb538a2184f9f8c747cb91537d7d",
+  "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "cd2503b1ad752b021c7b20933aedd3245a296ca33f3d3ab6f8a31b5d16f979a4",
+  "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "0b4f30fb5caaeb932c8d19e4ade4cf3187fca5b72064dc942e4ac1296a80f2b0",
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutCatalog.swift": "8efcbce94149fd430171990a8709450ad99238b8818419736a767cc69afcc937",
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": "501a579dcd5cc23dd7f025df063a7a8604306f6a60d9908147d9a903158626b5",
+  "iosapp/XBXRC/Resources/Assets.xcassets/XboxLogo.imageset/icon.svg": "e0aebb34fe6fd6e9fd8bc8889d4acc16a9a3eb2682ba6c19b3266b07e699f331",
+  "iosapp/XBXRC/Resources/TouchLayouts/generic.json": "d081a5368eb5d6780e55a6363b6df9981f1a4b34b7da6fc8e858e19b1c23cf9e",
+  "iosapp/XBXRC/Resources/Localizable.xcstrings": "75772265a37933d3ca9a6c2551dac38e3e493aa7c18f802680297f7d0a339d6f",
+  "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "bbfdd47b5b49ae40235a8e48261cb74ca9ae7b32fa7f68a651edb9ba34797c75",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "8932ea931077b710665b352a36895906748f1b4f7a8bb83db2aae3c211462f6c",
+  "iosapp/XBXRC/App/XBXRCApp.swift": "e13867ba0a7b6504bff4f17bdad87240d49473ea732feb7c1708eeb11bae745a",
+  "iosapp/XBXRC.xcodeproj/project.pbxproj": "38f9e22aa780e733544375ae2c5fb8e79e76a440673641099a20a45f952b5022"
+}

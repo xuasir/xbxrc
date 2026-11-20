@@ -11,6 +11,27 @@ struct HostPowerCommandResult: Equatable, Sendable {
 }
 
 protocol XboxDataClient: Sendable {
+    func loadPlayerProfile(webTokenJSON: String, targetID: String) async throws -> XboxFriendSummary
+    func loadHistoryPage(webTokenJSON: String, targetID: String?, continuation: String?)
+        async throws
+        -> XboxHistoryPage
+    func loadLibraryGame(webTokenJSON: String, titleID: String, targetID: String?) async throws
+        -> GameSummary?
+    func loadPlayerPlaytimes(webTokenJSON: String, titleIDs: [String], targetID: String?)
+        async throws
+        -> XboxTitlePlaytimeSnapshot
+    func loadAchievementPage(
+        webTokenJSON: String, titleID: String, targetID: String?, locale: String,
+        continuation: String?
+    ) async throws -> XboxAchievementsPage
+    func loadFriends(webTokenJSON: String) async throws -> [XboxFriendSummary]
+    func loadMedia(webTokenJSON: String, kind: XboxAlbumKind, continuation: String?) async throws
+        -> XboxAlbumPage
+    func loadInstalledSection(webTokenJSON: String, consoleID: String, market: String, language: String, source: XboxInstalledSource, productIDs: [String]) async throws -> InstalledSectionResult
+    func loadInstalledLibrary(
+        webTokenJSON: String, consoleID: String, market: String, language: String
+    ) async throws
+        -> XboxInstalledLibrarySnapshot
     func loadHosts(webTokenJSON: String) async throws -> [XboxHostSummary]
     func powerOn(webTokenJSON: String, consoleID: String) async throws -> HostPowerCommandResult
     func powerOff(webTokenJSON: String, consoleID: String) async throws -> HostPowerCommandResult
@@ -24,15 +45,79 @@ protocol XboxDataClient: Sendable {
 }
 
 struct RustXboxDataClient: XboxDataClient {
+    func loadFriends(webTokenJSON: String) async throws -> [XboxFriendSummary] {
+        try await fetchFriends(webTokenJson: webTokenJSON).map { friend in
+            XboxFriendSummary(
+                id: friend.id, displayName: friend.displayName, gamertag: friend.gamertag,
+                avatarURL: XboxImageURL.resolve(friend.avatarUrl), gamerscore: friend.gamerscore,
+                presenceState: friend.presenceState, presenceText: friend.presenceText,
+                currentTitleID: friend.currentTitleId)
+        }
+    }
+
+    func loadMedia(webTokenJSON: String, kind: XboxAlbumKind, continuation: String?) async throws
+        -> XboxAlbumPage
+    {
+        let page = try await fetchMediaPage(
+            webTokenJson: webTokenJSON, kind: kind.rawValue, continuation: continuation)
+        return XboxAlbumPage(
+            items: page.items.map { item in
+                XboxAlbumMedia(
+                    id: item.id, kind: XboxAlbumKind(rawValue: item.kind) ?? kind,
+                    titleID: item.titleId, titleName: item.titleName,
+                    capturedAt: parseISO8601(item.capturedAt),
+                    durationSeconds: item.durationSeconds,
+                    thumbnailURL: XboxImageURL.resolve(item.thumbnailUrl),
+                    url: XboxImageURL.resolve(item.url), expiresAt: parseISO8601(item.expiresAt))
+            }, continuation: page.continuation)
+    }
+
+    func loadInstalledLibrary(
+        webTokenJSON: String, consoleID: String, market: String, language: String
+    ) async throws
+        -> XboxInstalledLibrarySnapshot
+    {
+        let snapshot = try await fetchInstalledLibrary(
+            webTokenJson: webTokenJSON, consoleId: consoleID, market: market, language: language)
+        return installedSnapshot(snapshot)
+    }
+
+    func loadInstalledSection(webTokenJSON: String, consoleID: String, market: String, language: String, source: XboxInstalledSource, productIDs: [String]) async throws -> InstalledSectionResult {
+        let result = try await fetchInstalledSection(webTokenJson: webTokenJSON, consoleId: consoleID, market: market, language: language, source: source, productIds: productIDs)
+        return InstalledSectionResult(snapshot: installedSnapshot(result.snapshot), artwork: result.artwork.map {
+            CloudCatalogMetadata(productID: $0.productId, name: $0.name, publisherName: $0.publisherName, description: $0.description,
+                tileURL: XboxImageURL.resolve($0.tileImageUrl), posterURL: XboxImageURL.resolve($0.posterImageUrl), heroURL: XboxImageURL.resolve($0.heroImageUrl), categories: $0.categories)
+        }, failure: result.failure.map(SectionRequestFailure.init))
+    }
+
+    private func installedSnapshot(_ snapshot: XboxInstalledLibrary) -> XboxInstalledLibrarySnapshot {
+        XboxInstalledLibrarySnapshot(
+            consoleID: snapshot.consoleId,
+            games: snapshot.games?.map { game in
+                XboxInstalledGameSummary(
+                    id: game.id, titleID: game.titleId, productID: game.productId,
+                    name: game.name, artworkURL: XboxImageURL.resolve(game.artworkUrl),
+                    storageDeviceID: game.storageDeviceId,
+                    sizeBytes: game.sizeBytes, installedAt: parseISO8601(game.installedAt),
+                    lastPlayedAt: parseISO8601(game.lastPlayedAt))
+            },
+            storage: snapshot.storage?.map {
+                XboxHostStorageSummary(
+                    id: $0.id, name: $0.name, freeBytes: $0.freeBytes, totalBytes: $0.totalBytes)
+            },
+            powerState: snapshot.powerState, notices: snapshot.notices)
+    }
     func loadHosts(webTokenJSON: String) async throws -> [XboxHostSummary] {
         try await fetchHosts(webTokenJson: webTokenJSON).enumerated().map { index, host in
             let commandID = host.id ?? host.serverId ?? host.deviceId
             let streamTargetID = host.serverId ?? host.id ?? host.deviceId
             let stableID = streamTargetID ?? commandID ?? "host-\(index)"
-            let displayName = [host.name, host.deviceName]
+            let displayName =
+                [host.name, host.deviceName]
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .first(where: { !$0.isEmpty }) ?? "Xbox"
-            let consoleType = host.consoleType?
+            let consoleType =
+                host.consoleType?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .nonEmpty ?? "Xbox"
             return XboxHostSummary(
@@ -101,31 +186,32 @@ struct RustXboxDataClient: XboxDataClient {
         )
         do {
             let games = try await fetchGameLibrary(webTokenJson: webTokenJSON).map { game in
-            GameSummary(
-                id: game.titleId,
-                titleID: game.titleId,
-                name: game.name,
-                artworkURL: XboxImageURL.resolve(game.artworkUrl),
-                heroURL: XboxImageURL.resolve(game.heroUrl),
-                lastPlayedAt: parseISO8601(game.lastPlayedAt),
-                playtimeMinutes: nil,
-                achievementProgress: game.achievementProgress.map { progress in
-                    AchievementProgress(
-                        unlockedCount: Int(progress.unlockedCount),
-                        totalCount: Int(progress.totalCount),
-                        earnedGamerscore: Int(progress.earnedGamerscore),
-                        totalGamerscore: Int(progress.totalGamerscore),
-                        percentage: Int(progress.percentage)
-                    )
-                }
-            )
+                GameSummary(
+                    id: game.titleId,
+                    titleID: game.titleId,
+                    name: game.name,
+                    artworkURL: XboxImageURL.resolve(game.artworkUrl),
+                    heroURL: XboxImageURL.resolve(game.heroUrl),
+                    lastPlayedAt: parseISO8601(game.lastPlayedAt),
+                    playtimeMinutes: nil,
+                    achievementProgress: game.achievementProgress.map { progress in
+                        AchievementProgress(
+                            unlockedCount: Int(progress.unlockedCount),
+                            totalCount: Int(progress.totalCount),
+                            earnedGamerscore: Int(progress.earnedGamerscore),
+                            totalGamerscore: Int(progress.totalGamerscore),
+                            percentage: Int(progress.percentage)
+                        )
+                    }
+                )
             }
             IOSRuntimeTrace.event(
                 domain: "xbox-data",
                 event: "gameLibraryBoundarySucceeded",
                 payload: [
                     "games": .integer(Int64(games.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .network,
                 importance: .key,
@@ -139,7 +225,8 @@ struct RustXboxDataClient: XboxDataClient {
                 payload: CloudLibraryDiagnostics.errorPayload(
                     error,
                     extra: [
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
                     ]
                 ),
                 dimension: .network,
@@ -180,7 +267,8 @@ struct RustXboxDataClient: XboxDataClient {
                 payload: [
                     "requested": .integer(Int64(titleIDs.count)),
                     "received": .integer(Int64(playtimes.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .network,
                 importance: .debug,
@@ -195,7 +283,8 @@ struct RustXboxDataClient: XboxDataClient {
                     error,
                     extra: [
                         "requested": .integer(Int64(titleIDs.count)),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .network,
@@ -229,7 +318,8 @@ struct RustXboxDataClient: XboxDataClient {
             ).map { achievement in
                 let visibleDescription: String
                 if achievement.isUnlocked || !achievement.isSecret {
-                    visibleDescription = achievement.description.isEmpty
+                    visibleDescription =
+                        achievement.description.isEmpty
                         ? achievement.lockedDescription
                         : achievement.description
                 } else {
@@ -254,7 +344,8 @@ struct RustXboxDataClient: XboxDataClient {
                 event: "achievementsBoundarySucceeded",
                 payload: [
                     "received": .integer(Int64(achievements.count)),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .network,
                 importance: .debug,
@@ -268,7 +359,8 @@ struct RustXboxDataClient: XboxDataClient {
                 payload: CloudLibraryDiagnostics.errorPayload(
                     error,
                     extra: [
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
                     ]
                 ),
                 dimension: .network,
@@ -284,6 +376,34 @@ struct RustXboxDataClient: XboxDataClient {
             return nil
         }
         return try? Date(value, strategy: .iso8601)
+    }
+}
+
+// 测试替身可仅覆盖自己的数据表面，新增查询保留明确失败。
+extension XboxDataClient {
+    func loadFriends(webTokenJSON: String) async throws -> [XboxFriendSummary] {
+        throw XboxNativeQueryError.unavailable
+    }
+    func loadMedia(webTokenJSON: String, kind: XboxAlbumKind, continuation: String?) async throws
+        -> XboxAlbumPage
+    {
+        throw XboxNativeQueryError.unavailable
+    }
+    func loadInstalledLibrary(
+        webTokenJSON: String, consoleID: String, market: String, language: String
+    ) async throws
+        -> XboxInstalledLibrarySnapshot
+    { throw XboxNativeQueryError.unavailable }
+}
+
+enum XboxNativeQueryError: LocalizedError {
+    case unavailable
+    case repeatedContinuation
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: "Xbox 查询暂时不可用"
+        case .repeatedContinuation: "服务返回了重复分页，请刷新后重试"
+        }
     }
 }
 
@@ -309,8 +429,8 @@ enum XboxImageURL {
     }
 }
 
-private extension String {
-    var nonEmpty: String? {
+extension String {
+    fileprivate var nonEmpty: String? {
         isEmpty ? nil : self
     }
 }

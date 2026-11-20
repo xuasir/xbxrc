@@ -1,0 +1,21 @@
+{
+  "removedRoot": "/private/tmp/xbxrc-ios-touch-sampling-20261118/r1",
+  "removedFiles": 7861,
+  "removedLogicalBytes": 914482146,
+  "removedAllocatedBytes": 946827264,
+  "freeBeforeBytes": 82329600000,
+  "freeAfterBytes": 83148800000,
+  "freeChangeBytes": 819200000,
+  "pathAbsent": true,
+  "processesCompleted": [
+    "initial-tests exit 0",
+    "final-tests exit 0",
+    "device-build exit 0",
+    "xcresult summaries/attachments exit 0"
+  ],
+  "preserved": [
+    "repository evidence",
+    "shared WebRTC SourcePackages",
+    "existing user changes"
+  ]
+}

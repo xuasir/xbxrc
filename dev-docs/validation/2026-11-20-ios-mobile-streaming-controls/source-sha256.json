@@ -1,0 +1,19 @@
+{
+  "iosapp/XBXRC/App/AppRootView.swift": "f5b59683aea53e1b410acca7752e9ff0cc74ba0488021b8b12f73ad5c562e45a",
+  "iosapp/XBXRC/App/XBXRCApp.swift": "9a4f02896c22a7b932ff7cf03d625315590572f5d5f3337f435ac09e6fe32356",
+  "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift": "2db5bede48a0e6e2d5b85cbe73d95a98d2c92f9b75be30ac383e38ca334e5822",
+  "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "cf7a5a150ca86f8b2f658e2944185371fc5fba933a06831a5899f329fc068697",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "c896e1a8e65b8419195759af16159d0f5e0c0a0c7c1ec700e915e691b3007438",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": "2b927041025b105ed2590c83899a746dd7ffa875d49d729ef830897449f0cc4d",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": "6bb2bd7dbb846259196bf3e14a87aecb3bae646ad5fb3da3dcf5a247de91edd1",
+  "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "8384fe192f31d8481d30eb8db47038d18ed9fedba373e0f0117552601303c3c5",
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "40c6228a38effbba3fc5989ad756dc94dcf86f8c4c1612bb91c0b306850665c5",
+  "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": "55572bfe2498a058d0fb7a3aa057835d667bd1cc5a494a9f744531c1d9f9eef3",
+  "iosapp/XBXRC/Features/Settings/MobileSettingsControls.swift": "432dc1306953d903246ddcaa3c0e6d40ab47ac90da77c6b4e08be09805c9f74b",
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTrace.swift": "9df848891837122581f20eee9c481699be5ce56fe9220f6929c2db6aee9f9ed3",
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift": "d419a8ec41ec1ede21f5fcf6d63abc4196476c8c27e02ce244b55815c01aba18",
+  "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "76a2e4e5b5838fbb11cbd8abc03f4b4b2776e5388be1bb4781130da5732a23fc",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "452ae27e275d26e3f5c8b942ee3554c2395a9bd643d40aac438367a1c4ff1953",
+  "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "eb6a389e6af5d7751cdbc8b9eb8faf37dd94d07b1188afd9e3ded54aeaf70682",
+  "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift": "df71ba07a67e7ff77d56bc24c339769ce88d52c7c8d58225fd6df85c70ee718f"
+}

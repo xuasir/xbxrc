@@ -1,0 +1,5 @@
+	 Executed 37 tests, with 0 failures (0 unexpected) in 5.748 (5.762) seconds
+	 Executed 37 tests, with 0 failures (0 unexpected) in 5.748 (5.762) seconds
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:71: error: -[XBXRCUITests.PCPageInteractionTests testSingleHostKeepsCenteredHeroAndCloudToolbarCoversScrolledContent] : XCTAssertEqualWithAccuracy failed: ("41.10525990214317") is not equal to ("40.0") +/- ("1.0")
+
+原生转场中头像宽度41.105pt，后续使用固定标题栏事务并等待稳定尺寸验证。

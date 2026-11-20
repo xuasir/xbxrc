@@ -1,0 +1,5 @@
+Failed to determine if database is empty or not: You don’t have permission to save the file “org.swift.swiftpm” in the folder “Caches”.Failed to determine if database is empty or not: You don’t have permission to save the file “org.swift.swiftpm” in the folder “Caches”.failed loading cached manifest for 'webrtc': You don’t have permission to save the file “manifests” in the folder “org.swift.swiftpm”.failed closing manifest db cache: You don’t have permission to save the file “manifests” in the folder “org.swift.swiftpm”.You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.
+2026-11-20 11:21:04.715 xcodebuild[23029:6155832] Writing error result bundle to /var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-20-11_11-21-0004.xcresult
+xcodebuild: error: Could not resolve package dependencies:
+  You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.
+  You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.

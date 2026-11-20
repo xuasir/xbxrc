@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-20",
+  "removedRoot": "/private/tmp/xbxrc-ios-mobile-controls-20261120",
+  "removedFiles": 8787,
+  "logicalBytes": 1324810849,
+  "allocatedBytes": 1356333056,
+  "freeBytesBefore": 63897600000,
+  "freeBytesAfter": 65126400000,
+  "pathExistsAfter": false,
+  "processCheck": "本轮 xcodebuild / swift-frontend / xcresulttool 均已结束",
+  "retained": [
+    "仓库8张关键截图、验证摘要、失败诊断与源码哈希",
+    "共享 target/ios、target/ios-webrtc SDK 与其他任务数据"
+  ]
+}

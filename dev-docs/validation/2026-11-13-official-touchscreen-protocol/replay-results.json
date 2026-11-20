@@ -1,0 +1,452 @@
+{
+  "inspectionDate": "2026-11-13",
+  "method": "官方原类/方法隔离回放，真实 CircularBuffer，模拟通道与时钟",
+  "sourceChecks": [
+    {
+      "file": "web-rtc-stream.d6f6b903.chunk.js",
+      "sha256": "0e1d97750113681c7c2d1edfc7910c1b2915055450a7cfde8fc7a0a54fef73d2",
+      "bytes": 158507,
+      "result": "pass"
+    },
+    {
+      "file": "8128.1aca8038.chunk.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+      "bytes": 177333,
+      "result": "pass"
+    },
+    {
+      "file": "2091.34346f46.chunk.js",
+      "sha256": "4ab75f6ff4399496657055a8820aa317208714b1ee9faee384ee359e9a211bd0",
+      "bytes": 101453,
+      "result": "pass"
+    }
+  ],
+  "passed": 29,
+  "failed": 0,
+  "records": [
+    {
+      "id": "report-flags",
+      "result": "pass",
+      "observed": {
+        "pointer": 4,
+        "clientMetadata": 8,
+        "serverMetadata": 16,
+        "state": 512,
+        "ack": 1024
+      }
+    },
+    {
+      "id": "header-versions",
+      "result": "pass",
+      "observed": [
+        {
+          "version": 6,
+          "size": 5
+        },
+        {
+          "version": 7,
+          "size": 13
+        },
+        {
+          "version": 8,
+          "size": 14
+        },
+        {
+          "version": 9,
+          "size": 14
+        },
+        {
+          "version": 10,
+          "size": 14
+        }
+      ]
+    },
+    {
+      "id": "header-bytes-v6",
+      "result": "pass",
+      "observed": {
+        "size": 5,
+        "hex": "04 78 56 34 12"
+      }
+    },
+    {
+      "id": "header-bytes-v7",
+      "result": "pass",
+      "observed": {
+        "size": 13,
+        "hex": "04 78 56 34 12 00 00 00 00 00 44 8f 40"
+      }
+    },
+    {
+      "id": "header-bytes-v8",
+      "result": "pass",
+      "observed": {
+        "size": 14,
+        "hex": "04 00 78 56 34 12 00 00 00 00 00 44 8f 40"
+      }
+    },
+    {
+      "id": "client-metadata-and-cap",
+      "result": "pass",
+      "observed": {
+        "length": 15,
+        "mask": [
+          8,
+          0
+        ],
+        "maxTouchPoints": 255
+      }
+    },
+    {
+      "id": "client-metadata-version-gate",
+      "result": "pass",
+      "observed": 0
+    },
+    {
+      "id": "input-token-wrap",
+      "result": "pass",
+      "observed": [
+        4294967295,
+        0
+      ]
+    },
+    {
+      "id": "legacy-single-pointer",
+      "result": "pass",
+      "observed": {
+        "length": 36,
+        "frameCount": 1,
+        "eventCount": 1,
+        "pointer": {
+          "height": 15,
+          "width": 30,
+          "pressure": 127,
+          "twist": 45,
+          "pointerId": 7,
+          "x": 480,
+          "y": 270,
+          "type": 1
+        },
+        "hex": "04 00 01 00 00 00 00 00 00 00 00 44 8f 40 01 01 0f 00 1e 00 7f 2d 00 07 00 00 00 e0 01 00 00 0e 01 00 00 01"
+      }
+    },
+    {
+      "id": "legacy-three-event-types",
+      "result": "pass",
+      "observed": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "legacy-multi-frame-two-fingers",
+      "result": "pass",
+      "observed": {
+        "length": 77,
+        "frameCount": 2,
+        "counts": [
+          2,
+          1
+        ],
+        "ids": [
+          7,
+          9,
+          7
+        ]
+      }
+    },
+    {
+      "id": "legacy-up-keeps-fields",
+      "result": "pass",
+      "observed": {
+        "height": 15,
+        "width": 30,
+        "pressure": 127,
+        "twist": 45,
+        "pointerId": 7,
+        "x": 480,
+        "y": 270,
+        "type": 2
+      }
+    },
+    {
+      "id": "client-dimensions-default",
+      "result": "pass",
+      "observed": {
+        "clientWidth": 1280,
+        "clientHeight": 720,
+        "pointer": {
+          "height": 15,
+          "width": 30,
+          "pressure": 127,
+          "twist": 45,
+          "pointerId": 7,
+          "x": 480,
+          "y": 270,
+          "type": 1
+        }
+      }
+    },
+    {
+      "id": "integer-truncation-and-wrap",
+      "result": "pass",
+      "observed": {
+        "height": 15,
+        "width": 9464,
+        "pressure": 254,
+        "twist": 45,
+        "pointerId": 7,
+        "x": 4294967295,
+        "y": 16,
+        "type": 1
+      },
+      "note": "官方序列化器沿 DataView 转换：有限小数向零截断，越界无符号整数按字段位宽回绕。"
+    },
+    {
+      "id": "normalized-tak-pointer",
+      "result": "pass",
+      "observed": {
+        "height": 21,
+        "width": 38,
+        "pressure": 127,
+        "twist": 45,
+        "pointerId": 7,
+        "x": 480,
+        "y": 540,
+        "type": 1
+      }
+    },
+    {
+      "id": "unreliable-single-pointer-v9",
+      "result": "pass",
+      "observed": {
+        "length": 44,
+        "frameId": 1,
+        "gamepads": 0,
+        "pointers": 1,
+        "pointer": {
+          "pointerId": 7,
+          "upDown": 1,
+          "move": 0,
+          "height": 15,
+          "width": 30,
+          "pressure": 127,
+          "twist": 45,
+          "x": 480,
+          "y": 270
+        },
+        "tail": [
+          0,
+          0,
+          0
+        ],
+        "hex": "00 02 0a 00 00 00 00 00 00 00 00 44 8f 40 01 00 00 00 00 01 07 00 00 00 01 00 0f 00 1e 00 7f 2d 00 e0 01 00 00 0e 01 00 00 00 00 00"
+      }
+    },
+    {
+      "id": "unreliable-single-pointer-v10",
+      "result": "pass",
+      "observed": {
+        "length": 45,
+        "tail": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "unreliable-two-fingers",
+      "result": "pass",
+      "observed": {
+        "length": 65,
+        "count": 2,
+        "ids": [
+          7,
+          9
+        ]
+      }
+    },
+    {
+      "id": "counter-sequence",
+      "result": "pass",
+      "observed": [
+        {
+          "upDown": 1,
+          "move": 0,
+          "up": false
+        },
+        {
+          "upDown": 1,
+          "move": 1,
+          "up": false
+        },
+        {
+          "upDown": 1,
+          "move": 1,
+          "up": false
+        },
+        {
+          "upDown": 2,
+          "move": 1,
+          "up": true
+        },
+        {
+          "upDown": 3,
+          "move": 1,
+          "up": false
+        },
+        {
+          "upDown": 3,
+          "move": 2,
+          "up": false
+        }
+      ]
+    },
+    {
+      "id": "duplicate-down-up",
+      "result": "pass",
+      "observed": {
+        "counts": [
+          2,
+          0
+        ],
+        "discriminator": 4
+      }
+    },
+    {
+      "id": "counter-wrap",
+      "result": "pass",
+      "observed": {
+        "counts": [
+          0,
+          0
+        ],
+        "up": true
+      }
+    },
+    {
+      "id": "unacknowledged-up-retained",
+      "result": "pass",
+      "observed": {
+        "count": 1,
+        "counts": [
+          2,
+          0
+        ],
+        "x": 320,
+        "y": 180
+      }
+    },
+    {
+      "id": "ack-baseline-and-retransmission",
+      "result": "pass",
+      "observed": {
+        "sentBeforeAck": 2,
+        "ids": [
+          1,
+          1
+        ],
+        "retransmits": 1,
+        "baseline": 1,
+        "queueLength": 0,
+        "sentAfterAck": 2
+      }
+    },
+    {
+      "id": "cumulative-and-duplicate-ack",
+      "result": "pass",
+      "observed": {
+        "first": {
+          "baseline": 2,
+          "queue": 1
+        },
+        "duplicate": {
+          "baseline": 2,
+          "queue": 1
+        },
+        "final": 3,
+        "changed": 0
+      }
+    },
+    {
+      "id": "server-metadata-v6-v9",
+      "result": "pass",
+      "observed": [
+        {
+          "version": 6,
+          "length": 9,
+          "width": 1920,
+          "height": 1080,
+          "received": true
+        },
+        {
+          "version": 9,
+          "length": 10,
+          "width": 1920,
+          "height": 1080,
+          "received": true
+        }
+      ]
+    },
+    {
+      "id": "legacy-metadata-gate",
+      "result": "pass",
+      "observed": {
+        "before": 0,
+        "after": 1
+      }
+    },
+    {
+      "id": "ack-queue-growth",
+      "result": "pass",
+      "observed": {
+        "length": 121,
+        "capacity": 240,
+        "frameId": 121
+      }
+    },
+    {
+      "id": "channel-factory",
+      "result": "pass",
+      "observed": {
+        "legacy": "K",
+        "state": "Y",
+        "versions": {
+          "legacy": [
+            "1",
+            "10"
+          ],
+          "state": [
+            "9",
+            "10"
+          ]
+        }
+      }
+    },
+    {
+      "id": "data-channel-configurations",
+      "result": "pass",
+      "observed": [
+        {
+          "name": "unreliableinput",
+          "protocol": "2.0",
+          "ordered": false,
+          "maxRetransmits": 0
+        },
+        {
+          "name": "reliableinput",
+          "protocol": "2.0",
+          "ordered": true
+        },
+        {
+          "name": "input",
+          "protocol": "1.0",
+          "ordered": true
+        }
+      ]
+    }
+  ]
+}

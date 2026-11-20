@@ -1,0 +1,62 @@
+{
+  "task": "2026-11-20-xhome-mac-trace-analysis",
+  "scope": "用户新导出Mac Designed for iPad Home Trace健康、锐化、超分、低帧率诊断",
+  "input": {
+    "source": "/Users/guo.xu/Downloads/runtime-trace-ios-1795166210528-1.jsonl",
+    "localCopy": "/Users/guo.xu/Documents/code/games/xbxrc/runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+    "bytes": 19554765,
+    "sha256": "126e80ac00474f98f467eb95bc01a63d3958372518b1a71a041187159cb650db",
+    "temporaryRoot": "/private/tmp/xbxrc-xhome-mac-trace-analysis-20261120/r2",
+    "runTarget": "My Mac (Designed for iPad)",
+    "runTargetEvidence": "用户本轮明确确认",
+    "deviceModelInterpretation": "日志iPad8,6是兼容运行目标标识；设备能力结合Mac运行目标解释。"
+  },
+  "baseGate": {
+    "result": "FAIL",
+    "failures": {
+      "budgetViolations": 0,
+      "coverageViolations": 0,
+      "invalidRows": 0,
+      "noRows": 0,
+      "pairingViolations": 1,
+      "privacyViolations": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0
+    },
+    "pairingViolation": "seq138图片候选有start而缺outcome"
+  },
+  "coreGate": {
+    "result": "FAIL",
+    "attempt1": "FAIL：完成代次缺peerConnected/remoteIceCompleted/四通道profile，playing缺失，初始连接超时退出",
+    "attempt2": "PASS：连接、握手、首帧、稳态与退出链完整"
+  },
+  "checks": {
+    "completedJsonRows": 36195,
+    "sequenceGapCount": 0,
+    "malformedRows": 0,
+    "privacyViolations": 0,
+    "pressureNotices": 0,
+    "rawFileWithinBudget": true,
+    "receivedEqualsDecoded": true,
+    "sourceClockPairing": true
+  },
+  "conclusions": {
+    "receiveDecodeWeightedFps": 58.872092691246756,
+    "presentWeightedFps": 18.073445141793393,
+    "drawableWeightedFps": 18.046081863758882,
+    "callbackHandlingDelayP50Ms": 51.747208297252655,
+    "callbackHandlingDelayP95Ms": 71.87437492609024,
+    "callbackHandlingDelayP99Ms": 105.10974997282028,
+    "gpuCompletionP95Ms": 2.052000045776367,
+    "latestIngressDropRatio": 0.6921914943062979,
+    "repeatedPlayingRows": 15926,
+    "spatialScalerConfiguredRows": 0,
+    "sharpnessObservation": "Trace缺实际参数；代码shader已接线，实际强度与视觉增益待同帧A/B",
+    "superResolutionObservation": "本文件覆盖启动且无loss；当前首次MetalFX配置必记事件，本次成功配置路径缺记录；开关/兼容/能力/输出像素/缩放倍率缺观测",
+    "redactionGap": "completionHandlerDelayMs被敏感片段handle误脱敏；本轮由sourceMonotonicMs-presentedAtMonotonicMs恢复处理延迟"
+  },
+  "method": "FPS使用同一sampleId的相邻累计量delta/真实sampleWindowMs；处理延迟按同帧同一单调时钟差分，包含回调排队及Trace前处理；drawable使用系统presentedTime独立观测。",
+  "boundary": "主线程等待与入口掉帧已由Trace证明；重复playing/高频health更新是代码首要疑因，其CPU占比和修复收益待Time Profiler或A/B。视觉画质增益需要同场景截图对照。",
+  "coreObservationListsCompacted": true,
+  "coreObservationListsOriginalBytes": 27664558
+}

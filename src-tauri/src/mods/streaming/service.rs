@@ -1087,8 +1087,26 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         params: StreamingDecideRecoveryParams,
     ) -> AppResult<StreamingDecideRecoveryResult> {
         let fact_value = serde_json::to_value(&params.fact).unwrap_or(serde_json::Value::Null);
+        if let StreamingRuntimeFact::Supervision { sample } = &params.fact {
+            let mut sample = sample.clone();
+            sample.is_closing |= params.is_closing;
+            let decision = self
+                .inner
+                .flow
+                .supervise_runtime(&params.session_id, sample)
+                .await
+                .map_err(map_flow_error)?;
+            return Ok(StreamingDecideRecoveryResult {
+                should_reconnect: decision.media_connection_eligible,
+                reason: decision
+                    .media_connection_eligible
+                    .then(|| "media-stalled".into()),
+                supervision: Some(decision),
+            });
+        }
         // 恢复判定统一在 crate session 内完成，tauri 仅做运行事实映射。
         let reason = match params.fact {
+            StreamingRuntimeFact::Supervision { .. } => unreachable!("supervision handled above"),
             StreamingRuntimeFact::TransportConnectionState { connection_state } => {
                 decide_runtime_recovery(
                     RuntimeFact::TransportConnectionState(connection_state.as_str()),
@@ -1133,6 +1151,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         Ok(StreamingDecideRecoveryResult {
             should_reconnect: reason.is_some(),
             reason,
+            supervision: None,
         })
     }
 

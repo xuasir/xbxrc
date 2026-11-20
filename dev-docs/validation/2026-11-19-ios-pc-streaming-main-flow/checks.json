@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-19",
+  "scope": "current main working tree: iOS versus PC Browser",
+  "head": "b7f09ec8311d1af46f0b105aef110f461d6a2b0f",
+  "productionCodeChangedByAudit": false,
+  "checks": [
+    {
+      "command": "sh iosapp/scripts/check-streaming-session-boundary.sh",
+      "exitCode": 0,
+      "result": "streaming session boundary check passed"
+    },
+    {
+      "command": "python3 -B -m unittest discover -s iosapp/scripts/tests -p 'test_check_streaming_core_trace.py'",
+      "exitCode": 0,
+      "testsPassed": 14,
+      "result": "OK"
+    },
+    {
+      "name": "evidence-source-links",
+      "result": "passed",
+      "sourceFiles": 21
+    }
+  ],
+  "sourceSha256": {
+    "crates/xbox-ios-bridge/src/cloud_access.rs": "9c80c971e1aec40dd0a763ec07b89cbf708cc3434655913ed4bd68abb24557a3",
+    "crates/xbox-ios-bridge/src/streaming.rs": "cb72422f66f0c212762e29f8f68819be7ec0b6e23141024a253b2173bd9d0aa4",
+    "crates/xbox-streaming/src/session/flow.rs": "9185db5b659fb3c95f5eaffd57c0d0754a5088762cc04e8c0b04144bca53d093",
+    "crates/xbox-streaming/src/session/signaling/flow.rs": "cf9b426dd07c4850dc3bd1360a3f6f2d2e5e2cc18351b8f0dc55c97b2cc4e116",
+    "crates/xbox-streaming/src/session/signaling/state.rs": "38470af1d8eba779b77af57ca21d608f7c5170fc078f6a2691e0aabb2fd86af6",
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": "0bb39560a9c42f40d9f4a14d5936d383b6c2410df11e6f6d4e3d881e62fe1ecb",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "4985cb1d6f77d4f0a65f98286c44bb84b0b70d15e45b3c5c1a1aa4d23e505caa",
+    "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift": "9c7fd57c96b7270e0cb7b0de1bd860a332f2553d902e830527150003f77a0197",
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "b85956fc149f6ae8fe4cadf05c8f11c6add2307d8f8979648e890c962d437454",
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "9afa7e17bb2b4ea06f26da2eaba3425cdd66defb5304653b7d7d8aea969dd615",
+    "iosapp/XBXRC/Platform/Streaming/StreamingSessionState.swift": "6d2e3b35ffda1c29d2d3154cafa17339719b4cc88d770d18f65112aa82bfbdbb",
+    "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift": "089e9455b73d9f921ac7c1c85251ec8b06ae536b749ba08fb7bfa527f3b012c4",
+    "src-tauri/src/mods/data/services/streaming_query_service.rs": "8a445ac26c5cdfe0a29af2dc99f60098f70f659a43685b6c29307f3a8b130dbb",
+    "src-tauri/src/mods/streaming/context.rs": "ac9972d7edf3619bb4ff96c070339e9c24bea5e75b073faeb3ea3b8b6281f5ba",
+    "src-tauri/src/mods/streaming/service.rs": "a1ede2043c1b68d3d012f0b48c0ffef5c0af722063cd84c837418d39f7ddfa2a",
+    "src/player/app/input/InputService.ts": "ce5b7f1a46ac4d9bf80c3da1e2b764bb243b38ee94c4dc12a6b8aed682fe56f9",
+    "src/player/app/input/frame-feedback.ts": "bace61732bfc2f9f4a4ff86d4f7e95d9793488b89da07c1d4eec3fd4d5fe65ce",
+    "src/player/app/media/PlaybackService.ts": "2f108342dd67046cb85db618f1d3928ee8ace9dec9018c2c7b5f62eab9b8a186",
+    "src/streaming/runtime/browser-runtime.ts": "ca19d762aa227c78b1b2bfbf7f3dd3bac146e34f92338748d4bc5158a02bbb3c",
+    "src/streaming/runtime/browser-supervision.ts": "a32bc8fc5ca132938970d288013d82d3752e6853538733827122e6fb34f026e0",
+    "src/streaming/useStreamExecution.ts": "2461570b71289052e637c60ddadae87bbf024eeba67797cc6542b9aaf01e5ee5"
+  },
+  "runtimeEvidence": {
+    "networkHealth": "requires fresh device trace",
+    "recoveryChainHealth": "requires fresh device trace",
+    "mediaSupply": "requires fresh device trace",
+    "steadySupply": "requires fresh device trace",
+    "submitPresentTails": "requires fresh device trace",
+    "frameSupplyDelta": "requires fresh device trace"
+  },
+  "cleanup": {
+    "testTemporaryDirectories": "TemporaryDirectory contexts completed",
+    "persistentTemporaryArtifactsCreated": 0,
+    "bytesReleased": 0,
+    "retained": [
+      "README.md",
+      "checks.json"
+    ]
+  }
+}

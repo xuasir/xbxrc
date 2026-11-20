@@ -16,6 +16,10 @@ use crate::session::monitor::SessionRuntimeBinding;
 use crate::session::operation::{
     cancelled_error, now_ms, PreparationBudget, SessionStartupScope, StartupRegistry,
 };
+use crate::session::recovery::{
+    decide_runtime_supervision, RuntimeSupervisionDecision, RuntimeSupervisionSample,
+    RuntimeSupervisionState,
+};
 use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
 use crate::session::signaling::logic::{decide_ice_poll, PollDecision};
@@ -373,6 +377,7 @@ where
     pub(crate) mutations: tokio::sync::RwLock<HashMap<String, Arc<SessionMutationEntry>>>,
     startups: Arc<Mutex<StartupRegistry>>,
     cleanups: tokio::sync::Mutex<HashMap<String, Arc<SessionCleanupEntry>>>,
+    runtime_supervision: tokio::sync::Mutex<HashMap<String, RuntimeSupervisionState>>,
 }
 
 impl<S: SessionFlowSnapshot, P: SessionFlowProvider> SessionFlowServiceInner<S, P> {
@@ -383,6 +388,7 @@ impl<S: SessionFlowSnapshot, P: SessionFlowProvider> SessionFlowServiceInner<S, 
             return;
         }
         self.signaling.write().await.remove(session_id);
+        self.runtime_supervision.lock().await.remove(session_id);
         let mut mutations = self.mutations.write().await;
         if mutations
             .get(session_id)
@@ -436,6 +442,7 @@ where
                 mutations: tokio::sync::RwLock::new(HashMap::new()),
                 startups: Arc::new(Mutex::new(StartupRegistry::default())),
                 cleanups: tokio::sync::Mutex::new(HashMap::new()),
+                runtime_supervision: tokio::sync::Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -486,9 +493,35 @@ where
             })
     }
 
+    pub async fn supervise_runtime(
+        &self,
+        session_id: &str,
+        sample: RuntimeSupervisionSample,
+    ) -> Result<RuntimeSupervisionDecision, SessionFlowError> {
+        let sessions = self.inner.sessions.read().await;
+        let record = sessions
+            .get(session_id)
+            .ok_or_else(|| cancelled_error("runtimeSupervision"))?;
+        if record.cancelled.is_cancelled() {
+            return Err(cancelled_error("runtimeSupervision"));
+        }
+        let mut states = self.inner.runtime_supervision.lock().await;
+        Ok(decide_runtime_supervision(
+            &sample,
+            states.entry(session_id.to_owned()).or_default(),
+        ))
+    }
+
     pub async fn send_keepalive(&self, session_id: &str) -> Result<bool, SessionFlowError> {
         let scheduler = SessionScheduler::new(Arc::clone(&self.inner));
         scheduler.send_keepalive(session_id).await
+    }
+
+    /// 宿主恢复可立即复用原 monitor 的一次服务端状态观测。
+    pub async fn refresh_session_observation(&self, session_id: &str) {
+        SessionScheduler::new(Arc::clone(&self.inner))
+            .monitor_session_tick(session_id)
+            .await;
     }
 
     pub async fn list_active_sessions(&self, target_type: Option<String>) -> ListActiveSessions<S> {

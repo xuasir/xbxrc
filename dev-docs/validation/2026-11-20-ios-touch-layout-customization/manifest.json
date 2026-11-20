@@ -1,0 +1,62 @@
+[
+  {
+    "file": "phone-touch-template-restored-after-relaunch.png",
+    "round": "r4",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPhone 18 Pro"
+  },
+  {
+    "file": "phone-touch-template-adjusted-preview.png",
+    "round": "r4",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPhone 18 Pro"
+  },
+  {
+    "file": "phone-touch-template-dragged.png",
+    "round": "r4",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPhone 18 Pro"
+  },
+  {
+    "file": "phone-touch-template-settings.png",
+    "round": "r4",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPhone 18 Pro"
+  },
+  {
+    "file": "phone-touch-template-portrait-lower-half.png",
+    "round": "r6",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "device": "iPhone 18 Pro"
+  },
+  {
+    "file": "ipad-touch-template-restored-after-relaunch.png",
+    "round": "r7",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPad Pro 13-inch (M5)"
+  },
+  {
+    "file": "ipad-touch-template-adjusted-preview.png",
+    "round": "r7",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPad Pro 13-inch (M5)"
+  },
+  {
+    "file": "ipad-touch-template-dragged.png",
+    "round": "r7",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPad Pro 13-inch (M5)"
+  },
+  {
+    "file": "ipad-touch-template-settings.png",
+    "round": "r7",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "device": "iPad Pro 13-inch (M5)"
+  },
+  {
+    "file": "ipad-touch-template-portrait-lower-half.png",
+    "round": "r7",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "device": "iPad Pro 13-inch (M5)"
+  }
+]

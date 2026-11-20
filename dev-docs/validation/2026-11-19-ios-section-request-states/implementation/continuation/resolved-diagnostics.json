@@ -1,0 +1,21 @@
+{
+  "environmentFailure": {
+    "exitCode": 74,
+    "errors": [
+      "2026-11-19 18:08:48.238 xcodebuild[55971:4513344] Logging connecton invalid: <OS_xpc_error: <dictionary: 0x1f05dcb60> { count = 1, transaction: 0, voucher = 0x0, contents =",
+      "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]:499] WARN  : Unable to discover any Simulator runtimes. Developer Directory is /Applications/Xcode.app/Contents/Developer.",
+      "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]_block_invoke:556] ERROR : Could not get list of trusted mount directories: Error Domain=com.apple.CoreSimulator.SimError Code=409 \"Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded\" UserInfo={NSLocalizedDescription=Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded}",
+      "[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({",
+      "xcodebuild: error: Could not resolve package dependencies:",
+      "<unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted",
+      "<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'",
+      "<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)"
+    ],
+    "resolution": "授权系统SwiftPM和Clang缓存访问后，模拟器构建与3项定向回归通过。"
+  },
+  "legacyAssertions": {
+    "profile": "四个资料来源分别请求一次，重复激活保持各来源去重。",
+    "playtime": "游戏列表成功状态与更新时间保留，失败归入时长分区并结束busy。"
+  },
+  "swiftFormat": "使用既有4空格、100列约定；本轮修改通过严格核验。"
+}

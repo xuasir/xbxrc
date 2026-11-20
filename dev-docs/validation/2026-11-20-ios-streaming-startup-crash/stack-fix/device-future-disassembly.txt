@@ -1,0 +1,163 @@
+
+/private/tmp/xbxrc-ios-streaming-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000000b004e8 <__ZN11uniffi_core3ffi10rustfuture15rust_future_new17h462899a26c482f30E>:
+  b004e8: a9be6ffc     	stp	x28, x27, [sp, #-0x20]!
+  b004ec: a9017bfd     	stp	x29, x30, [sp, #0x10]
+  b004f0: 910043fd     	add	x29, sp, #0x10
+  b004f4: d134c3ff     	sub	sp, sp, #0xd30
+  b004f8: f90003ff     	str	xzr, [sp]
+  b004fc: aa0003e1     	mov	x1, x0
+  b00500: 910203e0     	add	x0, sp, #0x80
+  b00504: f90007e0     	str	x0, [sp, #0x8]
+  b00508: 52819608     	mov	w8, #0xcb0              ; =3248
+  b0050c: aa0803e2     	mov	x2, x8
+  b00510: 943374b3     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  b00514: f94007e0     	ldr	x0, [sp, #0x8]
+  b00518: 910063e8     	add	x8, sp, #0x18
+  b0051c: f9000be8     	str	x8, [sp, #0x10]
+  b00520: 97fed57f     	bl	0xab5b1c <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE>
+  b00524: f9400be0     	ldr	x0, [sp, #0x10]
+  b00528: 9403cca0     	bl	0xbf37a8 <__ZN5alloc4sync12Arc$LT$T$GT$3new17hdd2db435ff919702E>
+  b0052c: 97fee956     	bl	0xabaa84 <__ZN11uniffi_core3ffi6handle6Handle8from_arc17he1ba941cec140803E>
+  b00530: 9134c3ff     	add	sp, sp, #0xd30
+  b00534: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+  b00538: a8c26ffc     	ldp	x28, x27, [sp], #0x20
+  b0053c: d65f03c0     	ret
+
+
+/private/tmp/xbxrc-ios-streaming-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000000ab5b1c <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE>:
+  ab5b1c: a9be6ffc     	stp	x28, x27, [sp, #-0x20]!
+  ab5b20: a9017bfd     	stp	x29, x30, [sp, #0x10]
+  ab5b24: 910043fd     	add	x29, sp, #0x10
+  ab5b28: d135c3ff     	sub	sp, sp, #0xd70
+  ab5b2c: f90003ff     	str	xzr, [sp]
+  ab5b30: f90007e8     	str	x8, [sp, #0x8]
+  ab5b34: aa0003e1     	mov	x1, x0
+  ab5b38: 9102c3e0     	add	x0, sp, #0xb0
+  ab5b3c: f9000be0     	str	x0, [sp, #0x10]
+  ab5b40: 52819608     	mov	w8, #0xcb0              ; =3248
+  ab5b44: aa0803e2     	mov	x2, x8
+  ab5b48: 94349f25     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  ab5b4c: f9400be0     	ldr	x0, [sp, #0x10]
+  ab5b50: 910163e8     	add	x8, sp, #0x58
+  ab5b54: 97ffb7be     	bl	0xaa3a4c <__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE>
+  ab5b58: 14000007     	b	0xab5b74 <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x58>
+  ab5b5c: f85e03a0     	ldur	x0, [x29, #-0x20]
+  ab5b60: 94349dba     	bl	0x17dd248 <_writev+0x17dd248>
+  ab5b64: f81e03a0     	stur	x0, [x29, #-0x20]
+  ab5b68: aa0103e8     	mov	x8, x1
+  ab5b6c: b81e83a8     	stur	w8, [x29, #-0x18]
+  ab5b70: 17fffffb     	b	0xab5b5c <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x40>
+  ab5b74: 910063e8     	add	x8, sp, #0x18
+  ab5b78: 910163e0     	add	x0, sp, #0x58
+  ab5b7c: 9407f0a1     	bl	0xcb1e00 <__ZN3std4sync6poison5mutex14Mutex$LT$T$GT$3new17h81811aeb2088e41eE>
+  ab5b80: 14000001     	b	0xab5b84 <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x68>
+  ab5b84: 910223e8     	add	x8, sp, #0x88
+  ab5b88: 94040598     	bl	0xbb71e8 <__ZN11uniffi_core3ffi10rustfuture9scheduler25Scheduler$LT$Callback$GT$3new17hd0d8cba207933b3eE>
+  ab5b8c: 14000008     	b	0xab5bac <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x90>
+  ab5b90: 910063e0     	add	x0, sp, #0x18
+  ab5b94: 97ff3751     	bl	0xa838d8 <__ZN4core3ptr159drop_in_place$LT$std..sync..poison..mutex..Mutex$LT$uniffi_core..ffi..rustfuture..future..WrappedFuture$LT$uniffi_core..ffi..rustbuffer..RustBuffer$GT$$GT$$GT$17h4cdc1c15b21550c7E>
+  ab5b98: 17fffff1     	b	0xab5b5c <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x40>
+  ab5b9c: f81e03a0     	stur	x0, [x29, #-0x20]
+  ab5ba0: aa0103e8     	mov	x8, x1
+  ab5ba4: b81e83a8     	stur	w8, [x29, #-0x18]
+  ab5ba8: 17fffffa     	b	0xab5b90 <__ZN11uniffi_core3ffi10rustfuture6future36RustFuture$LT$FfiType$C$Callback$GT$3new17h8048a444756f959fE+0x74>
+  ab5bac: f94007e0     	ldr	x0, [sp, #0x8]
+  ab5bb0: 910063e1     	add	x1, sp, #0x18
+  ab5bb4: 52800808     	mov	w8, #0x40               ; =64
+  ab5bb8: aa0803e2     	mov	x2, x8
+  ab5bbc: 94349f08     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  ab5bc0: f94007e8     	ldr	x8, [sp, #0x8]
+  ab5bc4: 91010100     	add	x0, x8, #0x40
+  ab5bc8: 910223e1     	add	x1, sp, #0x88
+  ab5bcc: 52800508     	mov	w8, #0x28               ; =40
+  ab5bd0: aa0803e2     	mov	x2, x8
+  ab5bd4: 94349f02     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  ab5bd8: 9135c3ff     	add	sp, sp, #0xd70
+  ab5bdc: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+  ab5be0: a8c26ffc     	ldp	x28, x27, [sp], #0x20
+  ab5be4: d65f03c0     	ret
+  ab5be8: 94348b57     	bl	0x17d8944 <__ZN4core9panicking16panic_in_cleanup17hb720edf6aaee4763E>
+
+
+/private/tmp/xbxrc-ios-streaming-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000000aa3a4c <__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE>:
+  aa3a4c: a9be6ffc     	stp	x28, x27, [sp, #-0x20]!
+  aa3a50: a9017bfd     	stp	x29, x30, [sp, #0x10]
+  aa3a54: 910043fd     	add	x29, sp, #0x10
+  aa3a58: d14007ff     	sub	sp, sp, #0x1, lsl #12   ; =0x1000
+  aa3a5c: f90003ff     	str	xzr, [sp]
+  aa3a60: d14007ff     	sub	sp, sp, #0x1, lsl #12   ; =0x1000
+  aa3a64: f90003ff     	str	xzr, [sp]
+  aa3a68: d14007ff     	sub	sp, sp, #0x1, lsl #12   ; =0x1000
+  aa3a6c: f90003ff     	str	xzr, [sp]
+  aa3a70: d10cc3ff     	sub	sp, sp, #0x330
+  aa3a74: f90003e8     	str	x8, [sp]
+  aa3a78: aa0003e1     	mov	x1, x0
+  aa3a7c: 910083e0     	add	x0, sp, #0x20
+  aa3a80: f90007e0     	str	x0, [sp, #0x8]
+  aa3a84: 52819608     	mov	w8, #0xcb0              ; =3248
+  aa3a88: aa0803e2     	mov	x2, x8
+  aa3a8c: 9434e754     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  aa3a90: f94007e1     	ldr	x1, [sp, #0x8]
+  aa3a94: 52832d08     	mov	w8, #0x1968             ; =6504
+  aa3a98: aa0803e9     	mov	x9, x8
+  aa3a9c: aa0103e8     	mov	x8, x1
+  aa3aa0: 8b090108     	add	x8, x8, x9
+  aa3aa4: 3900011f     	strb	wzr, [x8]
+  aa3aa8: 914007e0     	add	x0, sp, #0x1, lsl #12   ; =0x1000
+  aa3aac: 9126c000     	add	x0, x0, #0x9b0
+  aa3ab0: 52832e08     	mov	w8, #0x1970             ; =6512
+  aa3ab4: aa0803e2     	mov	x2, x8
+  aa3ab8: f9000be2     	str	x2, [sp, #0x10]
+  aa3abc: 9434e748     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  aa3ac0: f9400be0     	ldr	x0, [sp, #0x10]
+  aa3ac4: 52800108     	mov	w8, #0x8                ; =8
+  aa3ac8: aa0803e1     	mov	x1, x8
+  aa3acc: 9403c6d3     	bl	0xb95618 <__ZN5alloc5alloc15exchange_malloc17h827d973d7b9779d7E>
+  aa3ad0: f9000fe0     	str	x0, [sp, #0x18]
+  aa3ad4: 1400000b     	b	0xaa3b00 <__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE+0xb4>
+  aa3ad8: f81e03a0     	stur	x0, [x29, #-0x20]
+  aa3adc: aa0103e8     	mov	x8, x1
+  aa3ae0: b81e83a8     	stur	w8, [x29, #-0x18]
+  aa3ae4: 914007e0     	add	x0, sp, #0x1, lsl #12   ; =0x1000
+  aa3ae8: 9126c000     	add	x0, x0, #0x9b0
+  aa3aec: 97ffbc9f     	bl	0xa92d68 <__ZN4core3ptr433drop_in_place$LT$uniffi_core..ffi..rustfuture..future..WrappedFuture$LT$uniffi_core..ffi..rustbuffer..RustBuffer$GT$..new$LT$xbox_ios_bridge..streaming..uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start..$u7b$$u7b$closure$u7d$$u7d$$C$core..result..Result$LT$xbox_ios_bridge..streaming..XboxPreparedSignaling$C$xbox_ios_bridge..streaming..XboxStreamingError$GT$$C$xbox_ios_bridge..UniFfiTag$GT$..$u7b$$u7b$closure$u7d$$u7d$$GT$17h1fdb0a4430126b38E>
+  aa3af0: 14000002     	b	0xaa3af8 <__ZN11uniffi_core3ffi10rustfuture6future28WrappedFuture$LT$FfiType$GT$3new17h3ca0d4c53bcd461eE+0xac>
+  aa3af4: 9434d394     	bl	0x17d8944 <__ZN4core9panicking16panic_in_cleanup17hb720edf6aaee4763E>
+  aa3af8: f85e03a0     	ldur	x0, [x29, #-0x20]
+  aa3afc: 9434e5d3     	bl	0x17dd248 <_writev+0x17dd248>
+  aa3b00: f9400fe0     	ldr	x0, [sp, #0x18]
+  aa3b04: 914007e1     	add	x1, sp, #0x1, lsl #12   ; =0x1000
+  aa3b08: 9126c021     	add	x1, x1, #0x9b0
+  aa3b0c: 52832e08     	mov	w8, #0x1970             ; =6512
+  aa3b10: aa0803e2     	mov	x2, x8
+  aa3b14: 9434e732     	bl	0x17dd7dc <_writev+0x17dd7dc>
+  aa3b18: f9400fe9     	ldr	x9, [sp, #0x18]
+  aa3b1c: f94003e8     	ldr	x8, [sp]
+  aa3b20: 528000aa     	mov	w10, #0x5               ; =5
+  aa3b24: 912647eb     	add	x11, sp, #0x991
+  aa3b28: 393ffd6a     	strb	w10, [x11, #0xfff]
+  aa3b2c: f9001109     	str	x9, [x8, #0x20]
+  aa3b30: d000a929     	adrp	x9, 0x1fc9000 <_$s5XBXRC22XboxHostStorageSummaryVWV>
+  aa3b34: 91338129     	add	x9, x9, #0xce0
+  aa3b38: f9001509     	str	x9, [x8, #0x28]
+  aa3b3c: 3dc667e0     	ldr	q0, [sp, #0x1990]
+  aa3b40: 3d800100     	str	q0, [x8]
+  aa3b44: 3dc66be0     	ldr	q0, [sp, #0x19a0]
+  aa3b48: 3d800500     	str	q0, [x8, #0x10]
+  aa3b4c: 91400fff     	add	sp, sp, #0x3, lsl #12   ; =0x3000
+  aa3b50: 910cc3ff     	add	sp, sp, #0x330
+  aa3b54: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+  aa3b58: a8c26ffc     	ldp	x28, x27, [sp], #0x20
+  aa3b5c: d65f03c0     	ret

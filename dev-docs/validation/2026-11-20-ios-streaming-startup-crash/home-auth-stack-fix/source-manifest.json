@@ -1,0 +1,29 @@
+{
+  "files": {
+    "crates/xbox-streaming/src/session/operation.rs": {
+      "sha256": "19ccbe4df7f98468d589c0b1263e8d634233fc1e6c8d4730f26ec84f778b1785",
+      "modifiedAt": "2026-11-20T13:54:43.818540+08:00"
+    },
+    "crates/xbox-streaming/src/session/operation/stack_tests.rs": {
+      "sha256": "20fdf25e4b2df702efc5c2d70ebd5762d13a685f5c7bc41b2e7ce9b8cd93cd9e",
+      "modifiedAt": "2026-11-20T14:30:34.803850+08:00"
+    },
+    "crates/xbox-ios-bridge/src/streaming/stack_tests.rs": {
+      "sha256": "3e35a56099d537317486009294c1548f39b9b10608c37a0d3971cab72224cd13",
+      "modifiedAt": "2026-11-20T14:30:41.125122+08:00"
+    }
+  },
+  "adjacentMatchesBaseline": {
+    "crates/xbox-ios-bridge/src/cloud_access.rs": true,
+    "crates/xbox-ios-bridge/src/streaming.rs": true,
+    "crates/xbox-ios-bridge/src/streaming/credentials.rs": true
+  },
+  "deviceBinary": {
+    "pathAtBuild": "/private/tmp/xbxrc-ios-home-auth-stack-fix-20261120/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib",
+    "sha256": "f9e4eefd9e3e5b8ed53ac02aee293ba2a32b27bab0d79b4978dd3ea74a6761e5",
+    "modifiedAt": "2026-11-20T14:20:50.932338+08:00",
+    "platform": "iPhoneOS arm64",
+    "configuration": "Debug",
+    "codeSigningAllowed": false
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-18",
+  "symbolSizePt": 28,
+  "slotSizePt": 40,
+  "symbolToTitleVisibleGapPt": 18,
+  "slotToTitleGapPt": 12,
+  "bottomGapPt": 24,
+  "results": {
+    "phone": {
+      "passedTests": 2,
+      "result": "Passed"
+    },
+    "ipad": {
+      "passedTests": 2,
+      "result": "Passed"
+    }
+  },
+  "pixelChecks": [
+    {
+      "platform": "phone",
+      "logoInkWidthPt": 28.0,
+      "logoInkHeightPt": 28.0,
+      "rgbaPreservedAfterCompression": true,
+      "rootTitleFramesMatchPrevious": true
+    },
+    {
+      "platform": "ipad",
+      "logoInkWidthPt": 28.0,
+      "logoInkHeightPt": 28.0,
+      "rgbaPreservedAfterCompression": true,
+      "rootTitleFramesMatchPrevious": true
+    }
+  ],
+  "swiftFormat": "Passed (repository 4-space configuration)",
+  "lintFix": "Passed",
+  "indexDiffPreserved": true,
+  "sources": [
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+      "sha256": "9e447eec9d7ec116fb8206ffc9fe65765186d4279537feedb6b6b563c9ded417"
+    },
+    {
+      "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+      "sha256": "d853e004dfcf0b6e66ec85fea7a408703c1e6e0c1c62f2c842db01c3123359a9"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "41f0946bed80d401677551af38f87384717063c4e1bafc96521f3373b4de2c87"
+    }
+  ],
+  "images": [
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-logo-scale/ipad-settings.png",
+      "sha256": "e8c382ed4ce2c1cd16075a88f2b2004f069274a2f2966bd4a729c2737df6ba55"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-logo-scale/phone-hosts.png",
+      "sha256": "961121d7f4eff3b453300fa8f6f82a503c8c4775b1f5a5328a930d0528abbb67"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-18-ios-brand-logo-scale/header-comparison.jpg",
+      "sha256": "0da96b6b0fa42cdcddbe3ef86d3ef2a2c3f2df4c2b2d94ac87072bf45823d06c"
+    }
+  ],
+  "diffChecks": {
+    "unstaged": "Passed",
+    "staged": "Passed"
+  }
+}

@@ -1,0 +1,355 @@
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 682-767
+682: struct StreamingLatestIngressDelivery<Value>: @unchecked Sendable {
+683:     let value: Value
+684:     let replacedCount: Int64
+685: }
+686: 
+687: final class StreamingLatestIngressSlot<Value>: @unchecked Sendable {
+688:     private let lock = NSLock()
+689:     private var pendingValue: Value?
+690:     private var deliveryScheduled = false
+691:     private var replacedCount: Int64 = 0
+692: 
+693:     func submit(_ value: Value) -> Bool {
+694:         lock.lock()
+695:         if pendingValue != nil { replacedCount += 1 }
+696:         pendingValue = value
+697:         let shouldSchedule = !deliveryScheduled
+698:         deliveryScheduled = true
+699:         lock.unlock()
+700:         return shouldSchedule
+701:     }
+702: 
+703:     func take() -> StreamingLatestIngressDelivery<Value>? {
+704:         lock.lock()
+705:         defer { lock.unlock() }
+706:         guard let pendingValue else { return nil }
+707:         let delivery = StreamingLatestIngressDelivery(
+708:             value: pendingValue,
+709:             replacedCount: replacedCount
+710:         )
+711:         self.pendingValue = nil
+712:         replacedCount = 0
+713:         return delivery
+714:     }
+715: 
+716:     func finishDelivery() -> Bool {
+717:         lock.lock()
+718:         defer { lock.unlock() }
+719:         guard pendingValue == nil else { return true }
+720:         deliveryScheduled = false
+721:         return false
+722:     }
+723: 
+724:     func reset() {
+725:         lock.lock()
+726:         pendingValue = nil
+727:         deliveryScheduled = false
+728:         replacedCount = 0
+729:         lock.unlock()
+730:     }
+731: }
+732: 
+733: private final class StreamingVideoFrameIngress: NSObject, RTCVideoRenderer, @unchecked Sendable {
+734:     private let frameSlot = StreamingLatestIngressSlot<RTCVideoFrame>()
+735:     @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64) -> Void)?
+736:     @MainActor var sizeSink: (@MainActor (CGSize) -> Void)?
+737: 
+738:     func setSize(_ size: CGSize) {
+739:         guard size.width > 0, size.height > 0 else { return }
+740:         Task { @MainActor [weak self] in
+741:             self?.sizeSink?(size)
+742:         }
+743:     }
+744: 
+745:     func renderFrame(_ frame: RTCVideoFrame?) {
+746:         guard let frame else { return }
+747:         if frameSlot.submit(frame) { scheduleDrain() }
+748:     }
+749: 
+750:     func reset() {
+751:         frameSlot.reset()
+752:     }
+753: 
+754:     private func scheduleDrain() {
+755:         Task { @MainActor [weak self] in
+756:             self?.drainLatestFrame()
+757:         }
+758:     }
+759: 
+760:     @MainActor
+761:     private func drainLatestFrame() {
+762:         guard let delivery = frameSlot.take() else {
+763:             _ = frameSlot.finishDelivery()
+764:             return
+765:         }
+766:         frameSink?(delivery.value, delivery.replacedCount)
+767:         if frameSlot.finishDelivery() { scheduleDrain() }
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 1174-1224
+1174:             let renderedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
+1175:             Task { @MainActor in
+1176:                 self?.handleCompletedCommandBuffer(
+1177:                     completedSuccessfully: completedSuccessfully,
+1178:                     frame: frame,
+1179:                     context: traceContext,
+1180:                     renderedAtMilliseconds: renderedAtMilliseconds
+1181:                 )
+1182:             }
+1183:         }
+1184:         #if !targetEnvironment(simulator)
+1185:             // 真机分别观测系统 drawable 呈现与 GPU 完成，模拟器沿用 GPU 完成观测。
+1186:             drawable.addPresentedHandler { [weak self] presentedDrawable in
+1187:                 let presentedAt = presentedDrawable.presentedTime * 1_000
+1188:                 guard presentedAt > 0 else { return }
+1189:                 Task { @MainActor in
+1190:                     guard let self, self.currentTraceContext() == traceContext else { return }
+1191:                     let snapshot = self.telemetry.recordDrawablePresent(
+1192:                         submittedAt: submitTimestamp, presentedAt: presentedAt)
+1193:                     self.emitPresentationEvent(.displayHealth(traceContext, snapshot))
+1194:                 }
+1195:             }
+1196:         #endif
+1197:         commandBuffer.present(drawable)
+1198:         commandBuffer.commit()
+1199:     }
+1200: 
+1201:     private func handleCompletedCommandBuffer(
+1202:         completedSuccessfully: Bool,
+1203:         frame: StreamingDecodedFrameRef,
+1204:         context: StreamingPresentationTraceContext,
+1205:         renderedAtMilliseconds: Double
+1206:     ) {
+1207:         guard currentTraceContext() == context else { return }
+1208:         guard completedSuccessfully else {
+1209:             telemetry.cancelSubmit(identifier: frame.identifier)
+1210:             handleSkippedPresent(
+1211:                 frame: frame,
+1212:                 reason: .drawableUnavailable,
+1213:                 requeueAsLatest: true
+1214:             )
+1215:             return
+1216:         }
+1217:         frame.frameFeedback?.session.recordRendered(
+1218:             timing: frame.frameFeedback!.timing, atMilliseconds: renderedAtMilliseconds)
+1219:         let hasPending = handlePresentedFrame(
+1220:             frame, context: context, presentedAt: renderedAtMilliseconds)
+1221:         let health = telemetry.setDrawableBusy(false)
+1222:         emitPresentationEvent(.displayHealth(context, health))
+1223:         if hasPending { scheduler.requestTick() }
+1224:     }
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 1230-1253
+1230:         presentedAt presentTimestamp: Double
+1231:     ) -> Bool {
+1232:         let hasPending = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
+1233:         let present = telemetry.recordPresent(
+1234:             identifier: frame.identifier,
+1235:             timestampMilliseconds: presentTimestamp
+1236:         )
+1237:         emitPresentationEvent(.displayHealth(context, present.snapshot))
+1238:         var presentPayload: [String: IOSRuntimeTraceValue] = [
+1239:             "presentCount": .integer(present.snapshot.presentCount),
+1240:             "frameId": .integer(Int64(clamping: frame.identifier)),
+1241:             "presentedAtMonotonicMs": .double(presentTimestamp),
+1242:             "presentTimestampSource": .string("commandBufferCompletion"),
+1243:             "completionHandlerDelayMs": .double(
+1244:                 max(0, StreamingFrameFeedbackClock.nowMilliseconds - presentTimestamp)),
+1245:             "frameWidth": .integer(Int64(frame.width)),
+1246:             "frameHeight": .integer(Int64(frame.height)),
+1247:         ]
+1248:         if let compatibilityPath = frame.storage.compatibilityPath {
+1249:             presentPayload["compatibilityPath"] = .string(compatibilityPath)
+1250:         }
+1251:         IOSRuntimeTrace.state(
+1252:             domain: "ios-streaming",
+1253:             event: "displayPresent",
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 1499-1527
+1499:     ) -> MTLTexture? {
+1500:         #if targetEnvironment(simulator)
+1501:             return nil
+1502:         #else
+1503:             stateLock.lock()
+1504:             let selectedPicture = picture
+1505:             stateLock.unlock()
+1506:             guard selectedPicture.superResolution, !selectedPicture.compatibilityMode,
+1507:                 let device, bgraPipelineState != nil,
+1508:                 MTLFXSpatialScalerDescriptor.supportsDevice(device)
+1509:             else { return nil }
+1510:             let rotated = frame.rotationDegrees == 90 || frame.rotationDegrees == 270
+1511:             let width = Double(rotated ? frame.height : frame.width)
+1512:             let height = Double(rotated ? frame.width : frame.height)
+1513:             guard width > 0, height > 0 else { return nil }
+1514:             let extent = normalizedRenderScale(
+1515:                 for: frame,
+1516:                 drawableWidth: max(drawableSize.width, 1),
+1517:                 drawableHeight: max(drawableSize.height, 1))
+1518:             let scale = min(
+1519:                 2,
+1520:                 max(
+1521:                     drawableSize.width * Double(abs(extent.x)) / width,
+1522:                     drawableSize.height * Double(abs(extent.y)) / height))
+1523:             guard scale > 1.01 else { return nil }
+1524:             let outputWidth = Int(Double(frame.width) * scale)
+1525:             let outputHeight = Int(Double(frame.height) * scale)
+1526:             let size = SIMD4<Int>(frame.width, frame.height, outputWidth, outputHeight)
+1527:             if superResolutionResources?.size != size {
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 1550-1567
+1550:                 superResolutionResources = (size, scaler, input, output)
+1551:                 IOSRuntimeTrace.state(
+1552:                     domain: "ios-streaming", event: "spatialScalerConfigured",
+1553:                     payload: [
+1554:                         "inputWidth": .integer(Int64(frame.width)),
+1555:                         "inputHeight": .integer(Int64(frame.height)),
+1556:                         "outputWidth": .integer(Int64(outputWidth)),
+1557:                         "outputHeight": .integer(Int64(outputHeight)),
+1558:                     ],
+1559:                     dimension: .presentation, importance: .key,
+1560:                     operationID: frame.traceContext?.attemptID)
+1561:             }
+1562:             guard let resources = superResolutionResources else { return nil }
+1563:             let pass = MTLRenderPassDescriptor()
+1564:             pass.colorAttachments[0].texture = resources.input
+1565:             pass.colorAttachments[0].loadAction = .clear
+1566:             pass.colorAttachments[0].storeAction = .store
+1567:             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift : 1846-1853
+1846:     }
+1847: 
+1848:     private func emitPresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
+1849:         Task { @MainActor [weak self] in
+1850:             self?.presentationEventSink?(event)
+1851:         }
+1852:     }
+1853: 
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift : 572-596
+572:     func displayHealthUpdated(
+573:         context: StreamingPresentationTraceContext,
+574:         snapshot: StreamingDisplayHealthSnapshot
+575:     ) async {
+576:         guard visible, isCurrent(context.generation),
+577:             context.attemptID == activeAttemptID,
+578:             context.peerEpoch == activePeerEpoch
+579:         else { return }
+580:         guard context.videoGeneration == videoGeneration else { return }
+581:         latestDisplayHealthSnapshot = snapshot
+582:         if let presented = snapshot.lastPresentAtMilliseconds {
+583:             lastVideoActivityAtMs = max(lastVideoActivityAtMs, UInt64(max(0, presented)))
+584:         }
+585:         if let resumedAtMilliseconds,
+586:             let presentedAt = snapshot.lastPresentAtMilliseconds,
+587:             presentedAt > resumedAtMilliseconds
+588:         {
+589:             playbackReadiness.mark(.framePresented)
+590:             self.resumedAtMilliseconds = nil
+591:             firstFrameGuardTask?.cancel()
+592:             firstFrameGuardTask = nil
+593:         }
+594:         if playbackReady {
+595:             await publish(.playing, generation: context.generation)
+596:         }
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift : 925-946
+925:     private func armInitialConnectionDeadline(generation: UInt64) {
+926:         initialConnectionTask?.cancel()
+927:         guard !hasEverConnected else { return }
+928:         let timeout = initialConnectionTimeout
+929:         let epoch = activePeerEpoch
+930:         initialConnectionTask = Task { [weak self] in
+931:             do { try await Task.sleep(for: timeout) } catch { return }
+932:             guard let self, await self.isCurrent(generation), await self.activePeerEpoch == epoch,
+933:                 await !self.hasEverConnected
+934:             else { return }
+935:             await self.initialConnectionExpired(generation: generation, peerEpoch: epoch)
+936:         }
+937:     }
+938: 
+939:     private func initialConnectionExpired(generation: UInt64, peerEpoch: UInt64) async {
+940:         initialConnectionTask = nil
+941:         trace(
+942:             "initialConnectionTimedOut",
+943:             payload: ["timeoutMs": .integer(initialConnectionTimeout.milliseconds)],
+944:             dimension: .recovery)
+945:         if preparedSignaling?.fallbackIceServers != nil && !fallbackRetryConsumed {
+946:             await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift : 2333-2337
+2333: 
+2334:     private func publish(_ state: StreamingFeatureState, generation: UInt64) async {
+2335:         guard isCurrent(generation) else { return }
+2336:         await stateSink?(generation, visible ? state : .suspending)
+2337:     }
+
+iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift : 4-11
+4: @MainActor
+5: final class StreamingFeatureStore: ObservableObject {
+6:     @Published private(set) var state: StreamingFeatureState = .idle
+7:     @Published private(set) var videoTrack: StreamingVideoTrackHandle?
+8:     @Published private(set) var streamTitleID: String?
+9:     @Published private(set) var streamTarget: StreamingLaunchTarget?
+10:     @Published private(set) var diagnostics: StreamingSessionDiagnostics = .empty
+11:     @Published private(set) var audioMuted = false
+
+iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift : 614-620
+614:     }
+615: 
+616:     private func restoreIdleTimer() {
+617:         if let previousIdleTimerDisabled {
+618:             UIApplication.shared.isIdleTimerDisabled = previousIdleTimerDisabled
+619:         }
+620:         previousIdleTimerDisabled = nil
+
+iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift : 630-650
+630:             diagnostics.connectedElapsedMilliseconds = elapsed
+631:         }
+632:         if state == .playing, mediaReadyElapsedMilliseconds == nil {
+633:             mediaReadyElapsedMilliseconds = elapsed
+634:             diagnostics.mediaReadyElapsedMilliseconds = elapsed
+635:         }
+636:         if case .failed = state {
+637:             microphoneEnabled = false
+638:             microphonePending = false
+639:             input.setSuppressed(true, reason: .terminal)
+640:             restoreIdleTimer()
+641:         }
+642:         traceState(state, generation: generation)
+643:     }
+644: 
+645:     private func traceState(_ state: StreamingFeatureState, generation: UInt64) {
+646:         IOSRuntimeTrace.state(
+647:             domain: "ios-streaming",
+648:             event: "streamingStateChanged",
+649:             payload: [
+650:                 "generation": .integer(Int64(generation)),
+
+iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift : 89-113
+89:         "credential", "password", "username", "accountid", "xuid", "xid", "uhs", "refreshcode",
+90:     ]
+91: 
+92:     static func redact(
+93:         payload: [String: IOSRuntimeTraceValue],
+94:         profile: IOSRuntimeTraceProfile,
+95:         fingerprintSalt: String
+96:     ) -> [String: IOSRuntimeTraceValue] {
+97:         Dictionary(
+98:             uniqueKeysWithValues: payload.map { key, value in
+99:                 let normalizedKey = key.lowercased().replacingOccurrences(of: "_", with: "")
+100:                 if sensitiveFragments.contains(where: normalizedKey.contains) {
+101:                     if case .bool = value {
+102:                         return (key, value)
+103:                     }
+104:                     return (key, .string("<redacted>"))
+105:                 }
+106:                 if normalizedKey == "productid" {
+107:                     return (
+108:                         key,
+109:                         profile == .dev
+110:                             ? redactValue(value, profile: profile, salt: fingerprintSalt)
+111:                             : fingerprintValue(value, salt: fingerprintSalt)
+112:                     )
+113:                 }
+

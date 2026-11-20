@@ -1,0 +1,12 @@
+test_acknowledged_retries_and_partial_previous_write_preserve_exact_bytes (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_acknowledged_retries_and_partial_previous_write_preserve_exact_bytes) ... ok
+test_configuration_is_scoped_to_the_xcode_project (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_configuration_is_scoped_to_the_xcode_project) ... ok
+test_filename_project_and_batch_bounds_are_checked (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_filename_project_and_batch_bounds_are_checked) ... ok
+test_gaps_and_different_retries_leave_saved_bytes_intact (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_gaps_and_different_retries_leave_saved_bytes_intact) ... ok
+test_retention_orders_writer_timestamp_and_file_id (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_retention_orders_writer_timestamp_and_file_id) ... ok
+test_symlink_destination_cannot_redirect_trace_writes (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_symlink_destination_cannot_redirect_trace_writes) ... ok
+test_tcp_ack_and_health_follow_durable_append (iosapp.scripts.tests.test_dev_trace_collector.TraceCollectorTests.test_tcp_ack_and_health_follow_durable_append) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.554s
+
+OK

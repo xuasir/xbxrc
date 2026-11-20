@@ -1,0 +1,30 @@
+[
+  {
+    "path": "phone/settings-PC-options.png",
+    "device": "iPhone 17e",
+    "testIdentifier": "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable()",
+    "timestamp": 1795073298.109,
+    "sha256": "564bb8bbc3ce41521b3959d788b8964dfeddbe64fbb3914fa6ec90fa19d10f22"
+  },
+  {
+    "path": "phone/controller-inline-recording.png",
+    "device": "iPhone 17e",
+    "testIdentifier": "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline()",
+    "timestamp": 1795073323.534,
+    "sha256": "1e1176dd79cea2353f72703258d9a8e9ea4ca47fc4d6d5ea5bb60273fc34b6d6"
+  },
+  {
+    "path": "ipad/settings-PC-options.png",
+    "device": "iPad Pro 13-inch (M5)",
+    "testIdentifier": "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable()",
+    "timestamp": 1795073514.68,
+    "sha256": "58036025b3a52638990481d02ab5c3c4c824df86c5d17d7a0991199aceae34bd"
+  },
+  {
+    "path": "ipad/controller-inline-recording.png",
+    "device": "iPad Pro 13-inch (M5)",
+    "testIdentifier": "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline()",
+    "timestamp": 1795073557.84,
+    "sha256": "6174a1e49f98f9a166b0f49c178407cfab0c8be4be6dab654f51b1765db09413"
+  }
+]

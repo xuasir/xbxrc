@@ -1,0 +1,388 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 396045,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795068770071-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      },
+      {
+        "actualBytes": 497594,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795071085312-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      },
+      {
+        "actualBytes": 495243,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795072071967-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      },
+      {
+        "actualBytes": 532892,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073477955-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      },
+      {
+        "actualBytes": 2393,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073497211-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      },
+      {
+        "actualBytes": 2076,
+        "file": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073521585-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad",
+        "files": 6,
+        "maxFiles": 6,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "coverage": {
+    "flows": {
+      "library": {
+        "checks": [
+          {
+            "alternatives": [
+              "libraryPageAppeared"
+            ],
+            "label": "library page",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "cacheRestoreStarted"
+            ],
+            "label": "cache restore start",
+            "observed": [
+              "cacheRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreFailed",
+              "cacheRestoreHit",
+              "cacheRestoreMiss",
+              "cacheRestoreRejected",
+              "cacheRestoreSkipped"
+            ],
+            "label": "cache restore outcome",
+            "observed": [
+              "cacheRestoreHit",
+              "cacheRestoreSkipped"
+            ]
+          },
+          {
+            "alternatives": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ],
+            "label": "catalog activation decision",
+            "observed": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "contentPresented",
+              "skeletonPresented"
+            ],
+            "label": "library presentation",
+            "observed": []
+          }
+        ],
+        "required": false
+      },
+      "startup": {
+        "checks": [
+          {
+            "alternatives": [
+              "appLaunchStarted"
+            ],
+            "label": "app launch",
+            "observed": [
+              "appLaunchStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreStarted"
+            ],
+            "label": "auth restore start",
+            "observed": [
+              "authRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreFailed",
+              "authRestoreSucceeded"
+            ],
+            "label": "auth restore outcome",
+            "observed": [
+              "authRestoreSucceeded"
+            ]
+          }
+        ],
+        "required": false
+      }
+    },
+    "missingRequiredAnchors": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "coverageViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "gate": "PASS",
+  "pairing": {
+    "evaluatedStarts": 42,
+    "violations": []
+  },
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "categories": {
+      "decision": 80,
+      "event": 457,
+      "snapshot": 88,
+      "state": 3948
+    },
+    "dimensions": {
+      "core": 432,
+      "input": 34,
+      "lifecycle": 2085,
+      "media_supply": 233,
+      "network": 1657,
+      "recovery": 132
+    },
+    "domains": {
+      "auth": 136,
+      "cloud-library": 184,
+      "ios-app": 12,
+      "ios-streaming": 3628,
+      "settings": 257,
+      "trace": 6,
+      "xbox-data": 350
+    },
+    "events": {
+      "accessPrepareFailed": 24,
+      "accessPrepareStarted": 114,
+      "accessPrepareSucceeded": 90,
+      "accessReleased": 60,
+      "achievementsLoadStarted": 12,
+      "achievementsLoadSucceeded": 12,
+      "answerApplied": 106,
+      "appLaunchStarted": 6,
+      "appearanceModeChanged": 4,
+      "audioTrackReady": 126,
+      "authRestoreSessionFound": 18,
+      "authRestoreStarted": 28,
+      "authRestoreSucceeded": 28,
+      "authSessionRenewStarted": 18,
+      "authSessionRenewSucceeded": 18,
+      "authSignInStarted": 2,
+      "authSignInSucceeded": 2,
+      "authSignOutFailed": 2,
+      "authSignOutStarted": 8,
+      "authSignedOut": 6,
+      "cacheDiskLoadStarted": 12,
+      "cacheDiskLoadSucceeded": 8,
+      "cacheDiskOverlayMissing": 4,
+      "cacheDiskSaveStarted": 12,
+      "cacheDiskSaveSucceeded": 12,
+      "cacheOverlayCleared": 4,
+      "cacheRestoreHit": 4,
+      "cacheRestoreScopeChanged": 4,
+      "cacheRestoreSkipped": 12,
+      "cacheRestoreStarted": 16,
+      "catalogActivationRefreshRequired": 4,
+      "catalogActivationSkipped": 4,
+      "catalogActivationStarted": 8,
+      "catalogRefreshCoalesced": 12,
+      "catalogRefreshCommitted": 12,
+      "catalogRefreshStarted": 12,
+      "catalogRemoteSnapshotReceived": 12,
+      "cloudAccessBoundaryFailed": 2,
+      "cloudAccessBoundaryStarted": 2,
+      "cloudRegionPresetChanged": 4,
+      "controlReady": 90,
+      "dataChannelProfilesCreated": 89,
+      "dataSessionBound": 46,
+      "dataStoreCleared": 10,
+      "ephemeralLoginSessionChanged": 4,
+      "fallbackTurnRetry": 1,
+      "fileOpened": 6,
+      "firstFrameGuardTriggered": 3,
+      "firstVideoFrame": 87,
+      "hapticsStopped": 56,
+      "hostPowerCommandFailed": 4,
+      "hostPowerCommandSkipped": 4,
+      "hostPowerCommandStarted": 8,
+      "hostPowerCommandSucceeded": 1,
+      "hostsRefreshStarted": 13,
+      "hostsRefreshSucceeded": 13,
+      "iceRestartFailed": 11,
+      "iceRestartStarted": 27,
+      "iceTasksCancelled": 60,
+      "initialConnectionTimedOut": 2,
+      "inputStopped": 56,
+      "libraryClearStarted": 10,
+      "libraryContentCommitted": 22,
+      "libraryErrorDiscarded": 4,
+      "libraryRefreshCoalesced": 4,
+      "libraryRefreshStarted": 26,
+      "libraryStateChanged": 22,
+      "localIceCompleted": 103,
+      "localIceStarted": 106,
+      "messageHandshakeAcked": 92,
+      "microphoneNegotiated": 17,
+      "offerStarted": 86,
+      "peerClosed": 56,
+      "peerConnected": 100,
+      "peerDisconnected": 3,
+      "presentationDetached": 60,
+      "profileActivationSkipped": 2,
+      "qualityActionCompleted": 3,
+      "remoteAnswerApplyCompleted": 126,
+      "remoteAnswerApplyStarted": 130,
+      "remoteAnswerApplyTimedOut": 4,
+      "remoteAudioMuted": 3,
+      "remoteIceBatchApplied": 148,
+      "remoteIceBatchReceived": 88,
+      "remoteIceCompleted": 88,
+      "remoteSessionClosed": 60,
+      "runtimeRebuildNegotiated": 8,
+      "runtimeRebuildOfferStarted": 8,
+      "runtimeRebuildStarted": 12,
+      "runtimeSupervisionSnapshot": 60,
+      "scenePhaseChanged": 6,
+      "sectionQueryFailed": 6,
+      "sectionQueryStarted": 81,
+      "sectionQuerySucceeded": 72,
+      "sessionCreateStarted": 90,
+      "sessionReady": 86,
+      "sessionResumeValidated": 4,
+      "sessionSuspended": 4,
+      "sessionTerminal": 60,
+      "signalingTerminal": 4,
+      "streamControlCompleted": 17,
+      "streamControlInvoked": 17,
+      "streamLaunchStarted": 114,
+      "streamingSettingChanged": 245,
+      "streamingStateChanged": 785,
+      "surfaceActivationSkipped": 12,
+      "terminalSelected": 84
+    },
+    "files": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795068770071-1.jsonl",
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795071085312-1.jsonl",
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795072071967-1.jsonl",
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073477955-1.jsonl",
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073497211-1.jsonl",
+      "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-19-ios-streaming-pc-behavior-parity/traces/ipad/runtime-trace-ios-1795073521585-1.jsonl"
+    ],
+    "firstTsMs": 1795068771291,
+    "importance": {
+      "debug": 285,
+      "essential": 214,
+      "key": 4074
+    },
+    "lastTsMs": 1795073530675,
+    "profiles": {
+      "dev": 4573
+    },
+    "rows": 4573,
+    "sessions": [
+      "012989B1-47AD-41E2-B474-514BB4B65CA7",
+      "3B299660-2535-4BA4-9E68-7E51E6F4D291",
+      "3FA453E8-3DF7-479D-8924-D50744E4D2BB",
+      "43DF8311-F001-4778-9C4A-AE456A2E295D",
+      "9D88F674-F62F-428D-9DA4-D27A2F905CBF",
+      "B502DE53-DB06-4B5E-9D2C-6A38A41409F5"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "012989B1-47AD-41E2-B474-514BB4B65CA7": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 6,
+        "regressions": 0,
+        "rows": 6
+      },
+      "3B299660-2535-4BA4-9E68-7E51E6F4D291": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 1268,
+        "regressions": 0,
+        "rows": 1268
+      },
+      "3FA453E8-3DF7-479D-8924-D50744E4D2BB": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 1184,
+        "regressions": 0,
+        "rows": 1184
+      },
+      "43DF8311-F001-4778-9C4A-AE456A2E295D": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 930,
+        "regressions": 0,
+        "rows": 930
+      },
+      "9D88F674-F62F-428D-9DA4-D27A2F905CBF": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 7,
+        "regressions": 0,
+        "rows": 7
+      },
+      "B502DE53-DB06-4B5E-9D2C-6A38A41409F5": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 1178,
+        "regressions": 0,
+        "rows": 1178
+      }
+    },
+    "violations": []
+  }
+}

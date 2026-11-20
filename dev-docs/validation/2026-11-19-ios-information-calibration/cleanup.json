@@ -1,0 +1,30 @@
+{
+  "removedRoot": "/private/tmp/xbxrc-ios-information-calibration-20261119",
+  "removedRounds": [
+    "r1",
+    "r2",
+    "r3",
+    "r4"
+  ],
+  "removedFileCount": 10148,
+  "removedLogicalBytes": 5232026714,
+  "removedAllocatedBytes": 5263425536,
+  "freeBytesBefore": 57344000000,
+  "freeBytesAfter": 62668800000,
+  "freeBytesDelta": 5324800000,
+  "rootExistsAfter": false,
+  "completedSessions": {
+    "phoneInitial": 65,
+    "phoneRecheck": 0,
+    "ipad": 0,
+    "deviceBuild": 0,
+    "lint": 0,
+    "attachmentExports": 0
+  },
+  "retained": [
+    "仓库内11张关键PNG、预览、5张用户原图、测试摘要与失败诊断",
+    "其他任务的WebRTC源码缓存及ZIP",
+    "仓库内共享Rust构建缓存",
+    "用户附件环境管理的剪贴板原图"
+  ]
+}

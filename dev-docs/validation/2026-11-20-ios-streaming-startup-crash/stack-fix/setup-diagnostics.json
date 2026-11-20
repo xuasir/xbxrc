@@ -1,0 +1,35 @@
+{
+  "resolvedFailures": [
+    {
+      "kind": "baseline gate",
+      "result": "6 个导出 future 超过 8 KiB，start=119216",
+      "resolution": "重型 await 分支分段 Box::pin，15 个入口全部通过"
+    },
+    {
+      "kind": "test compilation",
+      "result": "UniFFI Handle 提供 Clone，borrowed call 需要显式 clone",
+      "resolution": "fixture 的 poll/cancel/complete/free 按 handle 合同实现"
+    },
+    {
+      "kind": "sandbox",
+      "result": "本地 HTTP bind 与 SwiftPM 缓存写入被沙箱限制",
+      "resolution": "获准后执行本地回归与设备构建"
+    },
+    {
+      "kind": "fixture proxy",
+      "result": "本机 proxy 接管 loopback 请求，引发 fixture timeout",
+      "resolution": "独立子测试进程只为 loopback 设置 NO_PROXY"
+    },
+    {
+      "kind": "fixture resolution",
+      "result": "默认 720p 与测试 1080p 断言不一致",
+      "resolution": "测试显式指定 cloud_resolution=1080"
+    },
+    {
+      "kind": "bindings comparison",
+      "result": "Swift EOF newline differs",
+      "resolution": "确认仅末尾换行差异，C 合同逐字一致，工作区文件保留"
+    }
+  ],
+  "finalFailures": 0
+}

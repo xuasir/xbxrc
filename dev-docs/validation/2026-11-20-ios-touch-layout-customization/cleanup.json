@@ -1,0 +1,26 @@
+{
+  "temporary_root": "/private/tmp/xbxrc-ios-touch-layout-customization-20261120",
+  "rounds": [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7"
+  ],
+  "processes_ended": true,
+  "removed": true,
+  "allocated_bytes_before": 1628901376,
+  "free_bytes_before": 64716800000,
+  "free_bytes_after": 66355200000,
+  "free_bytes_delta": 1638400000,
+  "preserved": [
+    "dev-docs/validation/2026-11-20-ios-touch-layout-customization",
+    "target/ios",
+    "target/ios-bindgen",
+    "target/browser",
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "/private/tmp/xbxrc-settings-swift-format.json"
+  ]
+}

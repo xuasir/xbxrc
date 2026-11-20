@@ -1,0 +1,272 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination "platform=iOS Simulator,id=754F69D9-2451-47ED-95AB-69596D404F2D" -derivedDataPath /private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r1/DerivedData -clonedSourcePackagesDirPath /Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -parallel-testing-enabled NO "-only-testing:XBXRCUITests/TouchLayoutInteractionTests/testSignedOutLogoAndWideLoginButton" "-only-testing:XBXRCUITests/TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility" -resultBundlePath /private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r1/ipad.xcresult CODE_SIGNING_ALLOWED=NO test-without-building
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  XBXRCWebRTC: /Users/guo.xu/Documents/code/games/xbxrc/iosapp/Packages/WebRTC @ local
+
+Writing result bundle at path:
+	/private/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r1/ipad.xcresult
+
+2026-11-20 22:40:22.854060+0800 XBXRCUITests-Runner[4179:7764069] [Default] Running tests...
+2026-11-20 22:40:23.118467+0800 XBXRCUITests-Runner[4179:7764069] [UIKit App Config] Update the Info.plist: Launch screens will soon be required.
+    t =      nans Interface orientation changed to Landscape Right
+Test Suite 'Selected tests' started at 2026-11-20 22:40:26.020.
+Test Suite 'XBXRCUITests.xctest' started at 2026-11-20 22:40:26.021.
+Test Suite 'TouchLayoutInteractionTests' started at 2026-11-20 22:40:26.021.
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testSignedOutLogoAndWideLoginButton]' started.
+    t =     0.01s Start Test at 2026-11-20 22:40:26.029
+    t =     0.19s Set Up
+    t =     0.19s Setting device orientation to Portrait
+    t =     0.22s     Device orientation changed to Portrait
+    t =     0.41s     Interface orientation changed to Portrait
+    t =     0.73s     Wait for com.apple.springboard to idle
+objc[4179]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.7D6eEH/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10742c398) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.7D6eEH/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x107600310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     1.19s Open com.xuasir.xbxrc.ios
+    t =     1.19s     Launch com.xuasir.xbxrc.ios
+2026-11-20 22:40:27.464 xcodebuild[4116:7763250] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-20 22:40:27.465 xcodebuild[4116:7763250] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     2.88s         Setting up automation session
+    t =     5.50s         Wait for com.xuasir.xbxrc.ios to idle
+    t =     7.09s Waiting 10.0s for "signed-out-login" Button to exist
+    t =     8.12s     Checking `Expect predicate `existsNoRetry == 1` for object "signed-out-login" Button`
+    t =     8.12s         Checking existence of `"signed-out-login" Button`
+    t =     8.18s Checking existence of `"signed-out-logo" Image`
+    t =     8.19s Find the "signed-out-login" Button
+    t =     8.19s Checking existence of `"page-xbox-logo" Image`
+    t =     8.20s Checking existence of `"primary-navigation-hosts" Button`
+    t =     8.20s Checking existence of `"primary-navigation-library" Button`
+    t =     8.21s Checking existence of `"primary-navigation-my" Button`
+    t =     8.21s Checking existence of `"primary-navigation-controller" Button`
+    t =     8.22s Checking existence of `"primary-navigation-settings" Button`
+    t =     8.22s Find the Window (First Match)
+    t =     8.23s Find the "signed-out-logo" Image
+    t =     8.24s Find the "signed-out-login" Button
+    t =     8.25s Find the "signed-out-logo" Image
+    t =     8.26s Find the "signed-out-login" Button
+    t =     8.27s Find the "signed-out-login" Button
+    t =     8.51s Added attachment named 'signed-out-logo-wide-login'
+    t =     8.51s Tear Down
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testSignedOutLogoAndWideLoginButton]' passed (8.786 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' started.
+    t =     0.00s Start Test at 2026-11-20 22:40:34.817
+    t =     0.04s Set Up
+    t =     0.04s Setting device orientation to Landscape Left
+    t =     0.04s     Device orientation changed to Landscape Left
+    t =     0.10s     Interface orientation changed to Landscape Right
+    t =     0.14s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     0.15s     Wait for com.apple.springboard to idle
+    t =     0.87s Open com.xuasir.xbxrc.ios
+    t =     0.87s     Launch com.xuasir.xbxrc.ios
+    t =     0.87s         Terminate com.xuasir.xbxrc.ios:4208
+2026-11-20 22:40:36.770 xcodebuild[4116:7763250] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-20 22:40:36.770 xcodebuild[4116:7763250] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     2.16s         Setting up automation session
+    t =     4.50s         Wait for com.xuasir.xbxrc.ios to idle
+    t =     6.19s Waiting 10.0s for "stream-controls-open" Button to exist
+    t =     7.22s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-open" Button`
+    t =     7.22s         Checking existence of `"stream-controls-open" Button`
+    t =     7.31s Find the "stream-controls-open" Button
+    t =     7.37s Find the "stream-controls-open" Button
+    t =     7.39s Find the "stream-controls-open" Button
+    t =     7.40s Checking existence of `"touch-control-right/inner/1" Button`
+    t =     7.64s Added attachment named 'streaming-hidden-landscape'
+    t =     7.65s Tap "stream-controls-open" Button
+    t =     7.65s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     7.65s     Find the "stream-controls-open" Button
+    t =     7.66s     Check for interrupting elements affecting "stream-controls-open" Button
+    t =     7.67s         Wait for com.apple.springboard to idle
+    t =     7.74s     Synthesize event
+    t =     8.19s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     8.63s Waiting 5.0s for "stream-diagnostics-menu" Button to exist
+    t =     9.65s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-diagnostics-menu" Button`
+    t =     9.66s         Checking existence of `"stream-diagnostics-menu" Button`
+    t =     9.70s Find the "stream-metrics-toggle" Button
+    t =     9.72s Tap "stream-metrics-toggle" Button
+    t =     9.72s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     9.73s     Find the "stream-metrics-toggle" Button
+    t =     9.74s     Check for interrupting elements affecting "stream-metrics-toggle" Button
+    t =     9.76s         Wait for com.apple.springboard to idle
+    t =     9.78s     Synthesize event
+    t =    10.07s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    10.07s Waiting 3.0s for "compact-performance-overlay" Other to exist
+    t =    11.10s     Checking `Expect predicate `existsNoRetry == 1` for object "compact-performance-overlay" Other`
+    t =    11.10s         Checking existence of `"compact-performance-overlay" Other`
+    t =    11.16s Checking existence of `"stream-picture-settings" Button`
+    t =    11.19s Find the "stream-picture-settings" Button
+    t =    11.22s Checking existence of `"stream-audio-toggle" Button`
+    t =    11.25s Find the "stream-audio-toggle" Button
+    t =    11.28s Checking existence of `"stream-microphone-toggle" Button`
+    t =    11.31s Find the "stream-microphone-toggle" Button
+    t =    11.34s Checking existence of `"stream-aspect-toggle" Button`
+    t =    11.37s Find the "stream-aspect-toggle" Button
+    t =    11.40s Checking existence of `"stream-paste-text" Button`
+    t =    11.43s Find the "stream-paste-text" Button
+    t =    11.46s Checking existence of `"stream-exit" Button`
+    t =    11.48s Find the "stream-exit" Button
+    t =    11.52s Checking existence of `"stream-power-off" Button`
+    t =    11.54s Find the "stream-power-off" Button
+    t =    11.58s Checking existence of `"stream-record-toggle" Button`
+    t =    11.60s Find the "stream-record-toggle" Button
+    t =    11.64s Checking existence of `"stream-trace-export" Button`
+    t =    11.66s Find the "stream-trace-export" Button
+    t =    11.70s Find the Window (First Match)
+    t =    11.70s Find the "stream-picture-settings" Button
+    t =    11.73s Find the "stream-diagnostics-menu" Button
+    t =    11.99s Added attachment named 'streaming-two-rails-landscape'
+    t =    11.99s Tap "stream-diagnostics-menu" Button
+    t =    11.99s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    12.00s     Find the "stream-diagnostics-menu" Button
+    t =    12.02s     Check for interrupting elements affecting "stream-diagnostics-menu" Button
+    t =    12.05s         Wait for com.apple.springboard to idle
+    t =    12.06s     Synthesize event
+    t =    12.36s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    12.62s Waiting 5.0s for "stream-diagnostics-floating-panel" Other to exist
+    t =    13.65s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-diagnostics-floating-panel" Other`
+    t =    13.65s         Checking existence of `"stream-diagnostics-floating-panel" Other`
+    t =    13.78s Find the "stream-diagnostics-floating-panel" Other
+    t =    13.83s Waiting 5.0s for "stream-diagnostic-groups" SegmentedControl to exist
+    t =    14.86s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-diagnostic-groups" SegmentedControl`
+    t =    14.86s         Checking existence of `"stream-diagnostic-groups" SegmentedControl`
+    t =    14.94s Tap "网络" Button
+    t =    14.94s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    14.94s     Find the "网络" Button
+    t =    14.99s     Check for interrupting elements affecting "网络" Button
+    t =    15.03s         Wait for com.apple.springboard to idle
+    t =    15.05s     Synthesize event
+    t =    15.34s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    16.59s Checking existence of `"stream-diagnostic-rtt" Other`
+    t =    16.67s Checking existence of `"stream-diagnostic-rtt" StaticText`
+    t =    16.72s Tap "显示" Button
+    t =    16.72s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    16.72s     Find the "显示" Button
+    t =    16.78s     Check for interrupting elements affecting "显示" Button
+    t =    16.82s         Wait for com.apple.springboard to idle
+    t =    16.84s     Synthesize event
+    t =    17.13s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    18.56s Checking existence of `"stream-diagnostic-receivedFps" Other`
+    t =    18.65s Checking existence of `"stream-diagnostic-receivedFps" StaticText`
+    t =    18.72s Tap "恢复" Button
+    t =    18.72s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    18.72s     Find the "恢复" Button
+    t =    18.79s     Check for interrupting elements affecting "恢复" Button
+    t =    18.84s         Wait for com.apple.springboard to idle
+    t =    18.85s     Synthesize event
+    t =    19.14s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    20.57s Checking existence of `"stream-diagnostic-recoveryEffect" Other`
+    t =    20.65s Checking existence of `"stream-diagnostic-recoveryEffect" StaticText`
+    t =    20.70s Tap "会话" Button
+    t =    20.70s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    20.71s     Find the "会话" Button
+    t =    20.75s     Check for interrupting elements affecting "会话" Button
+    t =    20.80s         Wait for com.apple.springboard to idle
+    t =    20.81s     Synthesize event
+    t =    21.10s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    22.63s Checking existence of `"stream-diagnostic-connectedElapsed" Other`
+    t =    22.70s Checking existence of `"stream-diagnostic-connectedElapsed" StaticText`
+    t =    22.75s Swipe up "stream-diagnostic-rows" ScrollView
+    t =    22.75s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    22.75s     Find the "stream-diagnostic-rows" ScrollView
+    t =    22.80s     Check for interrupting elements affecting "stream-diagnostic-rows" ScrollView
+    t =    22.84s         Wait for com.apple.springboard to idle
+    t =    22.86s     Synthesize event
+    t =    23.29s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    23.76s Tap "stream-diagnostic-copy" Button
+    t =    23.76s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    23.77s     Find the "stream-diagnostic-copy" Button
+    t =    23.82s     Check for interrupting elements affecting "stream-diagnostic-copy" Button
+    t =    23.86s         Wait for com.apple.springboard to idle
+    t =    23.88s     Synthesize event
+    t =    24.17s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    24.17s Waiting 3.0s for "已复制" StaticText to exist
+    t =    25.20s     Checking `Expect predicate `existsNoRetry == 1` for object "已复制" StaticText`
+    t =    25.20s         Checking existence of `"已复制" StaticText`
+    t =    25.69s Added attachment named 'streaming-diagnostics-upper-right'
+    t =    25.69s Tap "stream-diagnostics-close" Button
+    t =    25.69s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    25.70s     Find the "stream-diagnostics-close" Button
+    t =    25.83s     Check for interrupting elements affecting "stream-diagnostics-close" Button
+    t =    25.90s         Wait for com.apple.springboard to idle
+    t =    25.94s     Synthesize event
+    t =    26.24s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    26.24s Waiting 5.0s for "stream-metrics-toggle" Button to exist
+    t =    27.27s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-metrics-toggle" Button`
+    t =    27.27s         Checking existence of `"stream-metrics-toggle" Button`
+    t =    27.31s Tap "stream-metrics-toggle" Button
+    t =    27.31s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    27.31s     Find the "stream-metrics-toggle" Button
+    t =    27.34s     Check for interrupting elements affecting "stream-metrics-toggle" Button
+    t =    27.36s         Wait for com.apple.springboard to idle
+    t =    27.38s     Synthesize event
+    t =    27.66s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    27.67s Checking existence of `"compact-performance-overlay" Other`
+    t =    27.69s Tap "stream-picture-settings" Button
+    t =    27.69s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    27.69s     Find the "stream-picture-settings" Button
+    t =    27.71s     Check for interrupting elements affecting "stream-picture-settings" Button
+    t =    27.73s         Wait for com.apple.springboard to idle
+    t =    27.75s     Synthesize event
+    t =    28.04s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    28.88s Waiting 5.0s for "stream-picture-close" Button to exist
+    t =    29.91s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-picture-close" Button`
+    t =    29.91s         Checking existence of `"stream-picture-close" Button`
+    t =    30.34s Added attachment named 'streaming-picture-bottom-sheet'
+    t =    30.34s Tap "stream-picture-close" Button
+    t =    30.34s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    30.35s     Find the "stream-picture-close" Button
+    t =    30.43s     Check for interrupting elements affecting "stream-picture-close" Button
+    t =    30.49s         Wait for com.apple.springboard to idle
+    t =    30.51s     Synthesize event
+    t =    30.82s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    31.25s Waiting 5.0s for "stream-controls-close" Button to exist
+    t =    32.27s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-close" Button`
+    t =    32.28s         Checking existence of `"stream-controls-close" Button`
+    t =    32.30s Tap "stream-controls-close" Button
+    t =    32.30s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    32.31s     Find the "stream-controls-close" Button
+    t =    32.33s     Check for interrupting elements affecting "stream-controls-close" Button
+    t =    32.34s         Wait for com.apple.springboard to idle
+    t =    32.36s     Synthesize event
+    t =    32.65s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    32.66s Checking existence of `"stream-diagnostics-menu" Button`
+    t =    32.67s Waiting 3.0s for "stream-controls-open" Button to exist
+    t =    33.70s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-open" Button`
+    t =    33.70s         Checking existence of `"stream-controls-open" Button`
+    t =    33.72s Tap "stream-controls-open" Button
+    t =    33.73s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    33.73s     Find the "stream-controls-open" Button
+    t =    33.75s     Check for interrupting elements affecting "stream-controls-open" Button
+    t =    33.76s         Wait for com.apple.springboard to idle
+    t =    33.78s     Synthesize event
+    t =    34.07s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    34.07s Waiting 3.0s for "stream-diagnostics-menu" Button to exist
+    t =    35.09s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-diagnostics-menu" Button`
+    t =    35.09s         Checking existence of `"stream-diagnostics-menu" Button`
+    t =    35.11s Setting device orientation to Portrait
+    t =    35.12s     Device orientation changed to Portrait
+    t =    35.22s     Interface orientation changed to Portrait
+    t =    35.23s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    35.62s     Wait for com.apple.springboard to idle
+    t =    35.64s Tear Down
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (36.009 seconds).
+Test Suite 'TouchLayoutInteractionTests' passed at 2026-11-20 22:41:10.826.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 44.795 (44.805) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-20 22:41:10.833.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 44.795 (44.812) seconds
+Test Suite 'Selected tests' passed at 2026-11-20 22:41:10.833.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 44.795 (44.813) seconds
+2026-11-20 22:41:11.166 xcodebuild[4116:7763250] [MT] IDETestOperationsObserverDebug: 62.781 elapsed -- Testing started completed.
+2026-11-20 22:41:11.166 xcodebuild[4116:7763250] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-20 22:41:11.166 xcodebuild[4116:7763250] [MT] IDETestOperationsObserverDebug: 62.781 sec, +62.781 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/xbxrc-ios-login-menu-entry-wdru4xfs/r1/ipad.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

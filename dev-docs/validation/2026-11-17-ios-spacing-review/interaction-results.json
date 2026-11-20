@@ -1,0 +1,44 @@
+{
+  "phone": {
+    "passed": 13,
+    "skipped": 2,
+    "states": {
+      "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary": "passed",
+      "PCPageInteractionTests/testCloudFavoritesProductLanguagesAndScreenshotPreview": "passed",
+      "PCPageInteractionTests/testFriendComparisonAndSecretAchievementReveal": "passed",
+      "PCPageInteractionTests/testInformationActionsStayCompactAtWideSizes": "skipped",
+      "PCPageInteractionTests/testInformationPagesExposeHeroAndKeepLibraryActionsReachable": "passed",
+      "PCPageInteractionTests/testInstalledStorageFilterAndFourSectionDetail": "passed",
+      "PCPageInteractionTests/testInstalledUpperRegionAndInlineSearch": "passed",
+      "PCPageInteractionTests/testMyAlbumTabOpensMediaAndRestoresSelection": "passed",
+      "PCPageInteractionTests/testMyTabsPinSwipeAndRestoreDetailNavigation": "passed",
+      "PCPageInteractionTests/testWideSidebarKeepsPrimaryNavigationAndSecondarySelection": "skipped",
+      "SettingsInteractionTests/testBottomNavigationReservesSpaceAndFinalRowIsReachable": "passed",
+      "SettingsInteractionTests/testLanguageSelectionAppliesToControllerPagesAndDurationUnits": "passed",
+      "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable": "passed",
+      "SettingsInteractionTests/testTogglePickerAndNavigationRespondAtRowEdges": "passed",
+      "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline": "passed"
+    }
+  },
+  "ipad": {
+    "passed": 15,
+    "skipped": 0,
+    "states": {
+      "PCPageInteractionTests/testAppLanguageAppliesToCloudDetailsAndPlaytimeSummary": "passed",
+      "PCPageInteractionTests/testCloudFavoritesProductLanguagesAndScreenshotPreview": "passed",
+      "PCPageInteractionTests/testFriendComparisonAndSecretAchievementReveal": "passed",
+      "PCPageInteractionTests/testInformationActionsStayCompactAtWideSizes": "passed",
+      "PCPageInteractionTests/testInformationPagesExposeHeroAndKeepLibraryActionsReachable": "passed",
+      "PCPageInteractionTests/testInstalledStorageFilterAndFourSectionDetail": "passed",
+      "PCPageInteractionTests/testInstalledUpperRegionAndInlineSearch": "passed",
+      "PCPageInteractionTests/testMyAlbumTabOpensMediaAndRestoresSelection": "passed",
+      "PCPageInteractionTests/testMyTabsPinSwipeAndRestoreDetailNavigation": "passed",
+      "PCPageInteractionTests/testWideSidebarKeepsPrimaryNavigationAndSecondarySelection": "passed",
+      "SettingsInteractionTests/testBottomNavigationReservesSpaceAndFinalRowIsReachable": "passed",
+      "SettingsInteractionTests/testLanguageSelectionAppliesToControllerPagesAndDurationUnits": "passed",
+      "SettingsInteractionTests/testPCResolutionAndAspectChoicesAreAvailable": "passed",
+      "SettingsInteractionTests/testTogglePickerAndNavigationRespondAtRowEdges": "passed",
+      "SettingsInteractionTests/testVibrationPictureAndShortcutRecordingStayInline": "passed"
+    }
+  }
+}

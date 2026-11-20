@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-18",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-touch-layout-20261118/r1",
+  "removedChildren": [
+    "derived",
+    "device-build.log",
+    "device-derived",
+    "ipad-final-attachments",
+    "ipad-final.log",
+    "ipad-final.xcresult",
+    "phone-final-attachments",
+    "phone-final.log",
+    "phone-final.xcresult",
+    "phone-r3-attachments",
+    "phone-r3.log",
+    "phone-r3.xcresult",
+    "phone-visual-final-attachments",
+    "phone-visual-final.log",
+    "phone-visual-final.xcresult",
+    "swift-format.json",
+    "unit-authorized.log",
+    "unit-authorized.xcresult",
+    "unit-r2.log",
+    "unit-r2.xcresult",
+    "unit.log",
+    "unit.xcresult",
+    "xbox-controller-source.png"
+  ],
+  "processesEnded": [
+    "phone-visual-final xcodebuild exit 0",
+    "device-build xcodebuild exit 0",
+    "prior phone/iPad xcodebuild completed",
+    "xcresult export completed"
+  ],
+  "logicalBytesRemoved": 983618011,
+  "allocatedBytesRemoved": 1016422400,
+  "rootExistsAfter": false,
+  "diskFreeBytesBefore": 81510400000,
+  "diskFreeBytesAfter": 82739200000,
+  "preserved": [
+    "dev-docs/validation/2026-11-18-ios-touch-layout-playground/",
+    "iosapp/XBXRC/Resources/TouchLayouts/",
+    "existing WebRTC SourcePackages",
+    "target/ios shared Rust cache"
+  ],
+  "otherTemporaryDirectoriesCreated": []
+}

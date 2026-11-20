@@ -1,0 +1,15 @@
+    builtin-validationUtility /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    /usr/bin/touch -c /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/Build/Products/Debug-iphoneos/XBXRC.app
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-brand-navigation-20261118/r1/device-derived/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+note: Run script build phase 'Build Rust bridge' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'XBXRC' from project 'XBXRC')
+** BUILD SUCCEEDED **
+

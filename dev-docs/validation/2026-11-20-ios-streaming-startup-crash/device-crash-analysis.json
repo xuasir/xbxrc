@@ -1,0 +1,209 @@
+{
+  "analyzedOn": "2026-11-20",
+  "source": {
+    "filename": "XBXRC-2026-11-19-184559.ips",
+    "sha256": "bce69acef365a5bf9d5b023edacddc63dd392579866aa631fb152260836d5c34",
+    "rawReportRetainedAt": "/Users/guo.xu/Downloads/XBXRC-2026-11-19-184559.ips",
+    "archivalScope": "异常、触发线程、机器码与大小探针；原始报告保留于用户提供位置"
+  },
+  "captureTime": "2026-11-19 18:45:58.2130 +0800",
+  "app": {
+    "version": "0.1.0",
+    "build": "1",
+    "configurationEvidence": "XBXRC.debug.dylib"
+  },
+  "osVersion": "iPhone OS 27.2.1 (24B156)",
+  "deviceModelCode": "iPhone18,2",
+  "exception": {
+    "codes": "0x0000000000000002, 0x000000016b507450",
+    "message": "Could not determine thread index for stack guard region",
+    "rawCodes": [
+      2,
+      6095402064
+    ],
+    "type": "EXC_BAD_ACCESS",
+    "signal": "SIGBUS",
+    "subtype": "KERN_PROTECTION_FAILURE at 0x000000016b507450"
+  },
+  "termination": {
+    "namespace": "SIGNAL",
+    "code": 10,
+    "indicator": "Bus error: 10"
+  },
+  "faultingThread": {
+    "index": 3,
+    "queue": "com.apple.root.user-initiated-qos.cooperative",
+    "frames": [
+      {
+        "imageOffset": 12654092,
+        "symbol": "uniffi_core::ffi::rustfuture::future::WrappedFuture$LT$FfiType$GT$::new::h3ca0d4c53bcd461e",
+        "symbolLocation": 20,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 12728876,
+        "symbol": "uniffi_core::ffi::rustfuture::future::RustFuture$LT$FfiType$C$Callback$GT$::new::h8048a444756f959f",
+        "symbolLocation": 88,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 11693424,
+        "symbol": "uniffi_core::ffi::rustfuture::rust_future_new::h462899a26c482f30",
+        "symbolLocation": 80,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 12300096,
+        "symbol": "uniffi_xbox_ios_bridge_fn_method_xboxstreamsession_start",
+        "symbolLocation": 108,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6088104,
+        "symbol": "closure #1 in XboxStreamSession.start()",
+        "symbolLocation": 64,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6073604,
+        "symbol": "uniffiRustCallAsync<A, B>(rustFutureFunc:pollFunc:completeFunc:freeFunc:liftFunc:errorHandler:)",
+        "symbolLocation": 104,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6087589,
+        "symbol": "XboxStreamSession.start()",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6709541,
+        "symbol": "RustStreamingControlSession.prepareSignaling()",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6738725,
+        "symbol": "protocol witness for StreamingControlSession.prepareSignaling() in conformance RustStreamingControlSession",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 7429889,
+        "symbol": "StreamSessionActor.prepareSignaling(control:generation:startupSink:)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 7396281,
+        "symbol": "StreamSessionActor.start(request:stateSink:videoSink:diagnosticsSink:authSink:startupSink:microphoneSink:)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6653233,
+        "symbol": "closure #2 in StreamingFeatureStore.start(target:targetID:prepareAccess:)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 6664993,
+        "symbol": "partial apply for closure #2 in StreamingFeatureStore.start(target:targetID:prepareAccess:)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 1162745,
+        "symbol": "thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 1163969,
+        "symbol": "partial apply for thunk for @escaping @isolated(any) @callee_guaranteed @async () -> (@out A)",
+        "symbolLocation": 1,
+        "imageIndex": 1
+      },
+      {
+        "imageOffset": 30853,
+        "symbol": "completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)",
+        "symbolLocation": 1,
+        "imageIndex": 19
+      }
+    ]
+  },
+  "memory": {
+    "vmRegionInfo": "0x16b507450 is in 0x16b504000-0x16b508000;  bytes after start: 13392  bytes before end: 2991\n      REGION TYPE                   START - END        [ VSIZE] PRT/MAX SHRMOD  REGION DETAIL\n      Stack                      16b408000-16b504000   [ 1008K] rw-/rwx SM=COW  thread 0\n--->  Stack Guard                16b504000-16b508000   [   16K] ---/rwx SM=PRV  \n      Stack                      16b508000-16b590000   [  544K] rw-/rwx SM=COW  ",
+    "stackPointer": "0x16b507450",
+    "faultAddress": "0x16b507450",
+    "threadStackBytes": 557056,
+    "guardBytes": 16384
+  },
+  "capturedCode": {
+    "source": "IPS instructionByteStream，重组为 arm64 object 后用 llvm-objdump 解码",
+    "words": [
+      "0x914017ff",
+      "0x913103ff",
+      "0xa9417bfd",
+      "0xa8c26ffc",
+      "0xd65f03c0",
+      "0xa9be6ffc",
+      "0xa9017bfd",
+      "0x910043fd",
+      "0xd141d3e9",
+      "0xd14007ff",
+      "0xf90003ff",
+      "0xeb2963ff",
+      "0x54ffffa1",
+      "0xd12103ff",
+      "0xf90003ff",
+      "0xd10083a9",
+      "0xf90003e9",
+      "0x9140ebe9",
+      "0x91108129",
+      "0xf90007e9"
+    ],
+    "faultInstruction": "str xzr, [sp]",
+    "functionSymbol": "uniffi_core::ffi::rustfuture::future::WrappedFuture$LT$FfiType$GT$::new::h3ca0d4c53bcd461e",
+    "functionSymbolLocation": 20,
+    "probeBytes": 475136,
+    "remainingFrameBytes": 2112,
+    "savedRegisterBytes": 32,
+    "reservedFrameBytes": 477280,
+    "disassembly": "diagnostics/device-ips-code-disassembly.txt"
+  },
+  "layoutProbe": {
+    "library": "target/ios-bindgen/debug/libxbox_ios_bridge.rlib",
+    "librarySha256": "1f26ba9e1ae988486a41256df5899dfec8eb707f444ffea6f0c5cc5d93de710a",
+    "libraryBuiltAt": "2026-11-19T15:21:53.067186+08:00",
+    "scope": "同日缓存 macOS arm64 Rust 开发库；仅检查类型大小，闭包和网络操作均未执行",
+    "startFutureBytes": 119216,
+    "exchangeOfferFutureBytes": 14688,
+    "closeFutureBytes": 176,
+    "boxedStartFutureBytes": 8,
+    "log": "diagnostics/device-ips-future-size.log",
+    "source": "diagnostics/device-ips-future-size.rs",
+    "proofBoundary": "类型大小探针用于解释栈占用；后续生产修复的构造、poll 和取消行为需单独回归"
+  },
+  "conclusion": {
+    "confidence": "confirmed",
+    "rootCause": "UniFFI 会话 start 异步 future 构造阶段耗尽 Swift cooperative 工作线程栈",
+    "stage": "RustStreamingControlSession.prepareSignaling -> XboxStreamSession.start -> UniFFI RustFuture 构造；Peer 创建和 SDP offer 位于后续步骤",
+    "sharedTargetEntry": "xCloud 与 xHome 共用 XboxStreamSession.start 及其固定 future 类型",
+    "sdpFixRelationship": "SDP 字典致命错误对应 SIGTRAP；本报告对应 SIGBUS 栈保护区访问",
+    "networkMediaEvidence": "本尝试在 Peer 创建前终止，真实网络、恢复、媒体供给、稳态供给、submit/present 长尾和帧供给 delta 接续成功启动后的实机 trace"
+  },
+  "recommendedFix": {
+    "location": "crates/xbox-ios-bridge/src/streaming.rs: XboxStreamSession.start",
+    "direction": "缩小交给 UniFFI 的 future；在 Rust 内部将重型上下文/会话启动 await 分支堆分配，保留导出签名与既有控制流",
+    "constraints": "复用现有 Rust/Tokio/UniFFI bridge 和公共 SessionFlow；保持取消、代际、清理和认证约束",
+    "validation": [
+      "约 544 KiB 小栈环境的真实 FFI future 创建、poll、cancel/free 回归",
+      "Debug iPhoneOS 构建和实机 xCloud/xHome 首帧复测"
+    ],
+    "productionFixAppliedThisAnalysis": false
+  },
+  "priorValidationCoverage": "此前 12 项 native SDK 回归覆盖 SDP、Peer、H264 和 NV12；实机调用栈揭示的真实 Rust start FFI future 构造需要补充覆盖",
+  "implementationFollowup": "stack-fix/README.md",
+  "implementationCleanup": "stack-fix/cleanup.json"
+}

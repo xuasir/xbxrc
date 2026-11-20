@@ -1,0 +1,37 @@
+{
+  "previous-build": [
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:892: error: -[XBXRCUITests.PCPageInteractionTests testControllerInformationAndInputStripKeepToolbarOpaque] : XCTAssertGreaterThanOrEqual failed: (\"0.0\") is less than (\"44.0\")"
+  ],
+  "previous-cache": [
+    "failed downloading 'https://github.com/xuasir/xbxrc/releases/download/webrtc-137.7151.04/WebRTC.xcframework.zip' which is required by binary target 'WebRTC': “CFNetworkDownload_h7ghPr.tmp” couldn’t be moved to “artifacts” because either the former doesn’t exist, or the folder containing the latter doesn’t exist.The file “SourcePackages” doesn’t exist.fatalError",
+    "xcodebuild: error: Could not resolve package dependencies:",
+    "  failed downloading 'https://github.com/xuasir/xbxrc/releases/download/webrtc-137.7151.04/WebRTC.xcframework.zip' which is required by binary target 'WebRTC': “CFNetworkDownload_h7ghPr.tmp” couldn’t be moved to “artifacts” because either the former doesn’t exist, or the folder containing the latter doesn’t exist."
+  ],
+  "sandbox-cache": [
+    "2026-11-19 16:47:54.936 xcodebuild[95004:4249233] Logging connecton invalid: <OS_xpc_error: <dictionary: 0x1f05dcb60> { count = 1, transaction: 0, voucher = 0x0, contents =",
+    "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]:499] WARN  : Unable to discover any Simulator runtimes. Developer Directory is /Applications/Xcode.app/Contents/Developer.",
+    "[-[SimServiceContext initWithDeveloperDir:connectionType:error:]_block_invoke:556] ERROR : Could not get list of trusted mount directories: Error Domain=com.apple.CoreSimulator.SimError Code=409 \"Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded\" UserInfo={NSLocalizedDescription=Cannot talk to the service used to manage runtime disk images (simdiskimaged) because its launchd job is not registered or was unloaded}",
+    "[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({",
+    "[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({",
+    "Failed to determine if database is empty or not: You don’t have permission to save the file “org.swift.swiftpm” in the folder “Caches”.Failed to determine if database is empty or not: You don’t have permission to save the file “org.swift.swiftpm” in the folder “Caches”.failed loading cached manifest for 'webrtc': You don’t have permission to save the file “manifests” in the folder “org.swift.swiftpm”.failed closing manifest db cache: You don’t have permission to save the file “manifests” in the folder “org.swift.swiftpm”.You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.",
+    "xcodebuild: error: Could not resolve package dependencies:",
+    "  You don’t have permission to save the file “ManifestLoading” in the folder “manifests”.",
+    "  You don’t have permission to save the file “ManifestLoading” in the folder “manifests”."
+  ],
+  "first-recheck": [
+    "113 |         XCTAssertEqual(input.outputState(now: 0), .neutral)",
+    "133 |         XCTAssertEqual(restored.inputSource, .keyboard)",
+    "134 |         XCTAssertEqual(restored.keyboardMapping.state(pressedKeys: keys).buttonMask, 128)",
+    "136 |         XCTAssertEqual(input.outputState(now: 7), .neutral)",
+    "167 |         XCTAssertTrue(input.currentController === second)",
+    "169 |         XCTAssertTrue(channels.gamepadController(for: 0) === second)",
+    "170 |         XCTAssertNil(channels.gamepadController(for: 1))",
+    "172 |         XCTAssertTrue(channels.gamepadController(for: 0) === first)",
+    "173 |         XCTAssertTrue(input.currentController === first)",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:867: error: -[XBXRCUITests.PCPageInteractionTests testCloudBrowseCapsulesKeepSearchAndFiltersBound] : XCTAssertEqual failed: (\"1\") is not equal to (\"0\")",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:946: error: -[XBXRCUITests.PCPageInteractionTests testControllerInformationAndInputStripKeepToolbarOpaque] : XCTAssertGreaterThanOrEqual failed: (\"1.0\") is less than (\"44.0\")"
+  ],
+  "device-console": [
+    "error: the following command failed with exit code 0 but produced no further output"
+  ]
+}

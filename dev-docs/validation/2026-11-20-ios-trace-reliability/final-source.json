@@ -1,0 +1,12 @@
+{
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceEnvelope.swift": "930f377dde91543b21ae20c401a5a79e6c00fa0eac471859a168afdec82b0d70",
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTracePolicy.swift": "530b5dc853a8c086be22784ff604e698d9bd9e5e1bc75b2edfd5a93a7ea774e1",
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift": "1efb2311c56eda7f3d36ba3fc7bd6d75d6c84862beb7375df1af7e1d7cbe8eea",
+  "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "0b4f30fb5caaeb932c8d19e4ade4cf3187fca5b72064dc942e4ac1296a80f2b0",
+  "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": "457c4c9710b6d196479c557feb8ced61d67cd882f9e3500704ec4c219f712611",
+  "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "cd2503b1ad752b021c7b20933aedd3245a296ca33f3d3ab6f8a31b5d16f979a4",
+  "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift": "721eb1951a4fd4dcdb8a8f424808b0e0946493eae747321e93d16c0012a788fc",
+  "iosapp/XBXRCTests/SettingsAndPersistenceTests.swift": "464de5123ad2b56f4a5554d3ebd030cbc58dfa6f80dee57cc03d171d42aed09d",
+  "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "e808c4678a6c3c3e12c086056daee5d07374ee8aa751cbeb54ee3d1ac00b789d",
+  "iosapp/XBXRCTests/XBXRCTests.swift": "0e42f84a74e8c9f2c041a3786e80aeae2a28b3b275b2d8669ab5d1861d4da6ea"
+}

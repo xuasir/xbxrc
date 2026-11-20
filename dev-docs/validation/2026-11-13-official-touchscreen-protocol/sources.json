@@ -1,0 +1,27 @@
+{
+  "inspectionDate": "2026-11-13",
+  "assetSnapshotDate": "2026-11-12",
+  "sources": [
+    {
+      "file": "web-rtc-stream.d6f6b903.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/web-rtc-stream.d6f6b903.chunk.js",
+      "sha256": "0e1d97750113681c7c2d1edfc7910c1b2915055450a7cfde8fc7a0a54fef73d2",
+      "bytes": 158507,
+      "localRawFile": "/private/tmp/xbxrc-20261112-official-assets/web-rtc-stream.d6f6b903.chunk.js"
+    },
+    {
+      "file": "8128.1aca8038.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+      "bytes": 177333,
+      "localRawFile": "/private/tmp/xbxrc-20261112-official-assets/8128.1aca8038.chunk.js"
+    },
+    {
+      "file": "2091.34346f46.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/2091.34346f46.chunk.js",
+      "sha256": "4ab75f6ff4399496657055a8820aa317208714b1ee9faee384ee359e9a211bd0",
+      "bytes": 101453,
+      "localRawFile": "/private/tmp/xbxrc-20261112-official-assets/2091.34346f46.chunk.js"
+    }
+  ]
+}

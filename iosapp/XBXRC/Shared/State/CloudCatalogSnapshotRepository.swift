@@ -48,13 +48,17 @@ struct CloudCatalogSnapshot: Codable, Equatable, Sendable {
     let baseUpdatedAt: Date
     let overlayUpdatedAt: Date
     let successfulImageURLs: [String: URL]
+    let unavailableSources: Set<String>?
+    let sourceUpdatedAt: [String: Date]?
 
     init(
         scope: CloudCatalogScope,
         games: [CloudLibraryGame],
         baseUpdatedAt: Date,
         overlayUpdatedAt: Date,
-        successfulImageURLs: [String: URL] = [:]
+        successfulImageURLs: [String: URL] = [:],
+        unavailableSources: Set<String> = [],
+        sourceUpdatedAt: [String: Date]? = nil
     ) {
         schemaVersion = Self.schemaVersion
         self.scope = scope
@@ -62,6 +66,8 @@ struct CloudCatalogSnapshot: Codable, Equatable, Sendable {
         self.baseUpdatedAt = baseUpdatedAt
         self.overlayUpdatedAt = overlayUpdatedAt
         self.successfulImageURLs = successfulImageURLs
+        self.unavailableSources = unavailableSources
+        self.sourceUpdatedAt = sourceUpdatedAt
     }
 
     func cacheState(at now: Date = .now) -> CloudCatalogCacheState {
@@ -71,7 +77,7 @@ struct CloudCatalogSnapshot: Codable, Equatable, Sendable {
         let baseAge = max(0, now.timeIntervalSince(baseUpdatedAt))
         let overlayAge = max(0, now.timeIntervalSince(overlayUpdatedAt))
         guard baseAge <= Self.baseRenderableDuration,
-              overlayAge <= Self.overlayRenderableDuration
+            overlayAge <= Self.overlayRenderableDuration
         else {
             return .expired
         }
@@ -86,7 +92,9 @@ struct CloudCatalogSnapshot: Codable, Equatable, Sendable {
             games: games,
             baseUpdatedAt: baseUpdatedAt,
             overlayUpdatedAt: overlayUpdatedAt,
-            successfulImageURLs: urls
+            successfulImageURLs: urls,
+            unavailableSources: unavailableSources ?? [],
+            sourceUpdatedAt: sourceUpdatedAt
         )
     }
 }
@@ -144,7 +152,8 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
                 domain: "cloud-library",
                 event: "cacheDiskOverlayMissing",
                 payload: [
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
                 ],
                 dimension: .core,
                 importance: .debug,
@@ -157,7 +166,7 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             from: Data(contentsOf: overlayURL)
         )
         guard overlay.schemaVersion == CloudCatalogSnapshot.schemaVersion,
-              overlay.scope == scope
+            overlay.scope == scope
         else {
             IOSRuntimeTrace.decision(
                 domain: "cloud-library",
@@ -166,7 +175,8 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
                     "schema": .integer(Int64(overlay.schemaVersion)),
                     "expectedSchema": .integer(Int64(CloudCatalogSnapshot.schemaVersion)),
                     "scopeMatches": .bool(overlay.scope == scope),
-                    "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                    "elapsedMs": .integer(
+                        Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                 ],
                 dimension: .core,
                 importance: .key,
@@ -176,17 +186,19 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
         }
         let currentBaseURL = baseSnapshotURL(scope: scope)
         let legacyBaseURL = legacyBaseSnapshotURL(scope: scope)
-        let baseURL = FileManager.default.fileExists(atPath: currentBaseURL.path)
+        let baseURL =
+            FileManager.default.fileExists(atPath: currentBaseURL.path)
             ? currentBaseURL
             : legacyBaseURL
-        let base: CachedCloudCatalogBase? = if FileManager.default.fileExists(atPath: baseURL.path) {
-            try? decoder.decode(
-                CachedCloudCatalogBase.self,
-                from: Data(contentsOf: baseURL)
-            )
-        } else {
-            nil
-        }
+        let base: CachedCloudCatalogBase? =
+            if FileManager.default.fileExists(atPath: baseURL.path) {
+                try? decoder.decode(
+                    CachedCloudCatalogBase.self,
+                    from: Data(contentsOf: baseURL)
+                )
+            } else {
+                nil
+            }
         let baseByProductID = Dictionary(
             uniqueKeysWithValues: (base?.games ?? []).map { ($0.productID, $0) }
         )
@@ -212,7 +224,9 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
                 isNew: overlayGame.isNew,
                 lastPlayedAt: overlayGame.lastPlayedAt,
                 playtimeMinutes: overlayGame.playtimeMinutes,
-                achievementProgress: overlayGame.achievementProgress
+                achievementProgress: overlayGame.achievementProgress,
+                recentRank: overlayGame.recentRank, newRank: overlayGame.newRank,
+                popularRank: overlayGame.popularRank, leavingRank: overlayGame.leavingRank
             )
         }
         let snapshot = CloudCatalogSnapshot(
@@ -220,7 +234,9 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             games: games,
             baseUpdatedAt: base?.updatedAt ?? overlay.updatedAt,
             overlayUpdatedAt: overlay.updatedAt,
-            successfulImageURLs: base?.successfulImageURLs ?? [:]
+            successfulImageURLs: base?.successfulImageURLs ?? [:],
+            unavailableSources: overlay.unavailableSources ?? [],
+            sourceUpdatedAt: overlay.sourceUpdatedAt
         )
         if overlayURL == legacyOverlayURL || baseURL == legacyBaseURL {
             do {
@@ -240,7 +256,8 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
                 "hasBase": .bool(base != nil),
                 "successfulImages": .integer(Int64(snapshot.successfulImageURLs.count)),
                 "cacheState": .string(snapshot.cacheState().rawValue),
-                "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                "elapsedMs": .integer(
+                    Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
             ],
             dimension: .core,
             importance: .key,
@@ -276,7 +293,8 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
                     error,
                     extra: [
                         "games": .integer(Int64(snapshot.games.count)),
-                        "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                        "elapsedMs": .integer(
+                            Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
                     ]
                 ),
                 dimension: .core,
@@ -290,7 +308,8 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             event: "cacheDiskSaveSucceeded",
             payload: [
                 "games": .integer(Int64(snapshot.games.count)),
-                "elapsedMs": .integer(Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
+                "elapsedMs": .integer(
+                    Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt))),
             ],
             dimension: .core,
             importance: .debug,
@@ -307,7 +326,7 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
         )
         let base: CachedCloudCatalogBase
         if let existingBase,
-           existingBase.schemaVersion == snapshot.schemaVersion
+            existingBase.schemaVersion == snapshot.schemaVersion
         {
             base = CachedCloudCatalogBase(
                 schemaVersion: existingBase.schemaVersion,
@@ -401,7 +420,9 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
             schemaVersion: snapshot.schemaVersion,
             scope: snapshot.scope,
             updatedAt: snapshot.overlayUpdatedAt,
-            games: snapshot.games.map(CachedCloudCatalogOverlayGame.init)
+            games: snapshot.games.map(CachedCloudCatalogOverlayGame.init),
+            unavailableSources: snapshot.unavailableSources,
+            sourceUpdatedAt: snapshot.sourceUpdatedAt
         )
         let url = overlaySnapshotURL(scope: snapshot.scope)
         try encoder.encode(overlay).write(to: url, options: .atomic)
@@ -425,11 +446,13 @@ actor CloudCatalogSnapshotRepository: CloudCatalogSnapshotStoring {
     }
 
     private static func defaultRootDirectory() -> URL {
-        let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first ?? FileManager.default.temporaryDirectory
-        return applicationSupport
+        let applicationSupport =
+            FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first ?? FileManager.default.temporaryDirectory
+        return
+            applicationSupport
             .appendingPathComponent("XBXRC", isDirectory: true)
             .appendingPathComponent("CloudCatalog", isDirectory: true)
     }
@@ -469,6 +492,8 @@ private struct CachedCloudCatalogOverlay: Codable, Sendable {
     let scope: CloudCatalogScope
     let updatedAt: Date
     let games: [CachedCloudCatalogOverlayGame]
+    var unavailableSources: Set<String>?
+    var sourceUpdatedAt: [String: Date]? = nil
 }
 
 private struct CachedCloudCatalogOverlayGame: Codable, Sendable {
@@ -481,6 +506,10 @@ private struct CachedCloudCatalogOverlayGame: Codable, Sendable {
     let hasEntitlement: Bool?
     let isRecentlyPlayed: Bool?
     let isNew: Bool?
+    let recentRank: Int?
+    let newRank: Int?
+    let popularRank: Int?
+    let leavingRank: Int?
     let lastPlayedAt: Date?
     let playtimeMinutes: Int?
     let achievementProgress: AchievementProgress?
@@ -495,6 +524,10 @@ private struct CachedCloudCatalogOverlayGame: Codable, Sendable {
         hasEntitlement = game.hasEntitlement
         isRecentlyPlayed = game.isRecentlyPlayed
         isNew = game.isNew
+        recentRank = game.recentRank
+        newRank = game.newRank
+        popularRank = game.popularRank
+        leavingRank = game.leavingRank
         lastPlayedAt = game.lastPlayedAt
         playtimeMinutes = game.playtimeMinutes
         achievementProgress = game.achievementProgress
