@@ -1,363 +1,6 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "正在下载媒体" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Downloading media"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在下载媒体"
-          }
-        }
-      }
-    },
-    "正在更新媒体链接" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Updating media link"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在更新媒体链接"
-          }
-        }
-      }
-    },
-    "取消下载" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel download"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消下载"
-          }
-        }
-      }
-    },
-    "保存布局失败" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not save layout"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存布局失败"
-          }
-        }
-      }
-    },
-    "保存并退出" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save and exit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存并退出"
-          }
-        }
-      }
-    },
-    "退出预览" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exit preview"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出预览"
-          }
-        }
-      }
-    },
-    "正在保存布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saving layout"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在保存布局"
-          }
-        }
-      }
-    },
-    "尚未保存" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not saved"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚未保存"
-          }
-        }
-      }
-    },
-    "有新版本可更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "An update is available"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有新版本可更新"
-          }
-        }
-      }
-    },
-    "作者 %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "By %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "作者 %@"
-          }
-        }
-      }
-    },
-    "在云游戏详情中保存官方或社区布局，随后可在 Home 串流中切换。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save official or community layouts from a cloud game, then switch layouts during Home streaming."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在云游戏详情中保存官方或社区布局，随后可在 Home 串流中切换。"
-          }
-        }
-      }
-    },
-    "官方" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Official"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "官方"
-          }
-        }
-      }
-    },
-    "布局包中暂无可用布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No layouts are available in this bundle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "布局包中暂无可用布局"
-          }
-        }
-      }
-    },
-    "布局来源与版本" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Layout source and version"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "布局来源与版本"
-          }
-        }
-      }
-    },
-    "查看游戏布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View game layouts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看游戏布局"
-          }
-        }
-      }
-    },
-    "正在查询游戏布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading game layouts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在查询游戏布局"
-          }
-        }
-      }
-    },
-    "此游戏暂无可用的手柄布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No gamepad layouts are available for this game"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此游戏暂无可用的手柄布局"
-          }
-        }
-      }
-    },
-    "游戏触屏布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Game touch layouts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "游戏触屏布局"
-          }
-        }
-      }
-    },
-    "登录后查看游戏触屏布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign in to view game touch layouts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登录后查看游戏触屏布局"
-          }
-        }
-      }
-    },
-    "社区" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "社区"
-          }
-        }
-      }
-    },
-    "社区布局" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community layouts"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "社区布局"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -2252,6 +1895,23 @@
     "作者" : {
 
     },
+    "作者 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者 %@"
+          }
+        }
+      }
+    },
     "使用临时登录会话" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2365,7 +2025,6 @@
       }
     },
     "保存到本机" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2393,6 +2052,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存后可在 Home 串流菜单中切换布局。"
+          }
+        }
+      }
+    },
+    "保存布局失败" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not save layout"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存布局失败"
+          }
+        }
+      }
+    },
+    "保存并退出" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and exit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存并退出"
           }
         }
       }
@@ -2499,6 +2192,7 @@
       }
     },
     "全屏预览" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2843,6 +2537,7 @@
 
     },
     "关闭预览" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3607,6 +3302,7 @@
       }
     },
     "包内布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3929,6 +3625,23 @@
         }
       }
     },
+    "取消下载" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel download"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消下载"
+          }
+        }
+      }
+    },
     "取消录入" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4065,6 +3778,7 @@
       }
     },
     "可用于 Home 串流" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4322,6 +4036,7 @@
       }
     },
     "在云游戏详情中保存官方布局，随后可在 Home 串流中切换。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4333,6 +4048,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在云游戏详情中保存官方布局，随后可在 Home 串流中切换。"
+          }
+        }
+      }
+    },
+    "在云游戏详情中保存官方或社区布局，随后可在 Home 串流中切换。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save official or community layouts from a cloud game, then switch layouts during Home streaming."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在云游戏详情中保存官方或社区布局，随后可在 Home 串流中切换。"
           }
         }
       }
@@ -4741,7 +4473,6 @@
       }
     },
     "媒体下载" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5054,7 +4785,25 @@
         }
       }
     },
+    "官方" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Official"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "官方"
+          }
+        }
+      }
+    },
     "官方包中暂无可用布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5088,6 +4837,7 @@
       }
     },
     "官方版本" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5315,6 +5065,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Export runtime logs"
+          }
+        }
+      }
+    },
+    "尚未保存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not saved"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未保存"
           }
         }
       }
@@ -5944,23 +5711,6 @@
     "布局与输入测试" : {
 
     },
-    "布局模板" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Layout template"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "布局模板"
-          }
-        }
-      }
-    },
     "布局包" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5978,19 +5728,53 @@
         }
       }
     },
-    "布局预览" : {
+    "布局包中暂无可用布局" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Layout preview"
+            "value" : "No layouts are available in this bundle"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "布局预览"
+            "value" : "布局包中暂无可用布局"
+          }
+        }
+      }
+    },
+    "布局来源与版本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout source and version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "布局来源与版本"
+          }
+        }
+      }
+    },
+    "布局模板" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout template"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "布局模板"
           }
         }
       }
@@ -6007,6 +5791,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "布局等待适配"
+          }
+        }
+      }
+    },
+    "布局预览" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "布局预览"
           }
         }
       }
@@ -8933,7 +8734,6 @@
       }
     },
     "更新布局" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8962,6 +8762,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更清晰"
+          }
+        }
+      }
+    },
+    "有新版本可更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An update is available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有新版本可更新"
           }
         }
       }
@@ -9263,6 +9080,7 @@
       }
     },
     "查看官方布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9353,6 +9171,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看我的游戏资料与解锁进度"
+          }
+        }
+      }
+    },
+    "查看游戏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View game layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看游戏布局"
           }
         }
       }
@@ -9684,6 +9519,23 @@
         }
       }
     },
+    "正在下载媒体" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading media"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载媒体"
+          }
+        }
+      }
+    },
     "正在下载布局包" : {
       "localizations" : {
         "en" : {
@@ -9712,6 +9564,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在使用的布局会切换为通用 Xbox。"
+          }
+        }
+      }
+    },
+    "正在保存布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving layout"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在保存布局"
           }
         }
       }
@@ -10002,7 +9871,25 @@
         }
       }
     },
+    "正在更新媒体链接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updating media link"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在更新媒体链接"
+          }
+        }
+      }
+    },
     "正在查询官方布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10014,6 +9901,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在查询官方布局"
+          }
+        }
+      }
+    },
+    "正在查询游戏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading game layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查询游戏布局"
           }
         }
       }
@@ -10476,6 +10380,7 @@
       }
     },
     "此游戏暂无可用的官方手柄布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10487,6 +10392,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此游戏暂无可用的官方手柄布局"
+          }
+        }
+      }
+    },
+    "此游戏暂无可用的手柄布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No gamepad layouts are available for this game"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此游戏暂无可用的手柄布局"
           }
         }
       }
@@ -11239,6 +11161,23 @@
         }
       }
     },
+    "游戏触屏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Game touch layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏触屏布局"
+          }
+        }
+      }
+    },
     "游戏记录" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11693,7 +11632,6 @@
       }
     },
     "版本" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12148,6 +12086,7 @@
       }
     },
     "登录后查看官方触屏布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12159,6 +12098,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录后查看官方触屏布局"
+          }
+        }
+      }
+    },
+    "登录后查看游戏触屏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to view game touch layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录后查看游戏触屏布局"
           }
         }
       }
@@ -12353,6 +12309,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "确认应用"
+          }
+        }
+      }
+    },
+    "社区" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "社区"
+          }
+        }
+      }
+    },
+    "社区布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "社区布局"
           }
         }
       }
@@ -14998,6 +14988,23 @@
         }
       }
     },
+    "退出预览" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exit preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出预览"
+          }
+        }
+      }
+    },
     "选择 JSON 文件或粘贴完整配置，预览服务器并确认应用。配置包含 server_url、server_username、server_credential。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15299,7 +15306,6 @@
 
     },
     "重新保存" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
