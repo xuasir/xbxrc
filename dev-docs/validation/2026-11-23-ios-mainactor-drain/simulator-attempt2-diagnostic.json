@@ -1,0 +1,54 @@
+{
+  "exitCode": 65,
+  "result": "BUILD FAILED before tests",
+  "diagnoses": [
+    "新宿主测试补齐SwiftUI导入",
+    "现有截图capture使用transaction.disablesAnimations关闭本地动画"
+  ],
+  "errors": [
+    {
+      "logLine": 1329,
+      "lines": [
+        "SwiftCompile normal arm64 Compiling\\ PCDataParityTests.swift,\\ XBXRCTests.swift /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift (in target 'XBXRCTests' from project 'XBXRC')",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift:301:23: error: cannot find 'UIHostingController' in scope",
+        " 299 |         let window = UIWindow(windowScene: scene)",
+        " 300 |         window.frame = CGRect(x: 0, y: 0, width: 800, height: 420)",
+        " 301 |         let hosting = UIHostingController(",
+        "     |                       `- error: cannot find 'UIHostingController' in scope"
+      ]
+    },
+    {
+      "logLine": 1337,
+      "lines": [
+        "",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift:327:21: error: generic parameter 'T' could not be inferred",
+        " 325 |         }",
+        " 326 |         let surface = try XCTUnwrap(findSurface(hosting.view))",
+        " 327 |         let a = try XCTUnwrap(",
+        "     |                     `- error: generic parameter 'T' could not be inferred"
+      ]
+    },
+    {
+      "logLine": 1349,
+      "lines": [
+        "",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift:328:65: error: cannot infer contextual base in reference to member 'gamepad'",
+        " 326 |         let surface = try XCTUnwrap(findSurface(hosting.view))",
+        " 327 |         let a = try XCTUnwrap(",
+        " 328 |             surface.input.sockets.first { $0.control.action == .gamepad(\"gamepadA\") })",
+        "     |                                                                 `- error: cannot infer contextual base in reference to member 'gamepad'"
+      ]
+    },
+    {
+      "logLine": 1375,
+      "lines": [
+        "SwiftCompile normal arm64 Compiling\\ CapabilityMigrationTests.swift /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift (in target 'XBXRCTests' from project 'XBXRC')",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:919:30: error: cannot convert value of type 'any KeyPath<EnvironmentValues, Bool> & Sendable' to expected argument type 'WritableKeyPath<EnvironmentValues, Bool>'",
+        " 917 |                 .environment(\\.locale, Locale(identifier: language))",
+        " 918 |                 .environment(\\.dynamicTypeSize, textSize)",
+        " 919 |                 .environment(\\.accessibilityReduceMotion, true)",
+        "     |                              `- error: cannot convert value of type 'any KeyPath<EnvironmentValues, Bool> & Sendable' to expected argument type 'WritableKeyPath<EnvironmentValues, Bool>'"
+      ]
+    }
+  ]
+}

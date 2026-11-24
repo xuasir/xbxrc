@@ -1,0 +1,68 @@
+{
+  "task": "2026-11-23-ios-home-startup-diagnostics",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1",
+  "startedAt": "2026-11-23T14:47:17.978583+08:00",
+  "trackedBuildTestExportCommandsCompleted": [
+    {
+      "action": "hostDiagnosticTests",
+      "exitCode": 0
+    },
+    {
+      "action": "deviceBuildSandbox",
+      "exitCode": 74
+    },
+    {
+      "action": "deviceBuildRetry",
+      "exitCode": 0
+    },
+    {
+      "action": "xcresultExport",
+      "exitCode": 0
+    }
+  ],
+  "processInventoryAvailable": true,
+  "activeRelatedProcesses": [],
+  "rootAliasesChecked": [
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1",
+    "/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1"
+  ],
+  "scope": "本轮隔离目录相关的构建、编译、测试和结果导出进程",
+  "filesInventoried": 1534,
+  "logicalBytes": 562102262,
+  "allocatedBytes": 566480896,
+  "allocatedMiB": 540.24,
+  "diskFreeBeforeBytes": 45465600000,
+  "topLevelEntries": [
+    "DerivedDataDevice",
+    "ModuleCache",
+    "PureProbe",
+    "SwiftPMBuild",
+    "SwiftPMCache",
+    "SwiftPMConfig",
+    "SwiftPMSecurity",
+    "SystemTemporary",
+    "baseline",
+    "boundary.log",
+    "device-build-retry.log",
+    "device-build.log",
+    "device-retry.xcresult",
+    "device.xcresult",
+    "final-static-checks.json",
+    "swift-format.json",
+    "swift-test.log"
+  ],
+  "preserved": [
+    "用户Downloads原始诊断日志",
+    "本轮仓库验证证据",
+    "共享Rust/WebRTC依赖缓存",
+    "工作区既有暂存与未暂存改动"
+  ],
+  "status": "completed",
+  "completedAt": "2026-11-23T14:47:18.217476+08:00",
+  "temporaryRootExistsAfter": false,
+  "diskFreeAfterBytes": 46284800000,
+  "diskFreeDeltaBytes": 819200000,
+  "diskFreeAfterGiB": 43.11,
+  "originalUserLogHashUnchanged": true,
+  "sharedSourcePackagesRetained": true
+}

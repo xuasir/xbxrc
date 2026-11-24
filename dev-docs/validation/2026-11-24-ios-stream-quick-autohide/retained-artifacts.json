@@ -1,0 +1,22 @@
+[
+  {
+    "path": "streaming-quick-buttons-hidden.png",
+    "bytes": 2939563,
+    "sha256": "734f26e2e5118ff3fe0a03fab06d4cd72b9ef64e70adb98137d6f14fd218cd46"
+  },
+  {
+    "path": "streaming-quick-buttons-revealed.png",
+    "bytes": 2951443,
+    "sha256": "845131fa9bda94aa20c1e78f5cf23fc036c5ec7438c21fba6b23834bb62b19b7"
+  },
+  {
+    "path": "streaming-quick-buttons-revealed-portrait.png",
+    "bytes": 2909528,
+    "sha256": "776173f201d7d6d977ed6e4b8157744022b4c7fbb625f7aad645653ce0d0f761"
+  },
+  {
+    "path": "hidden-controls-hit-routing.json",
+    "bytes": 1234,
+    "sha256": "2381bdbdb3f027f9325d58eba325e40e43e76888e491a32d8651ed8790b5705d"
+  }
+]

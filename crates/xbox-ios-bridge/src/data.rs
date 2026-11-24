@@ -101,16 +101,14 @@ pub async fn fetch_hosts(web_token_json: String) -> Result<Vec<XboxHost>, XboxBr
     let claims = claims_from_json(&web_token_json)?;
     let account_id = claims.xuid.clone().unwrap_or_else(|| claims.uhs.clone());
     let smartglass = SmartglassApi::new(claims.uhs, claims.token);
-    let request = smartglass.get_consoles_list();
-    match tokio::time::timeout(std::time::Duration::from_secs(8), request).await {
-        Ok(Ok(response)) => {
-            let hosts = extract_hosts(&response);
-            replace_home_host_facts(&account_id, extract_home_host_facts(&response))?;
-            Ok(hosts)
-        }
-        Ok(Err(error)) => Err(crate::query_failure::query_error(error)),
-        Err(_) => Err(XboxBridgeError::Data("主机查询超时，请重试".into())),
-    }
+    let response = smartglass
+        .get_consoles_list()
+        .await
+        .map_err(crate::query_failure::query_error)?;
+    let hosts = extract_hosts(&response).map_err(crate::query_failure::query_error)?;
+    let facts = extract_home_host_facts(&response).map_err(crate::query_failure::query_error)?;
+    replace_home_host_facts(&account_id, facts)?;
+    Ok(hosts)
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -327,12 +325,16 @@ fn extract_games(response: &Value) -> Vec<XboxGame> {
         .collect()
 }
 
-fn extract_hosts(response: &Value) -> Vec<XboxHost> {
+fn validated_host_values(response: &Value) -> Result<Vec<&Value>, xbox_webapi::WebApiError> {
     find_host_values(response, 0)
-        .unwrap_or_default()
+        .ok_or_else(|| xbox_webapi::WebApiError::parse("invalid console list response"))
+}
+
+fn extract_hosts(response: &Value) -> Result<Vec<XboxHost>, xbox_webapi::WebApiError> {
+    Ok(validated_host_values(response)?
         .into_iter()
         .filter_map(map_host)
-        .collect()
+        .collect())
 }
 
 fn find_host_values(value: &Value, depth: usize) -> Option<Vec<&Value>> {
@@ -344,7 +346,7 @@ fn find_host_values(value: &Value, depth: usize) -> Option<Vec<&Value>> {
             .iter()
             .filter(|item| map_host(item).is_some())
             .collect::<Vec<_>>();
-        return (!hosts.is_empty()).then_some(hosts);
+        return (items.is_empty() || !hosts.is_empty()).then_some(hosts);
     }
     let object = value.as_object()?;
     for key in [
@@ -360,9 +362,10 @@ fn find_host_values(value: &Value, depth: usize) -> Option<Vec<&Value>> {
     None
 }
 
-pub(crate) fn extract_home_host_facts(response: &Value) -> Vec<HomeHostFacts> {
-    find_host_values(response, 0)
-        .unwrap_or_default()
+pub(crate) fn extract_home_host_facts(
+    response: &Value,
+) -> Result<Vec<HomeHostFacts>, xbox_webapi::WebApiError> {
+    Ok(validated_host_values(response)?
         .into_iter()
         .filter_map(|raw| {
             let host = map_host(raw)?;
@@ -381,7 +384,7 @@ pub(crate) fn extract_home_host_facts(response: &Value) -> Vec<HomeHostFacts> {
                 console_addrs,
             })
         })
-        .collect()
+        .collect())
 }
 
 fn extract_console_addrs(raw: &Value) -> Vec<HostAddr> {
@@ -891,7 +894,8 @@ mod tests {
                     "totalSpaceBytes": 1000
                 }]
             }]}
-        }));
+        }))
+        .expect("valid hosts");
 
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].server_id.as_deref(), Some("stream-target-id"));
@@ -916,7 +920,8 @@ mod tests {
                     ]
                 }
             }]}
-        }));
+        }))
+        .expect("valid facts");
 
         assert_eq!(facts.len(), 1);
         assert_eq!(facts[0].canonical_target_id(), Some("server-id"));
@@ -925,6 +930,27 @@ mod tests {
         assert_eq!(facts[0].console_addrs.len(), 1);
         assert_eq!(facts[0].console_addrs[0].ip, "10.0.0.8");
         assert_eq!(facts[0].remote_console.console_addrs_count, 1);
+    }
+
+    #[test]
+    fn distinguishes_empty_mixed_and_invalid_host_responses() {
+        for response in [json!([]), json!({"data": {"results": []}})] {
+            assert!(extract_hosts(&response).unwrap().is_empty());
+            assert!(extract_home_host_facts(&response).unwrap().is_empty());
+        }
+        let mixed = json!({"body": {"consoles": [null, {}, {"serverId": "valid"}]}});
+        assert_eq!(extract_hosts(&mixed).unwrap().len(), 1);
+        assert_eq!(extract_home_host_facts(&mixed).unwrap().len(), 1);
+        for response in [
+            json!(null),
+            json!({}),
+            json!({"unknown": []}),
+            json!({"results": [null, {}, {"serverId": " "}]}),
+            json!({"results": "broken"}),
+        ] {
+            assert!(extract_hosts(&response).is_err());
+            assert!(extract_home_host_facts(&response).is_err());
+        }
     }
 
     #[test]

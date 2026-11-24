@@ -1,0 +1,40 @@
+[
+  {
+    "file": "iosapp/XBXRCTests/StreamingControlsStateTests.swift",
+    "lines": [
+      [
+        108,
+        113
+      ],
+      [
+        116,
+        116
+      ],
+      [
+        119,
+        120
+      ],
+      [
+        125,
+        125
+      ],
+      [
+        465,
+        534
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "lines": [
+      [
+        489,
+        489
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

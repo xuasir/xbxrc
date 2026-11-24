@@ -1,0 +1,63 @@
+{
+  "task": "2026-11-24-ios-banner-header-consistency",
+  "completed_at": "2026-11-24T05:03:48.443170+00:00",
+  "process_confirmation": {
+    "xcodebuild_sessions": [
+      {
+        "session_id": 78954,
+        "exit_code": 65
+      },
+      {
+        "session_id": 26774,
+        "exit_code": 0
+      }
+    ],
+    "sample_session": {
+      "session_id": 88388,
+      "exit_code": 0
+    },
+    "xcresult_exports_completed": true,
+    "ps_rechecked_absent_pids": [
+      91801,
+      92177
+    ]
+  },
+  "removed_root": "/private/tmp/xbxrc-ios-banner-header-20261124-sqdcfljc",
+  "removed_contents": [
+    "baseline",
+    "baseline-git-status.txt",
+    "DerivedData",
+    "banner-smoke.xcresult",
+    "banner-final.xcresult",
+    "test.log",
+    "final-test.log",
+    "exports",
+    "final-exports",
+    "native-banner-smoke.swift",
+    "swift-format-2.json",
+    "swift-format-4.json",
+    "xcode-result-finalization.sample.txt"
+  ],
+  "removed_allocated_bytes": 656101376,
+  "removed_allocated_mib": 625.71,
+  "removed_logical_bytes": 639142177,
+  "free_space_before_bytes": 49152000000,
+  "free_space_after_bytes": 49971200000,
+  "observed_free_space_delta_bytes": 819200000,
+  "temporary_root_absent": true,
+  "retained": {
+    "evidence_root": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-banner-header-consistency",
+    "stable_screenshots": 9,
+    "failure_screenshot": 1,
+    "summaries": true,
+    "failure_diagnostics": true,
+    "source_hashes": true,
+    "task_diff": true,
+    "reproduction_probe": "native-banner-smoke.swift"
+  },
+  "shared_caches_retained": [
+    "existing WebRTC SourcePackages",
+    "target/ios",
+    "running Simulator"
+  ]
+}

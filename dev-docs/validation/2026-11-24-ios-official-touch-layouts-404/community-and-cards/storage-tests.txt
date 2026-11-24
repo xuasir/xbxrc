@@ -1,0 +1,26 @@
+   Compiling xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+   Compiling xbox-touch-layouts v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-touch-layouts)
+   Compiling xbox-cloud-catalog-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-cloud-catalog-flow)
+   Compiling xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+   Compiling xbox-auth-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-auth-flow)
+   Compiling xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.80s
+     Running unittests src/lib.rs (target/ios-bindgen/debug/deps/xbox_ios_bridge-e7e606f838dbd57f)
+
+running 13 tests
+test touch_layouts::tests::applied_layout_recency_is_persisted ... ok
+test touch_layouts::tests::failed_delete_cleanup_is_reported_and_retried_when_listing_layouts ... ok
+test touch_layouts::tests::library_requires_absolute_root ... ok
+test touch_layouts::tests::failed_save_keeps_previous_layout_and_pending_directories_are_cleaned ... ok
+test touch_layouts::tests::corrupt_compiled_layout_fails_without_affecting_other_layouts ... ok
+test touch_layouts::tests::invalid_index_entry_is_ignored_and_valid_entries_remain ... ok
+test touch_layouts::tests::failed_compiled_write_reclaims_new_package_and_preserves_previous_index ... ok
+test touch_layouts::tests::deleting_one_layout_preserves_shared_resources_and_last_delete_reclaims_them ... ok
+test touch_layouts::tests::community_layout_update_reuses_identity_and_survives_restart ... ok
+test touch_layouts::tests::corrupted_asset_is_rejected_and_same_version_save_repairs_shared_resources ... ok
+test touch_layouts::tests::reopening_library_reclaims_orphaned_packages_snapshots_and_pending_writes ... ok
+test touch_layouts::tests::saves_multiple_layouts_and_reloads_shared_bundle_after_restart ... ok
+test touch_layouts::tests::duplicate_save_is_idempotent_and_update_keeps_stable_selection_identity ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.04s
+

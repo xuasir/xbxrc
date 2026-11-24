@@ -25,7 +25,16 @@ uuid.workspace = true
 
 log.workspace = true
 
+chrono.workspace = true
+
+base64.workspace = true
+
+async-trait.workspace = true
+
 xbox-webapi = { path = "../xbox-webapi" }
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+tokio.workspace = true

@@ -1,0 +1,51 @@
+{
+  "task": "2026-11-24-ios-banner-header-consistency",
+  "temporary_root": "/private/tmp/xbxrc-ios-banner-header-20261124-sqdcfljc",
+  "evidence_root": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-banner-header-consistency",
+  "baseline_source_sha256": {
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "0d1908951725d3466820b64baf5d82da1d7cdd69d693759962591e46264730e8",
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "a0bdb5a39b92b5b8f46132e875c0088a3d03aa8ec55af46530e96220f6bd6007",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "10547da1130f0221982d1ee93afec1f3c8a56ca00a1940bf73ab8eb5d1aef3fa",
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift": "1ab27bb7f3e683c15276c10e64a3f7721c1f8367135eba3ca08ed781ddd7dd6e",
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": "6435cc7ed4c1c5e3252cfdb93fe38eeaef15cf74b1891053b5f846423b73aa71",
+    "iosapp/DESIGN.md": "68ef4c51bff4eb7248346ca349739bf0924877da3faaa131d8ba6b3e932cf3ea"
+  },
+  "shared_source_packages": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "temporary_artifacts": [
+    "baseline",
+    "baseline-git-status.txt",
+    "DerivedData",
+    "banner-smoke.xcresult",
+    "banner-final.xcresult",
+    "test.log",
+    "final-test.log",
+    "exports",
+    "final-exports",
+    "native-banner-smoke.swift",
+    "swift-format-2.json",
+    "swift-format-4.json",
+    "xcode-result-finalization.sample.txt"
+  ],
+  "completed_commands": [
+    {
+      "operation": "initial xcodebuild test",
+      "session_id": 78954,
+      "exit_code": 65
+    },
+    {
+      "operation": "final scoped xcodebuild test",
+      "session_id": 26774,
+      "exit_code": 0
+    },
+    {
+      "operation": "xcodebuild sample",
+      "session_id": 88388,
+      "exit_code": 0
+    },
+    {
+      "operation": "initial and final xcresulttool exports",
+      "exit_code": 0
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-23T11:59:00.731189+08:00",
+  "allExecutionStatesCompleted": true,
+  "finalBuildAndTestExitCodes": {
+    "simulator": 0,
+    "device": 0
+  },
+  "executionPids": [
+    53743,
+    54647,
+    59136,
+    60447
+  ],
+  "activeExecutionPids": [],
+  "activeProcessesMatchingTemporaryRoot": [],
+  "allToolSessionsCompleted": true,
+  "exportCommandsCompleted": true,
+  "rawResultBundlesVerified": true
+}

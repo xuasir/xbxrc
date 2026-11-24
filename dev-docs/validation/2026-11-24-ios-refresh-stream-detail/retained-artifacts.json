@@ -1,0 +1,50 @@
+[
+  {
+    "file": "installed-detail-title-action.png",
+    "source_test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "source_attachment": "priority-game-overview_0_3D9A271A-8439-48B4-AB75-DEC0D2718445.png",
+    "sha256": "6b973fc25581b910b2dafa5131a06f857febee0a0196cb4b90ae7c1c1cb78ef5"
+  },
+  {
+    "file": "streaming-quick-right.png",
+    "source_test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "source_attachment": "streaming-safe-touch-landscape-right_0_3107E977-9778-4905-A983-164A73D98029.png",
+    "sha256": "ab7338c271236d1eccb5d4d023a211699062e9d6f2cde79ccc8f0909abaa7774"
+  },
+  {
+    "file": "streaming-region-right.txt",
+    "source_test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "source_attachment": "streaming-safe-region-4_0_51E1E2D4-C395-4923-974B-20D8A2316CE8.txt",
+    "sha256": "8fbd92d2accb5933c1554bbd20843a1efdc2aa933e7d188659c06914ca43df81"
+  },
+  {
+    "file": "streaming-quick-left.png",
+    "source_test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "source_attachment": "streaming-safe-touch-landscape-left_0_FF1A7A52-C389-4159-A107-E3620DD351D7.png",
+    "sha256": "dd4ae57ecae9aee59b706e9f392a80ad25424fbee425d097327e6aa51688faca"
+  },
+  {
+    "file": "streaming-region-left.txt",
+    "source_test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "source_attachment": "streaming-safe-region-3_0_E97264C9-F299-4880-B225-48122E3CD3B1.txt",
+    "sha256": "a3a415bd483537ce8a8b45a40392a9945a385c426f961564328a6127e0736b73"
+  },
+  {
+    "file": "native-refresh-locale-summary.txt",
+    "source_test": "PCDataParityTests/testNativePullRefreshAndInstalledLocaleSmoke()",
+    "source_attachment": "native-refresh-locale-summary_0_22F17380-4431-4962-86AA-2AB078655D68.txt",
+    "sha256": "19ccbd6a85a10afb16d9bea213d891ffc8e9e524faa9c2447e3726b26d499ab4"
+  },
+  {
+    "file": "installed-detail-configured-chinese.png",
+    "source_test": "PCDataParityTests/testNativePullRefreshAndInstalledLocaleSmoke()",
+    "source_attachment": "installed-detail-configured-chinese_0_00D4B6C1-8DA5-4FF5-B4D8-117AD207AF87.png",
+    "sha256": "23dc3e20aa1c2bbd6def673b7c6b24c5a2f534f7b4a7d801268a7994ce7b1a57"
+  },
+  {
+    "file": "refresh-system-only.png",
+    "source_test": "PCDataParityTests/testNativePullRefreshAndInstalledLocaleSmoke()",
+    "source_attachment": "refresh-content-waiting_0_6FA999DF-0074-45EA-A999-050872629B98.png",
+    "sha256": "8a8a304e7e0e5367833d25c5ea91f9b521fc393f64c3747a992f020077f4bf93"
+  }
+]

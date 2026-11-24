@@ -1,0 +1,227 @@
+{
+  "input": {
+    "path": "runtime-logs/ios/runtime-trace-ios-1795187951399-1.jsonl",
+    "sha256": "24ac24de981cf9c15a1eafb558b6d14a8f28fb91fbfbe5a01e35afffbc90612d",
+    "rows": 33877
+  },
+  "baselineNormalSupply": {
+    "scope": "同sampleId且完全前台、首次呈现后的解码>=50FPS窗口；尾部零供给单独完整报告",
+    "attempts": [
+      {
+        "attempt": 1,
+        "normalSupplyWindows": 36,
+        "windowSeconds": 36.082854083359244,
+        "counts": {
+          "framesDecodedDelta": 2163.0,
+          "submitCountDelta": 2112.0,
+          "presentCountDelta": 2112.0,
+          "drawablePresentCountDelta": 2084.0
+        },
+        "weightedFps": {
+          "framesDecodedDelta": 59.94536892794011,
+          "submitCountDelta": 58.531955236157884,
+          "presentCountDelta": 58.531955236157884,
+          "drawablePresentCountDelta": 57.75596340537549
+        }
+      },
+      {
+        "attempt": 2,
+        "normalSupplyWindows": 66,
+        "windowSeconds": 66.18477420830726,
+        "counts": {
+          "framesDecodedDelta": 3967.0,
+          "submitCountDelta": 3880.0,
+          "presentCountDelta": 3880.0,
+          "drawablePresentCountDelta": 3860.0
+        },
+        "weightedFps": {
+          "framesDecodedDelta": 59.93825690957902,
+          "submitCountDelta": 58.62375518254767,
+          "presentCountDelta": 58.62375518254767,
+          "drawablePresentCountDelta": 58.32157087748299
+        }
+      }
+    ]
+  },
+  "applicationDropCounts": {
+    "ingressCoalesced": 189
+  },
+  "mailboxOverwriteEventCount": 0,
+  "attempts": [
+    {
+      "generation": 1,
+      "peerEpoch": 1,
+      "surfaceAttachmentCount": 50,
+      "medianAttachmentGapMs": 1001.975250005722,
+      "dropEventCount": 59,
+      "dropFrames": 61,
+      "dropEventsWithin50MsAfterAttachment": 26,
+      "dropFramesWithin50MsAfterAttachment": 26,
+      "medianDropSinceAttachmentMs": 56.16987502574921
+    },
+    {
+      "generation": 3,
+      "peerEpoch": 2,
+      "surfaceAttachmentCount": 149,
+      "medianAttachmentGapMs": 1002.5203541815281,
+      "dropEventCount": 112,
+      "dropFrames": 128,
+      "dropEventsWithin50MsAfterAttachment": 42,
+      "dropFramesWithin50MsAfterAttachment": 44,
+      "medianDropSinceAttachmentMs": 55.19956251978874
+    }
+  ],
+  "representativeAnchors": [
+    {
+      "attachment": {
+        "seq": 627,
+        "tsMs": 1795188020955,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 1,
+          "peerEpoch": 1,
+          "sourceMonotonicMs": 308866189.25133336
+        }
+      },
+      "followingDrop": {
+        "seq": 628,
+        "tsMs": 1795188020984,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 1,
+          "peerEpoch": 1,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308866217.8283334
+        }
+      },
+      "gapMs": 28.57700002193451
+    },
+    {
+      "attachment": {
+        "seq": 930,
+        "tsMs": 1795188021958,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 1,
+          "peerEpoch": 1,
+          "sourceMonotonicMs": 308867191.7135
+        }
+      },
+      "followingDrop": {
+        "seq": 931,
+        "tsMs": 1795188021989,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 1,
+          "peerEpoch": 1,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308867223.3096667
+        }
+      },
+      "gapMs": 31.596166670322418
+    },
+    {
+      "attachment": {
+        "seq": 1319,
+        "tsMs": 1795188024978,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 1,
+          "peerEpoch": 1,
+          "sourceMonotonicMs": 308870212.23908335
+        }
+      },
+      "followingDrop": {
+        "seq": 1320,
+        "tsMs": 1795188025008,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 1,
+          "peerEpoch": 1,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308870241.6911667
+        }
+      },
+      "gapMs": 29.452083349227905
+    },
+    {
+      "attachment": {
+        "seq": 12338,
+        "tsMs": 1795188091008,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 3,
+          "peerEpoch": 2,
+          "sourceMonotonicMs": 308936242.47425
+        }
+      },
+      "followingDrop": {
+        "seq": 12339,
+        "tsMs": 1795188091032,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 3,
+          "peerEpoch": 2,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308936266.3377917
+        }
+      },
+      "gapMs": 23.863541662693024
+    },
+    {
+      "attachment": {
+        "seq": 12641,
+        "tsMs": 1795188092011,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 3,
+          "peerEpoch": 2,
+          "sourceMonotonicMs": 308937244.9467084
+        }
+      },
+      "followingDrop": {
+        "seq": 12642,
+        "tsMs": 1795188092042,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 3,
+          "peerEpoch": 2,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308937275.9059167
+        }
+      },
+      "gapMs": 30.95920830965042
+    },
+    {
+      "attachment": {
+        "seq": 13542,
+        "tsMs": 1795188095019,
+        "event": "videoSurfaceAttached",
+        "payload": {
+          "generation": 3,
+          "peerEpoch": 2,
+          "sourceMonotonicMs": 308940252.9237084
+        }
+      },
+      "followingDrop": {
+        "seq": 13546,
+        "tsMs": 1795188095063,
+        "event": "videoFrameDropped",
+        "payload": {
+          "count": 1,
+          "generation": 3,
+          "peerEpoch": 2,
+          "reason": "ingressCoalesced",
+          "sourceMonotonicMs": 308940297.1459167
+        }
+      },
+      "gapMs": 44.22220832109451
+    }
+  ],
+  "interpretation": "旧Trace显示每秒重复surface绑定与入口丢弃集中出现；源码按包装对象地址比较，实际SDK不同wrapper的底层轨道相等性回归通过。优化后的绑定计数、帧率和延迟由新运行Trace验证。"
+}

@@ -1,0 +1,11 @@
+{
+  "productionFunctionsCopiedFrom": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+  "testsCopiedFrom": "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+  "typeDeclarationsExtractedFrom": [
+    "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceEnvelope.swift",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift"
+  ],
+  "testCount": 10,
+  "testScope": "Foundation/XCTest执行真实生产诊断函数，iPhoneOS构建验证完整App类型接线"
+}

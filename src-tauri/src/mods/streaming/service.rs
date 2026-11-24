@@ -50,7 +50,8 @@ use super::runtime_state::SessionControlTraces;
 use crate::mods::runtime_trace::RuntimeTraceProfile;
 use config_policy::*;
 
-const CONSOLE_READY_SMARTGLASS_CACHE_MS: u64 = 2_000;
+const CONSOLE_READY_SMARTGLASS_CACHE_MS: u64 =
+    xbox_streaming::session::operation::CONSOLE_READY_SMARTGLASS_CACHE_TTL.as_millis() as u64;
 static SDP_TRACE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[derive(Clone)]
@@ -737,7 +738,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             let (plan, compiler_context) = scope
                 .run(
                     "resolvingContext",
-                    Some(std::time::Duration::from_secs(90)),
+                    Some(xbox_streaming::session::RESOLVING_CONTEXT_TIMEOUT),
                     async {
                         self.resolve_streaming_plan(&params.target_type, &params.target_id)
                             .await

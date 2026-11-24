@@ -1,0 +1,7 @@
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift:72:27: error: cannot find 'fetchCommunityTouchBundles' in scope
+    |                           `- error: cannot find 'fetchCommunityTouchBundles' in scope
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift:76:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift:133:32: error: cannot find 'fetchCommunityTouchBundle' in scope
+    |                                `- error: cannot find 'fetchCommunityTouchBundle' in scope
+** TEST FAILED **

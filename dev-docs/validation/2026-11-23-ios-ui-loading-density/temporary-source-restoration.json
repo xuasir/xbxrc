@@ -1,0 +1,11 @@
+{
+  "path": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "baselineSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+  "backup": "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r1/CapabilityMigrationTests.original.swift",
+  "marker": "// BEGIN 20261123 Scoped UI loading/density probe",
+  "restoredSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+  "baselineMatchedAfterRestoration": true,
+  "probeRemoved": true,
+  "verifiedMarkerRemoval": true,
+  "captureConfiguration": "transaction.disablesAnimations=true"
+}

@@ -1,6 +1,7 @@
 pub mod achievements_api;
 pub mod auth_api;
 pub mod auth_utils;
+pub mod community_touch_api;
 pub mod console_api;
 pub mod crypto;
 pub mod error;
@@ -21,6 +22,7 @@ pub mod xcloud_api;
 pub use achievements_api::*;
 pub use auth_api::*;
 pub use auth_utils::*;
+pub use community_touch_api::*;
 pub use console_api::*;
 pub use crypto::*;
 pub use error::*;

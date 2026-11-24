@@ -1,0 +1,52 @@
+{
+  "task": "2026-11-24-ios-stream-quick-autohide",
+  "temporary_root": "/private/tmp/xbxrc-ios-quick-autohide-20261124-ds2dddxp",
+  "evidence_root": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-stream-quick-autohide",
+  "baseline_source_sha256": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": "63532a9f42dca6bf32a2bb06916d3b90909e16e307de4eed126818f0e7f92775",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": "ebbdad94199f7869ae44274c9dbca30bdbe9868c961ec5534e07ec38444a27b8",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "fe3cf8cc8af5e1f123dcd496099343855bbf3f28eb8f1505ccef5fdd33c928cc",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "ae64667d4e0a146b72376648c480b791c400f65cf704a4a2b7490c15ee5a3a64",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "fa41b412370abadc433aa2bea9579c64d7ad1041cdc9a26f0fe002caaa488035",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": "177551f84194c2b98c6cecb37144785eaadb04dc3aeafffe9a2b3249e3d3b9e1",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "0112052c340012cb9f23a0ddb768a17a9fac8c9bdf0bf9d782c3417a430db1a2",
+    "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "9b17b7973918d78a00e0c6fe56f0caa36187f64fe17765fdb8d72b0d66efac4b",
+    "iosapp/DESIGN.md": "6850939983943f20192373c471a41a8a6df5e087067ad91eeb908c0634e9f923",
+    "docs/project-task.md": "4772272458deb83c5f93646121183cbdd03e392fbdd8cdc2c325ba84bc828c01"
+  },
+  "started_at": "2026-11-24T15:25:41+0800",
+  "temporary_artifacts": [
+    "baseline",
+    "DerivedData",
+    "quick-smoke.xcresult",
+    "quick-smoke.log",
+    "exports",
+    "format-2.json",
+    "format-4.json",
+    "resume-baseline",
+    "initial-attachments",
+    "resume-smoke.xcresult",
+    "resume-smoke.log",
+    "resume-attachments",
+    "resume-activities.json",
+    "final-smoke.xcresult",
+    "final-smoke.log",
+    "final-attachments",
+    "final-activities.json",
+    "state-tests-without-probe.swift"
+  ],
+  "shared_source_packages": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "resumed_at": "2026-11-24",
+  "resume_baseline_source_sha256": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": "4d302380996d1a7d7801c73000a0b41c6b8048a9b433b1b5b51a145efe03af15",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": "432d7a3b51385a8b9b8f84173336dae6f5c04068ba3988052bcbde084aea861e",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "9bca0cdac04b6745924a1ab291e5ee5095e6778c7928d51a4cbdd4c5c6bdb6e8",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "1636f41a100bd6fd128161a6c312a1de01bfbe4c291a4c539e13c7729133c4ab",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "85748145a3fd07bdedebbc43193eaf32375cf3eaa4127552753f270f9825720b",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": "1e1c846c919e24fa8a62f38f6c0febc24312b8a8d775a65222f608d6100993a7",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "8011648c133c8d39eb6043029ba14f729fa559555124ac0577b709f73f427203",
+    "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "9b17b7973918d78a00e0c6fe56f0caa36187f64fe17765fdb8d72b0d66efac4b",
+    "iosapp/DESIGN.md": "68449d89275ecd80145a6a5205646dbead10a32169a01be8de51ff89afd8adc6",
+    "docs/project-task.md": "3443c1a206997442d40c15133f9a2fd00d4c06fd2ae0f30f459d0b5e9c1f7d6d"
+  }
+}

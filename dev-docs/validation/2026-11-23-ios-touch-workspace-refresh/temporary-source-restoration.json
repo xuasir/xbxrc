@@ -1,0 +1,12 @@
+{
+  "path": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "backup": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123/r1/CapabilityMigrationTests.baseline.swift",
+  "baselineSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+  "begin": "// BEGIN 20261123 Scoped full viewport render probe",
+  "end": "// END 20261123 Scoped full viewport render probe",
+  "restoredSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+  "restoredBaselineMatches": true,
+  "probeRemoved": true,
+  "reinsertedForRound": "r5",
+  "finalRestorationRound": "r6"
+}

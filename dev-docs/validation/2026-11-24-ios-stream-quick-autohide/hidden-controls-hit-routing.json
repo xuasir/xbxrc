@@ -1,0 +1,47 @@
+{
+  "ancestors" : [
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "TouchLayoutSurfaceView"
+    },
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "UIKitPlatformViewHost<PlatformViewRepresentableAdaptor<TouchLayoutSurface>>"
+    },
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "_UIHostingView<ModifiedContent<ModifiedContent<ModifiedContent<ZStack<TupleView<(Color, TouchGamepadOverlay, StreamingControlsOverlay)>>, _BackgroundModifier<StreamingControlsGestureLayer>>, _EnvironmentKeyWritingModifier<Optional<AppSettingsStore>>>, _EnvironmentKeyWritingModifier<Optional<SavedTouchLayoutsStore>>>>"
+    },
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "UIDropShadowView"
+    },
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "UITransitionView"
+    },
+    {
+      "alpha" : 1,
+      "hidden" : false,
+      "interactive" : true,
+      "type" : "UIWindow"
+    }
+  ],
+  "hitType" : "TouchLayoutSurfaceView",
+  "inputSuppressed" : false,
+  "point" : [
+    232,
+    761.60000000000002
+  ],
+  "surfaceHit" : true
+}

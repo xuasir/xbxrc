@@ -1,0 +1,711 @@
+[
+  {
+    "path": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "ranges": [
+      [
+        410,
+        412
+      ],
+      [
+        450,
+        452
+      ],
+      [
+        462,
+        464
+      ],
+      [
+        476,
+        484
+      ],
+      [
+        526,
+        528
+      ],
+      [
+        538,
+        540
+      ],
+      [
+        552,
+        560
+      ],
+      [
+        615,
+        620
+      ],
+      [
+        645,
+        647
+      ],
+      [
+        659,
+        663
+      ],
+      [
+        669,
+        673
+      ],
+      [
+        684,
+        743
+      ],
+      [
+        781,
+        783
+      ],
+      [
+        872,
+        875
+      ],
+      [
+        898,
+        910
+      ],
+      [
+        918,
+        920
+      ],
+      [
+        929,
+        933
+      ],
+      [
+        963,
+        965
+      ],
+      [
+        1002,
+        1004
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Authentication/AuthCredentialCoordinator.swift",
+    "ranges": [
+      [
+        35,
+        37
+      ],
+      [
+        95,
+        97
+      ],
+      [
+        104,
+        106
+      ],
+      [
+        116,
+        122
+      ],
+      [
+        134,
+        142
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+    "ranges": [
+      [
+        1,
+        5
+      ],
+      [
+        14,
+        21
+      ],
+      [
+        50,
+        66
+      ],
+      [
+        133,
+        187
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+    "ranges": [
+      [
+        81,
+        94
+      ],
+      [
+        110,
+        116
+      ],
+      [
+        128,
+        134
+      ],
+      [
+        177,
+        183
+      ],
+      [
+        195,
+        201
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+    "ranges": [
+      [
+        16,
+        18
+      ],
+      [
+        21,
+        23
+      ],
+      [
+        26,
+        28
+      ],
+      [
+        164,
+        176
+      ],
+      [
+        184,
+        187
+      ],
+      [
+        196,
+        198
+      ],
+      [
+        208,
+        211
+      ],
+      [
+        220,
+        222
+      ],
+      [
+        987,
+        989
+      ],
+      [
+        1004,
+        1006
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+    "ranges": [
+      [
+        11,
+        23
+      ],
+      [
+        65,
+        79
+      ],
+      [
+        102,
+        182
+      ],
+      [
+        249,
+        251
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "ranges": [
+      [
+        41,
+        43
+      ],
+      [
+        269,
+        273
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "ranges": [
+      [
+        28,
+        30
+      ],
+      [
+        98,
+        105
+      ],
+      [
+        110,
+        112
+      ],
+      [
+        117,
+        122
+      ],
+      [
+        142,
+        151
+      ],
+      [
+        159,
+        168
+      ],
+      [
+        180,
+        182
+      ],
+      [
+        199,
+        208
+      ],
+      [
+        253,
+        255
+      ],
+      [
+        313,
+        316
+      ],
+      [
+        389,
+        392
+      ],
+      [
+        402,
+        404
+      ],
+      [
+        412,
+        416
+      ],
+      [
+        577,
+        580
+      ],
+      [
+        770,
+        773
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "ranges": [
+      [
+        91,
+        94
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "ranges": [
+      [
+        178,
+        180
+      ],
+      [
+        194,
+        199
+      ],
+      [
+        255,
+        259
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "ranges": [
+      [
+        1980,
+        1983
+      ],
+      [
+        2000,
+        2002
+      ],
+      [
+        2009,
+        2011
+      ],
+      [
+        2171,
+        2174
+      ],
+      [
+        2186,
+        2188
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Security/KeychainSessionStore.swift",
+    "ranges": [
+      [
+        8,
+        10
+      ],
+      [
+        17,
+        19
+      ],
+      [
+        25,
+        27
+      ],
+      [
+        39,
+        48
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+    "ranges": [
+      [
+        6,
+        28
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift",
+    "ranges": [
+      [
+        4,
+        86
+      ],
+      [
+        341,
+        358
+      ],
+      [
+        482,
+        484
+      ],
+      [
+        498,
+        524
+      ],
+      [
+        536,
+        540
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/CloudLibraryStoreConcurrencyTests.swift",
+    "ranges": [
+      [
+        106,
+        112
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/PCDataParityTests.swift",
+    "ranges": [
+      [
+        444,
+        456
+      ],
+      [
+        790,
+        792
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "ranges": [
+      [
+        2931,
+        2933
+      ],
+      [
+        3011,
+        3013
+      ],
+      [
+        3042,
+        3044
+      ],
+      [
+        3076,
+        3078
+      ],
+      [
+        3231,
+        3233
+      ],
+      [
+        3265,
+        3267
+      ],
+      [
+        3301,
+        3303
+      ],
+      [
+        3342,
+        3344
+      ],
+      [
+        3386,
+        3388
+      ],
+      [
+        3413,
+        3415
+      ],
+      [
+        3437,
+        3439
+      ],
+      [
+        3463,
+        3465
+      ],
+      [
+        3498,
+        3500
+      ],
+      [
+        3545,
+        3547
+      ],
+      [
+        3578,
+        3580
+      ],
+      [
+        3615,
+        3617
+      ],
+      [
+        3662,
+        3664
+      ],
+      [
+        3701,
+        3703
+      ],
+      [
+        3726,
+        3728
+      ],
+      [
+        3745,
+        3747
+      ],
+      [
+        3771,
+        3773
+      ],
+      [
+        3778,
+        3780
+      ],
+      [
+        3913,
+        3918
+      ],
+      [
+        3925,
+        3930
+      ],
+      [
+        3933,
+        3976
+      ],
+      [
+        3990,
+        3992
+      ],
+      [
+        4019,
+        4021
+      ],
+      [
+        4051,
+        4053
+      ],
+      [
+        4083,
+        4085
+      ],
+      [
+        4103,
+        4105
+      ],
+      [
+        4108,
+        4110
+      ],
+      [
+        4121,
+        4127
+      ],
+      [
+        4131,
+        4134
+      ],
+      [
+        4181,
+        4185
+      ],
+      [
+        4257,
+        4259
+      ],
+      [
+        4276,
+        4278
+      ],
+      [
+        4296,
+        4298
+      ],
+      [
+        4305,
+        4307
+      ],
+      [
+        4311,
+        4313
+      ],
+      [
+        4666,
+        4668
+      ],
+      [
+        4680,
+        4682
+      ],
+      [
+        4804,
+        4806
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/App/PCPageUITestFixtures.swift",
+    "ranges": [
+      [
+        240,
+        242
+      ],
+      [
+        249,
+        251
+      ],
+      [
+        307,
+        309
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+    "ranges": [
+      [
+        240,
+        243
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+    "ranges": [
+      [
+        399,
+        401
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+    "ranges": [
+      [
+        485,
+        488
+      ],
+      [
+        498,
+        500
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+    "ranges": [
+      [
+        423,
+        426
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift",
+    "ranges": [
+      [
+        58,
+        60
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostic": ""
+  }
+]

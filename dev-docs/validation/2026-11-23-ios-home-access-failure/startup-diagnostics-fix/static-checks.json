@@ -1,0 +1,53 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+    "command": [
+      "xcrun",
+      "swiftc",
+      "-frontend",
+      "-parse",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift"
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+    "command": [
+      "xcrun",
+      "swiftc",
+      "-frontend",
+      "-parse",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift"
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "command": [
+      "xcrun",
+      "swiftc",
+      "-frontend",
+      "-parse",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift"
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+    "command": [
+      "plutil",
+      "-lint",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj/project.pbxproj"
+    ],
+    "exitCode": 0,
+    "diagnostics": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj/project.pbxproj: OK\n"
+  },
+  {
+    "check": "probeSourcesMatch",
+    "productionFunctions": true,
+    "productionTests": true
+  }
+]

@@ -235,7 +235,11 @@ pub(super) fn build_startup_bounded_retry_details(
 pub(super) fn map_domain_startup_error_kind(
     hint: &DomainStartupErrorHint,
 ) -> StreamingStartupErrorKind {
-    match hint.kind {
+    map_startup_error_kind(&hint.kind)
+}
+
+fn map_startup_error_kind(kind: &DomainStartupErrorKind) -> StreamingStartupErrorKind {
+    match kind {
         DomainStartupErrorKind::SessionCreate => StreamingStartupErrorKind::SessionCreate,
         DomainStartupErrorKind::SessionReady => StreamingStartupErrorKind::SessionReady,
         DomainStartupErrorKind::Runtime => StreamingStartupErrorKind::Runtime,
@@ -305,33 +309,17 @@ pub(super) fn classify_startup_error_kind_fallback(
     phase: &StreamingStartupPhase,
     error: &SessionFlowError,
 ) -> StreamingStartupErrorKind {
-    let normalized = error.message.to_ascii_lowercase();
-    if is_home_remote_play_not_ready_message(&normalized) {
-        return StreamingStartupErrorKind::HostRemotePlayUnavailable;
-    }
-    if is_home_server_registration_retry_exhausted_message(&normalized) {
-        return StreamingStartupErrorKind::HostRegistrationRetryExhausted;
-    }
-    if normalized.contains("target missing") {
-        return StreamingStartupErrorKind::Target;
-    }
-    if normalized.contains("auth")
-        || normalized.contains("token missing")
-        || normalized.contains("streaming token is unavailable")
-    {
-        return StreamingStartupErrorKind::Auth;
-    }
-    if normalized.contains("network error") {
-        return StreamingStartupErrorKind::Network;
-    }
-    match phase {
-        StreamingStartupPhase::ResolvingContext => StreamingStartupErrorKind::Unknown,
-        StreamingStartupPhase::CreatingSession => StreamingStartupErrorKind::SessionCreate,
-        StreamingStartupPhase::WaitingSessionReady => StreamingStartupErrorKind::SessionReady,
-        StreamingStartupPhase::StartingRuntime => StreamingStartupErrorKind::Runtime,
-        StreamingStartupPhase::Ready => StreamingStartupErrorKind::Runtime,
-        StreamingStartupPhase::Failed => StreamingStartupErrorKind::Unknown,
-    }
+    let phase = match phase {
+        StreamingStartupPhase::ResolvingContext => DomainStartupPhase::ResolvingContext,
+        StreamingStartupPhase::CreatingSession => DomainStartupPhase::CreatingSession,
+        StreamingStartupPhase::WaitingSessionReady => DomainStartupPhase::WaitingSessionReady,
+        StreamingStartupPhase::StartingRuntime => DomainStartupPhase::StartingRuntime,
+        StreamingStartupPhase::Ready => DomainStartupPhase::Ready,
+        StreamingStartupPhase::Failed => DomainStartupPhase::Failed,
+    };
+    map_startup_error_kind(
+        &xbox_streaming::session::startup_error::classify_startup_error_kind_fallback(phase, error),
+    )
 }
 
 pub(super) fn startup_error_message_key(kind: &StreamingStartupErrorKind) -> &'static str {
@@ -411,18 +399,22 @@ pub(super) fn is_startup_error_retryable_fallback(
     kind: &StreamingStartupErrorKind,
     error: &SessionFlowError,
 ) -> bool {
-    if is_home_remote_play_not_ready_message(&error.message.to_ascii_lowercase()) {
-        return false;
-    }
-    if is_remote_console_wake_circuit_open_message(&error.message) {
-        return false;
-    }
-    matches!(
-        kind,
-        StreamingStartupErrorKind::SessionCreate
-            | StreamingStartupErrorKind::SessionReady
-            | StreamingStartupErrorKind::Network
-    ) || error.status.is_some_and(|status| status >= 500)
+    let kind = match kind {
+        StreamingStartupErrorKind::SessionCreate => DomainStartupErrorKind::SessionCreate,
+        StreamingStartupErrorKind::SessionReady => DomainStartupErrorKind::SessionReady,
+        StreamingStartupErrorKind::Runtime => DomainStartupErrorKind::Runtime,
+        StreamingStartupErrorKind::Network => DomainStartupErrorKind::Network,
+        StreamingStartupErrorKind::Auth => DomainStartupErrorKind::Auth,
+        StreamingStartupErrorKind::Target => DomainStartupErrorKind::Target,
+        StreamingStartupErrorKind::HostRemotePlayUnavailable => {
+            DomainStartupErrorKind::HostRemotePlayUnavailable
+        }
+        StreamingStartupErrorKind::HostRegistrationRetryExhausted => {
+            DomainStartupErrorKind::HostRegistrationRetryExhausted
+        }
+        StreamingStartupErrorKind::Unknown => DomainStartupErrorKind::Unknown,
+    };
+    xbox_streaming::session::startup_error::is_startup_error_retryable_fallback(&kind, error)
 }
 
 pub(super) fn is_home_remote_play_not_ready_message(message: &str) -> bool {

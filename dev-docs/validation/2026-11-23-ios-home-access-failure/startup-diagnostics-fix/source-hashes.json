@@ -1,0 +1,76 @@
+{
+  "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift": {
+    "sha256": "61b981f98c20d1dd149a4ab369421cdb70cb152c603511e4c408ebdaaa7b2a8c",
+    "bytes": 7441,
+    "role": "本轮验收源码",
+    "snapshot": "sources/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift"
+  },
+  "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": {
+    "sha256": "7c18eed962a923d5417712f23c48494a3c33841f43fab031bbbc0e5975b898e8",
+    "bytes": 104088,
+    "role": "本轮验收源码",
+    "snapshot": "sources/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift"
+  },
+  "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift": {
+    "sha256": "bce7ca71f850df76c0a086d74307efaff19f1068f641136b0097b1526095273a",
+    "bytes": 5887,
+    "role": "本轮验收源码",
+    "snapshot": "sources/iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift"
+  },
+  "iosapp/XBXRC.xcodeproj/project.pbxproj": {
+    "sha256": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391",
+    "bytes": 82852,
+    "role": "本轮验收源码",
+    "snapshot": "sources/iosapp/XBXRC.xcodeproj/project.pbxproj"
+  },
+  "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceEnvelope.swift": {
+    "sha256": "930f377dde91543b21ae20c401a5a79e6c00fa0eac471859a168afdec82b0d70",
+    "bytes": 4488,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": {
+    "sha256": "7eeb642672c96b1a8fe2817d850ebf4701cabf0b7bddfede3f9b5cf31a977ae7",
+    "bytes": 230297,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift": {
+    "sha256": "721eb1951a4fd4dcdb8a8f424808b0e0946493eae747321e93d16c0012a788fc",
+    "bytes": 41656,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": {
+    "sha256": "76a2e4e5b5838fbb11cbd8abc03f4b4b2776e5388be1bb4781130da5732a23fc",
+    "bytes": 44206,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "crates/xbox-ios-bridge/src/cloud_access.rs": {
+    "sha256": "529267998790f1d45805e578bfbba462cb4877b83cfde691e0dca5ca39dea0ff",
+    "bytes": 39016,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "crates/xbox-ios-bridge/src/streaming/startup.rs": {
+    "sha256": "044490fd78687f8ca9597a5d8109129484362d5ee679e673b8cb0d383c35f055",
+    "bytes": 7431,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "crates/xbox-auth-flow/src/flow.rs": {
+    "sha256": "004dcbddbcb9e9c6ad9153863c6c7be734c42829b38bd8c11014c334bb4b942a",
+    "bytes": 15856,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "src-tauri/src/mods/auth/service.rs": {
+    "sha256": "95ed568ad9210ff47880ace78046b8584b8a52b59cb022d37a3353700eca222b",
+    "bytes": 27595,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "crates/xbox-webapi/src/error.rs": {
+    "sha256": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957",
+    "bytes": 13787,
+    "role": "诊断类型或两端行为对照源码"
+  },
+  "crates/xbox-streaming/src/session/flow.rs": {
+    "sha256": "445f692d908124e2d087d999b229ec2a0ef37faae72d22f217aabc5403f11e72",
+    "bytes": 42933,
+    "role": "诊断类型或两端行为对照源码"
+  }
+}

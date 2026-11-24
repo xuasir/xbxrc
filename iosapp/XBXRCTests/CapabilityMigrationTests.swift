@@ -427,6 +427,7 @@ final class CapabilityMigrationTests: XCTestCase {
                     let root = content.environmentObject(settings).environmentObject(auth)
                         .environmentObject(data).environmentObject(cloud)
                         .environmentObject(streaming).environmentObject(favorites)
+            .environmentObject(SavedTouchLayoutsStore())
                         .environment(\.locale, Locale(identifier: language))
                         .environment(\.dynamicTypeSize, textSize)
                         .environment(\.colorScheme, theme).preferredColorScheme(theme)

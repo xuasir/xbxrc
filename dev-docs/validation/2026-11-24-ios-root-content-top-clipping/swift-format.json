@@ -1,0 +1,50 @@
+[
+  {
+    "path": "iosapp/XBXRC/App/AppRootView.swift",
+    "ranges": [
+      [
+        160,
+        160
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "ranges": [
+      [
+        517,
+        517
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "ranges": [
+      [
+        31,
+        45
+      ],
+      [
+        49,
+        49
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "ranges": [
+      [
+        880,
+        1052
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

@@ -638,6 +638,18 @@ enum StreamingIceCandidatePolicy {
     }
 }
 
+func streamingVideoTracksMatch(_ current: RTCVideoTrack?, _ next: RTCVideoTrack?) -> Bool {
+    switch (current, next) {
+    case (nil, nil):
+        true
+    case (let current?, let next?):
+        // libwebrtc 的 receiver getter 会新建包装对象，相等性比较其底层轨道。
+        current.isEqual(next)
+    default:
+        false
+    }
+}
+
 final class LibWebRTCPeerRuntimeFactory: StreamingPeerRuntimeFactory, @unchecked Sendable {
     private let inputSession: StreamInputSession?
     init(inputSession: StreamInputSession? = nil) { self.inputSession = inputSession }
@@ -1300,7 +1312,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             videoTrackLock.unlock()
             return false
         }
-        if attachedVideoTrack === track, frameProbe != nil {
+        if streamingVideoTracksMatch(attachedVideoTrack, track), frameProbe != nil {
             videoTrackLock.unlock()
             return false
         }

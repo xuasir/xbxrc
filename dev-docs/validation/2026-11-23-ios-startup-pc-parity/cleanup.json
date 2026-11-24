@@ -1,0 +1,19 @@
+{
+  "timestampUTC": "2026-11-23T09:31:08.850909+00:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-startup-pc-20261123-cfnj_z17",
+  "removedAllocatedBytes": 958681088,
+  "remainingAllocatedBytes": 0,
+  "existsAfterCleanup": false,
+  "filesystemBefore": "Filesystem   1024-blocks      Used Available Capacity iused     ifree %iused  Mounted on\n/dev/disk3s5   482797652 391600000  50000000    89% 6639146 500516840    1%   /System/Volumes/Data\n",
+  "filesystemAfter": "Filesystem   1024-blocks      Used Available Capacity iused     ifree %iused  Mounted on\n/dev/disk3s5   482797652 390800000  50800000    89% 6635812 509440600    1%   /System/Volumes/Data\n",
+  "retainedEvidence": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-startup-pc-parity",
+  "retainedSharedCaches": [
+    "target/ios-bindgen",
+    "target/ios-webrtc",
+    "target/debug",
+    "target/browser"
+  ],
+  "processesEnded": true,
+  "userInputPathsModified": false,
+  "availableSpaceIncreaseBytes": 819200000
+}

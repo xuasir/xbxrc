@@ -1,0 +1,7 @@
+--- before/docs/project-task.md (task rows)
++++ after/docs/project-task.md (task rows)
+@@ -1,2 +1,2 @@
+-| 2026-11-23-ios-streaming-safe-area | 串流功能菜单与触屏布局避让灵动岛和系统安全区 | In Progress | 2026-11-23 | simple；操作层恢复原生安全区，正式Surface按窗口安全范围生成绘制与命中几何，编辑位置采用同一避让范围；两侧横屏、竖屏与iPad验收接续。 |
+-| 2026-11-23-ios-streaming-menu-overlay | 提高串流菜单层级与背景不透明度 | In Progress | 2026-11-23 | simple；用户接续授权；功能菜单显式位于触屏和指标上方，入口/双栏/诊断采用98%静态黑色背景，降低透明度100%；沿用输入接管，手机/iPad复验与证据清理接续。 |
++| 2026-11-23-ios-streaming-safe-area | 串流功能菜单与触屏布局避让灵动岛和系统安全区 | Done | 2026-11-23 | simple；原生安全区与统一绘制/命中/编辑几何完成；16项前序定向验证、手机/iPad各3项UI及iPhoneOS构建通过。24张验收图与6份窗口几何归档，1.58GiB临时产物及22份旧证据已清理，共享缓存保留。[证据](../dev-docs/validation/2026-11-23-ios-streaming-safe-area/README.md)。 |
++| 2026-11-23-ios-streaming-menu-overlay | 统一串流菜单层级与公共弹出层背景 | Done | 2026-11-23 | simple；入口/双栏/诊断复用公共深绿弹出层背景，层级位于触屏和指标上方，降低透明度采用实色面板；两端各3项UI、设备编译及格式/lint/边界通过，截图与诊断归档，临时清理完成。[证据](../dev-docs/validation/2026-11-23-ios-streaming-safe-area/README.md)。 |

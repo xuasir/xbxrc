@@ -1,0 +1,13 @@
+2026-11-23 17:53:43.187 xcodebuild[25630:10655165] Logging connecton invalid: <OS_xpc_error: <dictionary: 0x1f05dcb60> { count = 1, transaction: 0, voucher = 0x0, contents =
+2026-11-23 17:53:43.187 xcodebuild[25630:10655165] Error opening log file (/Users/guo.xu/Library/Logs/CoreSimulator/CoreSimulator.com.apple.dt.xcodebuild.log): Operation not permitted
+[-[SimServiceContext initWithDeveloperDir:connectionType:error:]:499] WARN  : Unable to discover any Simulator runtimes. Developer Directory is /Applications/Xcode.app/Contents/Developer.
+[-[SimServiceContext initWithDeveloperDir:connectionType:error:]_block_invoke:556] ERROR : Could not get list of trusted mount directories: Error Domain=com.apple.CoreSimulator.SimError Code=410 "The service used to manage runtime disk images (simdiskimaged) crashed or is not responding" UserInfo={NSLocalizedDescription=The service used to manage runtime disk images (simdiskimaged) crashed or is not responding}
+[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({
+[-[SimServiceContext sendRequest:reply:error:]:1982] ERROR : Unable to deliver request ({
+xcodebuild: error: Could not resolve package dependencies:
+  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted
+<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'
+<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)
+  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted
+<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'
+<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)

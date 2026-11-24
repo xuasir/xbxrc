@@ -1,0 +1,119 @@
+[
+  {
+    "path": "final/phone-official-touch-library-after-delete.png",
+    "name": "official-touch-library-after-delete",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795489655.695,
+    "sha256": "ac79c870df87485888cf1b874441a34aa779e79106b808d4526a0f1a2e77b9b8"
+  },
+  {
+    "path": "final/phone-official-touch-saved-library.png",
+    "name": "official-touch-saved-library",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795489650.592,
+    "sha256": "9c385867780a30a4bfc1c306803242bcf23f242d3164f40e9c105fa6bb810bb9"
+  },
+  {
+    "path": "final/phone-official-touch-ready-to-save.png",
+    "name": "official-touch-ready-to-save",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795489619.107,
+    "sha256": "02a66c121e12df88d9283f5af19ae3641c2a90f02320c2e9c3dbd9071d47b2dc"
+  },
+  {
+    "path": "final/phone-official-touch-cloud-entry.png",
+    "name": "official-touch-cloud-entry",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795489613.106,
+    "sha256": "c9f5a1667af769fe4b04ad05b3f3a41132d9f39dc2d29870e5ea86cc2918d08b"
+  },
+  {
+    "path": "final/phone-official-touch-stream-standard-landscape-right.png",
+    "name": "official-touch-stream-standard-landscape-right",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795489727.292,
+    "sha256": "7fecf76b6bb6ddb62c7bc882096f1d19f1639bea99245cdbddd850fcf02712b4"
+  },
+  {
+    "path": "final/phone-official-touch-stream-custom-landscape.png",
+    "name": "official-touch-stream-custom-landscape",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795489716.266,
+    "sha256": "00f328fc9bf810d0a615b5d190b6f3e4d4e5d02920a849ada4101b818cb691d0"
+  },
+  {
+    "path": "final/phone-official-touch-stream-quick-switch-portrait.png",
+    "name": "official-touch-stream-quick-switch-portrait",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795489694.945,
+    "sha256": "73f807d9cc80d0b5b372229e6873d230450af7f93dc6d647975ab935680c3460"
+  },
+  {
+    "path": "final/phone-official-touch-stream-picker-portrait.png",
+    "name": "official-touch-stream-picker-portrait",
+    "device": "iPhone 18 Pro",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795489687.212,
+    "sha256": "2416fc468af8c97e44df4eb0931c1569670515d73f66e0691218b18fa30daae0"
+  },
+  {
+    "path": "final/ipad-official-touch-saved-library.png",
+    "name": "official-touch-saved-library",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795491120.425,
+    "sha256": "19df4fc8b279f27e94ed32b5ae7bf03291465b116797b10bbf6e0729b1211048"
+  },
+  {
+    "path": "final/ipad-official-touch-preview-landscape.png",
+    "name": "official-touch-preview-landscape",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes()",
+    "timestamp": 1795491086.361,
+    "sha256": "14a563712182006edfcf8d2278dab204afa0bd4166a5ef4a0b50b9f5360de577"
+  },
+  {
+    "path": "final/ipad-official-touch-stream-standard-landscape-right.png",
+    "name": "official-touch-stream-standard-landscape-right",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795491238.234,
+    "sha256": "31fce055d8c921d2c73e0fce19aacfd9d8ec604d333bfd578e4dce9fef430d1f"
+  },
+  {
+    "path": "final/ipad-official-touch-stream-quick-custom-landscape.png",
+    "name": "official-touch-stream-quick-custom-landscape",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795491223.701,
+    "sha256": "45c5d262d73b4be1603f328da131f311c099c4543367188300a7a69c97dcd965"
+  },
+  {
+    "path": "final/ipad-official-touch-stream-picker-landscape.png",
+    "name": "official-touch-stream-picker-landscape",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795491216.489,
+    "sha256": "f56bb448bac56fd0a5acce7a4db5b482d2950443c36a2daac124a666a166d7dd"
+  },
+  {
+    "path": "final/ipad-official-touch-stream-saved-landscape-left.png",
+    "name": "official-touch-stream-saved-landscape-left",
+    "device": "iPad Pro 11-inch (M5)",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795491211.229,
+    "sha256": "4ef85cb4478a1b758e5dc96f32e058e92315b49a88b6bd312c6e5224b80b4246"
+  },
+  {
+    "path": "diagnostics/phone-before-row-alignment.png",
+    "name": "用户要求修改的原始行布局",
+    "sha256": "a292b8a6208d5047bfa8956501cc3c348a78287d046f082f2c470384586399b6"
+  }
+]

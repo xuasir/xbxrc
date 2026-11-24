@@ -1,0 +1,4 @@
+refreshSpinnersBefore=3
+refreshSpinnersDuring=0
+refreshSpinnersAfter=3
+requests=["TW:zh-TW:FORZA0000001", "US:en-US:FORZA0000001"]

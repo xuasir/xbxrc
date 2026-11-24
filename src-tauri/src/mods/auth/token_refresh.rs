@@ -1,6 +1,36 @@
-//! 目标凭据续期共用 SISU 复用、核心轮换落盘和有界恢复流程。
+//! 目标凭据续期使用共享 SISU/核心轮换编排，宿主只持有提交与代次。
 use super::*;
-use xbox_auth_flow::{AuthBundle, AuthFlowError};
+use xbox_auth_flow::{
+    renew_auth_tokens, AuthBundle, AuthFlowError, AuthFlowObserver, AuthRenewalError,
+    AuthRenewalObserver, RenewAuthTokensInput,
+};
+
+struct DesktopAuthRenewal<'a> {
+    service: &'a AuthService,
+    trace: &'a AuthOperationTrace,
+    generation: u64,
+}
+
+impl AuthFlowObserver for DesktopAuthRenewal<'_> {
+    fn stage(&self, stage: &'static str, facts: Value) {
+        self.trace.stage(stage, facts);
+    }
+}
+
+#[async_trait]
+impl AuthRenewalObserver for DesktopAuthRenewal<'_> {
+    type Error = AppError;
+    async fn checkpoint_credentials(
+        &self,
+        token: &xbox_webapi::OAuthTokenResponse,
+    ) -> AppResult<()> {
+        self.service
+            .runtime
+            .checkpoint_credentials(self.generation, || {
+                self.service.persistence.persist_user_token(token)
+            })
+    }
+}
 
 impl AuthService {
     pub(super) async fn start_silent_flow_impl(
@@ -10,105 +40,40 @@ impl AuthService {
         force_core_refresh: bool,
         scope: AuthTokenScope,
     ) -> AppResult<()> {
-        let reuse_sisu = !force_core_refresh && self.persistence.can_reuse_sisu_user_token()?;
-        trace.stage(
-            "refreshPolicy",
-            json!({ "scope": scope.as_str(), "skipCoreRefresh": reuse_sisu }),
-        );
-        if reuse_sisu {
-            let user_token = self
-                .persistence
-                .get_user_token()?
-                .ok_or_else(|| AppError::Auth("登录续期凭据暂不可用，请选择重新登录".into()))?;
-            let input = BuildDownstreamTokensInput {
-                user_token: serde_json::from_value(serde_json::to_value(user_token)?)?,
-                sisu_token: self.persistence.load_flow_sisu_token()?,
+        let sisu = if self.persistence.can_reuse_sisu_user_token()? {
+            Some(self.persistence.load_flow_sisu_token()?)
+        } else {
+            None
+        };
+        let user = self
+            .persistence
+            .get_user_token()?
+            .map(|token| serde_json::from_value(serde_json::to_value(token)?))
+            .transpose()?;
+        let observer = DesktopAuthRenewal {
+            service: self,
+            trace,
+            generation,
+        };
+        let bundle = Box::pin(renew_auth_tokens(
+            &AuthFlow::new(),
+            RenewAuthTokensInput {
+                refresh_token: self.persistence.get_refresh_token()?.unwrap_or_default(),
+                user_token: user,
+                sisu_token: sisu,
                 seed: self.persistence.load_auth_flow_seed()?,
                 force_region_ip: self.config_provider.get_force_region_ip(),
-            };
-            trace.stage(
-                "downstreamRefreshStarted",
-                json!({ "scope": scope.as_str() }),
-            );
-            let result = AuthFlow::new()
-                .build_downstream_tokens_for(input, scope.flow_scope())
-                .await;
-            match result {
-                Ok(output) if !cloud_unauthorized(&output.auth_bundle, scope) => {
-                    return self.persist_renewed_bundle(
-                        output.auth_bundle,
-                        scope,
-                        generation,
-                        trace,
-                    );
-                }
-                Ok(_) => {}
-                Err(error)
-                    if error
-                        .upstream_error()
-                        .is_some_and(|error| error.to_status_code() == Some(401)) =>
-                {
-                    trace.stage("downstreamTokenRejected", flow_error_summary(&error));
-                }
-                Err(error) => {
-                    trace.stage("refreshFailed", flow_error_summary(&error));
-                    return Err(auth_flow_app_error(error));
-                }
-            }
-            // 下游拒绝有效期内的 SISU 后，使用 refresh grant 恢复一次。
-            trace.stage(
-                "coreRefreshRetryStarted",
-                json!({ "scope": scope.as_str(), "retryLimit": 1 }),
-            );
-        }
-        self.refresh_core_tokens(scope, generation, trace).await
-    }
-
-    async fn refresh_core_tokens(
-        &self,
-        scope: AuthTokenScope,
-        generation: u64,
-        trace: &AuthOperationTrace,
-    ) -> AppResult<()> {
-        if self.runtime.is_refresh_token_rejected() {
-            return Err(AppError::Auth("登录续期凭据已失效，请选择重新登录".into()));
-        }
-        let refresh_token = self
-            .persistence
-            .get_refresh_token()?
-            .ok_or_else(|| AppError::Auth("登录续期凭据暂不可用，请选择重新登录".into()))?;
-        let seed = self.persistence.load_auth_flow_seed()?;
-        let flow = AuthFlow::new();
-        trace.stage(
-            "coreAndDownstreamRefreshStarted",
-            json!({ "scope": scope.as_str() }),
-        );
-        let user_token = flow
-            .refresh_user_token(&refresh_token)
-            .await
-            .map_err(|error| {
-                trace.stage("refreshFailed", flow_error_summary(&error));
-                self.map_refresh_grant_error(error, generation)
-            })?;
-        self.runtime.checkpoint_credentials(generation, || {
-            self.persistence.persist_user_token(&user_token)
+                scope: scope.flow_scope(),
+                force_core_refresh,
+                refresh_token_rejected: self.runtime.is_refresh_token_rejected(),
+            },
+            &observer,
+        ))
+        .await
+        .map_err(|error| match error {
+            AuthRenewalError::Flow(error) => self.map_refresh_grant_error(error, generation),
+            AuthRenewalError::Checkpoint(error) => error,
         })?;
-        trace.stage(
-            "coreCredentialsPersistCompleted",
-            json!({ "scope": scope.as_str() }),
-        );
-        let bundle = flow
-            .finalize_user_token_for(
-                &user_token,
-                &seed,
-                &self.config_provider.get_force_region_ip(),
-                scope.flow_scope(),
-            )
-            .await
-            .map_err(|error| {
-                trace.stage("refreshFailed", flow_error_summary(&error));
-                auth_flow_app_error(error)
-            })?;
         self.persist_renewed_bundle(bundle, scope, generation, trace)
     }
 
@@ -146,10 +111,4 @@ impl AuthService {
         }
         auth_flow_app_error(error)
     }
-}
-
-fn cloud_unauthorized(bundle: &AuthBundle, scope: AuthTokenScope) -> bool {
-    scope == AuthTokenScope::Cloud
-        && cloud_token_unavailable_error(&bundle.stream_tokens)
-            .is_some_and(|error| error.to_status_code() == Some(401))
 }

@@ -1,0 +1,69 @@
+{
+  "task": "2026-11-24-ios-pc-http-behavior-parity",
+  "artifacts": {
+    "task-changes.diff": {
+      "bytes": 138819,
+      "sha256": "32eb4872b3ed7c68e978db75f11931cf3f379c378dab1f67aeec7f1212964479"
+    },
+    "swift-recovery-summary.json": {
+      "bytes": 985,
+      "sha256": "e88d7a6efc7a93c740f1c0ac22d8d3e2411096398004dae1cd3c22319d696ceb"
+    },
+    "source-hashes.json": {
+      "bytes": 4124,
+      "sha256": "46686b7d691b96132ccde7a53f15a3b593ffa147d17139cc41500f7614334aaa"
+    },
+    "swift-cancellation-summary.json": {
+      "bytes": 984,
+      "sha256": "17455933f47895c501297f3763abb4d53ee0d64abb8f1cc5e5d521ff70f5907a"
+    },
+    "rust-tests.log": {
+      "bytes": 19172,
+      "sha256": "1417fec30612ec87bba7c8e806f2b3481ef774bed7ccceb3e80301b5d22fd784"
+    },
+    "diagnostics.json": {
+      "bytes": 7470,
+      "sha256": "b73bd0639ca3e23c05de3a7c5a0301284968da002553de9d2b84af709c229816"
+    },
+    "README.md": {
+      "bytes": 1349,
+      "sha256": "ff5cffaec8bad4a9e60f798af18b8836fa03b1f38f2c120dfe2a09dce738ed52"
+    },
+    "cleanup.json": {
+      "bytes": 575,
+      "sha256": "d91d2a5755dadce3e0c5b27882c6b5816c6435fb2963926832090765d0b7eddf"
+    },
+    "device-build-summary.txt": {
+      "bytes": 2068,
+      "sha256": "f43cab767e136fc0d717fb59796944768009606f2fc7c48f040393fadadb1778"
+    },
+    "validation.json": {
+      "bytes": 789,
+      "sha256": "15de6b19edebe3f84dfd65bba283a5c338e73c4d68d722b319f70de2a5302abc"
+    },
+    "binding-reproduction.log": {
+      "bytes": 277,
+      "sha256": "e7057cdd51cd0c78d828b5b2652259a7217c509e22e5e115ac26f7b47d43b3f1"
+    },
+    "concurrent-changes.json": {
+      "bytes": 259,
+      "sha256": "1585ece41315f3dd55c75cd935e0a66a29d41270b255f6a52b3f8d222a59ae5d"
+    },
+    "process-check.json": {
+      "bytes": 47,
+      "sha256": "f650a64e3f0690c4955741b7358a37522a074c62678e0a4d16cc17c1da14e00a"
+    },
+    "baseline-metadata.json": {
+      "bytes": 219,
+      "sha256": "5b460e642d7d3f2c835cdf3ab92992fc146322853a284b86a71295a1053e37ba"
+    },
+    "swift-test-summary.txt": {
+      "bytes": 10315,
+      "sha256": "3e3c3d7b212e804e6fc5cdaf6ddf3c872e9a62f2b44df641a4615bcc067e55ad"
+    },
+    "swift-initial-summary.json": {
+      "bytes": 1178,
+      "sha256": "8a94a01b14ccfe258c79540277230886f40425682357e0da4c4c4c74c6472a4b"
+    }
+  }
+}

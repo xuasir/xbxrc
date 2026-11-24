@@ -1,0 +1,62 @@
+{
+  "createdAt": "2026-11-23T17:52:04.862735+08:00",
+  "round": "r6-popup",
+  "taskIds": [
+    "2026-11-23-ios-streaming-safe-area",
+    "2026-11-23-ios-streaming-menu-overlay"
+  ],
+  "request": "背景色都变成黑色了，你不如直接用弹出层的背景色",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-safe-area-20261123/r6-popup",
+  "cleanupRoot": "/private/tmp/xbxrc-ios-streaming-safe-area-20261123",
+  "reuseDerivedData": "/private/tmp/xbxrc-ios-streaming-safe-area-20261123/r1/DerivedData",
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-streaming-safe-area",
+  "ownedSources": [
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "iosapp/DESIGN.md",
+    "docs/project-task.md"
+  ],
+  "baselineHashes": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "e23a3f52ccb7bccd2ec348326a7305e9f2381ee26cfe90e147491328e1401512",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "b27f698a3e22adfdadd2f3960bd3bd0846f0fc65035a3ab1c46a32b13084d8b1",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "e18bf741c03708b050928688ace0ca92f17282781fcd2131c3c37905821fec5f",
+    "iosapp/DESIGN.md": "0ba70f1d7f145c9fabbd881e0bb2d4aa1ffc813d25e0fef1553c44b9b967b003",
+    "docs/project-task.md": "f9c2f21794f45bf6eaf50d1478467df80d1f2baa3ad70dcdd2ef9fb1bef52524"
+  },
+  "protectedSourceHashes": {
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "39bed1528af373308001b55b99b4f2aedfcc05ff0edbc48961167a3fe1804954",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "38f0f5e099e7c23f9f6ddca962a887966936a80d6bb5d67f4ed027fde7f9ac46",
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": "5459c36d1acda4be8afe942c38f8532df8de04e44da9028a17073eaf36c7e946",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift": "f29a2bc2bde747587f32cf68fdfde976d3d77aa54b6da5b38118ba5e88fc2d62",
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": "a6772d955b97bd875a280fd5ed637a10762ca969338691f3b285f04ff6ab9514",
+    "iosapp/XBXRC.xcodeproj/project.pbxproj": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391"
+  },
+  "retainedDependencies": [
+    "target/ios-webrtc",
+    "target/ios-rust"
+  ],
+  "temporarySourceEdits": [],
+  "sourceHashesBeforeTest": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "3b256077938fd0c8cc7f0d4784fdb3d65ec2fea5b85f9482e8ced1405955342f",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "852d33c75fdab7fedb4bd8bd16cc2cc26898129cd83bf0c7acb3e000469c0fff",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "e18bf741c03708b050928688ace0ca92f17282781fcd2131c3c37905821fec5f",
+    "iosapp/DESIGN.md": "7956b22fa50e316207becbe9c921359f10161d013fbbb1869195c675e020b3a1",
+    "docs/project-task.md": "febafc8a62fc9747f8ce4ed18b005fe663975309f59d6356b3b10770e3594b16",
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "39bed1528af373308001b55b99b4f2aedfcc05ff0edbc48961167a3fe1804954",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "38f0f5e099e7c23f9f6ddca962a887966936a80d6bb5d67f4ed027fde7f9ac46",
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": "5459c36d1acda4be8afe942c38f8532df8de04e44da9028a17073eaf36c7e946",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift": "f29a2bc2bde747587f32cf68fdfde976d3d77aa54b6da5b38118ba5e88fc2d62",
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": "a6772d955b97bd875a280fd5ed637a10762ca969338691f3b285f04ff6ab9514",
+    "iosapp/XBXRC.xcodeproj/project.pbxproj": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391"
+  },
+  "acceptedTaskSourceHashes": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "3b256077938fd0c8cc7f0d4784fdb3d65ec2fea5b85f9482e8ced1405955342f",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "852d33c75fdab7fedb4bd8bd16cc2cc26898129cd83bf0c7acb3e000469c0fff",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "61afd85b035629d77d0a9ad2154723c88dcd43fda8ecd5fa6ac45daea8d30472"
+  }
+}

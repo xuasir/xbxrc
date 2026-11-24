@@ -1,0 +1,105 @@
+[
+  {
+    "path": "dev-docs/validation/2026-11-20-ios-display-callback/artifact-manifest.json",
+    "beforeSha256": "860b3a67ca503b3acae3a66139b6a2e26fab9131feb318c95f21ffa039c6267c",
+    "beforeGeneratedAt": "2026-11-23T11:10:42.739084+08:00",
+    "beforeTrackingDocuments": [
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "c4e906f5613dfea00619b7ced0c9c18a981c8330b803de998948e67471297f24"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "991bd027a752d9c68b0b8691a3671f626cb306300ac463502646e70d1d84ab2d"
+      }
+    ],
+    "scope": "同步本任务最终RFC/Report/任务行的文档指纹；归档源码和结果保持",
+    "afterSha256": "42a306b7c4119e852180c37c126110951d98f3d6c69ba51106f58abeb8c3d0e5",
+    "afterTrackingDocuments": [
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+      }
+    ],
+    "preexistingArtifactIndexMismatches": [],
+    "archivedArtifactsVerified": 37
+  },
+  {
+    "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/artifact-manifest.json",
+    "beforeSha256": "ad32abb824b3c2f536682a3be0b600369dab5c0f97de2fa99823d115b9eb3209",
+    "beforeGeneratedAt": "2026-11-23T11:10:42.739084+08:00",
+    "beforeTrackingDocuments": [
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "c4e906f5613dfea00619b7ced0c9c18a981c8330b803de998948e67471297f24"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "991bd027a752d9c68b0b8691a3671f626cb306300ac463502646e70d1d84ab2d"
+      },
+      {
+        "path": "docs/project-task.md",
+        "sha256": "10da74c920e4ce4248455532562279d2116698372101cbbceb86bc5c7a8b6554"
+      }
+    ],
+    "scope": "同步本任务最终RFC/Report/任务行的文档指纹；归档源码和结果保持",
+    "afterSha256": "5237eba2bec54909254bf4b0b0e21a49c4f51a02821be3a0f1362dca3421f79c",
+    "afterTrackingDocuments": [
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+      },
+      {
+        "path": "docs/project-task.md",
+        "sha256": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436"
+      }
+    ],
+    "preexistingArtifactIndexMismatches": [],
+    "archivedArtifactsVerified": 31
+  },
+  {
+    "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-fresh-trace/artifact-manifest.json",
+    "beforeSha256": "08e210bc400b3f2ef4d2f08f0741e4a6365035f663e5f4e007c408576cef3e2b",
+    "beforeGeneratedAt": "2026-11-23T11:10:42.739084+08:00",
+    "beforeTrackingDocuments": [
+      {
+        "path": "docs/project-task.md",
+        "sha256": "10da74c920e4ce4248455532562279d2116698372101cbbceb86bc5c7a8b6554"
+      },
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "c4e906f5613dfea00619b7ced0c9c18a981c8330b803de998948e67471297f24"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "991bd027a752d9c68b0b8691a3671f626cb306300ac463502646e70d1d84ab2d"
+      }
+    ],
+    "scope": "同步本任务最终RFC/Report/任务行的文档指纹；归档源码和结果保持",
+    "afterSha256": "c88dabb607261ca83c806c32049e946328c5aa53beba501242931e6ebd22f430",
+    "afterTrackingDocuments": [
+      {
+        "path": "docs/project-task.md",
+        "sha256": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436"
+      },
+      {
+        "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+        "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+      },
+      {
+        "path": "docs/reports/2026-11-20-ios-display-callback.md",
+        "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+      }
+    ],
+    "preexistingArtifactIndexMismatches": [],
+    "archivedArtifactsVerified": 17
+  }
+]

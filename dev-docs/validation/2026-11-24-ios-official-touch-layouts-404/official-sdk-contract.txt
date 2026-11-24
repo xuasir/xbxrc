@@ -1,0 +1,8 @@
+titleIdentity
+async fetchTitleInfosByIds(e,t,i,{version:n}={version:2}){const s=oe(this.playFetch,e);try{const o=await s(`${e.endpointSettings.getDomain()}/v${n}/titles`,{method:"POST",body:JSON.stringify({alternateIds:t,alternateIdType:i})});return await o.json()}catch(o){this.logger.throw("fetchTitleInfoByIds returned invalid json",c.ws.BadConfiguration)}}
+
+inputConfigurations
+async getTitleInputConfigurations(e,t,i){const n=oe(this.playFetch,e);try{const s=await n(`${e.endpointSettings.getDomain()}/v2/titles/inputconfigs`,{method:"POST",body:JSON.stringify({titleIds:t,titleIdType:i})});return await s.json()}catch(s){this.logger.throw("getTitleInputConfigurations returned invalid json",c.ws.BadConfiguration)}}
+
+bundleDownload
+async getTouchAdaptationBundle(e,t,i){const n=`${t.getDomain()}/v1/sessions/tabs/${i}/download?noRedirect=true`,s=oe(this.playFetch,e);try{const e=await s(n,{method:"GET"}),t=await e.text(),i=await this.tabFetch(t,{method:"GET"});return await i.arrayBuffer()}catch(o){this.throwCaughtError(o,"getTouchAdaptationBundle")}}

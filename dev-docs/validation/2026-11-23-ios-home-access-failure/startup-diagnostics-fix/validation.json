@@ -1,0 +1,80 @@
+{
+  "recordedAt": "2026-11-23T14:44:15.585533+08:00",
+  "task": "2026-11-23-ios-home-startup-diagnostics",
+  "status": "Validation Pending",
+  "implementationAndBuild": "PASS",
+  "connectionValidation": "相同环境的实机新Trace待采集",
+  "causeBoundary": "generation=4会话准备失败、generation=5授权请求超时；具体连接阻断仍待结构化错误与最后阶段确认",
+  "checks": {
+    "hostDiagnosticTests": "10/10 PASS",
+    "deviceAppBuild": "PASS",
+    "swiftParse": "PASS",
+    "projectPlist": "PASS",
+    "targetedSwiftFormat": "PASS",
+    "sessionBoundary": "PASS",
+    "taskDiffWhitespace": "PASS"
+  },
+  "commandsCompleted": [
+    {
+      "action": "hostDiagnosticTests",
+      "exitCode": 0
+    },
+    {
+      "action": "deviceBuildSandbox",
+      "exitCode": 74
+    },
+    {
+      "action": "deviceBuildRetry",
+      "exitCode": 0
+    },
+    {
+      "action": "xcresultExport",
+      "exitCode": 0
+    }
+  ],
+  "buildProduct": {
+    "bundleIdentifier": "com.xuasir.xbxrc.ios",
+    "version": "0.1.0",
+    "build": "1",
+    "minimumOSVersion": "26.0",
+    "objects": {
+      "StreamingStartupDiagnostics.o": {
+        "sha256": "473839755c677badb3f03164d42a48568cc830597115d671bb8153090952cd26",
+        "bytes": 85840
+      },
+      "StreamSessionActor.o": {
+        "sha256": "cf1142ed0cfe00197dfadebc3b576ef5f65d4604166fc29a5ffec014cb2359a8",
+        "bytes": 2021464
+      }
+    }
+  },
+  "userConfirmed": {
+    "network": "Wi-Fi裸连",
+    "consoleState": "待机",
+    "wakeOnConnect": true,
+    "pcCanConnect": true
+  },
+  "userInput": {
+    "path": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+    "sha256": "cd82f52c28fceed59cedca8199cddcc48cfc30a331cfc2446204280ae5cd5456",
+    "bytes": 81801
+  },
+  "worktreeContainsPreexistingChanges": true,
+  "taskDeltaFromSavedBaseline": true,
+  "temporaryRoot": "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1",
+  "temporaryInventoryRootOnly": true,
+  "physicalConnectionVerification": "用户实机验收",
+  "cleanup": {
+    "status": "completed",
+    "allocatedMiBRemoved": 540.24,
+    "temporaryRootExistsAfter": false,
+    "originalUserLogHashUnchanged": true,
+    "sharedSourcePackagesRetained": true
+  },
+  "finalReview": {
+    "taskSourceSnapshotsMatch": true,
+    "trackedTaskDiffWhitespace": "PASS",
+    "reviewedDelta": "实际配置、启动阶段、脱敏错误与测试注册；既有业务行为及其他工作区改动保留",
+    "reviewedAt": "2026-11-23T14:49:34.383889+08:00"
+  }
+}

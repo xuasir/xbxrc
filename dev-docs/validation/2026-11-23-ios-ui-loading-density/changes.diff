@@ -1,0 +1,364 @@
+diff --git a/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift b/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
+index a8230102..61d1f320 100644
+--- a/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
++++ b/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
+@@ -83,26 +83,31 @@ enum CloudLibraryPage: String, AppSecondaryRoute, Sendable {
+ struct CloudCatalogStatusView: View {
+   @ObservedObject var cloud: CloudLibraryStore
+   @EnvironmentObject private var auth: AuthStore
++  var showsLoading = true
+   var body: some View {
+     VStack(alignment: .leading, spacing: 12) {
+       AppAccountRequestNotice()
+ 
+-      AppSectionRequestState(
+-        title: "云游戏目录",
+-        status: SectionRequestStatus(
+-          phase: cloud.phase, isBusy: cloud.isRefreshing,
+-          hasSnapshot: cloud.catalogUpdatedAt != nil,
+-          updatedAt: cloud.catalogUpdatedAt,
+-          attempt: cloud.catalogUpdatedAt == nil ? .initial : .refresh,
+-          failure: cloud.catalogFailure), identifier: "cloud-catalog"
+-      ) {
+-        await cloud.refresh(reason: .manualRetry) { try await auth.prepareCloudAccess() }
++      if showsLoading || cloud.catalogFailure != nil {
++        AppSectionRequestState(
++          title: "云游戏目录",
++          status: SectionRequestStatus(
++            phase: cloud.phase, isBusy: cloud.isRefreshing,
++            hasSnapshot: cloud.catalogUpdatedAt != nil,
++            updatedAt: cloud.catalogUpdatedAt,
++            attempt: cloud.catalogUpdatedAt == nil ? .initial : .refresh,
++            failure: cloud.catalogFailure), identifier: "cloud-catalog"
++        ) {
++          await cloud.refresh(reason: .manualRetry) { try await auth.prepareCloudAccess() }
++        }
+       }
+-      AppSectionRequestState(
+-        title: "游戏图片与资料", status: cloud.metadataState.requestStatus,
+-        identifier: "cloud-metadata"
+-      ) {
+-        await cloud.retryMetadata { try await auth.prepareCloudAccess() }
++      if showsLoading || cloud.metadataState.requestStatus.failure != nil {
++        AppSectionRequestState(
++          title: "游戏图片与资料", status: cloud.metadataState.requestStatus,
++          identifier: "cloud-metadata"
++        ) {
++          await cloud.retryMetadata { try await auth.prepareCloudAccess() }
++        }
+       }
+     }
+   }
+diff --git a/iosapp/XBXRC/Features/Library/GameLibraryView.swift b/iosapp/XBXRC/Features/Library/GameLibraryView.swift
+index da079f07..e703894c 100644
+--- a/iosapp/XBXRC/Features/Library/GameLibraryView.swift
++++ b/iosapp/XBXRC/Features/Library/GameLibraryView.swift
+@@ -118,23 +118,19 @@ struct GameLibraryView: View {
+     GeometryReader { geometry in
+       AppPageScroll {
+         LazyVStack(spacing: 0) {
+-          HStack {
+-            Text("\(cloudStore.games.count) 款游戏")
+-              .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
+-            Spacer()
++          if authStore.needsDataSignIn || cloudStore.catalogFailure != nil
++            || cloudStore.metadataState.requestStatus.failure != nil
++          {
++            CloudCatalogStatusView(cloud: cloudStore, showsLoading: false)
++              .padding(.horizontal, AppLayoutPolicy.pageInset)
++              .padding(.bottom, AppLayoutPolicy.pageInset)
+           }
+-          .padding(.horizontal, AppLayoutPolicy.pageInset)
+-          .padding(.vertical, 24)
+-
+-          CloudCatalogStatusView(cloud: cloudStore)
+-            .padding(.horizontal, AppLayoutPolicy.pageInset).padding(
+-              .bottom, AppLayoutPolicy.pageInset)
+-
+           ForEach(collections) { collection in
+             LibraryShelf(collection: collection)
+               .padding(.bottom, 32)
+           }
+         }
++        .padding(.top, AppLayoutPolicy.pageInset)
+         .padding(.bottom, 24)
+         .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth).frame(maxWidth: .infinity)
+       }
+diff --git a/iosapp/XBXRC/Features/Profile/ProfileView.swift b/iosapp/XBXRC/Features/Profile/ProfileView.swift
+index d534174d..3bd9b8f2 100644
+--- a/iosapp/XBXRC/Features/Profile/ProfileView.swift
++++ b/iosapp/XBXRC/Features/Profile/ProfileView.swift
+@@ -32,6 +32,7 @@ private enum MyRoute: AppSecondaryRoute {
+ struct ProfileView: View {
+     @EnvironmentObject private var authStore: AuthStore
+     @EnvironmentObject private var dataStore: XboxDataStore
++    @Environment(\.locale) private var locale
+     @State private var path: [MyRoute] = []
+     @State private var showsSignOutConfirmation = false
+     let isActive: Bool
+@@ -44,19 +45,7 @@ struct ProfileView: View {
+                     AppAccountRequestNotice()
+                     overview
+                     if authStore.isSignedIn {
+-                        VStack(alignment: .leading, spacing: 8) {
+-                            Text("游戏与成就概况").appFont(.section, weight: .semibold)
+-                            if dataStore.historyState(targetID: nil).hasSnapshot {
+-                                PersonalLibraryOverview(games: dataStore.games)
+-                            }
+-                            AppSectionRequestState(
+-                                title: "游戏与成就概况",
+-                                status: dataStore.historyState(targetID: nil).requestStatus,
+-                                identifier: "my-overview"
+-                            ) {
+-                                await dataStore.refreshLibrary(reason: .manualRetry)
+-                            }
+-                        }
++                        libraryOverview
+                         VStack(spacing: 12) {
+                             ForEach(MyRoute.allCases) { route in
+                                 NavigationLink(value: route) {
+@@ -179,36 +168,37 @@ struct ProfileView: View {
+ 
+     @ViewBuilder
+     private var overview: some View {
+-        if let profile = authStore.profile, authStore.isSignedIn {
+-            PersonalIdentityHero(
+-                person: XboxFriendSummary(
+-                    id: profile.xuid ?? "self", displayName: profile.displayName,
+-                    gamertag: profile.gamertag,
+-                    avatarURL: XboxImageURL.resolve(profile.displayPictureUrl),
+-                    gamerscore: profile.gamerScore, presenceState: profile.presenceState,
+-                    presenceText: profile.richPresence ?? profile.currentTitleName),
+-                currentTitle: profile.currentTitleName, friendCount: profile.friendCount,
+-                followingCount: profile.followingCount, followersCount: profile.followersCount)
++        if authStore.isSignedIn {
++            let identityState = authStore.profileSectionStates[.identity] ?? XboxSingleDataState()
++            // 身份来源完成后展示头像与名称，其他来源可先返回数量和在线状态。
++            let showsSkeleton =
++                !identityState.hasSnapshot && identityState.failure == nil
++                && !authStore.needsDataSignIn
++                && (identityState.phase == .idle || identityState.phase == .loading)
++            if showsSkeleton {
++                ProfileIdentitySkeleton()
++            } else if identityState.hasSnapshot, let profile = authStore.profile {
++                PersonalIdentityHero(
++                    person: XboxFriendSummary(
++                        id: profile.xuid ?? "self", displayName: profile.displayName,
++                        gamertag: profile.gamertag,
++                        avatarURL: XboxImageURL.resolve(profile.displayPictureUrl),
++                        gamerscore: profile.gamerScore, presenceState: profile.presenceState,
++                        presenceText: profile.richPresence ?? profile.currentTitleName),
++                    currentTitle: profile.currentTitleName, friendCount: profile.friendCount,
++                    followingCount: profile.followingCount, followersCount: profile.followersCount)
++            }
+             ForEach([XboxProfileSource.identity, .presence, .friends, .social], id: \.self) {
+                 source in
+-                AppSectionRequestState(
+-                    title: profileSourceTitle(source),
+-                    status: (authStore.profileSectionStates[source] ?? XboxSingleDataState())
+-                        .requestStatus,
+-                    identifier: "profile-\(source)"
+-                ) {
+-                    await authStore.refreshProfileSource(source)
+-                }
+-            }
+-        } else if authStore.isSignedIn {
+-            VStack(alignment: .leading, spacing: 8) {
+-                AppSectionRequestState(
+-                    title: "账户资料",
+-                    status: (authStore.profileSectionStates[.identity]
+-                        ?? XboxSingleDataState(phase: .loading, isRefreshing: true)).requestStatus,
+-                    identifier: "profile-identity"
+-                ) {
+-                    await authStore.refreshProfileSource(.identity)
++                let status = (authStore.profileSectionStates[source] ?? XboxSingleDataState())
++                    .requestStatus
++                if !showsSkeleton || status.failure != nil {
++                    AppSectionRequestState(
++                        title: profileSourceTitle(source), status: status,
++                        identifier: "profile-\(source)"
++                    ) {
++                        await authStore.refreshProfileSource(source)
++                    }
+                 }
+             }
+         } else {
+@@ -217,4 +207,71 @@ struct ProfileView: View {
+             }.frame(maxWidth: .infinity, minHeight: 280)
+         }
+     }
++
++    private var libraryOverview: some View {
++        let state = dataStore.historyState(targetID: nil)
++        let showsSkeleton =
++            !state.hasSnapshot && state.failure == nil
++            && !authStore.needsDataSignIn && (state.phase == .idle || state.phase == .loading)
++        return VStack(alignment: .leading, spacing: 8) {
++            Text("游戏与成就概况").appFont(.section, weight: .semibold)
++            if state.hasSnapshot {
++                PersonalLibraryOverview(games: dataStore.games)
++            } else if showsSkeleton {
++                AppMetricGrid {
++                    ProfileMetricSkeleton()
++                    ProfileMetricSkeleton()
++                }
++                .skeletonPulse(
++                    accessibilityLabel: appLocalizedString("正在载入游戏与成就概况", locale: locale)
++                )
++                .accessibilityIdentifier("my-overview-skeleton")
++            }
++            if !showsSkeleton {
++                AppSectionRequestState(
++                    title: "游戏与成就概况", status: state.requestStatus,
++                    identifier: "my-overview"
++                ) {
++                    await dataStore.refreshLibrary(reason: .manualRetry)
++                }
++            }
++        }
++    }
++}
++
++private struct ProfileIdentitySkeleton: View {
++    @Environment(\.dynamicTypeSize) private var textSize
++    @Environment(\.locale) private var locale
++
++    var body: some View {
++        VStack(alignment: .leading, spacing: 16) {
++            let layout =
++                textSize.isAccessibilitySize
++                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
++                : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
++            layout {
++                Circle().fill(.quaternary).frame(width: 72, height: 72)
++                VStack(alignment: .leading, spacing: 8) {
++                    Capsule().fill(.quaternary).frame(width: 160, height: 26)
++                    Capsule().fill(.quaternary).frame(width: 120, height: 14)
++                }
++            }
++            HStack(alignment: .top, spacing: 12) {
++                ForEach(0..<4, id: \.self) { _ in ProfileMetricSkeleton() }
++            }
++        }
++        .frame(maxWidth: .infinity, minHeight: 144, alignment: .bottomLeading)
++        .skeletonPulse(accessibilityLabel: appLocalizedString("正在载入账户资料", locale: locale))
++        .accessibilityIdentifier("my-identity-skeleton")
++    }
++}
++
++private struct ProfileMetricSkeleton: View {
++    var body: some View {
++        VStack(alignment: .leading, spacing: AppLayoutPolicy.detailSpacing) {
++            Capsule().fill(.quaternary).frame(maxWidth: 56).frame(height: 18)
++            Capsule().fill(.quaternary).frame(maxWidth: 44).frame(height: 12)
++        }
++        .frame(maxWidth: .infinity, alignment: .leading)
++    }
+ }
+diff --git a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+index 679698e0..b3ef0f78 100644
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+@@ -169,12 +169,13 @@ private struct TouchAppearanceSlider: View {
+     }
+ }
+ 
++@MainActor
+ private func orientationPicker(selection: Binding<TouchLayoutOrientation>) -> some View {
+-    Picker("预览方向", selection: selection) {
+-        ForEach(TouchLayoutOrientation.allCases) { Text(LocalizedStringKey($0.title)).tag($0) }
+-    }
+-    .pickerStyle(.segmented).frame(minHeight: 44)
+-    .accessibilityIdentifier("touch-preview-orientation")
++    AppSegmentedFilter(
++        selection: selection, values: TouchLayoutOrientation.allCases,
++        title: { $0.title }, identifier: "touch-preview-orientation", label: "预览方向"
++    )
++    .appSettingsInformation()
+ }
+ 
+ /// 使用正式 Surface 按参考屏幕比例缩放，触点坐标由视图变换回到同一逻辑视口。
+diff --git a/iosapp/XBXRC/Resources/Localizable.xcstrings b/iosapp/XBXRC/Resources/Localizable.xcstrings
+index 565f419f..52f8f104 100644
+--- a/iosapp/XBXRC/Resources/Localizable.xcstrings
++++ b/iosapp/XBXRC/Resources/Localizable.xcstrings
+@@ -9258,6 +9258,23 @@
+         }
+       }
+     },
++    "正在载入游戏与成就概况" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Loading game and achievement overview"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在载入游戏与成就概况"
++          }
++        }
++      }
++    },
+     "正在载入游戏库" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -9338,13 +9355,19 @@
+       }
+     },
+     "正在载入账户资料" : {
+-      "extractionState" : "stale",
++      "extractionState" : "manual",
+       "localizations" : {
+         "en" : {
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "Loading account profile"
+           }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在载入账户资料"
++          }
+         }
+       }
+     },
+@@ -14791,4 +14814,4 @@
+     }
+   },
+   "version" : "1.0"
+-}
+\ No newline at end of file
++}
+diff --git a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+index 07d15ce8..c3dc8a29 100644
+--- a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -165,9 +165,9 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         app.launch()
+         openTouchSettings(app)
+         app.buttons["controller-touch-customize"].tap()
+-        let directions = app.segmentedControls["touch-preview-orientation"]
+-        XCTAssertTrue(directions.waitForExistence(timeout: 5))
+-        directions.buttons["竖屏"].tap()
++        let portrait = app.buttons["touch-preview-orientation-portrait"]
++        XCTAssertTrue(portrait.waitForExistence(timeout: 5))
++        portrait.tap()
+         app.scrollViews["app-settings-scroll"].swipeUp()
+         let preview = app.otherElements["touch-layout-preview"]
+         XCTAssertTrue(preview.exists)
+@@ -188,8 +188,8 @@ final class TouchLayoutInteractionTests: XCTestCase {
+         XCTAssertLessThan(a.frame.midX, originalX - 20)
+         app.buttons["app-navigation-back"].tap()
+         app.buttons["controller-touch-customize"].tap()
+-        XCTAssertTrue(directions.waitForExistence(timeout: 5))
+-        directions.buttons["竖屏"].tap()
++        XCTAssertTrue(portrait.waitForExistence(timeout: 5))
++        portrait.tap()
+         app.scrollViews["app-settings-scroll"].swipeUp()
+         XCTAssertEqual(a.frame.midX, originalX, accuracy: 3)
+         app.buttons["touch-template-save"].tap()

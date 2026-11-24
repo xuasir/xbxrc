@@ -1,0 +1,47 @@
+{
+  "actionTitle" : "Testing project XBXRC with scheme XBXRC",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "arm64",
+    "deviceId" : "79FF2297-6C93-409D-8E53-59A51F8B62AD",
+    "deviceName" : "iPhone 17e",
+    "modelName" : "iPhone 17e",
+    "osBuildNumber" : "24A434",
+    "osVersion" : "27.0",
+    "platform" : "iOS Simulator"
+  },
+  "endTime" : 1795405337.156,
+  "errorCount" : 2,
+  "errors" : [
+    {
+      "issueType" : "Uncategorized",
+      "message" : "Testing cancelled because the build failed."
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "Swift Compiler Error",
+      "message" : "Cannot convert value of type 'any KeyPath<EnvironmentValues, Bool> & Sendable' to expected argument type 'WritableKeyPath<EnvironmentValues, Bool>'",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift#EndingColumnNumber=29&EndingLineNumber=918&StartingColumnNumber=29&StartingLineNumber=918&Timestamp=817098103.855105"
+    }
+  ],
+  "startTime" : 1795405303.742,
+  "status" : "failed",
+  "warningCount" : 2,
+  "warnings" : [
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=56&EndingLineNumber=472&StartingColumnNumber=56&StartingLineNumber=472&Timestamp=817098103.855105"
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=41&EndingLineNumber=472&StartingColumnNumber=41&StartingLineNumber=472&Timestamp=817098103.855105"
+    }
+  ]
+}

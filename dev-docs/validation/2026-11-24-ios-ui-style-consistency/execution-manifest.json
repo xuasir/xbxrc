@@ -1,0 +1,39 @@
+{
+  "task": "2026-11-24-ios-ui-style-consistency",
+  "temporary_root": "/private/tmp/xbxrc-ios-ui-style-20261124-pm3_8xx9",
+  "temporary_artifacts": [
+    "baseline",
+    "DerivedData",
+    "style-smoke.xcresult",
+    "build.log",
+    "test.log"
+  ],
+  "preserved_existing_changes": true,
+  "baseline_source_sha256": {
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "cf7a5a150ca86f8b2f658e2944185371fc5fba933a06831a5899f329fc068697",
+    "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift": "1b4a652326c16db5066dfe09c59c4a62e25a4c4ba4ca2cb4fa8a90665d4570fe",
+    "iosapp/XBXRC/App/AppRootView.swift": "54a820f9201771d0ea28f29eb895783b4e442972e8762f4973291e5a795aca6b",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "7afe7925ec74df3c76f03cb611b5f4e7336f5beb5bc2fe74225cf675e9e3de26",
+    "iosapp/XBXRC/Features/Profile/PersonalPages.swift": "21afa98b94d0073fbc2cac46bcd045266885b9bb5fac4ee9943cf90f5223950a",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "3498ced1885222faa57c25d2fa82691cda2ff4b0258e843ff47491860bc17b9d",
+    "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift": "03b6833dc0392d32b5df339498d14e84a994bf7817aa0b6f9df95a9ae4b3536a",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "57678c4a273704cb8e62b3c3b349355ea8d5bcddc6a7856dd8e7659869556f9d",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": "ac86e90611c49aadda69b3af652709b2b48d08fe4aee67284f7cb82fdba13998",
+    "iosapp/DESIGN.md": "0737fcbdb346e9c6198114d0399dd64d77b39eceeffb59128a2dd70a463d2911",
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "6678a1a0c100944347c0e12fa3117f25b3fa34756fb7bc3dd232a5c00be1fbab",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "61afd85b035629d77d0a9ad2154723c88dcd43fda8ecd5fa6ac45daea8d30472",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": "aa1a9b74d131bac2db89fbd3b0bec76752b99ef5bc7d292afdda25a25b71f9c0"
+  },
+  "temporary_source_probe": {
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "marker": "// BEGIN 20261124 Scoped UI style smoke",
+    "baseline_sha256": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+    "retained_source": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/native-style-smoke.swift"
+  },
+  "shared_source_packages": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "additional_temporary_artifacts": [
+    "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-24-11_11-55-0058.xcresult"
+  ]
+}

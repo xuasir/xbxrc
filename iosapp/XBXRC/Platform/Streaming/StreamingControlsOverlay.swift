@@ -9,7 +9,6 @@ struct StreamingControlsOverlay: View {
     let revealSource: StreamingControlsRevealSource
     var autoHideAfter: Duration? = .seconds(5)
     @EnvironmentObject private var settings: AppSettingsStore
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var controls = StreamingControlsState()
     @State private var audioMuted = false
     @State private var microphoneEnabled = false
@@ -17,11 +16,11 @@ struct StreamingControlsOverlay: View {
     @State private var videoContentMode: StreamingVideoContentMode = .fit
     @State private var capabilities = StreamingControlCapabilities.unavailable
     @State private var message: String?
-    @State private var picturePresented = false
     @State private var confirmExit = false
     @State private var confirmPowerOff = false
     @State private var capturing = false
     @State private var exporting = false
+    @State private var switchingLayout = false
     @State private var sharedTrace: StreamingTraceShareItem?
     @State private var exportError: String?
     @State private var autoHideTask: Task<Void, Never>?
@@ -29,20 +28,19 @@ struct StreamingControlsOverlay: View {
 
     var body: some View {
         ZStack {
-            if controls.surface == .hidden {
+            if controls.quickControlsVisible {
                 VStack {
-                    HStack {
+                    HStack(spacing: 8) {
                         dockButton(
                             systemName: "line.3.horizontal", label: "打开串流菜单",
                             identifier: "stream-controls-open"
                         ) {
                             reveal(source: .button)
                         }
-                        .background(
-                            .black.opacity(reduceTransparency ? 0.92 : 0.28),
-                            in: RoundedRectangle(cornerRadius: 14)
-                        )
-                        Spacer()
+                        .streamingQuickControlSurface()
+                        StreamingTouchQuickSwitch(
+                            controller: store.touchLayout, session: store.input)
+                        Spacer(minLength: 0)
                     }
                     Spacer()
                 }
@@ -62,13 +60,13 @@ struct StreamingControlsOverlay: View {
                     HStack(alignment: .center) {
                         rail(
                             height: min(
-                                geometry.size.height - 24, capabilities.canPowerOff ? 324 : 280)
+                                geometry.size.height * 0.5, capabilities.canPowerOff ? 368 : 324)
                         ) {
                             operationButtons
                         }
                         .accessibilityIdentifier("stream-operations-rail")
                         Spacer(minLength: 0)
-                        rail(height: min(geometry.size.height - 24, 236)) {
+                        rail(height: min(geometry.size.height * 0.5, 236)) {
                             diagnosticButtons
                         }
                         .accessibilityIdentifier("stream-diagnostics-rail")
@@ -81,12 +79,27 @@ struct StreamingControlsOverlay: View {
             if controls.surface == .debugSheet {
                 StreamingDiagnosticsFloatingPanel(store: store, onClose: resumeDock)
             }
+            if controls.surface == .touchLayoutPicker {
+                StreamingTouchLayoutPickerPanel(controller: store.touchLayout, onClose: resumeDock)
+            }
+            if controls.surface == .pictureSheet {
+                StreamingPictureControlsPanel(store: store, onClose: resumeDock)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityAction(named: "打开串流控制") { reveal(source: .accessibility) }
         .onChange(of: revealToken) { _, _ in
             guard controls.surface == .hidden || controls.dockVisible else { return }
+            if revealSource == .blankTap {
+                revealQuickControls()
+                return
+            }
             controls.dockVisible ? hideDock() : reveal(source: revealSource)
+        }
+        .onReceive(store.touchLayout.$pendingSelection.map { $0 != nil }.removeDuplicates()) {
+            pending in
+            switchingLayout = pending
+            scheduleAutoHide()
         }
         .onReceive(store.$audioMuted.removeDuplicates()) { audioMuted = $0 }
         .onReceive(store.$microphoneEnabled.removeDuplicates()) { microphoneEnabled = $0 }
@@ -115,9 +128,6 @@ struct StreamingControlsOverlay: View {
         .onReceive(store.input.$diagnosticsRevealToken.dropFirst()) { _ in
             guard controls.surface == .hidden || controls.dockVisible else { return }
             showDiagnostics()
-        }
-        .sheet(isPresented: $picturePresented, onDismiss: resumeDock) {
-            StreamingPictureControlsSheet(store: store)
         }
         .alert("结束串流？", isPresented: $confirmExit) {
             Button("取消", role: .cancel) { resumeDock() }
@@ -151,6 +161,7 @@ struct StreamingControlsOverlay: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        .onAppear { scheduleAutoHide() }
         .onDisappear {
             cancelAutoHide()
             messageTask?.cancel()
@@ -161,12 +172,18 @@ struct StreamingControlsOverlay: View {
     private var operationButtons: some View {
         Group {
             dockButton(
+                systemName: "gamecontroller", label: "切换触屏布局",
+                identifier: "stream-touch-layout-open"
+            ) {
+                cancelAutoHide()
+                controls.present(.touchLayoutPicker)
+            }
+            dockButton(
                 systemName: "slider.horizontal.3", label: "画面设置",
                 identifier: "stream-picture-settings"
             ) {
                 cancelAutoHide()
                 controls.present(.pictureSheet)
-                picturePresented = true
             }
             dockButton(
                 systemName: audioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
@@ -267,10 +284,8 @@ struct StreamingControlsOverlay: View {
         }
         .scrollIndicators(.hidden)
         .frame(width: 52, height: max(44, height))
-        // 静态透明底色减少实时视频上的模糊合成开销。
-        .background(
-            .black.opacity(reduceTransparency ? 0.92 : 0.28), in: RoundedRectangle(cornerRadius: 14)
-        )
+        // 菜单与诊断共用公共突出浮层的背景和降低透明度回退。
+        .appSurface(radius: 14, prominent: true, forceDark: true)
     }
 
     private func dockButton(
@@ -303,6 +318,17 @@ struct StreamingControlsOverlay: View {
             importance: .debug)
     }
 
+    private func revealQuickControls() {
+        guard controls.surface == .hidden else { return }
+        controls.revealQuickControls()
+        scheduleAutoHide()
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming", event: "streamQuickControlsVisibilityChanged",
+            payload: ["visible": .bool(true), "source": .string("blankTap")],
+            dimension: .input,
+            importance: .debug)
+    }
+
     private func resumeDock() {
         controls.reveal()
         scheduleAutoHide()
@@ -314,6 +340,7 @@ struct StreamingControlsOverlay: View {
     private func hideDock() {
         cancelAutoHide()
         controls.hide()
+        scheduleAutoHide()
     }
 
     private func performExport(_ operation: @escaping @MainActor () async throws -> URL?) {
@@ -340,11 +367,13 @@ struct StreamingControlsOverlay: View {
 
     private func scheduleAutoHide() {
         cancelAutoHide()
-        guard controls.dockVisible, !exporting, let autoHideAfter else { return }
+        guard controls.dockVisible || controls.quickControlsVisible,
+            !exporting, !switchingLayout, let autoHideAfter
+        else { return }
         autoHideTask = Task { @MainActor in
             try? await Task.sleep(for: autoHideAfter)
-            guard !Task.isCancelled else { return }
-            controls.hide()
+            guard !Task.isCancelled, !controls.suspendsAutoHide, !switchingLayout else { return }
+            controls.hideAutomatically()
             IOSRuntimeTrace.state(
                 domain: "ios-streaming", event: "streamControlsVisibilityChanged",
                 payload: ["visible": .bool(false), "source": .string("autoHide")],
@@ -359,49 +388,60 @@ struct StreamingControlsOverlay: View {
     }
 }
 
-private struct StreamingPictureControlsSheet: View {
+private struct StreamingPictureControlsPanel: View {
     @EnvironmentObject private var settings: AppSettingsStore
     let store: StreamingFeatureStore
+    let onClose: () -> Void
     @State private var picture: MobilePicturePreferences
     @State private var contentMode: StreamingVideoContentMode
-    @Environment(\.dismiss) private var dismiss
 
-    init(store: StreamingFeatureStore) {
+    init(store: StreamingFeatureStore, onClose: @escaping () -> Void) {
         self.store = store
+        self.onClose = onClose
         _picture = State(initialValue: store.picture)
         _contentMode = State(initialValue: store.videoContentMode)
     }
 
     var body: some View {
-        NavigationStack {
-            MobilePictureSettingsView(
-                picture: Binding(
-                    get: { picture },
-                    set: {
-                        picture = $0
-                        store.picture = $0
-                    }),
-                videoContentMode: Binding(
-                    get: { contentMode },
-                    set: {
-                        contentMode = $0
-                        store.setVideoContentMode($0)
-                    }),
-                onSaveDefault: { settings.mobile.picture = store.picture },
-                onRestoreDefault: { store.picture = settings.mobile.picture }
-            )
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成", systemImage: "checkmark") { dismiss() }
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                        .accessibilityIdentifier("stream-picture-close")
-                }.sharedBackgroundVisibility(.hidden)
+        GeometryReader { geometry in
+            let width = min(600, max(1, geometry.size.width - 28))
+            let height = max(1, min(geometry.size.height * 0.5, geometry.size.height - 28))
+            NavigationStack {
+                MobilePictureSettingsView(
+                    picture: Binding(
+                        get: { picture },
+                        set: {
+                            picture = $0
+                            store.picture = $0
+                        }),
+                    videoContentMode: Binding(
+                        get: { contentMode },
+                        set: {
+                            contentMode = $0
+                            store.setVideoContentMode($0)
+                        }),
+                    onSaveDefault: { settings.mobile.picture = store.picture },
+                    onRestoreDefault: { store.picture = settings.mobile.picture },
+                    showsBack: false
+                )
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完成", systemImage: "checkmark", action: onClose)
+                            .foregroundStyle(AppThemePalette.textPrimary).labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .accessibilityIdentifier("stream-picture-close")
+                    }.sharedBackgroundVisibility(.hidden)
+                }
             }
+            .frame(width: width, height: height)
+            .appSurface(radius: 12, prominent: true, forceDark: true)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .position(x: geometry.size.width / 2, y: geometry.size.height - height / 2)
+            .accessibilityIdentifier("stream-picture-panel")
         }
+        .ignoresSafeArea(.container, edges: .bottom)
         .onReceive(store.$picture.removeDuplicates()) { picture = $0 }
         .onReceive(store.$videoContentMode.removeDuplicates()) { contentMode = $0 }
-        .presentationDetents([.medium, .large])
-        .presentationBackground(.clear)
     }
 }
 

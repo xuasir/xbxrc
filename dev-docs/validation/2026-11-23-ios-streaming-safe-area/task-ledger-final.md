@@ -1,0 +1,2 @@
+| 2026-11-23-ios-streaming-safe-area | 串流功能菜单与触屏布局避让灵动岛和系统安全区 | Done | 2026-11-23 | simple；原生安全区与统一绘制/命中/编辑几何完成；16项前序定向验证、手机/iPad各3项UI及iPhoneOS构建通过。24张验收图与6份窗口几何归档，1.58GiB临时产物及22份旧证据已清理，共享缓存保留。[证据](../dev-docs/validation/2026-11-23-ios-streaming-safe-area/README.md)。 |
+| 2026-11-23-ios-streaming-menu-overlay | 统一串流菜单层级与公共弹出层背景 | Done | 2026-11-23 | simple；入口/双栏/诊断复用公共深绿弹出层背景，层级位于触屏和指标上方，降低透明度采用实色面板；两端各3项UI、设备编译及格式/lint/边界通过，截图与诊断归档，临时清理完成。[证据](../dev-docs/validation/2026-11-23-ios-streaming-safe-area/README.md)。 |

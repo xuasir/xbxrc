@@ -1,0 +1,51 @@
+[
+  {
+    "source": "build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:1069: error: -[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke] : XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (27.934 seconds).",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (23.082 seconds)."
+    ]
+  },
+  {
+    "source": "final-build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:1069: error: -[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke] : XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (29.066 seconds).",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (20.428 seconds)."
+    ]
+  },
+  {
+    "source": "verified-build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:1069: error: -[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke] : XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\") - Attributes: Application, 0x1096c88c0, pid: 17613, label: 'XBXRC'",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (26.743 seconds).",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (20.419 seconds)."
+    ]
+  },
+  {
+    "source": "accepted-build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:1093: error: -[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke] : Failed to get matching snapshot: No matches found for first query match sequence: `Descendants matching type Button` -> `Elements matching predicate 'label CONTAINS[c] \"全屏\" OR label CONTAINS[c] \"Full Screen\"'`, given input App element pid: 20930",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (38.014 seconds).",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (22.283 seconds)."
+    ]
+  },
+  {
+    "source": "completed-build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:1096: error: -[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke] : XCTAssertTrue failed",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (41.497 seconds).",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (20.290 seconds)."
+    ]
+  },
+  {
+    "source": "media-final-build.log",
+    "diagnostics": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift:37:35: error: cannot find type 'CloudProductDetailRepository' in scope",
+      "     |                                   `- error: cannot find type 'CloudProductDetailRepository' in scope",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift:51:34: error: cannot find type 'AlbumDownloadFailure' in scope",
+      "    |                                  `- error: cannot find type 'AlbumDownloadFailure' in scope"
+    ]
+  }
+]

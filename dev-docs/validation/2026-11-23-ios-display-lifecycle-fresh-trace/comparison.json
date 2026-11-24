@@ -1,0 +1,117 @@
+{
+  "baselineInput": {
+    "path": "runtime-logs/ios/runtime-trace-ios-1795187951399-1.jsonl",
+    "sha256": "24ac24de981cf9c15a1eafb558b6d14a8f28fb91fbfbe5a01e35afffbc90612d",
+    "rows": 33877
+  },
+  "newInput": {
+    "path": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+    "sha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d",
+    "bytes": 16504239,
+    "rows": 26163,
+    "firstTsMs": 1795401150206,
+    "lastTsMs": 1795401588672
+  },
+  "method": "同 sampleId、完整前台、首显后的解码 >=50FPS 窗口；低供给窗口在完整前台结果中保留",
+  "baselineNormalSupply": {
+    "scope": "同sampleId且完全前台、首次呈现后的解码>=50FPS窗口；尾部零供给单独完整报告",
+    "attempts": [
+      {
+        "attempt": 1,
+        "normalSupplyWindows": 36,
+        "windowSeconds": 36.082854083359244,
+        "counts": {
+          "framesDecodedDelta": 2163.0,
+          "submitCountDelta": 2112.0,
+          "presentCountDelta": 2112.0,
+          "drawablePresentCountDelta": 2084.0
+        },
+        "weightedFps": {
+          "framesDecodedDelta": 59.94536892794011,
+          "submitCountDelta": 58.531955236157884,
+          "presentCountDelta": 58.531955236157884,
+          "drawablePresentCountDelta": 57.75596340537549
+        }
+      },
+      {
+        "attempt": 2,
+        "normalSupplyWindows": 66,
+        "windowSeconds": 66.18477420830726,
+        "counts": {
+          "framesDecodedDelta": 3967.0,
+          "submitCountDelta": 3880.0,
+          "presentCountDelta": 3880.0,
+          "drawablePresentCountDelta": 3860.0
+        },
+        "weightedFps": {
+          "framesDecodedDelta": 59.93825690957902,
+          "submitCountDelta": 58.62375518254767,
+          "presentCountDelta": 58.62375518254767,
+          "drawablePresentCountDelta": 58.32157087748299
+        }
+      }
+    ]
+  },
+  "newNormalSupply": [
+    {
+      "attempt": 1,
+      "windows": 94,
+      "windowSeconds": 94.23864625006914,
+      "counts": {
+        "framesReceivedDelta": 5708,
+        "framesDecodedDelta": 5708,
+        "submitCountDelta": 4998,
+        "presentCountDelta": 4998,
+        "drawablePresentCountDelta": 4992
+      },
+      "weightedFps": {
+        "framesReceivedDelta": 60.569630689021196,
+        "framesDecodedDelta": 60.569630689021196,
+        "submitCountDelta": 53.035566605418346,
+        "presentCountDelta": 53.035566605418346,
+        "drawablePresentCountDelta": 52.97189845823297
+      },
+      "decodeToGpuGapPercent": 12.438682550805886,
+      "decodeToDrawableGapPercent": 12.543798177995795
+    }
+  ],
+  "baselineBindingCounts": [
+    {
+      "generation": 1,
+      "peerEpoch": 1,
+      "surfaceAttachmentCount": 50,
+      "medianAttachmentGapMs": 1001.975250005722,
+      "dropEventCount": 59,
+      "dropFrames": 61,
+      "dropEventsWithin50MsAfterAttachment": 26,
+      "dropFramesWithin50MsAfterAttachment": 26,
+      "medianDropSinceAttachmentMs": 56.16987502574921
+    },
+    {
+      "generation": 3,
+      "peerEpoch": 2,
+      "surfaceAttachmentCount": 149,
+      "medianAttachmentGapMs": 1002.5203541815281,
+      "dropEventCount": 112,
+      "dropFrames": 128,
+      "dropEventsWithin50MsAfterAttachment": 42,
+      "dropFramesWithin50MsAfterAttachment": 44,
+      "medianDropSinceAttachmentMs": 55.19956251978874
+    }
+  ],
+  "newBindingCounts": [
+    {
+      "1": 1,
+      "2": 1
+    }
+  ],
+  "baselineApplicationDrops": {
+    "ingressCoalesced": 189
+  },
+  "newApplicationDrops": [
+    {
+      "ingressCoalesced": 730
+    }
+  ],
+  "interpretation": "两份1440p日志的场景、运行时负载、采样时长和网络条件各自记录；新日志验证轨道绑定收敛，实际帧供给差仍待优化。"
+}

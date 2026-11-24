@@ -1,0 +1,95 @@
+{
+  "startedAt": "2026-11-23T11:29:42.771565+08:00",
+  "authorization": "用户继续现有串流帧供给优化；沿2026-11-20-ios-display-callback RFC执行",
+  "sources": [
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "iosapp/XBXRCTests/XBXRCTests.swift",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift"
+  ],
+  "documents": [
+    "docs/rfcs/2026-11-20-ios-display-callback.md",
+    "docs/reports/2026-11-20-ios-display-callback.md",
+    "docs/project-task.md"
+  ],
+  "baseline": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+      "bytes": 84391
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "sha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+      "bytes": 10033
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "sha256": "55572bfe2498a058d0fb7a3aa057835d667bd1cc5a494a9f744531c1d9f9eef3",
+      "bytes": 2581
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+      "bytes": 194983
+    },
+    {
+      "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+      "sha256": "c4e906f5613dfea00619b7ced0c9c18a981c8330b803de998948e67471297f24",
+      "bytes": 12171
+    },
+    {
+      "path": "docs/reports/2026-11-20-ios-display-callback.md",
+      "sha256": "991bd027a752d9c68b0b8691a3671f626cb306300ac463502646e70d1d84ab2d",
+      "bytes": 11890
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "10da74c920e4ce4248455532562279d2116698372101cbbceb86bc5c7a8b6554",
+      "bytes": 157591
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+      "sha256": "a8d849c2c6e6dd83a22842275c2fb2c31d510f805ebf6cb18fc79a6a72aabf4f",
+      "bytes": 10285
+    },
+    {
+      "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "sha256": "be5731bde7aa2c5d4c62e0e321267cbfba94db5c3c40728f8822c3983f84c7b1",
+      "bytes": 51802
+    }
+  ],
+  "temporaryRoot": "/private/tmp/xbxrc-ios-mainactor-drain-20261123",
+  "indexSha256": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "trace": "runtime-logs/ios/runtime-trace-ios-1795401150207-1.jsonl",
+  "traceSha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d",
+  "supplementalBuildFix": {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "baselineSha256": "a8d849c2c6e6dd83a22842275c2fb2c31d510f805ebf6cb18fc79a6a72aabf4f",
+    "scope": "仅orientationPicker函数添加MainActor隔离；保留现有方向胶囊改动",
+    "trigger": "模拟器首轮Swift6 RegionIsolation编译错误"
+  },
+  "supplementalTestBuildFix": {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "baselineSha256": "be5731bde7aa2c5d4c62e0e321267cbfba94db5c3c40728f8822c3983f84c7b1",
+    "scope": "截图capture以关闭本地动画替代写入只读accessibilityReduceMotion环境；保留当前截图探针",
+    "trigger": "测试目标编译中WritableKeyPath不匹配"
+  },
+  "relatedEvidenceManifests": [
+    "dev-docs/validation/2026-11-20-ios-display-callback/artifact-manifest.json",
+    "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/artifact-manifest.json",
+    "dev-docs/validation/2026-11-23-ios-display-lifecycle-fresh-trace/artifact-manifest.json"
+  ],
+  "retainedSources": [
+    "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "iosapp/XBXRCTests/XBXRCTests.swift",
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift"
+  ],
+  "historicalProbeSources": [
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift"
+  ]
+}

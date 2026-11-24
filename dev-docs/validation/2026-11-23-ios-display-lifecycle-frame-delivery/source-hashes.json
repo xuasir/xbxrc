@@ -1,0 +1,44 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "baselineSha256": "470325b954ab6271de004aed2b247ae64942e2b6d8048a3882a343c09c2fc353",
+    "validatedSha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+    "bytes": 84391
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "baselineSha256": "70814a8254591db7e22a6f8d73e094b21dc0ea94d15f0505618ca8cbe9d078c9",
+    "validatedSha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+    "bytes": 102364
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "baselineSha256": "14b75d356bbd20024216f03e8780564cfc1e00f0928e138d4255caa5ba938b50",
+    "validatedSha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+    "bytes": 194983
+  },
+  {
+    "path": "iosapp/scripts/check-streaming-core-trace.py",
+    "baselineSha256": "af42e0ade52e5ae776072ffa470a47e814e589f73b5835a037c377b149dbfc8a",
+    "validatedSha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+    "bytes": 39476
+  },
+  {
+    "path": "iosapp/scripts/tests/test_check_streaming_core_trace.py",
+    "baselineSha256": "6b7a422700f86a8d15e87ab250403ccf68eaf5c4a70e714c68d2e56b01464f5d",
+    "validatedSha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+    "bytes": 23649
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "baselineSha256": "457c4c9710b6d196479c557feb8ced61d67cd882f9e3500704ec4c219f712611",
+    "validatedSha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+    "bytes": 74961
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "baselineSha256": "8384fe192f31d8481d30eb8db47038d18ed9fedba373e0f0117552601303c3c5",
+    "validatedSha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+    "bytes": 10033
+  }
+]

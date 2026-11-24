@@ -1,17 +1,22 @@
+mod query_recovery;
+pub(crate) use query_recovery::query_xcloud_api;
+
+use crate::auth_session::{renew_auth_session, AuthTokenCache};
 use crate::{
-    auth_session_from_bundle, deserialize, normalize_force_region_ip, resolve_web_token_claims,
-    AuthSession, XboxBridgeError,
+    deserialize, normalize_force_region_ip, resolve_web_token_claims, AuthSession, XboxBridgeError,
 };
+use crate::{XboxAuthObserver, XboxStreamStartup, XboxStreamingAuthProvider};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use xbox_auth_flow::{AuthFlow, AuthFlowSeed, RefreshAndFinalizeInput};
+use xbox_auth_flow::{AuthFlowSeed, DownstreamTokenScope};
 use xbox_streaming::policy::session::SessionAccessContext;
 use xbox_streaming::policy::types::HostAddr;
 use xbox_streaming::{parse_session_access_context, Target};
-use xbox_streaming::{FallbackTurnProvider, RemoteConsoleSnapshot, TurnServer};
+use xbox_streaming::{RemoteConsoleSnapshot, TurnServer};
 
 static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
 static STREAM_ACCESS: OnceLock<Mutex<StreamAccessRegistry>> = OnceLock::new();
@@ -40,13 +45,16 @@ pub struct HomeAccessResult {
     pub expires_at_ms: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct StreamingAccessContext {
     pub(crate) host: String,
     pub(crate) bearer_token: String,
     pub(crate) account_id: String,
     pub(crate) refresh_token: String,
     pub(crate) auth_seed: Option<AuthFlowSeed>,
+    pub(crate) auth_session: Option<AuthSession>,
+    pub(crate) auth_provider: Option<Arc<dyn XboxStreamingAuthProvider>>,
+    pub(crate) auth_observer: Option<Arc<dyn XboxAuthObserver>>,
     pub(crate) target: Target,
     pub(crate) session_access: SessionAccessContext,
     pub(crate) force_region_ip: String,
@@ -56,6 +64,16 @@ pub(crate) struct StreamingAccessContext {
     pub(crate) created_at_ms: u64,
     pub(crate) expires_at_ms: u64,
     pub(crate) fallback_turn: Option<TurnServer>,
+}
+
+impl std::fmt::Debug for StreamingAccessContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamingAccessContext")
+            .field("target", &self.target)
+            .field("owner_generation", &self.owner_generation)
+            .field("expires_at_ms", &self.expires_at_ms)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +110,7 @@ impl HomeHostFacts {
 struct StreamAccessLease {
     metadata: StreamAccessLeaseMetadata,
     context: Option<StreamingAccessContext>,
+    query_recovery: Arc<tokio::sync::Mutex<query_recovery::QueryRecoveryState>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,125 +142,130 @@ struct LeaseMetadata {
     expires_at_ms: u64,
 }
 
+struct PreparedAccess {
+    auth_session: AuthSession,
+    handle: String,
+    account_id: String,
+    region_host: String,
+    metadata: LeaseMetadata,
+}
+
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn prepare_cloud_access(
-    refresh_token: String,
-    seed_json: String,
+    session: AuthSession,
     force_region_ip: String,
+    observer: Arc<dyn XboxAuthObserver>,
+    startup: Option<Arc<XboxStreamStartup>>,
+    auth_provider: Option<Arc<dyn XboxStreamingAuthProvider>>,
 ) -> Result<CloudAccessResult, XboxBridgeError> {
-    let seed: AuthFlowSeed = deserialize(&seed_json)?;
-    let force_region_ip = normalize_force_region_ip(force_region_ip);
-    let output = AuthFlow::new()
-        .refresh_and_finalize(RefreshAndFinalizeInput {
-            refresh_token,
-            seed: seed.clone(),
-            force_region_ip: force_region_ip.clone(),
-            include_streaming_tokens: true,
-        })
-        .await
-        .map_err(crate::authentication_error)?;
-
-    let created_at_ms = now_ms();
-    let expires_at_ms = cap_expiry_with_web_token(
-        resolve_access_expiry_ms(
-            output
-                .auth_bundle
-                .stream_tokens
-                .get("xCloudToken")
-                .or_else(|| output.auth_bundle.stream_tokens.get("xcloudToken")),
-            created_at_ms,
-        ),
-        &output.auth_bundle.web_token,
-        created_at_ms,
+    let operation = prepare_stream_access(
+        session,
+        force_region_ip,
+        observer,
+        Target::Cloud,
+        auth_provider,
     );
-    let mut context = resolve_cloud_access_context(
-        &output.auth_bundle.stream_tokens,
-        &output.auth_bundle.web_token,
-    )?;
-    context.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
-    context.auth_seed = Some(seed.clone());
-    context.force_region_ip = force_region_ip;
-    let access_handle = next_handle();
-    let account_id = context.account_id.clone();
-    let region_host = context.host.clone();
-    let metadata = stream_access_registry()?.insert(
-        access_handle.clone(),
-        context,
-        created_at_ms,
-        expires_at_ms,
-    );
-    let auth_session = auth_session_from_bundle(output.auth_bundle, &seed)?;
-
+    let prepared = match startup {
+        Some(startup) => Box::pin(startup.run_context(Target::Cloud, operation)).await?,
+        None => Box::pin(operation).await?,
+    };
     Ok(CloudAccessResult {
-        auth_session,
-        access_handle,
-        account_id,
-        region_host,
-        owner_generation: metadata.owner_generation,
-        expires_at_ms: metadata.expires_at_ms,
+        auth_session: prepared.auth_session,
+        access_handle: prepared.handle,
+        account_id: prepared.account_id,
+        region_host: prepared.region_host,
+        owner_generation: prepared.metadata.owner_generation,
+        expires_at_ms: prepared.metadata.expires_at_ms,
     })
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn prepare_home_access(
-    refresh_token: String,
-    seed_json: String,
+    session: AuthSession,
     force_region_ip: String,
+    observer: Arc<dyn XboxAuthObserver>,
+    startup: Option<Arc<XboxStreamStartup>>,
+    auth_provider: Option<Arc<dyn XboxStreamingAuthProvider>>,
 ) -> Result<HomeAccessResult, XboxBridgeError> {
-    let seed: AuthFlowSeed = deserialize(&seed_json)?;
-    let force_region_ip = normalize_force_region_ip(force_region_ip);
-    let output = AuthFlow::new()
-        .refresh_and_finalize(RefreshAndFinalizeInput {
-            refresh_token,
-            seed: seed.clone(),
-            force_region_ip: force_region_ip.clone(),
-            include_streaming_tokens: true,
-        })
-        .await
-        .map_err(crate::authentication_error)?;
+    let operation = prepare_stream_access(
+        session,
+        force_region_ip,
+        observer,
+        Target::Home,
+        auth_provider,
+    );
+    let prepared = match startup {
+        Some(startup) => Box::pin(startup.run_context(Target::Home, operation)).await?,
+        None => Box::pin(operation).await?,
+    };
+    Ok(HomeAccessResult {
+        auth_session: prepared.auth_session,
+        access_handle: prepared.handle,
+        account_id: prepared.account_id,
+        region_host: prepared.region_host,
+        owner_generation: prepared.metadata.owner_generation,
+        expires_at_ms: prepared.metadata.expires_at_ms,
+    })
+}
 
+async fn prepare_stream_access(
+    session: AuthSession,
+    force_region_ip: String,
+    observer: Arc<dyn XboxAuthObserver>,
+    target: Target,
+    auth_provider: Option<Arc<dyn XboxStreamingAuthProvider>>,
+) -> Result<PreparedAccess, XboxBridgeError> {
+    let force_region_ip = normalize_force_region_ip(force_region_ip);
+    let scope = if target.is_home() {
+        DownstreamTokenScope::Home
+    } else {
+        DownstreamTokenScope::Cloud
+    };
+    let auth = Box::pin(renew_auth_session(
+        session,
+        force_region_ip.clone(),
+        scope,
+        false,
+        Arc::clone(&observer),
+    ))
+    .await?;
+    let cache = AuthTokenCache::from_session(&auth)?
+        .ok_or_else(|| XboxBridgeError::InvalidData("credentialCacheUnavailable".into()))?;
+    let web: Value = deserialize(&auth.web_token_json)?;
+    let seed: AuthFlowSeed = deserialize(&auth.seed_json)?;
+    let mut context = if target.is_home() {
+        resolve_home_access_context(&cache.stream_tokens, &web)?
+    } else {
+        resolve_cloud_access_context(&cache.stream_tokens, &web)?
+    };
     let created_at_ms = now_ms();
     let expires_at_ms = cap_expiry_with_web_token(
         resolve_access_expiry_ms(
-            output
-                .auth_bundle
-                .stream_tokens
-                .get("xHomeToken")
-                .or_else(|| output.auth_bundle.stream_tokens.get("xhomeToken")),
+            scope
+                .stream_key()
+                .and_then(|key| cache.stream_tokens.get(key)),
             created_at_ms,
         ),
-        &output.auth_bundle.web_token,
+        &web,
         created_at_ms,
     );
-    let mut context = resolve_home_access_context(
-        &output.auth_bundle.stream_tokens,
-        &output.auth_bundle.web_token,
-    )?;
-    context.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
-    context.auth_seed = Some(seed.clone());
+    context.refresh_token = auth.refresh_token.clone();
+    context.auth_seed = Some(seed);
+    context.auth_session = Some(auth.clone());
+    context.auth_provider = auth_provider;
+    context.auth_observer = Some(observer);
     context.force_region_ip = force_region_ip;
-    context.fallback_turn = FallbackTurnProvider::new()
-        .get_by_target_type(Target::Home.as_str())
-        .await
-        .unwrap_or(None);
-    let access_handle = next_handle();
+    let handle = next_handle();
     let account_id = context.account_id.clone();
     let region_host = context.host.clone();
-    let metadata = stream_access_registry()?.insert(
-        access_handle.clone(),
-        context,
-        created_at_ms,
-        expires_at_ms,
-    );
-    let auth_session = auth_session_from_bundle(output.auth_bundle, &seed)?;
-
-    Ok(HomeAccessResult {
-        auth_session,
-        access_handle,
+    let metadata =
+        stream_access_registry()?.insert(handle.clone(), context, created_at_ms, expires_at_ms);
+    Ok(PreparedAccess {
+        auth_session: auth,
+        handle,
         account_id,
         region_host,
-        owner_generation: metadata.owner_generation,
-        expires_at_ms: metadata.expires_at_ms,
+        metadata,
     })
 }
 
@@ -293,7 +317,11 @@ fn resolve_cloud_access_context(
         .get("xCloudToken")
         .or_else(|| stream_tokens.get("xcloudToken"))
         .ok_or_else(|| {
-            XboxBridgeError::Authentication(cloud_token_unavailable_message(stream_tokens))
+            xbox_auth_flow::token_policy::cloud_token_unavailable_error(stream_tokens)
+                .map(crate::query_failure::query_error)
+                .unwrap_or_else(|| {
+                    XboxBridgeError::Authentication(cloud_token_unavailable_message(stream_tokens))
+                })
         })?;
     let data = token.get("data").unwrap_or(token);
     let session_access = parse_session_access_context(token)
@@ -344,6 +372,9 @@ fn resolve_cloud_access_context(
         account_id,
         refresh_token: String::new(),
         auth_seed: None,
+        auth_session: None,
+        auth_provider: None,
+        auth_observer: None,
         target: Target::Cloud,
         session_access,
         force_region_ip: String::new(),
@@ -394,6 +425,9 @@ fn resolve_home_access_context(
         account_id,
         refresh_token: String::new(),
         auth_seed: None,
+        auth_session: None,
+        auth_provider: None,
+        auth_observer: None,
         target: Target::Home,
         session_access,
         force_region_ip: String::new(),
@@ -497,6 +531,7 @@ impl StreamAccessRegistry {
                     terminal: None,
                 },
                 context: Some(context),
+                query_recovery: Arc::default(),
             },
         );
 
@@ -653,28 +688,79 @@ impl StreamAccessRegistry {
 
 pub(crate) async fn renew_bound_stream_access(
     context: &StreamingAccessContext,
+    rejected_token: Option<String>,
+) -> Result<(StreamingAccessContext, AuthSession), XboxBridgeError> {
+    let scope = if context.target.is_home() {
+        DownstreamTokenScope::Home
+    } else {
+        DownstreamTokenScope::Cloud
+    };
+    Box::pin(renew_bound_access(context, scope, rejected_token, false)).await
+}
+
+pub(crate) async fn renew_bound_web_access(
+    context: &StreamingAccessContext,
+    rejected_token: String,
+) -> Result<(StreamingAccessContext, AuthSession), XboxBridgeError> {
+    Box::pin(renew_bound_access(
+        context,
+        DownstreamTokenScope::Web,
+        Some(rejected_token),
+        false,
+    ))
+    .await
+}
+
+async fn renew_bound_access(
+    context: &StreamingAccessContext,
+    scope: DownstreamTokenScope,
+    rejected_token: Option<String>,
+    persist_checkpoint: bool,
 ) -> Result<(StreamingAccessContext, AuthSession), XboxBridgeError> {
     let seed = context.auth_seed.clone().ok_or_else(|| {
         XboxBridgeError::Authentication("streaming authentication seed unavailable".into())
     })?;
-    let output = AuthFlow::new()
-        .refresh_and_finalize(RefreshAndFinalizeInput {
-            refresh_token: context.refresh_token.clone(),
-            seed: seed.clone(),
-            force_region_ip: context.force_region_ip.clone(),
-            include_streaming_tokens: true,
-        })
-        .await
-        .map_err(crate::authentication_error)?;
-    let mut renewed = match context.target {
-        Target::Cloud => resolve_cloud_access_context(
-            &output.auth_bundle.stream_tokens,
-            &output.auth_bundle.web_token,
-        )?,
-        Target::Home => resolve_home_access_context(
-            &output.auth_bundle.stream_tokens,
-            &output.auth_bundle.web_token,
-        )?,
+    let session = context.auth_session.clone().unwrap_or(AuthSession {
+        refresh_token: context.refresh_token.clone(), seed_json: crate::serialize(&seed)?,
+        web_token_json: serde_json::json!({"data":{"Token":context.web_token,"DisplayClaims":{"xui":[{"uhs":context.web_uhs,"xid":context.account_id}]}}}).to_string(),
+        app_level: 0, token_cache_json: None,
+    });
+    let auth = match &context.auth_provider {
+        Some(provider) => {
+            provider
+                .ensure_session(scope.as_str().into(), rejected_token)
+                .await?
+        }
+        None => {
+            let force_core_refresh = crate::auth_session::token_was_rejected(
+                &session,
+                scope,
+                rejected_token.as_deref(),
+            )?;
+            Box::pin(renew_auth_session(
+                session,
+                context.force_region_ip.clone(),
+                scope,
+                force_core_refresh,
+                if persist_checkpoint {
+                    context
+                        .auth_observer
+                        .clone()
+                        .unwrap_or_else(|| Arc::new(InMemoryAuthObserver))
+                } else {
+                    Arc::new(InMemoryAuthObserver)
+                },
+            ))
+            .await?
+        }
+    };
+    let cache = AuthTokenCache::from_session(&auth)?
+        .ok_or_else(|| XboxBridgeError::InvalidData("credentialCacheUnavailable".into()))?;
+    let web: Value = deserialize(&auth.web_token_json)?;
+    let mut renewed = if context.target.is_home() {
+        resolve_home_access_context(&cache.stream_tokens, &web)?
+    } else {
+        resolve_cloud_access_context(&cache.stream_tokens, &web)?
     };
     if renewed.account_id != context.account_id {
         return Err(XboxBridgeError::Authentication(
@@ -682,31 +768,35 @@ pub(crate) async fn renew_bound_stream_access(
         ));
     }
     let created_at_ms = now_ms();
-    let token = match context.target {
-        Target::Cloud => output
-            .auth_bundle
-            .stream_tokens
-            .get("xCloudToken")
-            .or_else(|| output.auth_bundle.stream_tokens.get("xcloudToken")),
-        Target::Home => output
-            .auth_bundle
-            .stream_tokens
-            .get("xHomeToken")
-            .or_else(|| output.auth_bundle.stream_tokens.get("xhomeToken")),
-    };
     renewed.created_at_ms = created_at_ms;
+    let target_key = if context.target.is_home() {
+        "xHomeToken"
+    } else {
+        "xCloudToken"
+    };
     renewed.expires_at_ms = cap_expiry_with_web_token(
-        resolve_access_expiry_ms(token, created_at_ms),
-        &output.auth_bundle.web_token,
+        resolve_access_expiry_ms(cache.stream_tokens.get(target_key), created_at_ms),
+        &web,
         created_at_ms,
     );
-    renewed.refresh_token = output.auth_bundle.user_token.refresh_token.clone();
-    renewed.auth_seed = Some(seed.clone());
+    renewed.refresh_token = auth.refresh_token.clone();
+    renewed.auth_seed = Some(seed);
+    renewed.auth_session = Some(auth.clone());
+    renewed.auth_provider = context.auth_provider.clone();
+    renewed.auth_observer = context.auth_observer.clone();
     renewed.owner_generation = context.owner_generation;
     renewed.force_region_ip = context.force_region_ip.clone();
     renewed.fallback_turn = context.fallback_turn.clone();
-    let auth = auth_session_from_bundle(output.auth_bundle, &seed)?;
     Ok((renewed, auth))
+}
+
+struct InMemoryAuthObserver;
+#[async_trait::async_trait]
+impl XboxAuthObserver for InMemoryAuthObserver {
+    async fn checkpoint(&self, _: crate::XboxAuthCheckpoint) -> Result<(), XboxBridgeError> {
+        Ok(())
+    }
+    fn on_stage(&self, _: crate::XboxAuthStage) {}
 }
 
 impl StreamAccessLease {
@@ -748,24 +838,12 @@ pub(crate) fn find_home_host_facts(
 }
 
 fn resolve_access_expiry_ms(token: Option<&Value>, created_at_ms: u64) -> u64 {
-    let capped_expiry = created_at_ms.saturating_add(ACCESS_LEASE_MAX_LIFETIME_MS);
-    let token_expiry = token.and_then(|token| {
-        let data = token.get("data").unwrap_or(token);
-        let create_time = token
-            .get("_objectCreateTime")
-            .or_else(|| data.get("_objectCreateTime"))
-            .and_then(parse_u64_value)?;
-        let duration_seconds = data
-            .get("durationInSeconds")
-            .or_else(|| token.get("durationInSeconds"))
-            .or_else(|| data.get("duration_in_seconds"))
-            .and_then(parse_u64_value)?;
-        Some(create_time.saturating_add(duration_seconds.saturating_mul(1_000)))
-    });
-    token_expiry
-        .filter(|expiry| *expiry > created_at_ms)
-        .map(|expiry| expiry.min(capped_expiry))
-        .unwrap_or(capped_expiry)
+    let cap = created_at_ms.saturating_add(ACCESS_LEASE_MAX_LIFETIME_MS);
+    token
+        .and_then(xbox_auth_flow::token_policy::resolve_stream_token_expiry_ms)
+        .and_then(|expiry| u64::try_from(expiry).ok())
+        .map(|expiry| expiry.min(cap))
+        .unwrap_or(cap)
 }
 
 fn cap_expiry_with_web_token(stream_expiry_ms: u64, web_token: &Value, created_at_ms: u64) -> u64 {
@@ -781,13 +859,6 @@ fn cap_expiry_with_web_token(stream_expiry_ms: u64, web_token: &Value, created_a
     web_expiry_ms
         .map(|value| stream_expiry_ms.min(value))
         .unwrap_or(stream_expiry_ms)
-}
-
-fn parse_u64_value(value: &Value) -> Option<u64> {
-    value
-        .as_u64()
-        .or_else(|| value.as_i64().and_then(|value| u64::try_from(value).ok()))
-        .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
 }
 
 fn now_ms() -> u64 {
@@ -807,13 +878,16 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn fixture_context(account_id: &str, target: Target) -> StreamingAccessContext {
+    pub(super) fn fixture_context(account_id: &str, target: Target) -> StreamingAccessContext {
         StreamingAccessContext {
             host: "stream.example.com".to_string(),
             bearer_token: "gs-token".to_string(),
             account_id: account_id.to_string(),
             refresh_token: "refresh-token".to_string(),
             auth_seed: None,
+            auth_session: None,
+            auth_provider: None,
+            auth_observer: None,
             target,
             session_access: SessionAccessContext {
                 gs_token: Some("gs-token".to_string()),
@@ -925,12 +999,10 @@ mod tests {
             }),
             &json!({}),
         );
-        let error = result
-            .expect_err("missing cloud token should fail")
-            .to_string();
-        assert!(error.contains("forceRegionApplied=false"));
-        assert!(error.contains("offering=xgpuweb,errorKind=http,statusCode=403"));
-        assert!(error.contains("offering=xgpuwebf2p,errorKind=network,statusCode=none"));
+        let error = result.expect_err("missing cloud token should fail");
+        assert!(matches!(error, XboxBridgeError::Query { ref failure }
+            if failure.kind == crate::XboxQueryFailureKind::Timeout && failure.retriable));
+        assert!(!error.to_string().contains("xgpuweb"));
     }
 
     #[test]

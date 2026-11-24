@@ -1,0 +1,28 @@
+{
+  "file": "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift",
+  "ranges": [
+    [
+      122,
+      4641
+    ],
+    [
+      20261,
+      20992
+    ]
+  ],
+  "command": [
+    "xcrun",
+    "swift-format",
+    "format",
+    "--configuration",
+    "/private/tmp/xbxrc-ios-startup-pc-20261123-cfnj_z17/swift-format.json",
+    "--in-place",
+    "--offsets",
+    "122:4641",
+    "--offsets",
+    "20261:20992",
+    "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift"
+  ],
+  "exitCode": 0,
+  "output": ""
+}

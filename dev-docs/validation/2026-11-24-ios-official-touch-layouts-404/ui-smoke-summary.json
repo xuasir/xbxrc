@@ -1,0 +1,12 @@
+{
+  "platform": "iPad Pro 13-inch (M5), iOS Simulator 27.0",
+  "test": "SavedOfficialTouchLayoutInteractionTests/testOfficialLayout404UsesSharedRetryAndRecovers",
+  "tests": 1,
+  "failures": 0,
+  "seconds": 20.867,
+  "source": "typed HTTP 404 fixture, shared retry component, recovery to preview",
+  "screenshots": [
+    "ipad-shared-retry.png",
+    "ipad-recovered.png"
+  ]
+}

@@ -68,6 +68,45 @@ struct AppIconView: View {
   }
 }
 
+private enum AppFirstTextLineCenter: AlignmentID {
+  static func defaultValue(in dimensions: ViewDimensions) -> CGFloat {
+    // 扣除后续文字行的基线距离，图标始终对齐首行的垂直中心。
+    (dimensions.height - (dimensions[.lastTextBaseline] - dimensions[.firstTextBaseline])) / 2
+  }
+}
+
+private extension VerticalAlignment {
+  static let appFirstTextLineCenter = VerticalAlignment(AppFirstTextLineCenter.self)
+}
+
+struct AppIconLabelStyle: LabelStyle {
+  var spacing: CGFloat = 6
+
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(alignment: .appFirstTextLineCenter, spacing: spacing) {
+      configuration.icon
+        .alignmentGuide(.appFirstTextLineCenter) { $0[VerticalAlignment.center] }
+        .accessibilityHidden(true)
+      configuration.title.fixedSize(horizontal: false, vertical: true)
+    }
+  }
+}
+
+enum AppContentControlMetrics {
+  static let minimumHitSize: CGFloat = 44
+  static let horizontalPadding: CGFloat = 12
+  static let verticalPadding: CGFloat = 12
+  static let labelSpacing: CGFloat = 6
+  static let trackInset: CGFloat = 6
+  static let selectionInset: CGFloat = 2
+  static let tabSpacing: CGFloat = 24
+  static let underlineHeight: CGFloat = 3
+
+  static func animation(reduceMotion: Bool) -> Animation {
+    reduceMotion ? .easeInOut(duration: 0.16) : .smooth(duration: 0.24)
+  }
+}
+
 enum AppLayoutPolicy {
   static let contentMaximumWidth: CGFloat = 1_040
   static let settingsMaximumWidth: CGFloat = 760
@@ -170,7 +209,20 @@ extension View {
   /// 筛选与下拉共用实色底槽，44pt操作区内保留相同的视觉留白。
   func appFilterTrackSurface() -> some View {
     background {
-      Capsule().fill(AppThemePalette.filterTrack).padding(.vertical, 6)
+      Capsule().fill(AppThemePalette.filterTrack)
+        .padding(.vertical, AppContentControlMetrics.trackInset)
+    }
+  }
+
+  func appFilterSelectionSurface(isSelected: Bool, namespace: Namespace.ID) -> some View {
+    background {
+      if isSelected {
+        Capsule().fill(AppThemePalette.filterSelection)
+          .matchedGeometryEffect(id: "filter-selection", in: namespace)
+          .padding(
+            .vertical,
+            AppContentControlMetrics.trackInset + AppContentControlMetrics.selectionInset)
+      }
     }
   }
 }
@@ -442,13 +494,7 @@ private struct AppPageToolbarModifier: ViewModifier {
       .environment(\.appInformationIsEmbedded, false)
       .containerBackground(for: .navigation) {
         // 画布装配在原生导航容器中，状态栏与标题区使用同一张完整背景。
-        AppThemeBackground()
-          .overlay(alignment: .top) {
-            if let artwork = backgroundArtwork {
-              AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
-            }
-          }
-          .ignoresSafeArea()
+        AppPageBackdrop(artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess)
       }
       .onGeometryChange(for: CGFloat.self) {
         $0.size.width
@@ -457,7 +503,7 @@ private struct AppPageToolbarModifier: ViewModifier {
       }
       .background {
         AppNavigationBackdrop(
-          artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess
+          artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess, isActive: isActive
         )
         .frame(width: 0, height: 0)
         if !showsBrand && showsBack {
@@ -583,6 +629,7 @@ private struct AppNavigationBackdrop: UIViewControllerRepresentable {
   @Environment(\.colorScheme) private var colorScheme
   let artwork: AppPageArtwork?
   let onArtworkSuccess: ((URL) -> Void)?
+  let isActive: Bool
 
   func makeUIViewController(context: Context) -> BackdropController { BackdropController() }
 
@@ -591,6 +638,7 @@ private struct AppNavigationBackdrop: UIViewControllerRepresentable {
     controller.artwork = artwork
     controller.onArtworkSuccess = onArtworkSuccess
     controller.colorScheme = colorScheme
+    controller.isActive = isActive
     controller.updateBackdrop()
   }
 
@@ -599,15 +647,42 @@ private struct AppNavigationBackdrop: UIViewControllerRepresentable {
     var artwork: AppPageArtwork?
     var onArtworkSuccess: ((URL) -> Void)?
     var colorScheme: ColorScheme = .light
+    var isActive = true
     private let hosting = UIHostingController(rootView: AnyView(EmptyView()))
+    private let backdrop = UIView()
+    private var backdropConstraints: [NSLayoutConstraint] = []
+    private weak var backdropWindow: UIWindow?
 
     override func loadView() {
       view = UIView()
       view.isUserInteractionEnabled = false
+      hosting.safeAreaRegions = []
+      hosting.view.backgroundColor = .clear
+      hosting.view.isUserInteractionEnabled = false
+      hosting.view.accessibilityElementsHidden = true
+      hosting.view.translatesAutoresizingMaskIntoConstraints = false
+      backdrop.isUserInteractionEnabled = false
+      backdrop.accessibilityElementsHidden = true
+      backdrop.clipsToBounds = true
+      backdrop.translatesAutoresizingMaskIntoConstraints = false
+      // 独立容器持有背景，原生导航的工具项排布与背景边界各自维护。
+      backdrop.layer.zPosition = -1
+      backdrop.addSubview(hosting.view)
+      NSLayoutConstraint.activate([
+        hosting.view.topAnchor.constraint(equalTo: backdrop.topAnchor),
+        hosting.view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
+        hosting.view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+        hosting.view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+      ])
     }
 
     override func viewWillAppear(_ animated: Bool) {
       super.viewWillAppear(animated)
+      updateBackdrop()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+      super.viewDidAppear(animated)
       updateBackdrop()
     }
 
@@ -618,44 +693,59 @@ private struct AppNavigationBackdrop: UIViewControllerRepresentable {
 
     override func viewDidDisappear(_ animated: Bool) {
       super.viewDidDisappear(animated)
-      hosting.view.removeFromSuperview()
+      removeBackdrop()
     }
 
     func updateBackdrop() {
+      guard isActive else {
+        removeBackdrop()
+        return
+      }
       guard let window = view.window,
         let root = window.rootViewController,
         let navigation = appNavigationController(containing: view, in: root)
       else { return }
+      // 当前返回栈的页面拥有标题背景，后台资料更新沿自身页面保存。
+      guard let page = navigation.topViewController?.viewIfLoaded,
+        view.isDescendant(of: page)
+      else {
+        removeBackdrop()
+        return
+      }
       let bar = navigation.navigationBar
       let bounds = canvasBounds ?? window.bounds
-      let top = max(0, bar.convert(.zero, to: window).y - bounds.minY)
-      let localRegion = CGRect(
-        x: 0, y: -top, width: bar.bounds.width, height: bar.bounds.height + top)
-      let region = bar.convert(localRegion, to: window)
+      // 背景按完整导航容器中的真实边界取样，保持窗口画布的同一坐标。
+      let barRegion = bar.convert(bar.bounds, to: window)
+      let navigationRegion = navigation.view.convert(navigation.view.bounds, to: window)
+      let region = CGRect(
+        x: barRegion.minX, y: navigationRegion.minY, width: barRegion.width,
+        height: max(0, barRegion.maxY - navigationRegion.minY))
       hosting.rootView = AnyView(
-        ZStack(alignment: .topLeading) {
-          AppThemeBackground(canvasRegion: bounds)
-            .environment(\.appCanvasBounds, bounds)
-            .frame(width: bounds.width, height: bounds.height)
-            .overlay(alignment: .top) {
-              if let artwork {
-                AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
-              }
-            }
-            .offset(x: bounds.minX - region.minX, y: bounds.minY - region.minY)
-        }
-        .frame(width: region.width, height: region.height, alignment: .topLeading)
-        .clipped()
-        .environment(\.colorScheme, colorScheme)
+        AppPageBackdrop(artwork: artwork, canvasRegion: region, onArtworkSuccess: onArtworkSuccess)
+          .environment(\.appCanvasBounds, bounds)
+          .clipped()
+          .environment(\.colorScheme, colorScheme)
       )
-      hosting.view.backgroundColor = .clear
-      hosting.view.isUserInteractionEnabled = false
-      hosting.view.accessibilityElementsHidden = true
-      hosting.view.clipsToBounds = true
-      // 标题和操作始终绘制在遮挡背景上方，兼容导航栏对子视图的重排。
-      hosting.view.layer.zPosition = -1
-      hosting.view.frame = localRegion
-      if hosting.view.superview !== bar { bar.insertSubview(hosting.view, at: 0) }
+      if backdrop.superview !== bar || backdropWindow !== window {
+        removeBackdrop()
+        bar.insertSubview(backdrop, at: 0)
+        // 原生约束随导航栏每帧布局，遮挡范围始终止于真实底边。
+        backdropConstraints = [
+          backdrop.topAnchor.constraint(equalTo: navigation.view.topAnchor),
+          backdrop.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+          backdrop.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+          backdrop.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+        ]
+        NSLayoutConstraint.activate(backdropConstraints)
+        backdropWindow = window
+      }
+    }
+
+    private func removeBackdrop() {
+      NSLayoutConstraint.deactivate(backdropConstraints)
+      backdropConstraints.removeAll()
+      backdrop.removeFromSuperview()
+      backdropWindow = nil
     }
   }
 }
@@ -855,19 +945,21 @@ struct AppNavigationRow: View {
   var compact = false
   @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 24
 
+  private var displayedIconSize: CGFloat { min(32, max(24, iconSize)) }
+
   var body: some View {
     HStack(spacing: 16) {
-      AppIconView(icon, size: iconSize)
+      AppIconView(icon, size: displayedIconSize)
         .foregroundStyle(AppThemePalette.icon)
-        .frame(width: max(24, iconSize), height: max(24, iconSize))
       VStack(alignment: .leading, spacing: 4) {
-        Text(LocalizedStringKey(title)).appFont(.body)
+        Text(LocalizedStringKey(title)).appFont(.body, weight: .semibold)
           .foregroundStyle(AppThemePalette.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
         Text(LocalizedStringKey(subtitle)).appFont(compact ? .caption : .bodySmall)
           .foregroundStyle(AppThemePalette.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
-      Spacer(minLength: 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
       AppIconView(.chevron, size: 16)
         .foregroundStyle(AppThemePalette.textSecondary)
     }
@@ -1155,8 +1247,10 @@ struct AppSettingsActionButton: View {
   }
   var body: some View {
     Button(role: role, action: action) {
-      HStack {
-        if let systemImage { Image(systemName: systemImage) }
+      if let systemImage {
+        Label(LocalizedStringKey(title), systemImage: systemImage)
+          .labelStyle(AppIconLabelStyle())
+      } else {
         Text(LocalizedStringKey(title))
       }
     }

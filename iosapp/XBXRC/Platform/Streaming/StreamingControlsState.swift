@@ -100,6 +100,7 @@ enum StreamingControlsSurface: Equatable, Sendable {
     case dock
     case pictureSheet
     case debugSheet
+    case touchLayoutPicker
     case sharing
     case confirmingExit
     case confirmingPowerOff
@@ -107,14 +108,16 @@ enum StreamingControlsSurface: Equatable, Sendable {
 
 struct StreamingControlsState: Equatable, Sendable {
     private(set) var surface: StreamingControlsSurface = .hidden
+    private var showsQuickControls = true
 
     var dockVisible: Bool { surface == .dock }
+    var quickControlsVisible: Bool { surface == .hidden && showsQuickControls }
     var suspendsAutoHide: Bool { surface != .hidden && surface != .dock }
 
     mutating func reveal() { surface = .dock }
 
     mutating func toggleDock() {
-        surface = surface == .hidden ? .dock : .hidden
+        if surface == .hidden { reveal() } else { hide() }
     }
 
     mutating func present(_ next: StreamingControlsSurface) {
@@ -125,7 +128,20 @@ struct StreamingControlsState: Equatable, Sendable {
         surface = .dock
     }
 
-    mutating func hide() { surface = .hidden }
+    mutating func revealQuickControls() {
+        guard surface == .hidden else { return }
+        showsQuickControls = true
+    }
+
+    mutating func hide() {
+        surface = .hidden
+        showsQuickControls = true
+    }
+
+    mutating func hideAutomatically() {
+        surface = .hidden
+        showsQuickControls = false
+    }
 }
 
 struct StreamingInwardGestureSample: Equatable, Sendable {

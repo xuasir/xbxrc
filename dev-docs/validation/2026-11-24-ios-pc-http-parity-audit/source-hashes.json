@@ -1,0 +1,813 @@
+{
+  "taskId": "2026-11-24-ios-pc-http-parity-audit",
+  "snapshotCapturedAtUtc": "2026-11-24T07:09:23.909857+00:00",
+  "reverifiedAtUtc": "2026-11-24T07:39:34.129850+00:00",
+  "originalInventorySha256": "d5297f5c59bf8bb3a5cd7e4380c15c438f668d0fd2bb62560f66d3451ba65586",
+  "finalInventorySha256": "8bbc1e6832143da248178ac74eb2a3109d97b0cfeee9d7a1be7c462a42002a3a",
+  "candidateGroups": {
+    "ios_swift": 32,
+    "shared_rust": 45,
+    "ios_bridge": 21,
+    "pc_tauri": 38,
+    "pc_frontend": 5,
+    "build_config": 5
+  },
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "group": "build_config",
+      "sha256": "f0c47b1cea7659ed03fff12f95fa38b709ee6352e144a92089a475c83ee25b33"
+    },
+    {
+      "path": "Cargo.toml",
+      "group": "build_config",
+      "sha256": "22451a5eacd663f7fbe535965a21bfdc1b40bbbcafdc702b92c2ab020cac4d25"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/error.rs",
+      "group": "shared_rust",
+      "sha256": "c8279f3430a5263193ed4b69a903cd9c9afa97ca3b793c1f452fec8ec0f318fa"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/flow.rs",
+      "group": "shared_rust",
+      "sha256": "420a7f0db5c73627f35aec76c2b7479b2a83cfc9cf0d49c19af6578bab8486cc"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/lib.rs",
+      "group": "shared_rust",
+      "sha256": "ff002c18c5df4f5ca9265837e63e79ad0185e6e83202d991ec0c9ee8af950564"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/renewal.rs",
+      "group": "shared_rust",
+      "sha256": "007ac940c4f408d3c526dc6ad63e994b052e86ee3fee06fe7a4a5d132e4f2c33"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/telemetry.rs",
+      "group": "shared_rust",
+      "sha256": "b326a83065811e60fd1f9e43bdac8f2edba432616d490a671a9f0cb23fed479e"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/token_policy.rs",
+      "group": "shared_rust",
+      "sha256": "9c97c6cd28d814ede11711f3566c73ec9e979e1c876950ecb6b027647f1a6632"
+    },
+    {
+      "path": "crates/xbox-auth-flow/src/types.rs",
+      "group": "shared_rust",
+      "sha256": "49d0508726140cca7d3c87dea242105bd50749d97fb7527a387052c3368a8b93"
+    },
+    {
+      "path": "crates/xbox-cloud-catalog-flow/src/lib.rs",
+      "group": "shared_rust",
+      "sha256": "0647348369a88c6918afcc53c54473d9fa9bb26fe44515763358fa5ed6d4b199"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/Cargo.toml",
+      "group": "build_config",
+      "sha256": "e6324e210398d932570a7a5b97e3fe03a81c818fee041f478c7ad54646811b5b"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/auth_session.rs",
+      "group": "ios_bridge",
+      "sha256": "31d4883e9666844f44118483fd6e1dbc6129674f144899debaf998fb0aca7fc8"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/catalog_sources.rs",
+      "group": "ios_bridge",
+      "sha256": "95a8d75542144efd872756b4be5d0a4e86e4ee53dbfc0a54c24b9be1db126972"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/cloud_access.rs",
+      "group": "ios_bridge",
+      "sha256": "4ea192f6f87bca00b5f5f6b6abafcc8e1979f4e41ae11a5dbfbf880426ecc794"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/cloud_catalog.rs",
+      "group": "ios_bridge",
+      "sha256": "9533a0aaa4e09c1b80775e4ac07f3ed0734f204ac5b384b3b75f48b5765e8bfc"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/cloud_queries.rs",
+      "group": "ios_bridge",
+      "sha256": "33ac53a0b2ef2c8dfe08749de2ccacaedfd5b850593c34f1dfa9d5c1cb4bef2a"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/data.rs",
+      "group": "ios_bridge",
+      "sha256": "ba90a9cb8d14b272342a56dbe64ba3cd9c4a6266020d3b10b2f741878484e40f"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/installed_queries.rs",
+      "group": "ios_bridge",
+      "sha256": "c3b60279dd2c8c148cdf48a54dcd2e519b9d087da8bd6770e7328db73e8a6968"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/lib.rs",
+      "group": "ios_bridge",
+      "sha256": "33667d37c707a6d1f6b44ba9c956e47aa6a19aade9b99e927051d2f5b7862326"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/personal.rs",
+      "group": "ios_bridge",
+      "sha256": "e4bd4e9493f7deb48579e311f799efe3077e3c713b2d1798f3f4682c8f6c7bd5"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/personal_queries.rs",
+      "group": "ios_bridge",
+      "sha256": "65d2b20607b241bd8b3f02da983eb53dd339a15f2f4cfa54f30a19de2e0272f0"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/profile_queries.rs",
+      "group": "ios_bridge",
+      "sha256": "4ac008798bffc6329d2c41e7f2ee06aa25deac81a745edb24fe1ac00869cde6f"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/query_failure.rs",
+      "group": "ios_bridge",
+      "sha256": "39c6e6d779dc4b1c7bfcfe07fbbad0e41af1ed8ff79839d800fb971f55bf2db5"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming.rs",
+      "group": "ios_bridge",
+      "sha256": "55f639521810e9ce2e69fac181dadc2b47079116639c3f1558b4608ceba739f8"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/credentials.rs",
+      "group": "ios_bridge",
+      "sha256": "e0d7bd4f1d9761da38c1bd0b8f37e7c5fe311d3387e4249d3fa59fef126341f6"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/frame_feedback.rs",
+      "group": "ios_bridge",
+      "sha256": "4b2026a556875fa806d1c7707a491a042b4acc61682ea9c8c9f69d62db8d6725"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/home_context.rs",
+      "group": "ios_bridge",
+      "sha256": "747ac15477be002b6e55de7a2a1e82347fbc79d71ca0c8938ab1e767e054f078"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/stack_tests.rs",
+      "group": "ios_bridge",
+      "sha256": "217f807ead4c7f554ffbadfdf7523e5df5499f1b84bc34afc9998f31bd60cb55"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming/startup.rs",
+      "group": "ios_bridge",
+      "sha256": "75ebc5875412f25d3900b9e92908d5502d95263bf28d19921cd15fc8a9acc0ad"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/mod.rs",
+      "group": "ios_bridge",
+      "sha256": "658c036979a3daddd2e32f6893c24f5e8b8e4a12c5995e55dd855fea52f7575e"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/storage_repository.rs",
+      "group": "ios_bridge",
+      "sha256": "d7030b20b3a0da76b3eb4b32f4abd17df755e187eeabb0e9cdeaf1fbd58287e5"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/types.rs",
+      "group": "ios_bridge",
+      "sha256": "3cf42c00da3f364b8bb47b21a57169592d29d633bf20a9c672d22318c8c2eb87"
+    },
+    {
+      "path": "crates/xbox-streaming/src/policy/session/compiler.rs",
+      "group": "shared_rust",
+      "sha256": "f3a8036fba27bd705d508d23cec73ac379c670f1705ba2d0d88d493036dff931"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/api/session.rs",
+      "group": "shared_rust",
+      "sha256": "b9841df1458afd5b9ddb929ddf1387e1b627d3c50ddd4a14b65dc94474021e63"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/api/signaling.rs",
+      "group": "shared_rust",
+      "sha256": "3dbe66f3019c5dfe2cceb35028a1c68dbac7961b8525038f0b2c01d968ee185a"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/api/token_recovery.rs",
+      "group": "shared_rust",
+      "sha256": "921da7446810c28662a960fda8262ee36fdfff03df0b67842a3610b84c87480c"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/cleanup.rs",
+      "group": "shared_rust",
+      "sha256": "4234740494a2b07abdb6de19e5df08a39b93bc943cc4b70bbc3af49574e6ebdd"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/discovery.rs",
+      "group": "shared_rust",
+      "sha256": "e84828ca236e938f1d4cf87a7c893820c3fcab8f483235689616e49ab6169625"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/flow.rs",
+      "group": "shared_rust",
+      "sha256": "445f692d908124e2d087d999b229ec2a0ef37faae72d22f217aabc5403f11e72"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/operation.rs",
+      "group": "shared_rust",
+      "sha256": "6770aeef049c108872fb2d3f1ec62b1626d6036690001831d96ef567fd1cd1c6"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/operation/stack_tests.rs",
+      "group": "shared_rust",
+      "sha256": "20fdf25e4b2df702efc5c2d70ebd5762d13a685f5c7bc41b2e7ce9b8cd93cd9e"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/scheduler.rs",
+      "group": "shared_rust",
+      "sha256": "e3441ed16af19476ed85a9a4fab654240cd3bbd114fe3f3cdf13abec6476dc24"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/signaling/flow.rs",
+      "group": "shared_rust",
+      "sha256": "cf9b426dd07c4850dc3bd1360a3f6f2d2e5e2cc18351b8f0dc55c97b2cc4e116"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/signaling/state.rs",
+      "group": "shared_rust",
+      "sha256": "38470af1d8eba779b77af57ca21d608f7c5170fc078f6a2691e0aabb2fd86af6"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/signaling/turn.rs",
+      "group": "shared_rust",
+      "sha256": "745b6be09ae8da8164bf8e59105b1b887baed087946037e22dca7c93bf8f0d9d"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/startup.rs",
+      "group": "shared_rust",
+      "sha256": "c088df9122157a1d7ad5945086f5340d9fe1c414ee2720078061bac0250df7e2"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/archive.rs",
+      "group": "shared_rust",
+      "sha256": "673009909a5216d5cbd3559d50fdf2bd2a20b13be7ff987548573b9cdf8c9e80"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/bundle.rs",
+      "group": "shared_rust",
+      "sha256": "6fac870d0223699bfc5e7db4d547857050f2c9600ebb8a411184a280ac661c96"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/catalog.rs",
+      "group": "shared_rust",
+      "sha256": "3d0696f96934d9fe8a4058657764014601f243f6543fc1211872d514895756b5"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/lib.rs",
+      "group": "shared_rust",
+      "sha256": "3e94af6410d73a027d9e6e8950ded1520950b04ec654d4f472c226e917b59cda"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/references.rs",
+      "group": "shared_rust",
+      "sha256": "bcbcd7eef43954d21cdae8ce3c8d164d351c0c195bb5f896e1c40c04a70e2d02"
+    },
+    {
+      "path": "crates/xbox-webapi/Cargo.toml",
+      "group": "build_config",
+      "sha256": "52ca11d0c22b7eb932669548a6a48fd37c7637bf1ac2997f8b0879430269e204"
+    },
+    {
+      "path": "crates/xbox-webapi/src/achievements_api.rs",
+      "group": "shared_rust",
+      "sha256": "6eb352c9264e4a49a7dc56a82c396e17fe6af35982e6bba2506f803ca4836241"
+    },
+    {
+      "path": "crates/xbox-webapi/src/auth_api.rs",
+      "group": "shared_rust",
+      "sha256": "4e2b3e4cd45c9ffbc2f2657fded9e66836038454b2dc9c96cf27f8923831af06"
+    },
+    {
+      "path": "crates/xbox-webapi/src/console_api.rs",
+      "group": "shared_rust",
+      "sha256": "540a46bad18623c99bdd2451f6c34bf476a7f6d56ebbec055c2b188b0046e2ec"
+    },
+    {
+      "path": "crates/xbox-webapi/src/error.rs",
+      "group": "shared_rust",
+      "sha256": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957"
+    },
+    {
+      "path": "crates/xbox-webapi/src/gamepass_api.rs",
+      "group": "shared_rust",
+      "sha256": "c7181f3f859553a77522b2b89520f75baebc4e246bc7d983e96f51e2c7195f87"
+    },
+    {
+      "path": "crates/xbox-webapi/src/library/parse.rs",
+      "group": "shared_rust",
+      "sha256": "512aa241104380479ea8cf78d403f87b207feb3c369c6b2565643169b06a9be2"
+    },
+    {
+      "path": "crates/xbox-webapi/src/media_api.rs",
+      "group": "shared_rust",
+      "sha256": "d6f896e3a7d65d40a5b37ef6ce7876ee06f2a475d6544aaa6e3aed485c2cd940"
+    },
+    {
+      "path": "crates/xbox-webapi/src/people_api.rs",
+      "group": "shared_rust",
+      "sha256": "1074cd9aa0c14239a8a1f00d963d869762696d62926aebdc3df1064ee7d593f5"
+    },
+    {
+      "path": "crates/xbox-webapi/src/profile_api.rs",
+      "group": "shared_rust",
+      "sha256": "a7b9c4549f629eec630b594ae5b02c4ef1ae45bb7718f39dcd98ff1b4c8155ea"
+    },
+    {
+      "path": "crates/xbox-webapi/src/session_api.rs",
+      "group": "shared_rust",
+      "sha256": "2a733a31c34246d8a918311fe2b4788c7de2942281b637667da89f00f4a7f753"
+    },
+    {
+      "path": "crates/xbox-webapi/src/signaling_api.rs",
+      "group": "shared_rust",
+      "sha256": "bc31dadc868b344bced7bf2734141cf67096adb433a1b78f41ef09c2120c5885"
+    },
+    {
+      "path": "crates/xbox-webapi/src/smartglass_api.rs",
+      "group": "shared_rust",
+      "sha256": "3e9cb541ff750b8e95d8ba02d4711390daf29d9100849d829a4efb782f328066"
+    },
+    {
+      "path": "crates/xbox-webapi/src/social_api.rs",
+      "group": "shared_rust",
+      "sha256": "476f4103089a2718fad62225b8d22d73929d307c25b70d3522d5cb4e2502ccd2"
+    },
+    {
+      "path": "crates/xbox-webapi/src/titlehub_api.rs",
+      "group": "shared_rust",
+      "sha256": "4cb3d94fa6663e22ccfda40672e494ab33befaa5f712f4bf21339126b5a5b4f6"
+    },
+    {
+      "path": "crates/xbox-webapi/src/transport.rs",
+      "group": "shared_rust",
+      "sha256": "6c235938404f94eb4e60ba47a7a95828157c1658731e77060c21892a73b14a78"
+    },
+    {
+      "path": "crates/xbox-webapi/src/userpresence_api.rs",
+      "group": "shared_rust",
+      "sha256": "815b806260ecb09cfc24645f035b16c14a97244eb4bf2f7d5bf4a64295a38042"
+    },
+    {
+      "path": "crates/xbox-webapi/src/userstats_api.rs",
+      "group": "shared_rust",
+      "sha256": "71ded2cdd231e1cec30dd748e659f1200d2d148e74fa25e8fc522570a1802849"
+    },
+    {
+      "path": "crates/xbox-webapi/src/xcloud_api.rs",
+      "group": "shared_rust",
+      "sha256": "e8ec8d183099aa75a1745fe0a3d22c1611217a5d84d4c9ae5b315e814127cb78"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Authentication/AuthCredentialCoordinator.swift",
+      "group": "ios_swift",
+      "sha256": "547382ec6d3318cfaa314d22fc11177775ab1818015f08b717ad9f1f2d2a3f1b"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+      "group": "ios_swift",
+      "sha256": "3bea8fa54ed9932edfc2271bef00431fbf30ff3c86e5160feabb1d45f7af7bd8"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Authentication/WebAuthenticationPresenter.swift",
+      "group": "ios_swift",
+      "sha256": "d4d93be8535b19ee06f315cae80035046b037bc7794b7ec9d33b0ad21e35d180"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Authentication/XboxLoginView.swift",
+      "group": "ios_swift",
+      "sha256": "fbf41eba11a3c5fc212960fba473990747ca0b63fda8039c4ae659b14793e1ff"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+      "group": "ios_swift",
+      "sha256": "a4196795e3172214fa2439a9dbaa06cbe1b025faa76ae8ddd872b8f581c53733"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+      "group": "ios_swift",
+      "sha256": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+      "group": "ios_swift",
+      "sha256": "80358098bec7a233eea59b3454700357374aa8f530ba64dd00e295ea93324650"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+      "group": "ios_swift",
+      "sha256": "3bd1358bcfcfacf4440b14a62a2721c7228c4417ae28aee8f9101697da501b69"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+      "group": "ios_swift",
+      "sha256": "100ec0cf27c8317b12178f9da17eabda1435757ab154cfab729cba3627084d12"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutCatalog.swift",
+      "group": "ios_swift",
+      "sha256": "8efcbce94149fd430171990a8709450ad99238b8818419736a767cc69afcc937"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/CloudProductDataClient.swift",
+      "group": "ios_swift",
+      "sha256": "02f97ecaf25159d7eef97bb8640042b37c0ae463d6bb58986629b16efe60f301"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+      "group": "ios_swift",
+      "sha256": "2ca38c3941b9633e8992909ec74586e28aacec6acb777392b622033f40657d77"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift",
+      "group": "ios_swift",
+      "sha256": "7a023f06450636251e5b55564016d778265c6d6b83e5dd8a9bd698c665cef6ae"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxDataClient.swift",
+      "group": "ios_swift",
+      "sha256": "338624ffea4e0c94718fc41d344b69322e5d26ca347a3a6f8993c5984ef99b83"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxPersonalDataClient.swift",
+      "group": "ios_swift",
+      "sha256": "ea5fbf5483204fda4b51fc102333040a1f8be2d1c5b2e8ab3defae99868f9de7"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+      "group": "ios_swift",
+      "sha256": "5f2c041404f4684dd153344a6878400681eb9d6699b9eaa8fd9921fcca6d125b"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+      "group": "ios_swift",
+      "sha256": "610e5e14936aaf988a37829cec9d9c7e5093b66c6f87d2d85f372077b19d89fb"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift",
+      "group": "ios_swift",
+      "sha256": "4c9e18a0e6ff7677ac4932a1df5ae6c97a0c2451a917c04fe9daa9598646d3b5"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+      "group": "ios_swift",
+      "sha256": "9394cb272577617133470793566dd85d376acd86297d75e6bbba881f0e9c27c0"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+      "group": "ios_swift",
+      "sha256": "d419a8ec41ec1ede21f5fcf6d63abc4196476c8c27e02ce244b55815c01aba18"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Models/PersonalDataModels.swift",
+      "group": "ios_swift",
+      "sha256": "51f81b83868c17957f52ef2222d8c9daf39a0a65253bd159e1dc0f7ea055647b"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift",
+      "group": "ios_swift",
+      "sha256": "545d8ec0aa6ed63d76e2fa71e1996b30bd5f31d77920b78157033694f869d09e"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudCatalogPersistenceCoordinator.swift",
+      "group": "ios_swift",
+      "sha256": "d7a44d8849a65eb0141d27ec40fd816838e15095c3476a9e2b0a3643ddc1913a"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudCatalogSnapshotRepository.swift",
+      "group": "ios_swift",
+      "sha256": "48b108b18bee674e64344c24623de5cab3512fecadbf1a2783d0991abaddd565"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudFavoritesStore.swift",
+      "group": "ios_swift",
+      "sha256": "4927af99c072ab12edfb74a6241505132be4bf44513bb1fa17dc3929d36518e3"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift",
+      "group": "ios_swift",
+      "sha256": "d25cbe553c068919fe8347079665961a8de32a526fc2eeaf66e294aa6ac4f54f"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudLibraryScopeLifecycle.swift",
+      "group": "ios_swift",
+      "sha256": "d9433c9352b2f96882202db93406b1a49d346bdff358ad7cebbd2c893dd224b4"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+      "group": "ios_swift",
+      "sha256": "3ccdf4ce907d39b85fbf7209a03035483c3f363bee5c3b2656ccff4fde4addd8"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/SavedTouchLayoutsStore.swift",
+      "group": "ios_swift",
+      "sha256": "824975b9e49cc785e5d8147632f60738f2c44db4a1ecf721524f75b107d865ae"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/XboxDataStore.swift",
+      "group": "ios_swift",
+      "sha256": "5edc29a3ffdf2d4a0bc928eb794a9fad95b62f61bb71c05f74b75c48ed5c6833"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/XboxPersonalData.swift",
+      "group": "ios_swift",
+      "sha256": "4cd793302f8c7cb00b6941a17b2747d1cb2f275b63a74a7e1c78779c61a64532"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/XboxPlayerData.swift",
+      "group": "ios_swift",
+      "sha256": "493ab5594e27f6fbcea58b052241a1dab00a42b803966694270859a086f607e7"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "group": "build_config",
+      "sha256": "0f96da5ded5373eda25f67ca13a4da3d3a672a4ab89135bec4c24e54424f7c02"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "group": "pc_tauri",
+      "sha256": "59f2b02f0951eca8e4bee3ae5c07a9dee63d45acef75a42f83420fc3d3ae2f2d"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/events.rs",
+      "group": "pc_tauri",
+      "sha256": "1654d28fb2eaff3e0054870895bc52b98336b190e35c50aea145520c9a521c48"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/mod.rs",
+      "group": "pc_tauri",
+      "sha256": "653347a6acdcd6e86392904995fd24dfd02a6bc4bdda8ea1ab7045e38c90d9db"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/persistence_service.rs",
+      "group": "pc_tauri",
+      "sha256": "cdd6f97890e8601b316ea9c8b6bfb61111ebd92d8286e59b85b5064c5780332b"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/rpc.rs",
+      "group": "pc_tauri",
+      "sha256": "4921f85c2e04aa27df4fdf4f8422f5d6cc3e46fe278fcd384a9247c1d23017ce"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/runtime_state.rs",
+      "group": "pc_tauri",
+      "sha256": "ce002ab8ce96aff078e82def6471bb1a224988a7c0203a3fbb673210b354c45f"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/service.rs",
+      "group": "pc_tauri",
+      "sha256": "1872d0daff6115c61f79d7e7f0c4fefcf42485b899312ee91ed2e4da75ec8076"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/storage_repository.rs",
+      "group": "pc_tauri",
+      "sha256": "08b89780e4555880c39318f5b38c8032881b523bc0ac0b1db913e5d0830a26ba"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/token_policy.rs",
+      "group": "pc_tauri",
+      "sha256": "bc60946345b9251f98ac80142114326e9015cb878d7698e5276eb293b8bf6302"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/token_refresh.rs",
+      "group": "pc_tauri",
+      "sha256": "4c66553b3ba6a814083729dbd8a1ee1e5a3ce42a0e9a77cc909fd7d911d876bf"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/trace.rs",
+      "group": "pc_tauri",
+      "sha256": "fc9144eb1afe651de67846a3df7f55b9f8f0a264f12528269891cec3395d61bd"
+    },
+    {
+      "path": "src-tauri/src/mods/auth/types.rs",
+      "group": "pc_tauri",
+      "sha256": "ccaa8c6fb3bd9c2bf64257d4f9fdb2715f7533495ae2cbbbaede4b4e5c1e8157"
+    },
+    {
+      "path": "src-tauri/src/mods/data/cache_repository.rs",
+      "group": "pc_tauri",
+      "sha256": "72758dd8e0790a49e23cb7756a711c83dbca92d491307ca73ea93d9e9fe50f2d"
+    },
+    {
+      "path": "src-tauri/src/mods/data/catalog_projection.rs",
+      "group": "pc_tauri",
+      "sha256": "6ff37d2d3dc46c8bced0d598b4f2efb18783ce60022c8fd96a7f530060510cb9"
+    },
+    {
+      "path": "src-tauri/src/mods/data/cloud_detail_cache.rs",
+      "group": "pc_tauri",
+      "sha256": "abdc76531c4d58e8d3ded81038f77867456ea82e462a346d0a4fcd6c3fd2c429"
+    },
+    {
+      "path": "src-tauri/src/mods/data/cloud_queries.rs",
+      "group": "pc_tauri",
+      "sha256": "4427a51fc894e7c18af0631e2c6dfc540824e23a6f5f1f7ea37799ab26f70041"
+    },
+    {
+      "path": "src-tauri/src/mods/data/error.rs",
+      "group": "pc_tauri",
+      "sha256": "1dc9f435741fdeedcfd9573db6da51e47f579b6f4bb439d92688958a8f24631a"
+    },
+    {
+      "path": "src-tauri/src/mods/data/events.rs",
+      "group": "pc_tauri",
+      "sha256": "8e90510f9cf0b8febf01430c38967b299beb52e65e3a393616155e4c676440a6"
+    },
+    {
+      "path": "src-tauri/src/mods/data/host_cache.rs",
+      "group": "pc_tauri",
+      "sha256": "dd9e78e64a5a8d46a296af0b9eaf4273ce90a242fd8ab880bd083f1102cfedb5"
+    },
+    {
+      "path": "src-tauri/src/mods/data/mod.rs",
+      "group": "pc_tauri",
+      "sha256": "73f0f5ac9d0da375e767a3f6b858463646514f68cc32e732635b57dc75df5d3a"
+    },
+    {
+      "path": "src-tauri/src/mods/data/rpc.rs",
+      "group": "pc_tauri",
+      "sha256": "d849793f8c261aa35a5e7d8b2a9f1518e9ed8133477ff1079dc01d6401fcf5dc"
+    },
+    {
+      "path": "src-tauri/src/mods/data/runtime_state.rs",
+      "group": "pc_tauri",
+      "sha256": "c9726c20506ce668245c6636ce7f1ddf785607848e823890c1c88891cff134d2"
+    },
+    {
+      "path": "src-tauri/src/mods/data/service.rs",
+      "group": "pc_tauri",
+      "sha256": "f122e42b13fdcd143f545d7354143d7fbc32d232ccb6e76972e634fc79079fa1"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/host_service.rs",
+      "group": "pc_tauri",
+      "sha256": "2bc322717ada7f646c94b052c6df0c162e40a918f3fa0cc6cb788bd93e93c130"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/media_save.rs",
+      "group": "pc_tauri",
+      "sha256": "977af0dfdbfcb93fb216dc25aa34a52fdade68aa0b3804cb3526ab77dbd29e74"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/mod.rs",
+      "group": "pc_tauri",
+      "sha256": "1f4198ccd3a028bd41d86254b7b1f558a8b162b9cb14979d6335d9e8a8682efe"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/personal_service.rs",
+      "group": "pc_tauri",
+      "sha256": "eed8acc44fa50374905dd876ee7b5311f31aad14852b12663da08c8262e62f07"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/profile_service.rs",
+      "group": "pc_tauri",
+      "sha256": "d565788b3ebff8bd38ac57a2cc9cbb889ec4ed7a8260773e065676e961d9543e"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/streaming_query_service.rs",
+      "group": "pc_tauri",
+      "sha256": "8a445ac26c5cdfe0a29af2dc99f60098f70f659a43685b6c29307f3a8b130dbb"
+    },
+    {
+      "path": "src-tauri/src/mods/data/services/xcloud_service.rs",
+      "group": "pc_tauri",
+      "sha256": "d92bf0fe827c63bbc42b6b5db9432aa9f9883a60e517f281187ea76e26535594"
+    },
+    {
+      "path": "src-tauri/src/mods/data/session_resolver.rs",
+      "group": "pc_tauri",
+      "sha256": "85cf06c2662fb5bed1fbabd284cb408ceadae46b53c11e332c614f54eebf765c"
+    },
+    {
+      "path": "src-tauri/src/mods/data/types.rs",
+      "group": "pc_tauri",
+      "sha256": "52a90d2e83d175dc5259dfb2a14c70425815013ac7c2d05bd300d09ac9ade4c5"
+    },
+    {
+      "path": "src-tauri/src/mods/runtime_trace/diagnostic_records.rs",
+      "group": "pc_tauri",
+      "sha256": "645ef8340caf90e9446d2c9bcd937e4803ddd49e4dc43944a7a2ee6d081e9db5"
+    },
+    {
+      "path": "src-tauri/src/mods/runtime_trace/diagnostics_state.rs",
+      "group": "pc_tauri",
+      "sha256": "362a3bfe46a51a7db77318307e7b9a656772154a5644e7c5082248f75e9b7267"
+    },
+    {
+      "path": "src-tauri/src/mods/runtime_trace/policy.rs",
+      "group": "pc_tauri",
+      "sha256": "d3b74fcb7e44cecc63747fea606532da3374d629bd556371dea8e57e0ee89542"
+    },
+    {
+      "path": "src-tauri/src/mods/runtime_trace/writer.rs",
+      "group": "pc_tauri",
+      "sha256": "84b8407f2d79e960a737dbc5b1000ae29affd5bca84d918e135abac261b4d2b7"
+    },
+    {
+      "path": "src-tauri/src/mods/updater/service.rs",
+      "group": "pc_tauri",
+      "sha256": "7c9230dc0b7f9514fc451ea5f18474442e3a7ee57b2fdfdbce9eaab7845f048e"
+    },
+    {
+      "path": "src-tauri/src/shell/window.rs",
+      "group": "pc_tauri",
+      "sha256": "ef634bdbb2a47e0e5c116998c85cbef157c9b1719f4bfa4675cee0e4078dbf3e"
+    },
+    {
+      "path": "src/pages/home/hosts-store.ts",
+      "group": "pc_frontend",
+      "sha256": "4abee5c0dce59b0c4fdbb41275bf59a93095de1c4ae7eb52beeea32e0790a63b"
+    },
+    {
+      "path": "src/pages/home/use-hosts.ts",
+      "group": "pc_frontend",
+      "sha256": "ab237199b3faacb8ad76f44cbbe9f285228f68e579c65f0a311c400e04e4b233"
+    },
+    {
+      "path": "src/pages/library/use-library-query.ts",
+      "group": "pc_frontend",
+      "sha256": "f32d189470c4450b5ca4ab53b0147ae1bb92ad8dfb680c9da6d295f0681adad4"
+    },
+    {
+      "path": "src/services/rpc.ts",
+      "group": "pc_frontend",
+      "sha256": "cd06da0b3941b347c4a4e51461961684171bccd71cb33e3ba797ccdcfd3020da"
+    },
+    {
+      "path": "src/shared/rpc/client.ts",
+      "group": "pc_frontend",
+      "sha256": "c111ee512ed3163547514057f76c5f2e54642804b6ce233417d49e62b0339d01"
+    }
+  ],
+  "preservedConcurrentChanges": [
+    {
+      "path": "crates/xbox-webapi/src/xcloud_api.rs",
+      "initialSha256": "d650cc333632dc140f716e6917fbab27a9c1278545a304959a3a909668385873",
+      "snapshotSha256": "e8ec8d183099aa75a1745fe0a3d22c1611217a5d84d4c9ae5b315e814127cb78"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+      "initialSha256": "11dbb96606f842829148a42f1107d25f904319e824951763b5879784d70c8663",
+      "snapshotSha256": "a4196795e3172214fa2439a9dbaa06cbe1b025faa76ae8ddd872b8f581c53733"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+      "initialSha256": "c0497ef7beaa401b6a962a4e9d76de755b23c7f89c09e7748175ceb785f550ae",
+      "snapshotSha256": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+      "initialSha256": "3d844128631dd33ff8625444c91213a3351be291ee6d8e41cef3381ff299b59b",
+      "snapshotSha256": "80358098bec7a233eea59b3454700357374aa8f530ba64dd00e295ea93324650"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+      "initialSha256": "5e20d0e0aa971a018d532d0aabf13848f0e010299634fe564a2b5133a6e44cbb",
+      "snapshotSha256": "3bd1358bcfcfacf4440b14a62a2721c7228c4417ae28aee8f9101697da501b69"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+      "initialSha256": "23b18942734c0babb3a60be7d1d162a9183527b5e41f00b981d101e1b6efc292",
+      "snapshotSha256": "100ec0cf27c8317b12178f9da17eabda1435757ab154cfab729cba3627084d12"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+      "initialSha256": "0645f9f5b7dc317c379c7edd05075369cc5bc6f1d7b5d25e4889271d28f4048a",
+      "snapshotSha256": "5f2c041404f4684dd153344a6878400681eb9d6699b9eaa8fd9921fcca6d125b"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift",
+      "initialSha256": "9f5938a57d9b3a0313578571f572f4cdd54b3a312f541ec586cba2f5cff64c04",
+      "snapshotSha256": "4c9e18a0e6ff7677ac4932a1df5ae6c97a0c2451a917c04fe9daa9598646d3b5"
+    }
+  ],
+  "workingTreeIsNotLocked": true,
+  "supplementaryRecordedSnapshotSourceSha256": {
+    "crates/xbox-webapi/src/transport.rs": "6c235938404f94eb4e60ba47a7a95828157c1658731e77060c21892a73b14a78",
+    "crates/xbox-ios-bridge/src/data.rs": "ba90a9cb8d14b272342a56dbe64ba3cd9c4a6266020d3b10b2f741878484e40f",
+    "crates/xbox-ios-bridge/src/query_failure.rs": "39c6e6d779dc4b1c7bfcfe07fbbad0e41af1ed8ff79839d800fb971f55bf2db5",
+    "src-tauri/src/mods/data/session_resolver.rs": "85cf06c2662fb5bed1fbabd284cb408ceadae46b53c11e332c614f54eebf765c",
+    "src-tauri/src/mods/data/cloud_queries.rs": "4427a51fc894e7c18af0631e2c6dfc540824e23a6f5f1f7ea37799ab26f70041",
+    "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift": "3ccdf4ce907d39b85fbf7209a03035483c3f363bee5c3b2656ccff4fde4addd8",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "78a555686fc5e24645746659f0c2ab7954278ba8eb6675d460a36096fefec9da",
+    "src-tauri/src/mods/data/services/media_save.rs": "977af0dfdbfcb93fb216dc25aa34a52fdade68aa0b3804cb3526ab77dbd29e74",
+    "crates/xbox-webapi/src/xcloud_api.rs": "e8ec8d183099aa75a1745fe0a3d22c1611217a5d84d4c9ae5b315e814127cb78",
+    "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift": "5f2c041404f4684dd153344a6878400681eb9d6699b9eaa8fd9921fcca6d125b",
+    "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift": "a4196795e3172214fa2439a9dbaa06cbe1b025faa76ae8ddd872b8f581c53733",
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "80358098bec7a233eea59b3454700357374aa8f530ba64dd00e295ea93324650",
+    "iosapp/XBXRC/Features/Profile/PersonalPages.swift": "3bd1358bcfcfacf4440b14a62a2721c7228c4417ae28aee8f9101697da501b69",
+    "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift": "100ec0cf27c8317b12178f9da17eabda1435757ab154cfab729cba3627084d12",
+    "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift": "4c9e18a0e6ff7677ac4932a1df5ae6c97a0c2451a917c04fe9daa9598646d3b5"
+  },
+  "additionalReferencedSourceSha256AtContinuation": {
+    "src/components/common/RemoteImage.vue": "4aa0b81e1cb5bc090f533edca7461310de8e8a6e490e0dffb673af6cbe2a34fe",
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "c19b4926df1a592be22ee7fa94f194472441eba1a86dec29b0711d4cfcf6f985"
+  },
+  "scope": "146项候选及补充关键来源为07:09:23 UTC审计快照指纹；额外引用来源为续接时观测，不宣称当前工作树与快照相同。"
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "kind": "device",
+    "attempt": 1,
+    "source": "device-1.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:481:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:557:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Library/GameDetailView.swift:499:65: error: cannot find 'startup' in scope"
+    ]
+  },
+  {
+    "kind": "device",
+    "attempt": 2,
+    "source": "device-2.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6736:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6704:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]"
+    ]
+  },
+  {
+    "kind": "device",
+    "attempt": 3,
+    "source": "device-3.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'makeCall' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'uniffiHandleSuccess' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'uniffiHandleError' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'makeCall' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'uniffiHandleSuccess' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'uniffiHandleError' risks causing data races [#RegionIsolation::SendingRisksDataRace]"
+    ]
+  },
+  {
+    "kind": "simulator",
+    "attempt": 1,
+    "source": "simulator-1.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:481:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:557:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Library/GameDetailView.swift:499:65: error: cannot find 'startup' in scope"
+    ]
+  },
+  {
+    "kind": "simulator",
+    "attempt": 2,
+    "source": "simulator-2.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6736:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6704:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]"
+    ]
+  },
+  {
+    "kind": "simulator",
+    "attempt": 3,
+    "source": "simulator-3.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'makeCall' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'uniffiHandleSuccess' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:804:13: error: sending 'uniffiHandleError' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'makeCall' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'uniffiHandleSuccess' risks causing data races [#RegionIsolation::SendingRisksDataRace]",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:1586:13: error: sending 'uniffiHandleError' risks causing data races [#RegionIsolation::SendingRisksDataRace]"
+    ]
+  },
+  {
+    "kind": "simulator",
+    "attempt": 4,
+    "source": "simulator-4.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:511:56: error: extra arguments at positions #1, #2 in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:511:56: error: missing arguments for parameters 'session', 'checkpoint', 'authProvider', 'startup' in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:730:56: error: extra arguments at positions #1, #2 in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:730:56: error: missing arguments for parameters 'session', 'checkpoint', 'authProvider', 'startup' in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:737:56: error: extra arguments at positions #1, #2 in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:737:56: error: missing arguments for parameters 'session', 'checkpoint', 'authProvider', 'startup' in call"
+    ]
+  },
+  {
+    "kind": "simulator",
+    "attempt": 5,
+    "source": "simulator-5.log",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:512:44: error: missing argument label 'from:' in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:512:59: error: argument type 'AuthSession' does not conform to expected type 'Decoder'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:732:44: error: missing argument label 'from:' in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:732:59: error: argument type 'AuthSession' does not conform to expected type 'Decoder'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:740:44: error: missing argument label 'from:' in call",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:740:59: error: argument type 'AuthSession' does not conform to expected type 'Decoder'"
+    ]
+  },
+  {
+    "kind": "rust-earlier-attempt",
+    "source": "rust-tests-1.log",
+    "errors": [
+      "error[E0369]: binary operation `==` cannot be applied to type `xbox_webapi::WebApiError`",
+      "error: could not compile `xbox-ios-bridge` (lib test) due to 1 previous error"
+    ]
+  },
+  {
+    "kind": "rust-earlier-attempt",
+    "source": "rust-tests-2.log",
+    "errors": [
+      "test cloud_access::tests::missing_cloud_token_is_rejected ... FAILED",
+      "test streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack ... FAILED",
+      "test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... FAILED",
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 86 filtered out; finished in 0.00s",
+      "test streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack ... FAILED",
+      "test streaming::stack_tests::ffi_start_returns_credential_error_and_frees_on_device_stack ... FAILED",
+      "test result: FAILED. 83 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "error: test failed, to rerun pass `-p xbox-ios-bridge --lib`"
+    ]
+  },
+  {
+    "kind": "rust-earlier-attempt",
+    "source": "pc-check.log",
+    "errors": [
+      "error[E0603]: function import `cloud_token_unavailable_error` is private",
+      "error: could not compile `xbxrc` (lib) due to 1 previous error"
+    ]
+  }
+]

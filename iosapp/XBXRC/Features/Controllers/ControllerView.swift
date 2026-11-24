@@ -268,6 +268,7 @@ struct ControllerInputHistoryStrip: View {
 
 struct ControllerTouchSettingsView: View {
   @EnvironmentObject private var settings: AppSettingsStore
+  @State private var presentation: TouchWorkspacePresentation?
   var body: some View {
     AppSettingsForm {
       Section {
@@ -292,24 +293,53 @@ struct ControllerTouchSettingsView: View {
         Text("触屏")
       }
       Section("布局与外观") {
-        AppSettingsNavigationLink(
-          "自定义布局",
-          destination: TouchLayoutEditorView(
-            template: settings.mobile.selectedTouchTemplate,
-            appearance: settings.mobile.selectedTouchAppearance)
-        )
-        .accessibilityIdentifier("controller-touch-customize")
-        AppSettingsNavigationLink(
-          "触屏手柄调整",
-          destination: TouchLayoutAdjustmentView(
-            template: settings.mobile.selectedTouchTemplate,
-            appearance: settings.mobile.selectedTouchAppearance)
-        )
-        .accessibilityIdentifier("controller-touch-adjust")
+        AppSettingsActionButton("自定义布局") { present(.editor) }
+          .accessibilityIdentifier("controller-touch-customize")
+        AppSettingsActionButton("触屏手柄调整") { present(.adjustment) }
+          .accessibilityIdentifier("controller-touch-adjust")
+        NavigationLink {
+          SavedTouchLayoutsView()
+        } label: {
+          Text("已保存的游戏布局")
+        }
+        .frame(minHeight: 44).accessibilityIdentifier("controller-saved-touch-layouts")
       }
     }
     .appThemeCanvas()
+    .fullScreenCover(
+      item: $presentation,
+      onDismiss: {
+        AppOrientationCoordinator.shared.refresh()
+      },
+      content: { item in
+        NavigationStack {
+          switch item.kind {
+          case .editor:
+            TouchLayoutEditorView(template: item.template, appearance: item.appearance)
+          case .adjustment:
+            TouchLayoutAdjustmentView(template: item.template, appearance: item.appearance)
+          }
+        }
+        .environment(\.appFloatingNavigationInset, 0)
+        .environment(\.appCanvasBounds, nil)
+        .preferredColorScheme(.dark)
+      }
+    )
   }
+
+  private func present(_ kind: TouchWorkspacePresentation.Kind) {
+    presentation = TouchWorkspacePresentation(
+      kind: kind, template: settings.mobile.selectedTouchTemplate,
+      appearance: settings.mobile.selectedTouchAppearance)
+  }
+}
+
+private struct TouchWorkspacePresentation: Identifiable {
+  enum Kind { case editor, adjustment }
+  let id = UUID()
+  let kind: Kind
+  let template: TouchLayoutTemplate?
+  let appearance: TouchLayoutAppearance
 }
 
 struct ControllerStickSettingsView: View {

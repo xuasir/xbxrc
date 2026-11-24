@@ -14,6 +14,10 @@ const QUERY_TOTAL_TIMEOUT_SECS: u64 = 18;
 const QUERY_MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 const ERROR_MAX_BODY_BYTES: usize = 64 * 1024;
 
+#[cfg(test)]
+#[path = "transport.binary.test.rs"]
+mod binary_tests;
+
 #[derive(Debug, Clone, Copy)]
 struct RequestPolicy {
     total_timeout: Duration,
@@ -484,6 +488,114 @@ impl HttpTransport {
 
     pub async fn get(&self, url: &str, headers: Option<HeaderMap>) -> Result<Value, WebApiError> {
         self.request(Method::GET, url, headers, None).await
+    }
+
+    /// 二进制资源复用查询客户端、有限重试和凭据恢复，响应体按调用方预算读取。
+    pub async fn get_bytes(
+        &self,
+        url: &str,
+        headers: Option<HeaderMap>,
+        maximum_bytes: usize,
+    ) -> Result<Vec<u8>, WebApiError> {
+        if maximum_bytes == 0 || maximum_bytes > QUERY_MAX_BODY_BYTES {
+            return Err(WebApiError::parse("invalid binary response budget"));
+        }
+        let client = self.client.as_ref().map_err(Clone::clone)?;
+        let deadline = Instant::now()
+            + self
+                .policy
+                .map_or(Duration::from_secs(DEFAULT_TIMEOUT_SECS), |policy| {
+                    policy.total_timeout
+                });
+        let mut headers = headers.unwrap_or_default();
+        let mut renewed = false;
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let operation = async {
+                let response = client
+                    .get(url)
+                    .headers(headers.clone())
+                    .send()
+                    .await
+                    .map_err(WebApiError::from_reqwest_safe)?;
+                let status = response.status();
+                let response_headers = response.headers().clone();
+                let retry_after = response_headers
+                    .get("retry-after")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| parse_retry_after(value, chrono::Utc::now()));
+                let body = read_bounded_body(
+                    response,
+                    if status.is_success() {
+                        maximum_bytes
+                    } else {
+                        ERROR_MAX_BODY_BYTES
+                    },
+                )
+                .await;
+                let result = if status.is_success() {
+                    body
+                } else {
+                    let text = body
+                        .ok()
+                        .and_then(|bytes| String::from_utf8(bytes).ok())
+                        .unwrap_or_default();
+                    Err(WebApiError::http_response(status.as_u16(), &text))
+                };
+                Ok::<_, WebApiError>((result, retry_after))
+            };
+            let (result, retry_after) = match timeout_at(deadline, operation).await {
+                Ok(Ok(value)) => value,
+                Ok(Err(error)) => (Err(error), None),
+                Err(_) => (
+                    Err(WebApiError::network_kind(NetworkErrorKind::Timeout)),
+                    None,
+                ),
+            };
+            let error = match result {
+                Ok(bytes) => return Ok(bytes),
+                Err(error) => error,
+            };
+            if error.to_status_code() == Some(401) && !renewed {
+                if let (Some(recovery), Some(rejected)) = (
+                    self.bearer_recovery.as_ref(),
+                    headers
+                        .get(AUTHORIZATION)
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(|value| value.strip_prefix("Bearer ")),
+                ) {
+                    let token = timeout_at(deadline, recovery.recover(rejected))
+                        .await
+                        .unwrap_or_else(|_| {
+                            Err(WebApiError::network_kind(NetworkErrorKind::Timeout))
+                        })?;
+                    if token.trim().is_empty() {
+                        return Err(WebApiError::parse(
+                            "credential renewal returned an empty token",
+                        ));
+                    }
+                    headers.insert(
+                        AUTHORIZATION,
+                        HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
+                            WebApiError::parse("invalid renewed authorization header")
+                        })?,
+                    );
+                    renewed = true;
+                    continue;
+                }
+            }
+            if !should_retry(&Method::GET, &error, attempt, self.retry_mode) {
+                return Err(error);
+            }
+            let delay = retry_after
+                .unwrap_or_default()
+                .max(Duration::from_millis(compute_retry_delay_ms(attempt)));
+            if delay >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(error);
+            }
+            sleep(delay).await;
+        }
     }
 
     pub async fn post(

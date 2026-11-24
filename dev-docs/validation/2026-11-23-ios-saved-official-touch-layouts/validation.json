@@ -1,0 +1,44 @@
+{
+  "status": "implementation-smoke-passed; live-sample-and-home-validation-pending",
+  "updatedAt": "2026-11-24T11:59:11.262716+08:00",
+  "latestUserRule": "收尾使用最小冒烟；复用手机/iPad 已通过结果",
+  "passed": {
+    "rustBundleTests": 12,
+    "rustWebApiTests": 75,
+    "rustStorageTests": 12,
+    "swiftTests": 60,
+    "newBootstrapRegressionTests": 2,
+    "phoneUITests": 3,
+    "ipadUITests": 3,
+    "iPhoneOSBuild": true,
+    "rustFormatCheck": true,
+    "previousFrontendLintFix": true
+  },
+  "pending": [
+    "应用内保存的实际官方包冒烟",
+    "Home 实机输入、手感与持续串流验收"
+  ],
+  "recentPersistenceFix": [
+    "首次读取成功前保留最近布局",
+    "读取失败保留记录",
+    "成功空列表确认布局已移除后清理记录"
+  ],
+  "cleanup": "completed",
+  "formatEvidence": [
+    {
+      "command": "cargo fmt -p xbox-touch-layouts -p xbox-ios-bridge -p xbox-webapi",
+      "round": "r1",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint:fix",
+      "round": "r1",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo fmt -p xbox-touch-layouts -p xbox-webapi -p xbox-ios-bridge -- --check",
+      "round": "r3",
+      "exitCode": 0
+    }
+  ]
+}

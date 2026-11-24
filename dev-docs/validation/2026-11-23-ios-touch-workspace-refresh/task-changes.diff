@@ -1,0 +1,1069 @@
+--- baseline/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
++++ final/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+@@ -1,11 +1,11 @@
+ import SwiftUI
++import UIKit
+ 
+ struct TouchLayoutEditorView: View {
+     @EnvironmentObject private var settings: AppSettingsStore
+     @Environment(\.dismiss) private var dismiss
+     @State private var draft: TouchLayoutTemplate
+-    @State private var orientation: TouchLayoutOrientation = .landscape
+-    @State private var isDragging = false
++    @State private var orientation: TouchLayoutOrientation = .portrait
+     @State private var showDelete = false
+     @State private var showLimit = false
+     private let originalID: String?
+@@ -16,47 +16,33 @@
+     }
+ 
+     var body: some View {
+-        AppSettingsForm {
+-            Section("布局") {
+-                LabeledContent("模板名称") {
+-                    TextField("输入名称", text: $draft.name)
+-                        .multilineTextAlignment(.trailing)
+-                        .accessibilityIdentifier("touch-template-name")
+-                }
+-                orientationPicker(selection: $orientation)
+-                TouchLayoutPreview(
+-                    orientation: orientation, appearance: draft.appearance,
+-                    configuration: .init(
+-                        identity: draft.id, positions: draft.positions(for: orientation),
+-                        scale: draft.appearance.scale),
+-                    onMove: { id, point, size in
+-                        draft.setPosition(
+-                            TouchLayoutGeometry.normalizedPosition(point, size: size),
+-                            for: id, orientation: orientation)
+-                    }, onEditingChanged: { isDragging = $0 }
+-                )
+-                .appSettingsInformation()
+-                Text("拖动按键调整位置，横屏和竖屏分别保存。")
+-                    .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+-                    .appSettingsInformation()
+-                AppSettingsActionButton("恢复位置") { draft.resetPositions(for: orientation) }
+-                    .accessibilityIdentifier("touch-template-reset")
+-            }
++        TouchLayoutWorkspace(
++            title: "自定义布局", saveIdentifier: "touch-template-save", onSave: { save() },
++            orientation: $orientation, appearance: draft.appearance,
++            configuration: .init(
++                identity: draft.id, positions: draft.positions(for: orientation),
++                scale: draft.appearance.scale),
++            onMove: { id, point, size in
++                draft.setPosition(
++                    TouchLayoutGeometry.normalizedPosition(point, size: size),
++                    for: id, orientation: orientation)
++            }
++        ) {
++            LabeledContent("模板名称") {
++                TextField("输入名称", text: $draft.name)
++                    .multilineTextAlignment(.trailing)
++                    .submitLabel(.done)
++                    .accessibilityIdentifier("touch-template-name")
++            }
++            Text("拖动按键调整位置，横屏和竖屏分别保存。")
++                .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++            AppSettingsActionButton("恢复位置") { draft.resetPositions(for: orientation) }
++                .accessibilityIdentifier("touch-template-reset")
+             if originalID != nil {
+-                Section("本地模板") {
+-                    AppSettingsActionButton("另存为新模板") { save(asNew: true) }
+-                        .accessibilityIdentifier("touch-template-save-new")
+-                    AppSettingsActionButton("删除模板", role: .destructive) { showDelete = true }
+-                        .accessibilityIdentifier("touch-template-delete")
+-                }
+-            }
+-        }
+-        .scrollDisabled(isDragging)
+-        .appPageToolbar("自定义布局", showsBrand: false)
+-        .toolbar {
+-            ToolbarItem(placement: .topBarTrailing) {
+-                Button("保存") { save() }.frame(minWidth: 44, minHeight: 44)
+-                    .accessibilityIdentifier("touch-template-save")
++                AppSettingsActionButton("另存为新模板") { save(asNew: true) }
++                    .accessibilityIdentifier("touch-template-save-new")
++                AppSettingsActionButton("删除模板", role: .destructive) { showDelete = true }
++                    .accessibilityIdentifier("touch-template-delete")
+             }
+         }
+         .confirmationDialog("删除此本地模板？", isPresented: $showDelete, titleVisibility: .visible) {
+@@ -88,7 +74,7 @@
+     @EnvironmentObject private var settings: AppSettingsStore
+     @Environment(\.dismiss) private var dismiss
+     @State private var appearance: TouchLayoutAppearance
+-    @State private var orientation: TouchLayoutOrientation = .landscape
++    @State private var orientation: TouchLayoutOrientation = .portrait
+     private let template: TouchLayoutTemplate?
+     private let layoutID: String
+ 
+@@ -99,45 +85,33 @@
+     }
+ 
+     var body: some View {
+-        AppSettingsForm {
+-            Section("当前布局") {
+-                LabeledContent("布局模板") {
+-                    if let template { Text(verbatim: template.name) } else { Text("通用 Xbox") }
+-                }.appSettingsInformation()
+-                orientationPicker(selection: $orientation)
+-                TouchLayoutPreview(
+-                    orientation: orientation, appearance: appearance,
+-                    configuration: .init(
+-                        identity: layoutID,
+-                        positions: template?.positions(for: orientation) ?? [:],
+-                        scale: appearance.scale)
+-                )
+-                .appSettingsInformation()
+-            }
+-            Section("触屏手柄调整") {
+-                TouchAppearanceSlider(
+-                    "透明度", value: $appearance.opacity,
+-                    range: TouchLayoutAppearance.opacityRange, identifier: "touch-opacity")
+-                TouchAppearanceSlider(
+-                    "大小", value: $appearance.scale,
+-                    range: TouchLayoutAppearance.scaleRange, identifier: "touch-size")
+-                AppSettingsActionButton("恢复默认") { appearance = .init() }
+-                    .accessibilityIdentifier("touch-appearance-reset")
+-                Text("调整会实时显示在预览中，保存后用于串流。")
+-                    .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+-                    .appSettingsInformation()
+-            }
+-        }
+-        .appPageToolbar("触屏手柄调整", showsBrand: false)
+-        .toolbar {
+-            ToolbarItem(placement: .topBarTrailing) {
+-                Button("保存") {
+-                    settings.mobile.saveTouchAppearance(appearance, for: layoutID)
+-                    dismiss()
+-                }.frame(minWidth: 44, minHeight: 44)
+-                    .accessibilityIdentifier("touch-appearance-save")
+-            }
+-        }
++        TouchLayoutWorkspace(
++            title: "触屏手柄调整", saveIdentifier: "touch-appearance-save",
++            onSave: save,
++            orientation: $orientation, appearance: appearance,
++            configuration: .init(
++                identity: layoutID, positions: template?.positions(for: orientation) ?? [:],
++                scale: appearance.scale)
++        ) {
++            LabeledContent("布局模板") {
++                if let template { Text(verbatim: template.name) } else { Text("通用 Xbox") }
++            }
++            TouchAppearanceSlider(
++                "透明度", value: $appearance.opacity,
++                range: TouchLayoutAppearance.opacityRange, identifier: "touch-opacity")
++            TouchAppearanceSlider(
++                "大小", value: $appearance.scale,
++                range: TouchLayoutAppearance.scaleRange, identifier: "touch-size")
++            AppSettingsActionButton("恢复默认") { appearance = .init() }
++                .accessibilityIdentifier("touch-appearance-reset")
++            Text("调整会实时显示在预览中，保存后用于串流。")
++                .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++        }
++    }
++
++    private func save() {
++        settings.mobile.saveTouchAppearance(appearance, for: layoutID)
++        dismiss()
+     }
+ }
+ 
+@@ -173,60 +147,217 @@
+ private func orientationPicker(selection: Binding<TouchLayoutOrientation>) -> some View {
+     AppSegmentedFilter(
+         selection: selection, values: TouchLayoutOrientation.allCases,
+-        title: { $0.title }, identifier: "touch-preview-orientation", label: "预览方向"
++        title: { $0.title }, identifier: "touch-preview-orientation", label: "预览方向",
++        fillsWidth: false
+     )
+-    .appSettingsInformation()
+-}
+-
+-/// 使用正式 Surface 按参考屏幕比例缩放，触点坐标由视图变换回到同一逻辑视口。
+-private struct TouchLayoutPreview: View {
+-    let orientation: TouchLayoutOrientation
++}
++
++/// 画布占满实际窗口，工具浮在上方；收起设置后直接体验串流中的按键尺寸。
++private struct TouchLayoutWorkspace<SettingsContent: View>: View {
++    @Environment(\.dismiss) private var dismiss
++    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
++    let title: String
++    let saveIdentifier: String
++    let onSave: () -> Void
++    @Binding var orientation: TouchLayoutOrientation
+     let appearance: TouchLayoutAppearance
+     let configuration: TouchLayoutConfiguration
+     var onMove: ((String, CGPoint, CGSize) -> Void)? = nil
+-    var onEditingChanged: ((Bool) -> Void)? = nil
++    @ViewBuilder let settingsContent: () -> SettingsContent
++    @State private var showsSettings = false
++    @State private var settingsHeight: CGFloat = 280
++    @State private var toolsHeight: CGFloat = 100
++
++    private var canSelectOrientation: Bool {
++        UIDevice.current.userInterfaceIdiom == .phone
++    }
++
++    var body: some View {
++        GeometryReader { geometry in
++            ZStack(alignment: .top) {
++                TouchLayoutCanvas(
++                    orientation: $orientation, appearance: appearance,
++                    configuration: configuration, settingsPresented: showsSettings, onMove: onMove
++                )
++                .ignoresSafeArea()
++                VStack(spacing: 12) {
++                    VStack(spacing: 12) {
++                        workspaceTools
++                        if !canSelectOrientation {
++                            Text("旋转设备或调整窗口以切换方向")
++                                .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++                                .frame(maxWidth: .infinity, alignment: .leading)
++                                .accessibilityIdentifier("touch-workspace-orientation-guidance")
++                        }
++                    }
++                    .onGeometryChange(for: CGFloat.self) {
++                        $0.size.height
++                    } action: {
++                        toolsHeight = $0
++                    }
++                    if showsSettings {
++                        ScrollView {
++                            VStack(alignment: .leading, spacing: 12, content: settingsContent)
++                                .padding(16)
++                                .onGeometryChange(for: CGFloat.self) {
++                                    $0.size.height
++                                } action: {
++                                    settingsHeight = $0
++                                }
++                        }
++                        .frame(
++                            height: min(
++                                settingsHeight, max(44, geometry.size.height - toolsHeight - 20))
++                        )
++                        .scrollBounceBehavior(.basedOnSize)
++                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
++                        .overlay {
++                            RoundedRectangle(cornerRadius: 16)
++                                .strokeBorder(AppThemePalette.border, lineWidth: 1)
++                        }
++                        .accessibilityIdentifier("touch-workspace-settings-panel")
++                    }
++                }
++                .frame(maxWidth: 420)
++                .padding(.horizontal, 16).padding(.top, 8)
++                .frame(maxWidth: .infinity)
++            }
++        }
++        .ignoresSafeArea(.keyboard)
++        .toolbar(.hidden, for: .navigationBar)
++        .environment(\.colorScheme, .dark)
++        .preferredColorScheme(.dark)
++        .appResponsiveTypography()
++        .appFont(.body).foregroundStyle(AppThemePalette.textPrimary)
++        .tint(AppThemePalette.brand)
++    }
++
++    @ViewBuilder
++    private var workspaceTools: some View {
++        // 大字号独立呈现标题与方向胶囊，保证窄窗仍有完整的阅读和操作空间。
++        if dynamicTypeSize.isAccessibilitySize {
++            workspaceTitle
++            HStack(spacing: 12) {
++                backButton
++                Spacer(minLength: 0)
++                settingsButton
++                saveButton
++            }
++            orientationControl.frame(maxWidth: .infinity, alignment: .leading)
++        } else {
++            HStack(spacing: 8) {
++                backButton
++                workspaceTitle
++                saveButton
++            }
++            HStack(spacing: 12) {
++                orientationControl
++                Spacer(minLength: 0)
++                settingsButton
++            }
++        }
++    }
++
++    private var workspaceTitle: some View {
++        Text(LocalizedStringKey(title)).appFont(.title, weight: .semibold)
++            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
++            .frame(maxWidth: .infinity, alignment: .leading)
++            .accessibilityAddTraits(.isHeader)
++            .accessibilityIdentifier("current-page-title")
++    }
++
++    private var backButton: some View {
++        Button {
++            dismiss()
++        } label: {
++            AppIconView(.chevron, size: 18).rotationEffect(.degrees(180))
++                .frame(width: 44, height: 44)
++        }
++        .buttonStyle(.plain).accessibilityLabel("返回")
++        .accessibilityIdentifier("touch-workspace-back")
++    }
++
++    private var saveButton: some View {
++        Button("保存", action: onSave)
++            .frame(minWidth: 44, minHeight: 44)
++            .buttonStyle(.bordered).buttonBorderShape(.capsule)
++            .accessibilityIdentifier(saveIdentifier)
++    }
++
++    private var orientationControl: some View {
++        orientationPicker(
++            selection: Binding(
++                get: { orientation },
++                set: {
++                    AppOrientationCoordinator.shared.requestInterfaceOrientation(
++                        $0 == .portrait ? .portrait : .landscape)
++                })
++        )
++        .disabled(!canSelectOrientation)
++    }
++
++    private var settingsButton: some View {
++        Button {
++            showsSettings.toggle()
++        } label: {
++            AppIconView(.sliders, size: 20).frame(width: 44, height: 44)
++        }
++        .buttonStyle(.plain)
++        .background(AppThemePalette.filterTrack, in: Capsule())
++        .accessibilityLabel(Text(LocalizedStringKey(showsSettings ? "收起设置" : "展开设置")))
++        .accessibilityValue(Text(LocalizedStringKey(showsSettings ? "已展开" : "已收起")))
++        .accessibilityIdentifier("touch-workspace-settings")
++    }
++}
++
++/// 正式 Surface 直接消费真实窗口尺寸，竖屏视口沿串流合同保持在下半区。
++private struct TouchLayoutCanvas: View {
++    @Binding var orientation: TouchLayoutOrientation
++    let appearance: TouchLayoutAppearance
++    let configuration: TouchLayoutConfiguration
++    let settingsPresented: Bool
++    var onMove: ((String, CGPoint, CGSize) -> Void)? = nil
+     @State private var input = TouchInputAccumulator()
+     @State private var loadError: String?
+ 
+     var body: some View {
+         GeometryReader { geometry in
+-            let size = orientation.previewSize
+-            let scale = geometry.size.width / size.width
++            let size = geometry.size
++            let actualOrientation = TouchLayoutOrientation(size: size)
+             let frame = StreamingTouchViewportPolicy.frame(in: size)
+             ZStack(alignment: .topLeading) {
+                 Color(white: 0.06)
+-                ZStack(alignment: .topLeading) {
+-                    Text("游戏画面").font(.system(size: 18)).foregroundStyle(.white.opacity(0.25))
+-                        .position(
+-                            x: size.width / 2,
+-                            y: orientation == .portrait ? size.height / 4 : size.height / 2)
+-                    if orientation == .portrait {
+-                        Rectangle().fill(.white.opacity(0.08)).frame(width: size.width, height: 1)
+-                            .position(x: size.width / 2, y: size.height / 2)
+-                    }
+-                    TouchLayoutSurface(
+-                        input: input, opacity: appearance.opacity,
+-                        configuration: configuration, onMoveControl: onMove,
+-                        onEditingChanged: onEditingChanged
+-                    )
+-                    .frame(width: frame.width, height: frame.height)
+-                    .position(x: frame.midX, y: frame.midY)
++                Text("游戏画面").font(.system(size: 18)).foregroundStyle(.white.opacity(0.25))
++                    .position(
++                        x: size.width / 2,
++                        y: actualOrientation == .portrait ? size.height / 4 : size.height / 2)
++                if actualOrientation == .portrait {
++                    Rectangle().fill(.white.opacity(0.08)).frame(width: size.width, height: 1)
++                        .position(x: size.width / 2, y: size.height / 2)
+                 }
+-                .frame(width: size.width, height: size.height)
+-                .scaleEffect(scale, anchor: .topLeading)
++                TouchLayoutSurface(
++                    input: input, opacity: appearance.opacity,
++                    configuration: configuration, onMoveControl: onMove
++                )
++                .frame(width: frame.width, height: frame.height)
++                .position(x: frame.midX, y: frame.midY)
++                .accessibilityIdentifier("touch-layout-preview")
+                 if let loadError { Text(verbatim: loadError).foregroundStyle(.white).padding() }
+             }
+         }
+-        .aspectRatio(
+-            orientation.previewSize.width / orientation.previewSize.height, contentMode: .fit
+-        )
+-        .clipShape(RoundedRectangle(cornerRadius: 12))
+-        .accessibilityIdentifier("touch-layout-preview")
++        .onGeometryChange(for: TouchLayoutOrientation.self) {
++            TouchLayoutOrientation(size: $0.size)
++        } action: {
++            orientation = $0
++        }
+         .onAppear {
+             do { input.load(try TouchLayoutCatalog.standard()) } catch {
+                 loadError = error.localizedDescription
+             }
+         }
+         .onChange(of: orientation) { _, _ in input.cancelAll(reason: "previewOrientationChanged") }
+-    }
+-}
++        .onChange(of: settingsPresented) { _, _ in input.cancelAll(reason: "previewSettingsChanged")
++        }
++        .onDisappear { input.cancelAll(reason: "previewClosed") }
++    }
++}
+--- baseline/iosapp/XBXRC/Features/Controllers/ControllerView.swift
++++ final/iosapp/XBXRC/Features/Controllers/ControllerView.swift
+@@ -268,6 +268,7 @@
+ 
+ struct ControllerTouchSettingsView: View {
+   @EnvironmentObject private var settings: AppSettingsStore
++  @State private var presentation: TouchWorkspacePresentation?
+   var body: some View {
+     AppSettingsForm {
+       Section {
+@@ -292,24 +293,47 @@
+         Text("触屏")
+       }
+       Section("布局与外观") {
+-        AppSettingsNavigationLink(
+-          "自定义布局",
+-          destination: TouchLayoutEditorView(
+-            template: settings.mobile.selectedTouchTemplate,
+-            appearance: settings.mobile.selectedTouchAppearance)
+-        )
+-        .accessibilityIdentifier("controller-touch-customize")
+-        AppSettingsNavigationLink(
+-          "触屏手柄调整",
+-          destination: TouchLayoutAdjustmentView(
+-            template: settings.mobile.selectedTouchTemplate,
+-            appearance: settings.mobile.selectedTouchAppearance)
+-        )
+-        .accessibilityIdentifier("controller-touch-adjust")
++        AppSettingsActionButton("自定义布局") { present(.editor) }
++          .accessibilityIdentifier("controller-touch-customize")
++        AppSettingsActionButton("触屏手柄调整") { present(.adjustment) }
++          .accessibilityIdentifier("controller-touch-adjust")
+       }
+     }
+     .appThemeCanvas()
+-  }
++    .fullScreenCover(
++      item: $presentation,
++      onDismiss: {
++        AppOrientationCoordinator.shared.refresh()
++      },
++      content: { item in
++        NavigationStack {
++          switch item.kind {
++          case .editor:
++            TouchLayoutEditorView(template: item.template, appearance: item.appearance)
++          case .adjustment:
++            TouchLayoutAdjustmentView(template: item.template, appearance: item.appearance)
++          }
++        }
++        .environment(\.appFloatingNavigationInset, 0)
++        .environment(\.appCanvasBounds, nil)
++        .preferredColorScheme(.dark)
++      }
++    )
++  }
++
++  private func present(_ kind: TouchWorkspacePresentation.Kind) {
++    presentation = TouchWorkspacePresentation(
++      kind: kind, template: settings.mobile.selectedTouchTemplate,
++      appearance: settings.mobile.selectedTouchAppearance)
++  }
++}
++
++private struct TouchWorkspacePresentation: Identifiable {
++  enum Kind { case editor, adjustment }
++  let id = UUID()
++  let kind: Kind
++  let template: TouchLayoutTemplate?
++  let appearance: TouchLayoutAppearance
+ }
+ 
+ struct ControllerStickSettingsView: View {
+--- baseline/iosapp/XBXRC/App/AppOrientation.swift
++++ final/iosapp/XBXRC/App/AppOrientation.swift
+@@ -63,6 +63,15 @@
+         applyCurrentGeometry()
+     }
+ 
++    /// 手机编辑器请求系统旋转实际窗口，iPad 方向继续由窗口管理。
++    func requestInterfaceOrientation(_ mask: UIInterfaceOrientationMask) {
++        guard mode == .application else { return }
++        for scene in connectedWindowScenes() {
++            guard scene.traitCollection.userInterfaceIdiom == .phone else { continue }
++            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
++        }
++    }
++
+     private func applyCurrentGeometry() {
+         let scenes = connectedWindowScenes()
+         guard !scenes.isEmpty else { return }
+--- baseline/iosapp/XBXRC/Features/Profile/ProfileView.swift
++++ final/iosapp/XBXRC/Features/Profile/ProfileView.swift
+@@ -74,11 +74,6 @@
+             .toolbar {
+                 if authStore.isSignedIn {
+                     ToolbarItem(placement: .topBarTrailing) {
+-                        AppRefreshButton("刷新账户资料", isRefreshing: authStore.isBusy) {
+-                            await refresh()
+-                        }
+-                    }.sharedBackgroundVisibility(.hidden)
+-                    ToolbarItem(placement: .topBarTrailing) {
+                         Button {
+                             showsSignOutConfirmation = true
+                         } label: {
+@@ -97,13 +92,6 @@
+             .navigationDestination(for: MyRoute.self) { route in
+                 routeContent(route)
+                     .appPageToolbar(route.title)
+-                    .toolbar {
+-                        ToolbarItem(placement: .topBarTrailing) {
+-                            AppRefreshButton("刷新", isRefreshing: routeIsRefreshing(route)) {
+-                                await refresh(route)
+-                            }
+-                        }.sharedBackgroundVisibility(.hidden)
+-                    }
+             }
+         }
+         .environment(\.appPageIsActive, isActive)
+@@ -134,27 +122,10 @@
+         }
+     }
+ 
+-    private func routeIsRefreshing(_ route: MyRoute) -> Bool {
+-        switch route {
+-        case .friends: dataStore.friendsState.isRefreshing
+-        case .achievements, .playtime: dataStore.historyState(targetID: nil).isRefreshing
+-        case .album: dataStore.albumStates.values.contains { $0.isRefreshing }
+-        }
+-    }
+-
+-    private func refresh(_ route: MyRoute? = nil) async {
+-        switch route {
+-        case nil:
+-            async let profile: Void = authStore.refreshProfile(reason: .manualPull)
+-            async let library: Void = dataStore.refreshLibrary(reason: .manualPull)
+-            _ = await (profile, library)
+-        case .friends: await dataStore.loadFriends(refresh: true)
+-        case .achievements, .playtime: await dataStore.loadHistory(refresh: true)
+-        case .album:
+-            async let screenshots: Void = dataStore.loadAlbum(kind: .screenshot, refresh: true)
+-            async let clips: Void = dataStore.loadAlbum(kind: .clip, refresh: true)
+-            _ = await (screenshots, clips)
+-        }
++    private func refresh() async {
++        async let profile: Void = authStore.refreshProfile(reason: .manualPull)
++        async let library: Void = dataStore.refreshLibrary(reason: .manualPull)
++        _ = await (profile, library)
+     }
+ 
+     private func profileSourceTitle(_ source: XboxProfileSource) -> String {
+--- baseline/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
++++ final/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
+@@ -325,15 +325,6 @@
+       game.name, artwork: .game(game.artworkURL ?? installedGame?.artworkURL)
+     )
+     .appInformationTypography()
+-    .toolbar {
+-      ToolbarItem(placement: .topBarTrailing) {
+-        AppRefreshButton(
+-          "刷新统计", isRefreshing: detailState.isRefreshing || timeState.isRefreshing
+-        ) {
+-          await refreshCurrentSection()
+-        }
+-      }.sharedBackgroundVisibility(.hidden)
+-    }
+     .task(id: "\(auth.ownerGeneration):\(key):\(isActive)") {
+       guard isActive else { return }
+       await load(refresh: false)
+@@ -495,31 +486,6 @@
+     .refreshable { await load(refresh: true) }
+   }
+ 
+-  private func refreshCurrentSection() async {
+-    switch section {
+-    case .overview, .statistics: await load(refresh: true)
+-    case .achievements:
+-      async let mine: Void = data.loadPlayerAchievements(
+-        titleID: game.titleID,
+-        locale: PreferredGameLocaleNormalizer.normalize(settings.preferredGameLocale),
+-        refresh: true
+-      )
+-      if let targetID {
+-        await data.loadPlayerAchievements(
+-          titleID: game.titleID, targetID: targetID,
+-          locale: PreferredGameLocaleNormalizer.normalize(settings.preferredGameLocale),
+-          refresh: true)
+-      }
+-      await mine
+-    case .album:
+-      await withTaskGroup(of: Void.self) { group in
+-        for kind in XboxAlbumKind.allCases {
+-          group.addTask { await data.loadAlbum(kind: kind, refresh: true) }
+-        }
+-      }
+-    }
+-  }
+-
+   private func load(refresh: Bool) async {
+     async let detail: Void = data.loadLibraryGame(
+       titleID: initialGame.titleID, targetID: targetID, refresh: refresh)
+--- baseline/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
++++ final/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
+@@ -229,13 +229,6 @@
+     }
+     .accessibilityIdentifier("cloud-browser-scroll")
+     .appThemeCanvas().appPageToolbar(page.title, showsBrand: usesSidebar)
+-    .toolbar {
+-      ToolbarItem(placement: .topBarTrailing) {
+-        AppRefreshButton("刷新云目录", isRefreshing: cloud.isRefreshing) {
+-          await refresh()
+-        }
+-      }.sharedBackgroundVisibility(.hidden)
+-    }
+     .task(id: "\(auth.ownerGeneration):\(page.rawValue):\(isActive)") {
+       guard isActive else { return }
+       let identity = "\(auth.ownerGeneration):\(page.rawValue)"
+--- baseline/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ final/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -101,6 +101,8 @@
+         app.buttons["controller-touch-customize"].tap()
+         let a = app.buttons["touch-control-right/inner/1"]
+         XCTAssertTrue(a.waitForExistence(timeout: 5))
++        assertActualTouchViewport(app)
++        XCTAssertFalse(app.buttons["primary-navigation-controller"].isHittable)
+         let before = a.frame
+         let start = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+         let end = start.withOffset(CGVector(dx: -55, dy: -30))
+@@ -113,18 +115,19 @@
+         app.buttons["controller-touch-customize"].tap()
+         XCTAssertTrue(a.waitForExistence(timeout: 5))
+         XCTAssertLessThan(a.frame.midX, before.midX - 30)
+-        app.buttons["app-navigation-back"].tap()
++        app.buttons["touch-workspace-back"].tap()
+         picker.tap()
+         app.buttons["通用 Xbox"].tap()
+         app.buttons["controller-touch-customize"].tap()
+         XCTAssertTrue(a.waitForExistence(timeout: 5))
+         XCTAssertEqual(a.frame.midX, before.midX, accuracy: 3)
+-        app.buttons["app-navigation-back"].tap()
++        app.buttons["touch-workspace-back"].tap()
+         picker.tap()
+         app.buttons["自定义布局 1"].tap()
+         app.buttons["controller-touch-adjust"].tap()
+         XCTAssertTrue(a.waitForExistence(timeout: 5))
+         let originalWidth = a.frame.width
++        app.buttons["touch-workspace-settings"].tap()
+         let opacity = app.sliders["touch-opacity"]
+         let size = app.sliders["touch-size"]
+         XCTAssertTrue(size.waitForExistence(timeout: 5))
+@@ -134,20 +137,26 @@
+         let savedSize = app.staticTexts["touch-size-value"].label
+         XCTAssertGreaterThan(a.frame.width, originalWidth * 1.2)
+         save(app, "touch-template-adjusted-preview")
++        app.buttons["touch-workspace-settings"].tap()
++        XCTAssertFalse(size.exists)
++        assertActualTouchViewport(app)
++        save(app, "touch-template-adjusted-full-viewport")
+         app.buttons["touch-appearance-save"].tap()
+         app.terminate()
+         app.launchArguments.append("--preserve-settings-ui-test")
+         app.launch()
+         openTouchSettings(app)
+         app.buttons["controller-touch-adjust"].tap()
++        app.buttons["touch-workspace-settings"].tap()
+         XCTAssertTrue(size.waitForExistence(timeout: 5))
+         XCTAssertEqual(app.staticTexts["touch-opacity-value"].label, savedOpacity)
+         XCTAssertEqual(app.staticTexts["touch-size-value"].label, savedSize)
+         XCTAssertGreaterThan(a.frame.width, originalWidth * 1.2)
+         save(app, "touch-template-restored-after-relaunch")
+         size.adjust(toNormalizedSliderPosition: 0)
+-        app.buttons["app-navigation-back"].tap()
++        app.buttons["touch-workspace-back"].tap()
+         app.buttons["controller-touch-adjust"].tap()
++        app.buttons["touch-workspace-settings"].tap()
+         XCTAssertTrue(size.waitForExistence(timeout: 5))
+         XCTAssertEqual(app.staticTexts["touch-size-value"].label, savedSize)
+         app.buttons["touch-appearance-reset"].tap()
+@@ -167,13 +176,16 @@
+         app.buttons["controller-touch-customize"].tap()
+         let portrait = app.buttons["touch-preview-orientation-portrait"]
+         XCTAssertTrue(portrait.waitForExistence(timeout: 5))
+-        portrait.tap()
+-        app.scrollViews["app-settings-scroll"].swipeUp()
++        if portrait.isEnabled { portrait.tap() }
++        assertActualTouchViewport(app)
+         let preview = app.otherElements["touch-layout-preview"]
+         XCTAssertTrue(preview.exists)
+-        // 预览标识传递给实际 UIKit 触摸面；该范围已经是竖屏画布的下半区。
++        // 实际 UIKit 触摸面与串流共用窗口视口；竖屏保留在下半区。
+         let region = preview.frame
+-        XCTAssertEqual(region.height, region.width * 844 / 390 / 2, accuracy: 3)
++        let window = app.windows.firstMatch.frame
++        XCTAssertEqual(
++            region.height, window.height > window.width ? window.height / 2 : window.height,
++            accuracy: 3)
+         let a = app.buttons["touch-control-right/inner/1"]
+         XCTAssertTrue(a.exists)
+         for id in ["right/inner/1", "left/outer/1", "upper/right/0", "lower/center"] {
+@@ -182,20 +194,44 @@
+             XCTAssertLessThanOrEqual(control.frame.maxY, region.maxY + 1, id)
+         }
+         save(app, "touch-template-portrait-lower-half")
++        let landscape = app.buttons["touch-preview-orientation-landscape"]
++        if portrait.isEnabled {
++            let portraitX = a.frame.midX
++            landscape.tap()
++            waitForOrientation(app, landscape: true)
++            assertActualTouchViewport(app)
++            save(app, "touch-template-landscape-full-viewport")
++            portrait.tap()
++            waitForOrientation(app, landscape: false)
++            assertActualTouchViewport(app)
++            XCTAssertEqual(a.frame.midX, portraitX, accuracy: 3)
++        } else {
++            XCTAssertFalse(landscape.isEnabled)
++            XCTAssertTrue(app.staticTexts["touch-workspace-orientation-guidance"].exists)
++            XCUIDevice.shared.orientation = .landscapeLeft
++            waitForOrientation(app, landscape: true)
++            assertActualTouchViewport(app)
++            XCTAssertTrue(landscape.isSelected)
++            save(app, "touch-template-landscape-full-viewport")
++            XCUIDevice.shared.orientation = .portrait
++            waitForOrientation(app, landscape: false)
++            assertActualTouchViewport(app)
++            XCTAssertTrue(portrait.isSelected)
++        }
+         let originalX = a.frame.midX
+         let start = a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+         start.press(forDuration: 0.3, thenDragTo: start.withOffset(CGVector(dx: -40, dy: -35)))
+         XCTAssertLessThan(a.frame.midX, originalX - 20)
+-        app.buttons["app-navigation-back"].tap()
++        app.buttons["touch-workspace-back"].tap()
+         app.buttons["controller-touch-customize"].tap()
+         XCTAssertTrue(portrait.waitForExistence(timeout: 5))
+-        portrait.tap()
+-        app.scrollViews["app-settings-scroll"].swipeUp()
++        if portrait.isEnabled { portrait.tap() }
++        assertActualTouchViewport(app)
+         XCTAssertEqual(a.frame.midX, originalX, accuracy: 3)
+         app.buttons["touch-template-save"].tap()
+         app.buttons["controller-touch-customize"].tap()
++        app.buttons["touch-workspace-settings"].tap()
+         XCTAssertTrue(app.buttons["touch-template-delete"].waitForExistence(timeout: 5))
+-        app.scrollViews["app-settings-scroll"].swipeUp()
+         app.buttons["touch-template-delete"].tap()
+         let confirmDelete = app.buttons["touch-template-confirm-delete"].firstMatch
+         XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5))
+@@ -208,6 +244,18 @@
+         app.buttons["primary-navigation-controller"].tap()
+         if app.buttons["section-touch"].exists { app.buttons["section-touch"].tap() }
+         XCTAssertTrue(app.buttons["controller-touch-customize"].waitForExistence(timeout: 5))
++    }
++
++    private func assertActualTouchViewport(_ app: XCUIApplication) {
++        let preview = app.otherElements["touch-layout-preview"]
++        XCTAssertTrue(preview.waitForExistence(timeout: 5))
++        let window = app.windows.firstMatch.frame
++        let portrait = window.height > window.width
++        XCTAssertEqual(preview.frame.width, window.width, accuracy: 2)
++        XCTAssertEqual(
++            preview.frame.height, portrait ? window.height / 2 : window.height, accuracy: 2)
++        XCTAssertEqual(preview.frame.minX, window.minX, accuracy: 2)
++        XCTAssertEqual(preview.frame.minY, portrait ? window.midY : window.minY, accuracy: 2)
+     }
+ 
+     func testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility() {
+--- baseline/iosapp/XBXRCUITests/PCPageInteractionTests.swift
++++ final/iosapp/XBXRCUITests/PCPageInteractionTests.swift
+@@ -277,16 +277,16 @@
+     waitForPage(app, "我的")
+     XCTAssertFalse(app.scrollViews["my-section-tabs"].exists)
+     XCTAssertFalse(app.buttons["app-navigation-back"].exists)
+-    let refresh = app.buttons["刷新账户资料"]
+-    XCTAssertTrue(refresh.exists)
+-    XCTAssertLessThan(refresh.frame.midX, app.frame.maxX)
+-    XCTAssertGreaterThan(refresh.frame.midX, app.frame.midX)
++    XCTAssertFalse(app.buttons["刷新账户资料"].exists)
++    app.scrollViews["my-information-scroll"].swipeDown()
++    waitForPage(app, "我的")
+     let friends = app.buttons["section-friends"]
+     reveal(friends, in: app)
+     let rootPosition = friends.frame.minY
+     save(app, "annotations-my-overview")
+     friends.tap()
+     waitForPage(app, "好友")
++    XCTAssertFalse(app.buttons["刷新"].exists)
+     let friend = app.buttons["friend-2000"]
+     reveal(friend, in: app)
+     friend.tap()
+@@ -299,7 +299,7 @@
+     XCTAssertEqual(friends.frame.minY, rootPosition, accuracy: 24)
+     let signOut = app.buttons["my-sign-out"]
+     XCTAssertTrue(signOut.exists)
+-    XCTAssertGreaterThan(signOut.frame.midX, refresh.frame.midX)
++    XCTAssertGreaterThan(signOut.frame.midX, app.frame.midX)
+     XCTAssertLessThan(signOut.frame.maxY, app.navigationBars.firstMatch.frame.maxY + 1)
+     XCTAssertGreaterThanOrEqual(signOut.frame.width, 44)
+     XCTAssertGreaterThanOrEqual(signOut.frame.height, 44)
+@@ -677,10 +677,11 @@
+     let app = launch()
+     guard app.frame.width >= 900 else { throw XCTSkip("宽屏密度在iPad验证") }
+     app.buttons["primary-navigation-my"].tap()
+-    let refresh = app.buttons["刷新账户资料"]
+-    XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+-    XCTAssertLessThan(refresh.frame.width, 200)
+-    XCTAssertLessThanOrEqual(refresh.frame.height, 48)
++    let signOut = app.buttons["my-sign-out"]
++    XCTAssertTrue(signOut.waitForExistence(timeout: 5))
++    XCTAssertGreaterThanOrEqual(signOut.frame.width, 44)
++    XCTAssertLessThanOrEqual(signOut.frame.height, 48)
++    XCTAssertFalse(app.buttons["刷新账户资料"].exists)
+     save(app, "density-ipad-account")
+     app.buttons["section-friends"].tap()
+     let friend = app.buttons["friend-2000"]
+@@ -827,7 +828,33 @@
+       predicate: NSPredicate(format: "exists == false"), object: retry)
+     XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 5), .completed)
+     XCTAssertTrue(app.buttons["cloud-game-HALO00000001"].firstMatch.exists)
++    XCTAssertFalse(app.buttons["刷新云目录"].exists)
+     save(app, "section-errors-cloud-recovered")
++  }
++
++  func testCloudSourcePagePullRefreshRecoversFailure() {
++    let app = launch(arguments: ["--section-errors-ui-test"])
++    app.buttons["primary-navigation-library"].tap()
++    let retry = app.buttons["section-retry-cloud-popular"]
++    reveal(retry, in: app)
++    XCTAssertTrue(retry.waitForExistence(timeout: 5))
++    let entry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "热门游戏，")).firstMatch
++    reveal(entry, in: app)
++    entry.tap()
++    waitForPage(app, "热门游戏")
++    let scroll = app.scrollViews["cloud-browser-scroll"]
++    XCTAssertTrue(scroll.waitForExistence(timeout: 5))
++    scroll.swipeDown()
++    let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2))
++    let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.9))
++    start.press(forDuration: 0.1, thenDragTo: end)
++    waitForPage(app, "热门游戏")
++    let recovered = XCTNSPredicateExpectation(
++      predicate: NSPredicate(format: "exists == false"), object: retry)
++    XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 5), .completed)
++    XCTAssertTrue(app.buttons["cloud-game-HALO00000001"].firstMatch.exists)
++    XCTAssertFalse(app.buttons["刷新云目录"].exists)
++    save(app, "cloud-pull-refresh-recovered")
+   }
+ }
+ 
+--- baseline/iosapp/XBXRC/Resources/Localizable.xcstrings
++++ final/iosapp/XBXRC/Resources/Localizable.xcstrings
+@@ -4679,6 +4679,23 @@
+         }
+       }
+     },
++    "展开设置" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Expand settings"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "展开设置"
++          }
++        }
++      }
++    },
+     "左扳机" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -7294,6 +7311,23 @@
+     "收起记录" : {
+ 
+     },
++    "收起设置" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Collapse settings"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "收起设置"
++          }
++        }
++      }
++    },
+     "放大时增强清晰度" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -7431,6 +7465,23 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "方向左"
++          }
++        }
++      }
++    },
++    "旋转设备或调整窗口以切换方向" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Rotate your device or resize the window to change orientation"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "旋转设备或调整窗口以切换方向"
+           }
+         }
+       }
+@@ -8734,6 +8785,23 @@
+         }
+       }
+     },
++    "横屏" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Landscape"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "横屏"
++          }
++        }
++      }
++    },
+     "欧洲" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -11587,6 +11655,23 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "立即生效并保存"
++          }
++        }
++      }
++    },
++    "竖屏" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Portrait"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "竖屏"
+           }
+         }
+       }
+--- baseline/iosapp/DESIGN.md
++++ final/iosapp/DESIGN.md
+@@ -106,12 +106,12 @@
+ 
+ iOS 游戏输入统一为触屏手柄与外接手柄。控制器、设置、串流菜单和输入诊断围绕这两类来源组织；正式输入采样、按键映射和设备连接事实共用现有手柄合同。PC 的键盘模拟与键盘映射归桌面端。历史移动偏好加载时忽略已撤下的桌面输入字段，保留触屏、手柄、显示与音频设置。
+ 
+-触屏配置以通用 Xbox 为基准，上级菜单选择本地模板；自定义布局和触屏手柄调整使用独立导航子页。位置按横竖屏分别保存，竖屏全部控件保持下半区；透明度和大小随模板保存。编辑先修改本地草稿，保存后供本地串流与云游戏共用，绘制、无障碍范围和命中读取同一控件几何。
++触屏配置以通用 Xbox 为基准，上级菜单选择本地模板；自定义布局和触屏手柄调整使用独立全屏画布。正式 Surface 直接读取实际窗口尺寸；手机方向胶囊请求系统旋转，iPad 胶囊只读展示当前窗口方向，并提示旋转设备或调整窗口。大字号将标题、操作和方向胶囊分行排列。设置集中在默认收起的局部面板，展开时调整，收起后体验真实按键尺寸。位置按横竖屏分别保存，竖屏全部控件保持下半区；透明度和大小随模板保存。编辑先修改本地草稿，保存后供本地串流与云游戏共用，绘制、无障碍范围和命中读取同一控件几何。
+ 
+ | 页面 | 信息与操作合同 |
+ | --- | --- |
+ | 主机 | 主机原图表达当前设备，名称、型号、运行状态与空间表达实际事实。单台机器身份区居中，多台机器在身份区下方使用横向切换；游玩、电源和安装库动作随当前选择更新 |
+-| 云游戏 | 栏目以方形封面和名称组织内容；浏览子页共用全宽搜索与同行工具胶囊。游戏数量作为辅助事实，来源请求失败留在相应栏目 |
++| 云游戏 | 栏目以方形封面和名称组织内容；浏览子页共用全宽搜索与同行工具胶囊。首页以各栏目内容、更新和失败状态组织信息，浏览结果数量归对应列表 |
+ | 云游戏详情 | 身份区使用 80pt 圆角方形封面、游戏名、发行商及输入能力；简介展开操作附着同组标题。个人游戏入口具有标题、说明和方向指示；发行信息与游戏特性分别成卡；底部游玩动作与真实等待、访问要求相邻 |
+ | 我的与玩家 | 我的使用 72pt 身份头像与成就点数 / 好友 / 关注 / 粉丝的一排指标。好友、成就、游玩统计与相册通过独立子页进入；好友条目使用 40pt 头像、姓名、状态、活动及紧凑成就点数 |
+ | 成就与游玩记录 | 成就摘要保留全成就游戏数量、成就点数两项。集合汇总沿当前数据列表计算，VoiceOver 说明标明范围；完整账户点数归属身份区。统计页增加核心时长事实，进度与解锁状态直接横条切换 |
+@@ -124,6 +124,8 @@
+ ## 请求状态与反馈
+ 
+ 首次载入在对应内容槽位反馈。刷新由当前页动作或分区呈现忙碌状态；成功快照继续承载正文。缓存、接口、分页实现细节归诊断记录，用户页面保留能支持判断和操作的说明。
++
++支持下拉的内容页统一使用原生下拉刷新；“我的”及其子页、个人游戏详情和云目录的刷新沿各页来源执行。来源失败继续提供局部重试，独立媒体预览通过链接更新动作恢复到期资源。
+ 
+ 失败提示位于受影响分区，采用标题、短原因和重试动作的层级；整行具备至少 44pt 点击区域。上次内容的时间在更新失败时解释快照来源；分页失败留在列表末尾并保留已有内容。账户级重新登录入口在页面统一呈现。
+ 
+--- baseline/docs/rfcs/2026-11-20-ios-touch-layout-customization.md
++++ final/docs/rfcs/2026-11-20-ios-touch-layout-customization.md
+@@ -5,10 +5,12 @@
+ - Completion: 已完成
+ - Current State: completed
+ - Owner: 主窗口，单窗口直接执行
+-- Last Updated: 2026-11-20
++- Last Updated: 2026-11-23
+ - 执行授权：用户确认“按方案执行（推荐）”，主窗口直接实施。
+ 
+ ## Background
++
++2026-11-23 用户追加界面要求：两个触屏子页按真实设备视口呈现。接续修改采用独立全屏画布和默认收起的设置面板；手机方向胶囊请求系统旋转，iPad 胶囊只读展示当前窗口方向并提示旋转设备或调整窗口。正式 Surface、位置归一化、竖屏下半区及草稿保存合同沿用。[本轮证据](../../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/README.md)记录接续验收。
+ 
+ 用户要求将“控制器 → 触屏”从测试工具入口调整为日常配置入口：隐藏测试入口，支持拖动布局并保存本地模板，在上级切换模板，进入独立子页可视化调节当前布局的透明度和大小。
+ 
+@@ -152,3 +154,5 @@
+ - 2026-11-20 | in-progress：用户确认方案；模板持久化、共用几何、Surface 编辑模式和两个设置子页已实施，进入编译及定向回归。
+ 
+ - 2026-11-20 | completed：91 单元、iPhone 5 个独立 UI 流程、iPad 2 项 UI 与最终 iPhoneOS 构建通过；10 个源码哈希一致，10 张最终截图及 1 张定位图归档。r1～r7 临时产物清理完成，原占用约 1.52 GiB，共享缓存保留。[Report](../reports/2026-11-20-ios-touch-layout-customization.md)。
++
++- 2026-11-23 | completed：两个触屏子页按实际窗口全屏呈现，设置默认收起；手机通过胶囊请求系统旋转，iPad 跟随窗口几何；大字号工具分行。最终手机/iPad 各 8 组原生快照和方向、草稿、保存流程通过；7 项模板单元及外观持久化复验通过，iPhoneOS arm64 构建保持最低 26.0。[接续证据](../../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/README.md)归档 27 张截图、失败诊断和临时清理结果。
+--- baseline/docs/reports/2026-11-20-ios-touch-layout-customization.md
++++ final/docs/reports/2026-11-20-ios-touch-layout-customization.md
+@@ -3,6 +3,8 @@
+ ## Summary
+ 
+ 2026-11-20。用户确认的 [RFC](../rfcs/2026-11-20-ios-touch-layout-customization.md) 已完成实施和自动验收。“控制器 → 触屏”成为模板选择、布局编辑和外观调整入口，本地串流与云游戏消费同一份已保存配置。[验收证据](../../dev-docs/validation/2026-11-20-ios-touch-layout-customization/README.md)已归档。
++
++2026-11-23 接续更新：两个触屏子页采用实际窗口全屏画布和可收起设置，方向胶囊沿设备能力同步实际视口；页面刷新统一沿原生下拉执行。[接续证据](../../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/README.md)已归档。
+ 
+ ## Delivered
+ 
+@@ -32,3 +34,13 @@
+ ## Follow-up
+ 
+ 使用包含本轮改动的 iOS 构建，在本地串流和云游戏中各切换一个模板，确认透明度、大小及横竖屏操作手感。
++
++## 2026-11-23 接续验收
++
++- 自定义布局与触屏手柄调整通过独立全屏页面呈现，复用正式 Surface 和串流视口；设置默认收起，展开后修改名称、外观和模板操作。返回、保存与草稿丢弃沿原存储合同生效。
++- 手机方向胶囊请求系统旋转；iPad 根据实际窗口几何显示方向，并提示旋转设备或调整窗口。320pt 英文大字号采用标题、操作和胶囊分行布局，最终截图确认文字完整。
++- 我的根页、子页、个人游戏详情和云目录保留原生下拉刷新；分区失败重试和独立媒体链接更新保留各自用途。
++
++最终手机、iPad 各 8 组原生快照与方向/草稿/保存流程通过；7 项模板单元和两端拖动、外观持久化流程复验通过。来源页下拉恢复、资料页返回、栏目独立重试及 iPad 宽窗/相册返回也有通过记录。最终 iPhoneOS arm64 构建、Swift 格式/解析、前端 lint、工程与串流边界检查通过，最低系统保持 26.0。
++
++27 张必要截图、各轮摘要、源码哈希、失败诊断和临时源码还原记录已归档。临时探针已精确还原；本轮清理路径、释放量和保留项见 [cleanup.json](../../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/cleanup.json)。真机按键大小、拖动手感及本地/云游戏共同输入沿仓库约定手动验收。

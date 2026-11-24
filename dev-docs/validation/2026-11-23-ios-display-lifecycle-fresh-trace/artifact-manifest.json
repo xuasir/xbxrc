@@ -1,0 +1,112 @@
+{
+  "generatedAt": "2026-11-23T12:14:45.924492+08:00",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 9424,
+      "sha256": "d42a53a0efc65f125a35522d7c3b9e2a88e6d359ca9acc6dd6fe48f42147ad51"
+    },
+    {
+      "path": "analysis-input.json",
+      "bytes": 1700,
+      "sha256": "befc00af7c4bc270bc708a8405c875592395d98732004ac80a62048378661c6e"
+    },
+    {
+      "path": "analysis-plan.json",
+      "bytes": 1238,
+      "sha256": "65735693c801bd67f707ae446f7238bb8697036b2cb72b933671d4d2e311d8e0"
+    },
+    {
+      "path": "analyze_display_trace.py",
+      "bytes": 18928,
+      "sha256": "321055c0c8618f4d016c7722a19ad0f058953a8de19005a6806dcfeb7f56a4d1"
+    },
+    {
+      "path": "archive-audit.json",
+      "bytes": 879,
+      "sha256": "ada0f52fb4cedc37ee85571dd2ccb7c4ae4f224fda0d2d8971dc2f806610873d"
+    },
+    {
+      "path": "base-analysis.json",
+      "bytes": 10281,
+      "sha256": "b04dddede96f3c32450b546f956882d3b11b899883c222cca4148df90c564c50"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 2760,
+      "sha256": "77a833efb034610099235cdb78281ce68264551a9ddc088a11c62645a7a40845"
+    },
+    {
+      "path": "comparison.json",
+      "bytes": 3749,
+      "sha256": "f12b79f17936751adaec50a29d49f36711abde1a3176f065987414ea4bceb3f9"
+    },
+    {
+      "path": "core-analysis.full.json.gz",
+      "bytes": 147833,
+      "sha256": "0299375789ea0bd6485c26f15d713379bb310ac140e6fc01e8052af9feaeb967"
+    },
+    {
+      "path": "core-analysis.json",
+      "bytes": 35818,
+      "sha256": "e78e33d71c2c39a3417438876985f6c898b459052731aa6f589b4c61d2d0128c"
+    },
+    {
+      "path": "evidence-anchors.json",
+      "bytes": 354899,
+      "sha256": "f9e0b4cc164267125bfbae3f8278f90b5c637a0ea7b7af96eb5e9d252770706b"
+    },
+    {
+      "path": "health-summary.json",
+      "bytes": 94454,
+      "sha256": "a6e975cb84556335c073808361b7e5a3ab3a1ab3e8f0cc7fd214d66f8e77e4f8"
+    },
+    {
+      "path": "image-pairing-diagnostics.json",
+      "bytes": 977,
+      "sha256": "4eca1943779f2dd814bd4885bd0575d43c16f30010a4f95f00a7cef921c16fb3"
+    },
+    {
+      "path": "source-excerpts.txt",
+      "bytes": 14417,
+      "sha256": "63abe671222ba929d172a0e1fca961c5a69f7abba2d69f111a6e51fe11f2698e"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 2051,
+      "sha256": "dbec2e7070b13c4baa25d1d96b993c47e1a8e162fa594c80d444e02acbc660a8"
+    },
+    {
+      "path": "steady-windows.csv",
+      "bytes": 30010,
+      "sha256": "975fe66914d27bcada00c5ffc171f5c5a760f066bab7bcc1add61d8a60fe2aa4"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 3755,
+      "sha256": "785ef383aa9a2202dead07cdcb6a9fe18ba21f24c230d50587d2580dd46dca60"
+    }
+  ],
+  "rawInput": {
+    "path": "runtime-logs/ios/runtime-trace-ios-1795401150207-1.jsonl",
+    "bytes": 16504239,
+    "sha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d"
+  },
+  "trackingDocuments": [
+    {
+      "path": "docs/project-task.md",
+      "sha256": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436"
+    },
+    {
+      "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+      "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+    },
+    {
+      "path": "docs/reports/2026-11-20-ios-display-callback.md",
+      "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+    }
+  ],
+  "taskStatus": "Validation Pending",
+  "streamingCoreGate": "PASS",
+  "allFlowsGate": "FAIL"
+}

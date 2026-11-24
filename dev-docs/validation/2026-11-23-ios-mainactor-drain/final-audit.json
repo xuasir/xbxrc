@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-11-23T12:14:45.924492+08:00",
+  "validatedSourceSnapshotsVerified": 6,
+  "retainedCurrentSourcesVerified": 5,
+  "temporaryProbeCleanupVerified": true,
+  "selected52TestsRetained": true,
+  "simulatorPassed": 52,
+  "deviceBuild": "PASS",
+  "indexSha256": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "indexPreserved": true,
+  "unownedEditsPreservedInCurrentWorkspace": true,
+  "externalCleanupChangesObserved": [],
+  "relatedManifestsVerified": 3,
+  "relativeDocumentLinksVerified": 47,
+  "allEvidenceJsonValid": true,
+  "sourceAndDocumentDiffCheck": "PASS",
+  "temporaryRootAbsent": true,
+  "removedAllocatedMiB": 865.59,
+  "manualStreamingStatus": "Validation Pending"
+}

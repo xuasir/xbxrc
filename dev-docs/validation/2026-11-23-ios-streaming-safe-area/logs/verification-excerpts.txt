@@ -1,0 +1,54 @@
+r1
+Test Case '-[XBXRCTests.StreamingDisplayCallbackTests testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression]' passed (0.233 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testConfiguredSocketsStayInViewportAndShareHitGeometryAcrossSizes]' passed (0.005 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testControlDrawingAndHitAreasAvoidSafeAreaAcrossViewportSizesAndScales]' passed (0.003 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testCorruptTemplateDoesNotDiscardOtherTemplatesOrOldSettings]' passed (0.004 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testDraggedEdgePositionsClampWithLargeControlsAndInvalidValuesFallback]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testInsetChangesReleaseHeldInputAndUnchangedInsetsKeepInput]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testNormalizationFiltersUnknownControlsAndBoundsValues]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testNormalizedDragPositionRestoresPixelPositionWithSafeAreaInsets]' passed (0.001 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testScalingChangesDrawingAndJoystickUnitAndConfigurationReleasesHeldInput]' passed (0.002 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testSurfaceProjectsWindowSafetyIntoLowerHalfAndUpdatesFixedSizeInsets]' passed (0.007 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testTemplatesPersistBothOrientationsAndIndependentAppearance]' passed (0.010 seconds).
+Test Case '-[XBXRCTests.TouchLayoutCustomizationTests testUpdateCloneDeleteAndLimitPreserveSavedTemplate]' passed (0.003 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments]' passed (63.535 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft]' passed (34.957 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (17.628 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (23.765 seconds).
+** TEST SUCCEEDED **
+
+r4-final
+Test Case '-[XBXRCTests.StreamingDisplayCallbackTests testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression]' passed (0.215 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (17.423 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (39.215 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (34.205 seconds).
+** TEST SUCCEEDED **
+
+r5-ipad
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (20.310 seconds).
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:309: error: -[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility] : XCTAssertTrue failed
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' failed (23.714 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (29.176 seconds).
+
+r6-phone-initial
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (19.224 seconds).
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:309: error: -[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility] : XCTAssertTrue failed
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' failed (20.426 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (27.891 seconds).
+** TEST FAILED **
+
+r6-phone-compile-interruption
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift:171:29: error: value of type 'XboxAuthStage' has no member 'networkErrorKind'
+** TEST FAILED **
+
+r6-phone-final
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (41.781 seconds).
+** TEST SUCCEEDED **
+
+r6-ipad-final
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial]' passed (19.656 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (39.457 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (27.633 seconds).
+
+r6-device-final
+** BUILD SUCCEEDED **

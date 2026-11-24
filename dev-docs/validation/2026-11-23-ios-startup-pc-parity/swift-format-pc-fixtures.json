@@ -1,0 +1,20 @@
+{
+  "file": "iosapp/XBXRCTests/PCDataParityTests.swift",
+  "command": [
+    "xcrun",
+    "swift-format",
+    "format",
+    "--configuration",
+    "/private/tmp/xbxrc-ios-startup-pc-20261123-cfnj_z17/swift-format.json",
+    "--in-place",
+    "--offsets",
+    "25086:25233",
+    "--offsets",
+    "36269:36416",
+    "--offsets",
+    "36745:36892",
+    "iosapp/XBXRCTests/PCDataParityTests.swift"
+  ],
+  "exitCode": 0,
+  "output": ""
+}

@@ -1,0 +1,164 @@
+// BEGIN 20261123 Scoped UI loading/density probe
+extension CapabilityMigrationTests {
+    @MainActor
+    func testScopedLoadingCapsulesAndCloudDensity() async throws {
+        let suite = "XBXRC.ScopedUILoading.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let cacheRoot = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: cacheRoot)
+        }
+        let settings = AppSettingsStore(defaults: defaults)
+        let gate = ScopedIdentityGate()
+        let auth = AuthStore(
+            settings: settings, client: ScopedIdentityClient(gate: gate),
+            cloudClient: PCPageCloudClient(), keychain: PCPageSessionStore())
+        await auth.restore()
+        XCTAssertTrue(auth.isSignedIn)
+        let data = XboxDataStore(client: PCPageDataClient(), preferredGameLocaleProvider: settings)
+        await data.sync(session: auth.session, ownerGeneration: auth.ownerGeneration)
+        let cloud = CloudLibraryStore(
+            client: PCPageCloudClient(),
+            repository: CloudCatalogSnapshotRepository(rootDirectory: cacheRoot),
+            settingsProvider: settings)
+        let favorites = CloudFavoritesStore(defaults: defaults)
+        let streaming = StreamingFeatureStore(settingsProvider: settings)
+
+        func capture(
+            _ content: AnyView, name: String, size: CGSize = CGSize(width: 390, height: 844),
+            theme: ColorScheme = .dark, language: String = "zh-Hans",
+            textSize: DynamicTypeSize = .large
+        ) async throws {
+            let root = content.environmentObject(settings).environmentObject(auth)
+                .environmentObject(data).environmentObject(cloud)
+                .environmentObject(favorites).environmentObject(streaming)
+                .environment(\.colorScheme, theme).preferredColorScheme(theme)
+                .environment(\.locale, Locale(identifier: language))
+                .environment(\.dynamicTypeSize, textSize)
+                .transaction { $0.disablesAnimations = true }
+                .environment(\.appPageIsActive, false)
+                .appInformationTypography()
+            try await attachLayoutSnapshot(root: root, size: size, name: name)
+        }
+
+        for (name, size, theme, language, textSize) in [
+            ("phone-dark", CGSize(width: 390, height: 844), ColorScheme.dark, "zh-Hans", DynamicTypeSize.large),
+            ("phone-light", CGSize(width: 390, height: 844), ColorScheme.light, "zh-Hans", DynamicTypeSize.large),
+            ("narrow-accessibility", CGSize(width: 320, height: 800), ColorScheme.dark, "en", DynamicTypeSize.accessibility3),
+            ("window-dark", CGSize(width: 667, height: 809), ColorScheme.dark, "zh-Hans", DynamicTypeSize.large),
+            ("tablet-light", CGSize(width: 1024, height: 768), ColorScheme.light, "en", DynamicTypeSize.large),
+        ] {
+            try await capture(
+                AnyView(ProfileView(isActive: false)), name: "my-skeleton-\(name)",
+                size: size, theme: theme, language: language, textSize: textSize)
+        }
+        let refresh = Task { await auth.refreshProfile(reason: .initialActivation) }
+        for _ in 0..<100 {
+            if await gate.isWaiting, auth.profileSectionStates[.social]?.hasSnapshot == true {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTAssertNotNil(auth.profile)
+        XCTAssertEqual(auth.profileSectionStates[.identity]?.phase, .loading)
+        XCTAssertTrue(auth.profileSectionStates[.social]?.hasSnapshot == true)
+        try await capture(AnyView(ProfileView(isActive: false)), name: "my-skeleton-partial")
+
+        await gate.finish(failed: true)
+        await refresh.value
+        XCTAssertEqual(auth.profileSectionStates[.identity]?.phase, .failed)
+        data.libraryFailure = SectionRequestFailure(kind: .timeout)
+        try await capture(AnyView(ProfileView(isActive: false)), name: "my-initial-failure")
+
+        await gate.finish(failed: false)
+        await auth.refreshProfile(reason: .manualRetry)
+        data.libraryFailure = nil
+        await data.activateLibraryOnce()
+        XCTAssertTrue(auth.profileSectionStates[.identity]?.hasSnapshot == true)
+        XCTAssertTrue(data.historyState(targetID: nil).hasSnapshot)
+        try await capture(AnyView(ProfileView(isActive: false)), name: "my-loaded")
+
+        await gate.reset()
+        let secondRefresh = Task { await auth.refreshProfile(reason: .manualPull) }
+        for _ in 0..<100 {
+            if await gate.isWaiting { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTAssertTrue(auth.profileSectionStates[.identity]?.hasSnapshot == true)
+        XCTAssertTrue(auth.profileSectionStates[.identity]?.isRefreshing == true)
+        try await capture(AnyView(ProfileView(isActive: false)), name: "my-refresh-snapshot")
+        await gate.finish(failed: false)
+        await secondRefresh.value
+
+        for (name, size, theme, textSize) in [
+            ("phone-dark", CGSize(width: 390, height: 844), ColorScheme.dark, DynamicTypeSize.large),
+            ("window-dark", CGSize(width: 667, height: 809), ColorScheme.dark, DynamicTypeSize.large),
+            ("narrow-accessibility", CGSize(width: 320, height: 800), ColorScheme.light, DynamicTypeSize.accessibility3),
+        ] {
+            try await capture(
+                AnyView(NavigationStack {
+                    TouchLayoutAdjustmentView(template: nil, appearance: .init())
+                }), name: "touch-capsule-\(name)", size: size, theme: theme, textSize: textSize)
+        }
+
+        await cloud.activate(session: auth.session) { try await auth.prepareCloudAccess() }
+        XCTAssertFalse(cloud.games.isEmpty)
+        for source in ["recent", "newest", "popular", "leaving"] {
+            cloud.sourceStates[source] = .init(
+                value: true, phase: .loaded, isRefreshing: true, updatedAt: .now)
+        }
+        cloud.metadataState = .init(value: true, phase: .loaded, isRefreshing: true, updatedAt: .now)
+        try await capture(
+            AnyView(GameLibraryView(isActive: false)), name: "cloud-source-updates",
+            size: CGSize(width: 667, height: 809))
+        cloud.catalogFailure = SectionRequestFailure(kind: .timeout)
+        cloud.metadataState.failure = SectionRequestFailure(kind: .network)
+        try await capture(
+            AnyView(GameLibraryView(isActive: false)), name: "cloud-global-failures",
+            size: CGSize(width: 667, height: 809))
+    }
+}
+
+private actor ScopedIdentityGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private var failed = false
+    var isWaiting: Bool { continuation != nil }
+
+    func wait() async throws {
+        if !released {
+            await withCheckedContinuation { continuation = $0 }
+        }
+        if failed { throw URLError(.notConnectedToInternet) }
+    }
+
+    func finish(failed: Bool) {
+        self.failed = failed
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func reset() {
+        released = false
+        failed = false
+    }
+}
+
+private struct ScopedIdentityClient: XboxAuthClient {
+    let gate: ScopedIdentityGate
+    func beginLogin() async throws -> LoginStartResult { throw XboxNativeQueryError.unavailable }
+    func finishLogin(
+        callbackURL: URL, pendingJSON: String, seedJSON: String, forceRegionIP: String
+    ) async throws -> AuthSession { PCPageFixtures.bridgeSession }
+    func renewLogin(
+        refreshToken: String, seedJSON: String, forceRegionIP: String
+    ) async throws -> AuthSession { PCPageFixtures.bridgeSession }
+    func loadProfile(webTokenJSON: String) async throws -> XboxProfile { PCPageFixtures.profile }
+    func loadProfileSource(webTokenJSON: String, source: XboxProfileSource) async throws -> XboxProfile {
+        if source == .identity { try await gate.wait() }
+        return PCPageFixtures.profile
+    }
+}
+// END 20261123 Scoped UI loading/density probe

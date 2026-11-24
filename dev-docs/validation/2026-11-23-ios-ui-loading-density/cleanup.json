@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-23",
+  "result": "Passed",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-ui-loading-density-20261123",
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r1/DerivedData",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r1/scoped-ui.xcresult",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r2/scoped-ui.xcresult",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r2/device-build.xcresult",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r2/DeviceDerivedData",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r2/attachments",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r1/ScopedUIProbe.swift",
+    "/private/tmp/xbxrc-ios-ui-loading-density-20261123"
+  ],
+  "rootExistsAfter": false,
+  "removedAllocatedBytes": 974671872,
+  "removedMiB": 929.52,
+  "freeBytesBefore": 49561600000,
+  "freeBytesAfter": 50790400000,
+  "netFreeBytesDelta": 1228800000,
+  "processVerification": "xcodebuild, swift-frontend, xcresulttool and swift-format completed before cleanup; only process-filter command remained",
+  "retained": [
+    "19 native/UI screenshots and 2 supplied references in repository evidence",
+    "test/build summaries, failure diagnostic, source hashes and native render probe",
+    "existing target/ios Rust cache and target/ios-webrtc/137.7151.04/SourcePackages",
+    "existing simulator runtime and shared simulator state",
+    "user supplied clipboard originals"
+  ],
+  "temporaryTestSourceRestored": true
+}

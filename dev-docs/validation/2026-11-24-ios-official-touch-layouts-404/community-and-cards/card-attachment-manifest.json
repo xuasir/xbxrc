@@ -1,0 +1,17 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName": "iPad Pro 13-inch (M5)",
+        "exportedFileName": "C9C2F2EF-46E8-432B-84C3-BEAD8F2CB14B.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "community-touch-layout-cards_0_35D889FF-1996-400B-994F-705CA2161617.png",
+        "timestamp": 1795511012.793
+      }
+    ],
+    "testIdentifier": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails"
+  }
+]

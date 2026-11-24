@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-23",
+  "result": "Passed",
+  "taskIds": [
+    "2026-11-23-ios-streaming-safe-area",
+    "2026-11-23-ios-streaming-menu-overlay"
+  ],
+  "appearance": "appSurface(prominent: true, forceDark: true)",
+  "reducedTransparencyColor": "#415D4E",
+  "phonePassedUICases": [
+    "XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial",
+    "XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections",
+    "XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility"
+  ],
+  "ipadPassedUICases": [
+    "XBXRCUITests.TouchLayoutInteractionTests testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial",
+    "XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility",
+    "XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections"
+  ],
+  "acceptedUICount": 6,
+  "phoneSafetyResult": "r6-phone-initial-summary.json 的两项安全区测试",
+  "phoneDiagnosticResult": "r6-phone-final-summary.json",
+  "ipadResult": "r6-ipad-final-summary.json",
+  "reusedPriorCases": {
+    "r1": 16,
+    "r4InputSuppression": 1
+  },
+  "deviceBuild": "Passed",
+  "swiftFormat": "Passed",
+  "frontendLint": "Passed",
+  "streamingBoundary": "Passed",
+  "projectSyntax": "Passed",
+  "taskSourcesMatchAcceptedRun": true,
+  "protectedUISourcesPreserved": true,
+  "retainedPNGCount": 24,
+  "cleanup": "Completed"
+}

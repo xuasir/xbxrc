@@ -1,0 +1,29 @@
+{
+  "initial_ui_failure": {
+    "source": "initial-test-summary.json",
+    "assertion": "虚拟按键 isHittable 为 false，实际输出与原生命中接续验证",
+    "production_behavior_already_observed": [
+      "两个快捷入口5秒后同时隐藏",
+      "虚拟按键持续绘制"
+    ],
+    "resolved": true,
+    "evidence": [
+      "hidden-controls-hit-routing.json",
+      "final-test-results.json",
+      "build-test-excerpts.txt"
+    ],
+    "finding": "UIAccessibilityElement 的 isHittable 判定为 false；窗口命中真实 TouchLayoutSurfaceView，隐藏后的按压产生16，两个快捷按钮持续隐藏。",
+    "correction": "UI冒烟验证元素存在和真实按压输出，原生探针单独验证命中表面。"
+  },
+  "resume_build_failure": {
+    "source": "resume-smoke.log",
+    "errors": [
+      "fetchCommunityTouchBundles 未生成",
+      "fetchCommunityTouchBundle 未生成"
+    ],
+    "scope": "工作区社区布局接口与绑定并发更新",
+    "action": "保留当前代码，绑定完成后执行定向冒烟",
+    "resolved": true,
+    "result": "绑定同步后Simulator构建与三项定向冒烟通过"
+  }
+}

@@ -1,0 +1,110 @@
+[
+  {
+    "device": "iPhone 18 Pro",
+    "round": "r6-popup",
+    "orientation": 1,
+    "window": [
+      0.0,
+      0.0,
+      402.0,
+      874.0
+    ],
+    "safe": [
+      0.0,
+      62.0,
+      402.0,
+      778.0
+    ],
+    "attachment": "final/iphone-streaming-safe-region-1.txt"
+  },
+  {
+    "device": "iPhone 18 Pro",
+    "round": "r6-popup",
+    "orientation": 4,
+    "window": [
+      0.0,
+      0.0,
+      874.0,
+      402.0
+    ],
+    "safe": [
+      62.0,
+      0.0,
+      750.0,
+      382.0
+    ],
+    "attachment": "final/iphone-streaming-safe-region-4.txt"
+  },
+  {
+    "device": "iPhone 18 Pro",
+    "round": "r6-popup",
+    "orientation": 3,
+    "window": [
+      0.0,
+      0.0,
+      874.0,
+      402.0
+    ],
+    "safe": [
+      62.0,
+      0.0,
+      750.0,
+      382.0
+    ],
+    "attachment": "final/iphone-streaming-safe-region-3.txt"
+  },
+  {
+    "device": "iPad Pro 13-inch (M5)",
+    "round": "r6-popup",
+    "orientation": 1,
+    "window": [
+      0.0,
+      0.0,
+      1032.0,
+      1376.0
+    ],
+    "safe": [
+      0.0,
+      0.0,
+      1032.0,
+      1356.0
+    ],
+    "attachment": "final/ipad-streaming-safe-region-1.txt"
+  },
+  {
+    "device": "iPad Pro 13-inch (M5)",
+    "round": "r6-popup",
+    "orientation": 4,
+    "window": [
+      0.0,
+      0.0,
+      1376.0,
+      1032.0
+    ],
+    "safe": [
+      0.0,
+      0.0,
+      1376.0,
+      1012.0
+    ],
+    "attachment": "final/ipad-streaming-safe-region-4.txt"
+  },
+  {
+    "device": "iPad Pro 13-inch (M5)",
+    "round": "r6-popup",
+    "orientation": 3,
+    "window": [
+      0.0,
+      0.0,
+      1376.0,
+      1032.0
+    ],
+    "safe": [
+      0.0,
+      0.0,
+      1376.0,
+      1012.0
+    ],
+    "attachment": "final/ipad-streaming-safe-region-3.txt"
+  }
+]

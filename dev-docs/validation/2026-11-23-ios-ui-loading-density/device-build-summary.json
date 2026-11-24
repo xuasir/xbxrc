@@ -1,0 +1,11 @@
+{
+  "result": "Passed",
+  "platform": "iPhoneOS",
+  "architecture": "arm64",
+  "configuration": "Debug",
+  "minimumDeployment": "26.0",
+  "sdk": "27.0",
+  "codeSigningAllowed": false,
+  "temporaryProbeRemovedFromFinalSources": true,
+  "errors": []
+}

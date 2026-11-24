@@ -1,0 +1,55 @@
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name XBXRCTests --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk --xcode-version 27A266a --platform-family iOS --deployment-target 26.0 --bundle-identifier com.xuasir.xbxrc.ios.tests --output /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest --target-triple arm64-apple-ios26.0-simulator --binary-file /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/XBXRCTests --dependency-file /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/Objects-normal/arm64/XBXRCTests_dependency_info.dat --stringsdata-file /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/Objects-normal/arm64/XBXRCTests.SwiftFileList --metadata-file-list /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/XBXRCTests.DependencyMetadataFileList --static-metadata-file-list /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/XBXRCTests.DependencyStaticMetadataFileList --swift-const-vals-list /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/Objects-normal/arm64/XBXRCTests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-11-24 17:39:21.154 appintentsmetadataprocessor[46242:13662872] Starting appintentsmetadataprocessor export
+2026-11-24 17:39:21.168 appintentsmetadataprocessor[46242:13662872] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+
+CopySwiftLibs /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest (in target 'XBXRCTests' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/XBXRCTests --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/Frameworks --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/PlugIns --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/SystemExtensions --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/Extensions --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/XCTest.framework --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app/PlugIns/XBXRCTests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCTests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+Ignoring --strip-bitcode because --sign was not passed
+
+Validate /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-validationUtility /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRC.app -shallow-bundle -infoplist-subpath Info.plist
+
+ProcessInfoPlistFile /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/Info.plist /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCUITests.build/empty-XBXRCUITests.plist (in target 'XBXRCUITests' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-infoPlistUtility /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCUITests.build/empty-XBXRCUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCUITests.build/ProductTypeInfoPlistAdditions.plist -o /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/Info.plist
+
+CopySwiftLibs /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest (in target 'XBXRCUITests' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/XBXRCUITests --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/Frameworks --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/PlugIns --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/SystemExtensions --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Products/Debug-iphonesimulator/XBXRCUITests-Runner.app/PlugIns/XBXRCUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/XBXRC.build/Debug-iphonesimulator/XBXRCUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+Ignoring --strip-bitcode because --sign was not passed
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/simulator/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+note: Run script build phase 'Build Rust bridge' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'XBXRC' from project 'XBXRC')
+Test Suite 'Selected tests' started at 2026-11-24 17:40:16.053.
+Test Suite 'XBXRCTests.xctest' started at 2026-11-24 17:40:16.059.
+Test Suite 'PCDataParityTests' started at 2026-11-24 17:40:16.059.
+Test Case '-[XBXRCTests.PCDataParityTests testCancelledCatalogActivationAllowsNextEntry]' started.
+Test Case '-[XBXRCTests.PCDataParityTests testCancelledCatalogActivationAllowsNextEntry]' passed (0.102 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testCloudConsumersKeepOneRecoveryBoundary]' started.
+Test Case '-[XBXRCTests.PCDataParityTests testCloudConsumersKeepOneRecoveryBoundary]' passed (0.016 seconds).
+Test Case '-[XBXRCTests.PCDataParityTests testFailedCatalogActivationWaitsForCooldownAndReenters]' started.
+Test Case '-[XBXRCTests.PCDataParityTests testFailedCatalogActivationWaitsForCooldownAndReenters]' passed (0.030 seconds).
+Test Suite 'PCDataParityTests' passed at 2026-11-24 17:40:16.210.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.148 (0.150) seconds
+Test Suite 'XBXRCTests.xctest' passed at 2026-11-24 17:40:16.211.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.148 (0.152) seconds
+Test Suite 'Selected tests' passed at 2026-11-24 17:40:16.211.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.148 (0.158) seconds
+2026-11-24 17:40:16.595 xcodebuild[34473:13645619] [MT] IDETestOperationsObserverDebug: 54.828 elapsed -- Testing started completed.
+2026-11-24 17:40:16.595 xcodebuild[34473:13645619] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-24 17:40:16.596 xcodebuild[34473:13645619] [MT] IDETestOperationsObserverDebug: 54.828 sec, +54.828 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/xbxrc-ios-pc-http-behavior-parity-r2/recovery-tests-r2.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started

@@ -1,0 +1,21 @@
+{
+  "checkedAt": "2026-11-23T06:43:36.807026+00:00",
+  "activeTaskProcesses": [],
+  "rounds": [
+    "r1",
+    "r2",
+    "r3",
+    "r4-ipad",
+    "r4-device",
+    "r5-build",
+    "r5-phone",
+    "r5-ipad",
+    "r5-device",
+    "r6-build",
+    "r6-phone",
+    "r6-ipad",
+    "r6-device"
+  ],
+  "occupiedKiB": 1339904,
+  "freeBytesBefore": 44482818048
+}

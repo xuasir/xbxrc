@@ -6,6 +6,7 @@ struct StoredAuthSession: Codable, Equatable, Sendable {
     let seedJSON: String
     let webTokenJSON: String
     let appLevel: UInt32
+    let tokenCacheJSON: String?
     let cloudAccountID: String?
     let cloudRegionHost: String?
 
@@ -14,6 +15,7 @@ struct StoredAuthSession: Codable, Equatable, Sendable {
         seedJSON: String,
         webTokenJSON: String,
         appLevel: UInt32,
+        tokenCacheJSON: String? = nil,
         cloudAccountID: String? = nil,
         cloudRegionHost: String? = nil
     ) {
@@ -21,6 +23,7 @@ struct StoredAuthSession: Codable, Equatable, Sendable {
         self.seedJSON = seedJSON
         self.webTokenJSON = webTokenJSON
         self.appLevel = appLevel
+        self.tokenCacheJSON = tokenCacheJSON
         self.cloudAccountID = cloudAccountID
         self.cloudRegionHost = cloudRegionHost
     }
@@ -34,8 +37,15 @@ struct StoredAuthSession: Codable, Equatable, Sendable {
         seedJSON = bridgeSession.seedJson
         webTokenJSON = bridgeSession.webTokenJson
         appLevel = bridgeSession.appLevel
+        tokenCacheJSON = bridgeSession.tokenCacheJson
         self.cloudAccountID = cloudAccountID
         self.cloudRegionHost = cloudRegionHost
+    }
+
+    var bridgeSession: AuthSession {
+        AuthSession(
+            refreshToken: refreshToken, seedJson: seedJSON,
+            webTokenJson: webTokenJSON, appLevel: appLevel, tokenCacheJson: tokenCacheJSON)
     }
 }
 

@@ -7251,10 +7251,14 @@ dependencies = [
 name = "xbox-auth-flow"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
  "log",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "url",
  "uuid",
  "xbox-webapi",
@@ -7288,7 +7292,9 @@ dependencies = [
  "xbox-cloud-catalog-flow",
  "xbox-streaming",
  "xbox-streaming-protocol",
+ "xbox-touch-layouts",
  "xbox-webapi",
+ "zip",
 ]
 
 [[package]]
@@ -7312,6 +7318,18 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "xbox-touch-layouts"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "zip",
 ]
 
 [[package]]
@@ -7622,6 +7640,7 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.13.0",
  "memchr",
 ]

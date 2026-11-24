@@ -1,0 +1,27 @@
+{
+  "status": "Completed",
+  "completedAt": "2026-11-23T21:03:12.556281+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-safe-area-20261123",
+  "temporaryRootExistsAfter": false,
+  "temporaryAllocatedBytesRemoved": 1696030720,
+  "temporaryGiBRemoved": 1.58,
+  "supersededEvidenceFilesRemoved": 22,
+  "supersededEvidenceBytesRemoved": 63870588,
+  "diskFreeBytesBefore": 49152000000,
+  "diskFreeBytesAfter": 50790400000,
+  "diskFreeBytesDelta": 1638400000,
+  "retainedEvidenceItems": 30,
+  "retainedEvidenceHashesVerified": true,
+  "retainedPNG": 24,
+  "retainedDiagnosticPNG": 2,
+  "retainedCacheDirectories": {
+    "target/ios-webrtc": true,
+    "target/ios": true
+  },
+  "activeBuildTestExportProcessesBeforeCleanup": [],
+  "cacheDirectoryStatusAfter": {
+    "target/ios-webrtc": true,
+    "target/ios-rust": false,
+    "target/ios": true
+  }
+}

@@ -292,7 +292,9 @@ final class AuthStore: ObservableObject {
             phase = .signedOut
             return
         }
-        guard profileInitialRefreshGeneration != ownerGeneration else {
+        guard profileInitialRefreshGeneration != ownerGeneration
+            || profileSectionStates.values.contains(where: { $0.failure?.allowsActivation() ?? false })
+        else {
             IOSRuntimeTrace.decision(
                 domain: "auth",
                 event: "profileActivationSkipped",
@@ -341,8 +343,9 @@ final class AuthStore: ObservableObject {
         }
         profileRefreshTask = task
         profileRefreshTaskID = taskID
-        await task.value
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         if profileRefreshTaskID == taskID {
+            if task.isCancelled { profileInitialRefreshGeneration = nil }
             profileRefreshTask = nil
             profileRefreshTaskID = nil
         }
@@ -408,7 +411,7 @@ final class AuthStore: ObservableObject {
         let owner = ownerGeneration
         let task = Task { @MainActor [weak self] () -> String? in
             guard let self else { return nil }
-            let disposition = await self.refreshSession(stored)
+            let disposition = await self.refreshSession(stored, forceCoreRefresh: true)
             guard owner == self.ownerGeneration else { return nil }
             if disposition == .renewed {
                 self.needsDataSignIn = false
@@ -448,7 +451,7 @@ final class AuthStore: ObservableObject {
             friendCount: source == .friends ? patch.friendCount : old?.friendCount)
     }
 
-    func prepareCloudAccess() async throws -> PreparedCloudAccess {
+    func prepareCloudAccess(startup: XboxStreamStartup? = nil) async throws -> PreparedCloudAccess {
         guard session != nil, !isSigningOut else {
             IOSRuntimeTrace.decision(
                 domain: "auth",
@@ -460,6 +463,7 @@ final class AuthStore: ObservableObject {
             throw AuthStoreError.signedOut
         }
         let requestOwnerGeneration = ownerGeneration
+        let authProvider = makeStreamingAuthProvider(ownerGeneration: requestOwnerGeneration)
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
@@ -473,11 +477,13 @@ final class AuthStore: ObservableObject {
         do {
             let result = try await performAccessPreparation(
                 ownerGeneration: requestOwnerGeneration,
-                prepare: { [cloudClient, settings] currentSession in
+                prepare: { [cloudClient, settings] currentSession, checkpoint in
                     try await cloudClient.prepareAccess(
-                        refreshToken: currentSession.refreshToken,
-                        seedJSON: currentSession.seedJSON,
-                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+                        session: currentSession,
+                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP,
+                        checkpoint: checkpoint,
+                        authProvider: authProvider,
+                        startup: startup
                     )
                 },
                 refreshedSession: { result, _ in
@@ -521,7 +527,7 @@ final class AuthStore: ObservableObject {
         }
     }
 
-    func prepareHomeAccess() async throws -> PreparedHomeAccess {
+    func prepareHomeAccess(startup: XboxStreamStartup? = nil) async throws -> PreparedHomeAccess {
         guard session != nil, !isSigningOut else {
             IOSRuntimeTrace.decision(
                 domain: "auth",
@@ -533,6 +539,7 @@ final class AuthStore: ObservableObject {
             throw AuthStoreError.signedOut
         }
         let requestOwnerGeneration = ownerGeneration
+        let authProvider = makeStreamingAuthProvider(ownerGeneration: requestOwnerGeneration)
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
@@ -546,11 +553,13 @@ final class AuthStore: ObservableObject {
         do {
             let result = try await performAccessPreparation(
                 ownerGeneration: requestOwnerGeneration,
-                prepare: { [cloudClient, settings] currentSession in
+                prepare: { [cloudClient, settings] currentSession, checkpoint in
                     try await cloudClient.prepareHomeAccess(
-                        refreshToken: currentSession.refreshToken,
-                        seedJSON: currentSession.seedJSON,
-                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+                        session: currentSession,
+                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP,
+                        checkpoint: checkpoint,
+                        authProvider: authProvider,
+                        startup: startup
                     )
                 },
                 refreshedSession: { result, currentSession in
@@ -607,11 +616,14 @@ final class AuthStore: ObservableObject {
                 let current = self.session,
                 Self.streamingAccountID(current) == update.accountId
             else { throw AuthStoreError.staleOperation }
-            if current.refreshToken == update.authSession.refreshToken { return StreamingAuthCommitResult.committed }
+            if current.bridgeSession == update.authSession {
+                return StreamingAuthCommitResult.committed
+            }
             // 其他认证入口已提交更近的凭据时，会话沿同一账户同步它。
-            if current.refreshToken != update.previousRefreshToken {
-                return .synchronize(AuthSession(refreshToken: current.refreshToken, seedJson: current.seedJSON,
-                    webTokenJson: current.webTokenJSON, appLevel: current.appLevel))
+            if current.refreshToken != update.previousRefreshToken
+                && current.refreshToken != update.authSession.refreshToken
+            {
+                return .synchronize(current.bridgeSession)
             }
             let refreshed = StoredAuthSession(bridgeSession: update.authSession,
                 cloudAccountID: current.cloudAccountID, cloudRegionHost: current.cloudRegionHost)
@@ -638,7 +650,10 @@ final class AuthStore: ObservableObject {
 
     private func performAccessPreparation<Result: Sendable>(
         ownerGeneration requestOwnerGeneration: UInt64,
-        prepare: @escaping @MainActor (StoredAuthSession) async throws -> Result,
+        prepare:
+            @escaping @MainActor (StoredAuthSession, @escaping AuthCredentialCheckpoint)
+            async throws ->
+            Result,
         refreshedSession: @escaping @MainActor (Result, StoredAuthSession) -> StoredAuthSession,
         accessHandle: @escaping @MainActor (Result) -> String
     ) async throws -> Result {
@@ -652,7 +667,10 @@ final class AuthStore: ObservableObject {
             else {
                 throw AuthStoreError.staleOperation
             }
-            let result = try await prepare(currentSession)
+            let checkpoint = self.makeCredentialCheckpoint(
+                revision: revision,
+                ownerGeneration: requestOwnerGeneration, fallback: currentSession)
+            let result = try await prepare(currentSession, checkpoint)
             do {
                 guard self.canCommitAccess(
                     revision: revision,
@@ -660,9 +678,11 @@ final class AuthStore: ObservableObject {
                 ) else {
                     throw AuthStoreError.staleOperation
                 }
-                let refreshed = refreshedSession(result, currentSession)
-                try await self.keychain.save(refreshed)
-                guard self.canCommitAccess(
+                try Task.checkCancellation()
+                let refreshed = refreshedSession(result, self.session ?? currentSession)
+                if self.session != refreshed { try await self.keychain.save(refreshed) }
+                guard
+                    self.canCommitAccess(
                     revision: revision,
                     ownerGeneration: requestOwnerGeneration
                 ) else {
@@ -674,6 +694,77 @@ final class AuthStore: ObservableObject {
                 await self.cloudClient.releaseAccess(handle: accessHandle(result))
                 throw error
             }
+        }
+        return commit.value
+    }
+
+    private func makeCredentialCheckpoint(
+        revision: UInt64, ownerGeneration: UInt64, fallback: StoredAuthSession,
+        preserveCloudScope: Bool = true
+    ) -> AuthCredentialCheckpoint {
+        { [weak self] update in
+            guard let self,
+                self.canCommitAccess(revision: revision, ownerGeneration: ownerGeneration)
+            else {
+                throw AuthStoreError.staleOperation
+            }
+            let current = self.session ?? fallback
+            let refreshed = StoredAuthSession(
+                bridgeSession: update.authSession,
+                cloudAccountID: preserveCloudScope ? current.cloudAccountID : nil,
+                cloudRegionHost: preserveCloudScope ? current.cloudRegionHost : nil)
+            if current != refreshed { try await self.keychain.save(refreshed) }
+            guard self.canCommitAccess(revision: revision, ownerGeneration: ownerGeneration) else {
+                throw AuthStoreError.staleOperation
+            }
+            // 核心轮换在当前认证事务中保存，继续使用同一个 revision。
+            self.session = refreshed
+            IOSRuntimeTrace.event(
+                domain: "auth", event: "credentialCheckpointCommitted",
+                payload: [
+                    "coreOnly": .bool(update.coreOnly),
+                    "hasTokenCache": .bool(refreshed.tokenCacheJSON != nil),
+                ],
+                dimension: .lifecycle, importance: .key)
+        }
+    }
+
+    private func makeStreamingAuthProvider(ownerGeneration: UInt64) -> RustStreamingAuthProvider {
+        RustStreamingAuthProvider { [weak self] target, rejected in
+            guard let self else { throw AuthStoreError.staleOperation }
+            return try await self.ensureStreamingCredentials(
+                target: target, rejectedToken: rejected,
+                ownerGeneration: ownerGeneration)
+        }
+    }
+
+    private func ensureStreamingCredentials(
+        target: String, rejectedToken: String?, ownerGeneration: UInt64
+    ) async throws -> AuthSession {
+        let scope: XboxAuthScope
+        switch target {
+        case "web": scope = .web
+        case "home": scope = .home
+        case "cloud": scope = .cloud
+        default: throw XboxBridgeError.InvalidData("streamingCredentialTargetInvalid")
+        }
+        let commit = try await credentialCoordinator.perform(advancesRevision: true) {
+            [weak self] revision in
+            guard let self,
+                self.canCommitAccess(revision: revision, ownerGeneration: ownerGeneration),
+                let current = self.session
+            else { throw AuthStoreError.staleOperation }
+            let auth = try await self.client.renewLogin(
+                session: current,
+                forceRegionIP: self.settings.cloudRegionPreset.forceRegionIP, scope: scope,
+                forceCoreRefresh: false, rejectedToken: rejectedToken,
+                checkpoint: self.makeCredentialCheckpoint(
+                    revision: revision,
+                    ownerGeneration: ownerGeneration, fallback: current))
+            guard self.canCommitAccess(revision: revision, ownerGeneration: ownerGeneration) else {
+                throw AuthStoreError.staleOperation
+            }
+            return auth
         }
         return commit.value
     }
@@ -713,6 +804,7 @@ final class AuthStore: ObservableObject {
         phase = .refreshing
         let disposition = await refreshSession(
             session,
+            scope: .cloud,
             preserveCloudScope: false,
             markSignedIn: false,
             expectedRevision: requestRevision
@@ -803,6 +895,8 @@ final class AuthStore: ObservableObject {
     @discardableResult
     private func refreshSession(
         _ stored: StoredAuthSession,
+        scope: XboxAuthScope = .web,
+        forceCoreRefresh: Bool = false,
         preserveCloudScope: Bool = true,
         markSignedIn: Bool = true,
         expectedRevision: UInt64? = nil
@@ -827,11 +921,18 @@ final class AuthStore: ObservableObject {
                 advancesRevision: true
             ) { [weak self] revision -> SessionRefreshDisposition in
                 guard let self else { throw AuthStoreError.staleOperation }
+                let current = self.session ?? stored
                 do {
                     let bridgeSession = try await self.client.renewLogin(
-                        refreshToken: stored.refreshToken,
-                        seedJSON: stored.seedJSON,
-                        forceRegionIP: self.settings.cloudRegionPreset.forceRegionIP
+                        session: current,
+                        forceRegionIP: self.settings.cloudRegionPreset.forceRegionIP,
+                        scope: scope,
+                        forceCoreRefresh: forceCoreRefresh,
+                        rejectedToken: nil,
+                        checkpoint: self.makeCredentialCheckpoint(
+                            revision: revision,
+                            ownerGeneration: self.ownerGeneration, fallback: current,
+                            preserveCloudScope: preserveCloudScope)
                     )
                     guard self.credentialCoordinator.isCurrent(revision) else {
                         throw AuthStoreError.staleOperation
@@ -841,7 +942,7 @@ final class AuthStore: ObservableObject {
                         cloudAccountID: preserveCloudScope ? stored.cloudAccountID : nil,
                         cloudRegionHost: preserveCloudScope ? stored.cloudRegionHost : nil
                     )
-                    try await self.keychain.save(refreshed)
+                    if self.session != refreshed { try await self.keychain.save(refreshed) }
                     guard self.credentialCoordinator.isCurrent(revision) else {
                         throw AuthStoreError.staleOperation
                     }
@@ -852,6 +953,9 @@ final class AuthStore: ObservableObject {
                     self.recoveryAction = .refreshProfile
                     return .renewed
                 } catch {
+                    if Task.isCancelled || AuthStoreError.isCancelled(error) {
+                        throw CancellationError()
+                    }
                     guard self.credentialCoordinator.isCurrent(revision),
                           !AuthStoreError.isStale(error)
                     else {
@@ -883,7 +987,7 @@ final class AuthStore: ObservableObject {
                         self.recoveryAction = .signIn
                         return .rejected
                     }
-                    self.session = stored
+                    self.session = self.session ?? current
                     if markSignedIn {
                         self.phase = .signedIn
                     }
@@ -922,7 +1026,9 @@ final class AuthStore: ObservableObject {
             )
             return .renewed
         } catch {
-            guard !AuthStoreError.isStale(error) else { return .stale }
+            guard !AuthStoreError.isStale(error), !(error is CancellationError) else {
+                return .stale
+            }
             errorMessage = SectionRequestFailure(error: error).message
             phase = .failed
             recoveryAction = .signIn

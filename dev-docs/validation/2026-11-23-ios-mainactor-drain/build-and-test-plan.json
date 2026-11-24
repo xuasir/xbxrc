@@ -1,0 +1,100 @@
+{
+  "xcode": "27.0 (27A266a)",
+  "sdk": "iOS 27.0",
+  "commands": {
+    "simulator": [
+      "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild",
+      "-project",
+      "iosapp/XBXRC.xcodeproj",
+      "-scheme",
+      "XBXRC",
+      "-configuration",
+      "Debug",
+      "-clonedSourcePackagesDirPath",
+      "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "-disableAutomaticPackageResolution",
+      "-skipPackageUpdates",
+      "-destination",
+      "platform=iOS Simulator,id=79FF2297-6C93-409D-8E53-59A51F8B62AD",
+      "-derivedDataPath",
+      "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/DerivedDataSimulator",
+      "-parallel-testing-enabled",
+      "NO",
+      "-collect-test-diagnostics",
+      "never",
+      "-resultBundlePath",
+      "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/simulator-r3.xcresult",
+      "-only-testing:XBXRCTests/StreamingDisplayCallbackTests",
+      "-only-testing:XBXRCTests/StreamingFrameFeedbackTests",
+      "-only-testing:XBXRCTests/TraceReliabilityTests",
+      "-only-testing:XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession",
+      "-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame",
+      "-only-testing:XBXRCTests/StreamingControlsStateTests/testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState",
+      "-only-testing:XBXRCTests/StreamingControlsStateTests/testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas",
+      "CODE_SIGNING_ALLOWED=NO",
+      "COMPILER_INDEX_STORE_ENABLE=NO",
+      "test"
+    ],
+    "device": [
+      "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild",
+      "-project",
+      "iosapp/XBXRC.xcodeproj",
+      "-scheme",
+      "XBXRC",
+      "-configuration",
+      "Debug",
+      "-clonedSourcePackagesDirPath",
+      "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "-disableAutomaticPackageResolution",
+      "-skipPackageUpdates",
+      "-destination",
+      "generic/platform=iOS",
+      "-derivedDataPath",
+      "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/DerivedDataDevice",
+      "-resultBundlePath",
+      "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/device.xcresult",
+      "CODE_SIGNING_ALLOWED=NO",
+      "COMPILER_INDEX_STORE_ENABLE=NO",
+      "build"
+    ]
+  },
+  "testSelectors": [
+    "XBXRCTests/StreamingDisplayCallbackTests",
+    "XBXRCTests/StreamingFrameFeedbackTests",
+    "XBXRCTests/TraceReliabilityTests",
+    "XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+    "XBXRCTests/XBXRCTests/testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules",
+    "XBXRCTests/XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession",
+    "XBXRCTests/XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation",
+    "XBXRCTests/XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine",
+    "XBXRCTests/XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession",
+    "XBXRCTests/XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame",
+    "XBXRCTests/StreamingControlsStateTests/testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState",
+    "XBXRCTests/StreamingControlsStateTests/testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas"
+  ],
+  "resultBundles": {
+    "simulator": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/simulator-r3.xcresult",
+    "device": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/device.xcresult"
+  },
+  "temporaryRoot": "/private/tmp/xbxrc-ios-mainactor-drain-20261123",
+  "systemTemporary": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/SystemTemporary",
+  "attempts": [
+    {
+      "mode": "simulator",
+      "resultBundle": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/simulator.xcresult",
+      "execution": "simulator-attempt1-execution.json",
+      "result": "compileFailed"
+    },
+    {
+      "mode": "simulator",
+      "resultBundle": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/simulator-r2.xcresult",
+      "execution": "simulator-attempt2-execution.json",
+      "result": "testCompileFailed"
+    }
+  ]
+}

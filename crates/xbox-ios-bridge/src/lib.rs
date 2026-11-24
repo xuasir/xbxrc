@@ -2,11 +2,15 @@ use serde_json::Value;
 use std::collections::HashMap;
 use xbox_auth_flow::{
     AuthFlow, AuthFlowError, AuthFlowSeed, CompleteOAuthLoginInput, PendingOAuthLogin,
-    RefreshAndFinalizeInput, StartOAuthLoginInput,
+    StartOAuthLoginInput,
 };
 use xbox_webapi::{PeopleApi, ProfileApi, SocialApi, UserPresenceApi};
 
+mod auth_session;
 mod catalog_sources;
+pub use auth_session::{
+    XboxAuthCheckpoint, XboxAuthObserver, XboxAuthScope, XboxAuthStage, XboxStreamingAuthProvider,
+};
 mod cloud_access;
 mod cloud_catalog;
 mod cloud_queries;
@@ -17,6 +21,14 @@ mod personal_queries;
 mod profile_queries;
 mod query_failure;
 mod streaming;
+mod touch_layouts;
+
+pub use touch_layouts::{
+    fetch_community_touch_bundle, fetch_community_touch_bundles, fetch_official_touch_bundle,
+    fetch_official_touch_bundles, XboxOfficialTouchBundle, XboxOfficialTouchBundleChoice,
+    XboxSavedTouchLayout, XboxTouchLayoutAsset, XboxTouchLayoutChoice, XboxTouchLayoutLibrary,
+    XboxTouchLayoutSnapshot,
+};
 
 pub use catalog_sources::fetch_catalog_source;
 pub use cloud_access::{
@@ -49,13 +61,14 @@ pub use personal_queries::{
 pub use profile_queries::{fetch_profile_section, XboxProfileSource};
 pub use query_failure::{XboxQueryFailure, XboxQueryFailureKind, XboxSourceFailure};
 pub use streaming::{
-    create_scoped_stream_session, create_stream_session, is_stream_message_handshake_ack,
-    stream_control_bootstrap_payloads, stream_control_gamepad_added_payload,
-    stream_control_gamepad_changed_payload, stream_data_channel_profiles,
-    stream_input_frame_feedback_payload, stream_input_metadata_bootstrap_payload,
-    stream_message_handshake_payload, stream_post_handshake_payloads, XboxIceCandidate,
-    XboxIceServer, XboxPreparedSignaling, XboxRemoteIceBatch, XboxStartupProgress,
-    XboxStreamDataChannelProfile, XboxStreamFrameFeedback, XboxStreamSession,
+    create_scoped_stream_session, create_stream_session, create_stream_startup,
+    is_stream_message_handshake_ack, stream_control_bootstrap_payloads,
+    stream_control_gamepad_added_payload, stream_control_gamepad_changed_payload,
+    stream_data_channel_profiles, stream_input_frame_feedback_payload,
+    stream_input_metadata_bootstrap_payload, stream_message_handshake_payload,
+    stream_post_handshake_payloads, XboxIceCandidate, XboxIceServer, XboxPreparedSignaling,
+    XboxRemoteIceBatch, XboxStartupFailure, XboxStartupFailureKind, XboxStartupProgress,
+    XboxStreamDataChannelProfile, XboxStreamFrameFeedback, XboxStreamSession, XboxStreamStartup,
     XboxStreamingAuthUpdate, XboxStreamingError, XboxWebRtcPlan,
 };
 
@@ -65,6 +78,8 @@ const XAL_CALLBACK_SCHEME: &str = "ms-xal-000000004c20a908";
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum XboxBridgeError {
+    #[error("operationCancelled")]
+    Cancelled,
     #[error("Xbox query failed: {failure:?}")]
     Query { failure: XboxQueryFailure },
     #[error("Retryable authentication failure: {0}")]
@@ -87,12 +102,14 @@ pub struct LoginStartResult {
     pub seed_json: String,
 }
 
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AuthSession {
     pub refresh_token: String,
     pub seed_json: String,
     pub web_token_json: String,
     pub app_level: u32,
+    #[uniffi(default = None)]
+    pub token_cache_json: Option<String>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -145,41 +162,48 @@ pub async fn complete_login(
             callback_url,
             pending,
             seed: seed.clone(),
-            force_region_ip,
+            force_region_ip: force_region_ip.clone(),
             include_streaming_tokens: true,
         })
         .await
         .map_err(authentication_error)?;
 
-    auth_session_from_bundle(output.auth_bundle, &seed)
+    auth_session_from_bundle(output.auth_bundle, &seed, force_region_ip)
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn refresh_login(
-    refresh_token: String,
-    seed_json: String,
+    session: AuthSession,
     force_region_ip: String,
+    scope: XboxAuthScope,
+    force_core_refresh: bool,
+    rejected_token: Option<String>,
+    observer: std::sync::Arc<dyn XboxAuthObserver>,
 ) -> Result<AuthSession, XboxBridgeError> {
-    let seed: AuthFlowSeed = deserialize(&seed_json)?;
     let force_region_ip = normalize_force_region_ip(force_region_ip);
-    let output = AuthFlow::new()
-        .refresh_and_finalize(RefreshAndFinalizeInput {
-            refresh_token,
-            seed: seed.clone(),
-            force_region_ip,
-            include_streaming_tokens: true,
-        })
-        .await
-        .map_err(authentication_error)?;
-
-    auth_session_from_bundle(output.auth_bundle, &seed)
+    let force_core_refresh = force_core_refresh
+        || auth_session::token_was_rejected(
+            &session,
+            scope.flow_scope(),
+            rejected_token.as_deref(),
+        )?;
+    Box::pin(auth_session::renew_auth_session(
+        session,
+        force_region_ip,
+        scope.flow_scope(),
+        force_core_refresh,
+        observer,
+    ))
+    .await
 }
 
 fn authentication_error(error: AuthFlowError) -> XboxBridgeError {
-    if error.is_retriable() {
-        XboxBridgeError::RetryableAuthentication(error.to_string())
+    if error.requires_interactive_login() {
+        XboxBridgeError::Authentication("loginCredentialsRejected".into())
+    } else if let Some(upstream) = error.upstream_error() {
+        query_failure::query_error(upstream.clone())
     } else {
-        XboxBridgeError::Authentication(error.to_string())
+        XboxBridgeError::InvalidData("authenticationProtocolInvalid".into())
     }
 }
 
@@ -228,13 +252,9 @@ pub async fn fetch_profile(web_token_json: String) -> Result<XboxProfile, XboxBr
 fn auth_session_from_bundle(
     bundle: xbox_auth_flow::AuthBundle,
     seed: &AuthFlowSeed,
+    force_region_ip: String,
 ) -> Result<AuthSession, XboxBridgeError> {
-    Ok(AuthSession {
-        refresh_token: bundle.user_token.refresh_token,
-        seed_json: serialize(seed)?,
-        web_token_json: serialize(&bundle.web_token)?,
-        app_level: bundle.app_level,
-    })
+    auth_session::session_from_bundle(bundle, seed, force_region_ip)
 }
 
 fn serialize<T: serde::Serialize>(value: &T) -> Result<String, XboxBridgeError> {

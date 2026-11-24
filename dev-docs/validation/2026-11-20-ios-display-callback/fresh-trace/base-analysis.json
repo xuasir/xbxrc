@@ -1,0 +1,314 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 20267868,
+        "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795187951399-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Downloads",
+        "files": 1,
+        "maxFiles": 6,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "coverage": {
+    "flows": {
+      "library": {
+        "checks": [
+          {
+            "alternatives": [
+              "libraryPageAppeared"
+            ],
+            "label": "library page",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "cacheRestoreStarted"
+            ],
+            "label": "cache restore start",
+            "observed": [
+              "cacheRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreFailed",
+              "cacheRestoreHit",
+              "cacheRestoreMiss",
+              "cacheRestoreRejected",
+              "cacheRestoreSkipped"
+            ],
+            "label": "cache restore outcome",
+            "observed": [
+              "cacheRestoreHit"
+            ]
+          },
+          {
+            "alternatives": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ],
+            "label": "catalog activation decision",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "contentPresented",
+              "skeletonPresented"
+            ],
+            "label": "library presentation",
+            "observed": []
+          }
+        ],
+        "required": true
+      },
+      "startup": {
+        "checks": [
+          {
+            "alternatives": [
+              "appLaunchStarted"
+            ],
+            "label": "app launch",
+            "observed": [
+              "appLaunchStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreStarted"
+            ],
+            "label": "auth restore start",
+            "observed": [
+              "authRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreFailed",
+              "authRestoreSucceeded"
+            ],
+            "label": "auth restore outcome",
+            "observed": [
+              "authRestoreSucceeded"
+            ]
+          }
+        ],
+        "required": true
+      }
+    },
+    "missingRequiredAnchors": [
+      {
+        "anchor": "library page",
+        "flow": "library"
+      },
+      {
+        "anchor": "catalog activation decision",
+        "flow": "library"
+      },
+      {
+        "anchor": "library presentation",
+        "flow": "library"
+      }
+    ]
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "coverageViolations": 3,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "gate": "FAIL",
+  "pairing": {
+    "evaluatedStarts": 1,
+    "violations": []
+  },
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "categories": {
+      "decision": 7,
+      "event": 40,
+      "snapshot": 559,
+      "state": 33271
+    },
+    "dimensions": {
+      "core": 8,
+      "input": 105,
+      "lifecycle": 95,
+      "media_supply": 426,
+      "network": 13423,
+      "presentation": 19701,
+      "recovery": 119
+    },
+    "domains": {
+      "auth": 15,
+      "cloud-library": 7,
+      "ios-app": 13,
+      "ios-streaming": 33826,
+      "trace": 2,
+      "xbox-data": 14
+    },
+    "events": {
+      "accessPrepareStarted": 2,
+      "accessPrepareSucceeded": 2,
+      "accessReleased": 2,
+      "answerApplied": 2,
+      "appLaunchStarted": 1,
+      "audioDirectionChanged": 4,
+      "audioLifecycleStarted": 2,
+      "audioPlayoutGlitchDetected": 2,
+      "audioRouteChanged": 2,
+      "audioSessionActivationStarted": 2,
+      "audioSessionActivationSucceeded": 2,
+      "audioTrackReady": 2,
+      "audioUnitStarted": 2,
+      "authRestoreSessionFound": 1,
+      "authRestoreStarted": 1,
+      "authRestoreSucceeded": 1,
+      "authSessionRenewStarted": 1,
+      "authSessionRenewSucceeded": 1,
+      "cacheDiskLoadStarted": 1,
+      "cacheDiskLoadSucceeded": 1,
+      "cacheRestoreHit": 1,
+      "cacheRestoreScopeChanged": 1,
+      "cacheRestoreStarted": 1,
+      "controlBootstrapCompleted": 2,
+      "controlBootstrapPreHandshakeCompleted": 2,
+      "controlReady": 2,
+      "dataChannelProfilesCreated": 2,
+      "dataChannelStateChanged": 13325,
+      "dataSessionBound": 4,
+      "dataStoreCleared": 1,
+      "dataSyncSkipped": 3,
+      "displayFirstPresent": 2,
+      "displayHealthSnapshot": 118,
+      "displayPipelineReady": 2,
+      "displayPresent": 6362,
+      "displaySubmit": 6366,
+      "exportRequested": 1,
+      "fileOpened": 1,
+      "firstVideoFrame": 2,
+      "frameFeedback": 111,
+      "hapticsStopped": 2,
+      "homeAccessBoundaryStarted": 2,
+      "homeAccessBoundarySucceeded": 2,
+      "homeAccessUniFFIBoundaryStarted": 2,
+      "homeAccessUniFFIBoundarySucceeded": 2,
+      "hostsRefreshStarted": 1,
+      "hostsRefreshSucceeded": 1,
+      "iceTasksCancelled": 2,
+      "inputBootstrapCompleted": 2,
+      "inputBootstrapPreHandshakeCompleted": 2,
+      "inputFrameSent": 104,
+      "inputStopped": 2,
+      "libraryClearStarted": 1,
+      "libraryStateChanged": 1,
+      "localIceCompleted": 2,
+      "localIceStarted": 2,
+      "localOfferPrepared": 2,
+      "messageHandshakeAcked": 2,
+      "messageHandshakeSent": 2,
+      "messagePostHandshakeCompleted": 2,
+      "offerStarted": 2,
+      "peerClosed": 2,
+      "peerConnected": 2,
+      "peerDisconnected": 1,
+      "peerRuntimeConfigured": 2,
+      "presentationDetached": 2,
+      "receiverTrackDiscovered": 197,
+      "remoteAnswerApplyCompleted": 2,
+      "remoteAnswerApplyStarted": 2,
+      "remoteDescriptionApplyCallback": 2,
+      "remoteDescriptionApplyCompleted": 2,
+      "remoteDescriptionApplyStarted": 2,
+      "remoteDescriptionSetDispatched": 2,
+      "remoteDescriptionSetInvoking": 2,
+      "remoteDescriptionSetWillDispatch": 2,
+      "remoteIceBatchApplied": 4,
+      "remoteIceBatchReceived": 12,
+      "remoteIceCandidatesApplied": 4,
+      "remoteIceCompleted": 2,
+      "remoteSessionClosed": 2,
+      "rtcHealthSnapshot": 207,
+      "rumbleParsed": 1,
+      "runtimeSupervisionSnapshot": 119,
+      "scenePhaseChanged": 12,
+      "sectionQueryStarted": 1,
+      "sectionQuerySucceeded": 1,
+      "sessionCreateStarted": 2,
+      "sessionReady": 2,
+      "sessionResumeValidated": 5,
+      "sessionSuspended": 4,
+      "sessionTerminal": 2,
+      "signalingIceBatchStarted": 2,
+      "signalingIceBatchSucceeded": 2,
+      "signalingIceCompletionStarted": 2,
+      "signalingIceCompletionSucceeded": 2,
+      "signalingOfferStarted": 2,
+      "signalingOfferSucceeded": 2,
+      "steadyMediaObserved": 2,
+      "streamLaunchStarted": 2,
+      "streamingStateChanged": 30,
+      "surfaceActivationSkipped": 2,
+      "terminalSelected": 2,
+      "uniffiBoundaryStarted": 1,
+      "uniffiBoundarySucceeded": 1,
+      "videoFrameAcceptedToMailbox": 6366,
+      "videoFrameDropped": 171,
+      "videoSurfaceAttached": 199,
+      "videoSurfaceRendererReady": 2,
+      "videoSurfaceSized": 2
+    },
+    "files": [
+      "/Users/guo.xu/Downloads/runtime-trace-ios-1795187951399-1.jsonl"
+    ],
+    "firstTsMs": 1795187951399,
+    "importance": {
+      "debug": 13446,
+      "essential": 11,
+      "key": 20420
+    },
+    "lastTsMs": 1795188247993,
+    "profiles": {
+      "dev": 33877
+    },
+    "rows": 33877,
+    "sessions": [
+      "F24103DB-2D96-4617-9974-EEB0BE9EAFCD"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "F24103DB-2D96-4617-9974-EEB0BE9EAFCD": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 33877,
+        "regressions": 0,
+        "rows": 33877
+      }
+    },
+    "violations": []
+  }
+}

@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-11-20T19:48:15.727321+08:00",
+  "generatedAt": "2026-11-23T12:14:45.924492+08:00",
   "artifacts": [
     {
       "path": "README.md",
-      "bytes": 2643,
-      "sha256": "86a00f67ba8f37a1caba47e9848bbbb15088329f672c5feee9a41bf1b19cf1d1"
+      "bytes": 3333,
+      "sha256": "b514b4b360852d3778170ef20f5c70ee22eabaf74c581d863bdd4396b4ee1141"
     },
     {
       "path": "base-analyzer-tests.log",
@@ -30,6 +30,96 @@
       "path": "final-device-build-summary.log",
       "bytes": 1104,
       "sha256": "fa8953394e1860a215fa26735a96cefe3d830197916b6721543635583f559844"
+    },
+    {
+      "path": "fresh-trace/README.md",
+      "bytes": 10594,
+      "sha256": "27b4912a770daa16f2b7eddaa985cd3c57f8388728947f4094630df1ce53ad83"
+    },
+    {
+      "path": "fresh-trace/analysis-input.json",
+      "bytes": 542,
+      "sha256": "30c96041133a0d8f43f8d7cf812bc8fb137ea1da8bf6e9e12e152f8a577c13ab"
+    },
+    {
+      "path": "fresh-trace/analyze_post_fix.py",
+      "bytes": 13576,
+      "sha256": "58c12767735e666ed213928452eb4d75faf58d5cf2dbc4b768e607e1ae910f45"
+    },
+    {
+      "path": "fresh-trace/artifact-manifest.json",
+      "bytes": 2886,
+      "sha256": "23a06125341b24ac9a1fa4a34dc45fe586b9795dc80861e4c1cc41b623bb51a0"
+    },
+    {
+      "path": "fresh-trace/base-analysis.json",
+      "bytes": 8200,
+      "sha256": "ed8c7de7e64d6507dc97af1877327645b21feabdb316dd5673ed0c55e1690a42"
+    },
+    {
+      "path": "fresh-trace/cleanup.json",
+      "bytes": 1781,
+      "sha256": "8ed445b0a8f5dc8552941f0b5066916776be57fff8f849ee788d86ab221e6484"
+    },
+    {
+      "path": "fresh-trace/comparison.json",
+      "bytes": 1613,
+      "sha256": "0b4bf4a9945e1a3199d4320c5c68d4c04e0d589d36fd96e6e7b8e81f1d56f523"
+    },
+    {
+      "path": "fresh-trace/core-analysis.json",
+      "bytes": 5918006,
+      "sha256": "f9f370cd929dfda3da2a61a05315c69492dec84e8d4f7605d7ee1ea72f02b0d0"
+    },
+    {
+      "path": "fresh-trace/evidence-anchors.json",
+      "bytes": 66483,
+      "sha256": "5a8e200314e66ffd994fb4b7d96a94d3fb10d0a2f1546fb7b6e72c5bf67a45bf"
+    },
+    {
+      "path": "fresh-trace/health-summary.json",
+      "bytes": 49657,
+      "sha256": "c8af8e5d84f627516c62f2aa73063eb4c5d97e7ebdf1ae477136f259c0bd5479"
+    },
+    {
+      "path": "fresh-trace/normal-supply-summary.json",
+      "bytes": 1183,
+      "sha256": "07ee19930c527745975aaee2225c944dc84a19fa54a9aee198ce5b0aff80c666"
+    },
+    {
+      "path": "fresh-trace/source-excerpts.txt",
+      "bytes": 18462,
+      "sha256": "7ad647357f629248494fbf284e14b1e026a83d32c8ecc2a1cbea7c2380786f74"
+    },
+    {
+      "path": "fresh-trace/source-hashes.json",
+      "bytes": 979,
+      "sha256": "9839aa24d47ad584d7ed7f186541fc448ffc413c36c114a55ece7eac22c50de9"
+    },
+    {
+      "path": "fresh-trace/startup-analysis.json",
+      "bytes": 7943,
+      "sha256": "eaaed109a80c17fe864c858454e19385fe815481604c8182bec91bb7652b2766"
+    },
+    {
+      "path": "fresh-trace/steady-windows.csv",
+      "bytes": 36479,
+      "sha256": "0ac9a6ae9d7e3fa477a3b28490046933b4649533b93d1cf8e47403207423f9d7"
+    },
+    {
+      "path": "fresh-trace/terminal-anchors.json",
+      "bytes": 58355,
+      "sha256": "c17f5de5acb9d6abfcd0a2e7f2fe6b7edab787fccfddf73cb73043d4c56199e1"
+    },
+    {
+      "path": "fresh-trace/user-confirmation.json",
+      "bytes": 857,
+      "sha256": "a17eff1015154dfb4f79b1cd8f0bcc648ae6e2429b432b940da43a6ade029225"
+    },
+    {
+      "path": "fresh-trace/validation.json",
+      "bytes": 2327,
+      "sha256": "45acf372ad042195bb4f01ccc2d3643c08c234e7a2803903249f90e6e9971264"
     },
     {
       "path": "initial-simulator-summary.json",
@@ -100,11 +190,11 @@
   "trackingDocuments": [
     {
       "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
-      "sha256": "03dd6fe7e5aaccdc7280d269ab8ae2e021dc0d911562f8b8cbb55488391c7f57"
+      "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
     },
     {
       "path": "docs/reports/2026-11-20-ios-display-callback.md",
-      "sha256": "42daaf53fbff53f80ad5f137306c5a9eb1fca63c3d489e8caffcde8638c0d3fd"
+      "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
     }
   ]
 }

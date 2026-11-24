@@ -1,0 +1,1824 @@
+import AVFoundation
+import CryptoKit
+import Foundation
+@preconcurrency import WebRTC
+
+struct StreamingVideoPacketStatistics: Sendable {
+    private(set) var received: UInt64 = 0
+    private(set) var lost: Int64 = 0
+    private var allLossObserved = true
+    private var hasVideo = false
+    var observedLoss: Int64? { hasVideo && allLossObserved ? lost : nil }
+
+    mutating func observe(kind: String?, received: UInt64, lost: Int64?) {
+        guard kind == "video" else { return }
+        hasVideo = true
+        self.received += received
+        if let lost { self.lost += lost } else { allLossObserved = false }
+    }
+}
+
+struct StreamingMediaSampleProjection: Equatable, Sendable {
+    let mediaAdvanced: Bool
+    let firstMediaAtMilliseconds: Double?
+    let lastMediaAtMilliseconds: Double?
+    let frameSupplyDelta: Int64?
+}
+
+struct StreamingMediaSampleTracker: Sendable {
+    private var firstMediaAtMilliseconds: Double?
+    private var lastMediaAtMilliseconds: Double?
+    private var lastVideoBytes: UInt64?
+    private var lastVideoPacketsReceived: UInt64?
+    private var lastFramesDecoded: UInt64?
+
+    mutating func observe(
+        inboundVideoBytes: UInt64,
+        packetsReceived: UInt64,
+        framesDecoded: UInt64,
+        observedAtMilliseconds: Double
+    ) -> StreamingMediaSampleProjection {
+        let hasPreviousSample =
+            lastVideoBytes != nil
+            || lastVideoPacketsReceived != nil
+            || lastFramesDecoded != nil
+        let byteDelta = Self.positiveDelta(current: inboundVideoBytes, previous: lastVideoBytes)
+        let packetDelta = Self.positiveDelta(
+            current: packetsReceived,
+            previous: lastVideoPacketsReceived
+        )
+        let frameSupplyDelta = Self.signedDelta(
+            current: framesDecoded,
+            previous: lastFramesDecoded
+        )
+        let mediaAdvanced =
+            if hasPreviousSample {
+                byteDelta > 0 || packetDelta > 0 || (frameSupplyDelta ?? 0) > 0
+            } else {
+                inboundVideoBytes > 0 || packetsReceived > 0 || framesDecoded > 0
+            }
+
+        if mediaAdvanced {
+            if firstMediaAtMilliseconds == nil {
+                firstMediaAtMilliseconds = observedAtMilliseconds
+            }
+            lastMediaAtMilliseconds = observedAtMilliseconds
+        }
+        lastVideoBytes = inboundVideoBytes
+        lastVideoPacketsReceived = packetsReceived
+        lastFramesDecoded = framesDecoded
+
+        return StreamingMediaSampleProjection(
+            mediaAdvanced: mediaAdvanced,
+            firstMediaAtMilliseconds: firstMediaAtMilliseconds,
+            lastMediaAtMilliseconds: lastMediaAtMilliseconds,
+            frameSupplyDelta: frameSupplyDelta
+        )
+    }
+
+    private static func positiveDelta(current: UInt64, previous: UInt64?) -> UInt64 {
+        guard let previous, current >= previous else { return 0 }
+        return current - previous
+    }
+
+    private static func signedDelta(current: UInt64, previous: UInt64?) -> Int64? {
+        guard let previous, current >= previous else { return nil }
+        return Int64(clamping: current - previous)
+    }
+}
+
+enum StreamingRtpCapabilityRole: String, Equatable, Sendable {
+    case sender
+    case receiver
+}
+
+enum StreamingCodecPreferencePolicy {
+    static func capabilityRole(
+        for direction: StreamingMediaDirection
+    ) -> StreamingRtpCapabilityRole {
+        switch direction {
+        case .sendReceive: .sender
+        case .receiveOnly: .receiver
+        }
+    }
+
+    static func audioCodecRank(_ name: String) -> Int {
+        name.caseInsensitiveCompare("opus") == .orderedSame ? 0 : 10
+    }
+
+    static func videoCodecRank(_ name: String) -> Int {
+        switch name.lowercased() {
+        case "h264": 0
+        case "rtx": 1
+        case "red": 2
+        case "ulpfec": 3
+        default: 10
+        }
+    }
+}
+
+struct StreamingStatsRequestGate: Equatable, Sendable {
+    private(set) var generation: UInt64 = 0
+    private(set) var requestInFlight = false
+
+    mutating func activate() -> UInt64 {
+        generation &+= 1
+        requestInFlight = false
+        return generation
+    }
+
+    mutating func invalidate() {
+        generation &+= 1
+        requestInFlight = false
+    }
+
+    mutating func begin(generation: UInt64) -> Bool {
+        guard generation == self.generation, !requestInFlight else { return false }
+        requestInFlight = true
+        return true
+    }
+
+    mutating func complete(generation: UInt64) -> Bool {
+        guard generation == self.generation, requestInFlight else { return false }
+        requestInFlight = false
+        return true
+    }
+}
+
+private struct CreatedPeerDataChannelsResult: Sendable {
+    let createdChannels: [XboxStreamCreatedDataChannel]
+    let failedLabels: [String]
+}
+
+enum StreamingRuntimeDiagnostics {
+    static func sdpSummaryPayload(_ sdp: String) -> IOSRuntimeTraceValue {
+        let normalized = sdp.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized.split(separator: "\n").map(String.init)
+        let mediaSections = lines.filter { $0.hasPrefix("m=") }
+        let audioSections = mediaSections.filter { $0.hasPrefix("m=audio ") }
+        let videoSections = mediaSections.filter { $0.hasPrefix("m=video ") }
+        let applicationSections = mediaSections.filter { $0.hasPrefix("m=application ") }
+        let extmapCount = lines.filter { $0.hasPrefix("a=extmap:") }.count
+        let feedbackCount = lines.filter { $0.hasPrefix("a=rtcp-fb:") }.count
+        let candidateCount = lines.filter {
+            $0.hasPrefix("a=candidate:") || $0.hasPrefix("candidate:")
+        }.count
+        let midCount = lines.filter { $0.hasPrefix("a=mid:") }.count
+        let bundleMIDCount =
+            lines.first(where: { $0.hasPrefix("a=group:BUNDLE ") })
+            .map { max(0, $0.split(separator: " ").count - 1) } ?? 0
+        let videoPayloads = mediaPayloads(in: videoSections.first)
+        let audioPayloads = mediaPayloads(in: audioSections.first)
+        let videoCodecs = mediaCodecs(kind: "video", in: lines)
+        let audioCodecs = mediaCodecs(kind: "audio", in: lines)
+        let h264Profiles = Array(Set(lines.compactMap(profileLevelID))).sorted()
+
+        return .object([
+            "fingerprint": .string(fingerprint(sdp)),
+            "lineCount": .integer(Int64(lines.count)),
+            "mediaSectionCount": .integer(Int64(mediaSections.count)),
+            "audioSectionCount": .integer(Int64(audioSections.count)),
+            "videoSectionCount": .integer(Int64(videoSections.count)),
+            "applicationSectionCount": .integer(Int64(applicationSections.count)),
+            "midCount": .integer(Int64(midCount)),
+            "bundleMidCount": .integer(Int64(bundleMIDCount)),
+            "extmapCount": .integer(Int64(extmapCount)),
+            "rtcpFeedbackCount": .integer(Int64(feedbackCount)),
+            "candidateLineCount": .integer(Int64(candidateCount)),
+            "audioPayloadCount": .integer(Int64(audioPayloads.count)),
+            "videoPayloadCount": .integer(Int64(videoPayloads.count)),
+            "audioCodecs": .array(audioCodecs.map(IOSRuntimeTraceValue.string)),
+            "videoCodecs": .array(videoCodecs.map(IOSRuntimeTraceValue.string)),
+            "h264Profiles": .array(h264Profiles.map(IOSRuntimeTraceValue.string)),
+        ])
+    }
+
+    static func threadContextPayload() -> IOSRuntimeTraceValue {
+        let threadName =
+            Thread.current.name?.isEmpty == false
+            ? Thread.current.name!
+            : "unnamed"
+        return .object([
+            "isMainThread": .bool(Thread.isMainThread),
+            "threadName": .string(threadName),
+            "qualityOfService": .string(qosName(Thread.current.qualityOfService)),
+        ])
+    }
+
+    static func runtimeContextPayload(plan: StreamingWebRtcPlan) -> [String: IOSRuntimeTraceValue] {
+        [
+            "deviceModel": .string(deviceModelIdentifier()),
+            "osVersion": .string(ProcessInfo.processInfo.operatingSystemVersionString),
+            "audioDirection": .string(plan.audioDirection.rawValue),
+            "videoDirection": .string(plan.videoDirection.rawValue),
+            "audioCodecCapabilityRole": .string(
+                StreamingCodecPreferencePolicy.capabilityRole(for: plan.audioDirection).rawValue
+            ),
+            "videoCodecCapabilityRole": .string(
+                StreamingCodecPreferencePolicy.capabilityRole(for: plan.videoDirection).rawValue
+            ),
+            "iceTransportPolicy": .string(plan.iceTransportPolicy),
+            "preferIPv6": .bool(plan.preferIPv6),
+            "preventResolutionDrops": .bool(plan.preventResolutionDrops),
+            "stereoAudio": .bool(plan.stereoAudio),
+            "targetVideoWidth": .integer(Int64(plan.targetVideoWidth)),
+            "targetVideoHeight": .integer(Int64(plan.targetVideoHeight)),
+            "audioBitrateKbps": plan.audioBitrateKbps.map { .integer(Int64($0)) } ?? .null,
+            "maxVideoBitrateKbps": plan.maxVideoBitrateKbps.map { .integer(Int64($0)) } ?? .null,
+            "h264Profiles": .array(plan.h264Profiles.map(IOSRuntimeTraceValue.string)),
+            "requiredVideoRtcpFeedback": .array(
+                plan.requiredVideoRtcpFeedback.map(IOSRuntimeTraceValue.string)
+            ),
+            "allowedCandidateTypes": .array(
+                plan.allowedCandidateTypes.map(IOSRuntimeTraceValue.string)
+            ),
+        ]
+    }
+
+    private static func mediaCodecs(kind: String, in lines: [String]) -> [String] {
+        guard let start = lines.firstIndex(where: { $0.hasPrefix("m=\(kind) ") }) else {
+            return []
+        }
+        let section = lines.dropFirst(start + 1).prefix { !$0.hasPrefix("m=") }
+        // RTP payload 只在当前 media section 中映射；重复诊断行采用最后一个值。
+        let codecMap = section.reduce(into: [String: String]()) { codecs, line in
+            if let (payload, codec) = rtpMapEntry(line) { codecs[payload] = codec }
+        }
+        return mediaPayloads(in: lines[start]).compactMap { codecMap[$0] }
+    }
+
+    private static func rtpMapEntry(_ line: String) -> (String, String)? {
+        guard line.hasPrefix("a=rtpmap:") else { return nil }
+        let raw = line.dropFirst("a=rtpmap:".count)
+        let parts = raw.split(separator: " ", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        let codec = parts[1].split(separator: "/").first.map(String.init) ?? parts[1]
+        return (parts[0], codec)
+    }
+
+    private static func mediaPayloads(in mediaLine: String?) -> [String] {
+        guard let mediaLine else { return [] }
+        let fields = mediaLine.split(separator: " ").map(String.init)
+        guard fields.count > 3 else { return [] }
+        return Array(fields.dropFirst(3))
+    }
+
+    private static func profileLevelID(_ line: String) -> String? {
+        guard line.hasPrefix("a=fmtp:") else { return nil }
+        let lowered = line.lowercased()
+        guard let range = lowered.range(of: "profile-level-id=") else { return nil }
+        let suffix = lowered[range.upperBound...]
+        let profile = suffix.split(separator: ";", maxSplits: 1).first.map(String.init) ?? ""
+        return profile.isEmpty ? nil : profile
+    }
+
+    private static func fingerprint(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func deviceModelIdentifier() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machine = systemInfo.machine
+        return withUnsafePointer(to: machine) {
+            $0.withMemoryRebound(
+                to: CChar.self,
+                capacity: MemoryLayout.size(ofValue: machine)
+            ) {
+                String(cString: $0)
+            }
+        }
+    }
+
+    private static func qosName(_ qos: QualityOfService) -> String {
+        switch qos {
+        case .userInteractive: "userInteractive"
+        case .userInitiated: "userInitiated"
+        case .utility: "utility"
+        case .background: "background"
+        case .default: "default"
+        @unknown default: "unknown"
+        }
+    }
+}
+
+struct StreamingOfferSdpProjector {
+    static func videoBitrateCapKbps(in sdp: String) -> Int? {
+        let sections = sdp.replacingOccurrences(of: "\r\n", with: "\n").components(
+            separatedBy: "\nm=")
+        guard
+            let section = sections.first(where: { text in
+                let line = text.hasPrefix("m=") ? String(text.dropFirst(2)) : text
+                let parts =
+                    line.split(separator: "\n", maxSplits: 1).first?.split(separator: " ") ?? []
+                return parts.first == "video" && parts.count > 1 && (Int(parts[1]) ?? 0) > 0
+            })
+        else { return nil }
+        let lines = section.components(separatedBy: "\n").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+        guard !lines.contains("a=recvonly"), !lines.contains("a=inactive") else { return nil }
+        func cap(_ prefix: String, divisor: Int) -> Int? {
+            lines.first(where: { $0.hasPrefix(prefix) }).flatMap { Int($0.dropFirst(prefix.count)) }
+                .map { $0 / divisor }
+        }
+        let google = section.range(of: #"x-google-max-bitrate=[0-9]+"#, options: .regularExpression)
+            .flatMap { Int(section[$0].split(separator: "=").last ?? "") }
+        return (cap("b=TIAS:", divisor: 1000) ?? cap("b=AS:", divisor: 1) ?? google).flatMap {
+            $0 > 0 ? $0 : nil
+        }
+    }
+
+    func project(_ sdp: String, plan: StreamingWebRtcPlan) -> String {
+        var lines =
+            sdp
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        if lines.last == "" { lines.removeLast() }
+
+        if plan.videoCodecMimeType.caseInsensitiveCompare("video/H264") == .orderedSame {
+            let h264Payloads = h264PayloadTypes(in: lines)
+            reorderVideoPayloads(lines: &lines, h264Payloads: h264Payloads, plan: plan)
+            patchH264Parameters(lines: &lines, h264Payloads: h264Payloads, plan: plan)
+            patchVideoFeedback(lines: &lines, h264Payloads: h264Payloads, plan: plan)
+        }
+        patchMediaBitrate(
+            lines: &lines,
+            media: "video",
+            bitrateKbps: plan.maxVideoBitrateKbps
+        )
+        patchMediaBitrate(
+            lines: &lines,
+            media: "audio",
+            bitrateKbps: plan.audioBitrateKbps
+        )
+        if plan.stereoAudio {
+            patchOpusStereo(lines: &lines)
+        }
+        return lines.joined(separator: "\r\n") + "\r\n"
+    }
+
+    private func h264PayloadTypes(in lines: [String]) -> Set<String> {
+        Set(
+            lines.compactMap { line in
+                guard line.hasPrefix("a=rtpmap:"),
+                    line.localizedCaseInsensitiveContains(" H264/")
+                else { return nil }
+                return line.dropFirst("a=rtpmap:".count).split(separator: " ").first.map(
+                    String.init)
+            })
+    }
+
+    private func reorderVideoPayloads(
+        lines: inout [String],
+        h264Payloads: Set<String>,
+        plan: StreamingWebRtcPlan
+    ) {
+        let profileEntries: [(String, String)] = lines.compactMap { line in
+            guard line.hasPrefix("a=fmtp:") else { return nil }
+            let parts = line.dropFirst("a=fmtp:".count).split(separator: " ", maxSplits: 1)
+            guard parts.count == 2,
+                let profile = parameter(named: "profile-level-id", in: String(parts[1]))
+            else { return nil }
+            return (String(parts[0]), profile.lowercased())
+        }
+        let profileByPayload = [String: String](uniqueKeysWithValues: profileEntries)
+        let profileOrder = plan.h264Profiles.map { $0.lowercased() }
+        let preferredPayloads = h264Payloads.sorted { left, right in
+            rank(profileByPayload[left], profileOrder: profileOrder)
+                < rank(profileByPayload[right], profileOrder: profileOrder)
+        }
+        guard let index = lines.firstIndex(where: { $0.hasPrefix("m=video ") }) else { return }
+        let fields = lines[index].split(separator: " ").map(String.init)
+        guard fields.count > 3 else { return }
+        let remaining = fields.dropFirst(3).filter { !h264Payloads.contains($0) }
+        lines[index] = (Array(fields.prefix(3)) + preferredPayloads + remaining).joined(
+            separator: " ")
+    }
+
+    private func patchH264Parameters(
+        lines: inout [String],
+        h264Payloads: Set<String>,
+        plan: StreamingWebRtcPlan
+    ) {
+        for index in lines.indices where lines[index].hasPrefix("a=fmtp:") {
+            let prefix = "a=fmtp:"
+            let parts = lines[index].dropFirst(prefix.count).split(separator: " ", maxSplits: 1)
+            guard parts.count == 2, h264Payloads.contains(String(parts[0])) else { continue }
+            var parameters = orderedParameters(String(parts[1]))
+            setParameter(
+                "packetization-mode",
+                value: String(plan.h264PacketizationMode),
+                parameters: &parameters
+            )
+            setParameter(
+                "level-asymmetry-allowed",
+                value: plan.h264LevelAsymmetryAllowed ? "1" : "0",
+                parameters: &parameters
+            )
+            setParameter("max-fs", value: String(plan.maxFrameSize), parameters: &parameters)
+            setParameter("max-fr", value: String(plan.maxFrameRate), parameters: &parameters)
+            setOptionalBitrate("x-google-min-bitrate", plan.minVideoBitrateKbps, &parameters)
+            setOptionalBitrate("x-google-start-bitrate", plan.startVideoBitrateKbps, &parameters)
+            setOptionalBitrate("x-google-max-bitrate", plan.maxVideoBitrateKbps, &parameters)
+            lines[index] = "\(prefix)\(parts[0]) \(parameters.map(\.value).joined(separator: ";"))"
+        }
+    }
+
+    private func patchVideoFeedback(
+        lines: inout [String],
+        h264Payloads: Set<String>,
+        plan: StreamingWebRtcPlan
+    ) {
+        guard let videoStart = lines.firstIndex(where: { $0.hasPrefix("m=video ") }) else { return }
+        let videoEnd = mediaEndIndex(in: lines, after: videoStart)
+        var insertionIndex = videoEnd
+        for payload in h264Payloads.sorted() {
+            for feedback in plan.requiredVideoRtcpFeedback {
+                let line = "a=rtcp-fb:\(payload) \(feedback)"
+                if !lines[videoStart..<videoEnd].contains(line) {
+                    lines.insert(line, at: insertionIndex)
+                    insertionIndex += 1
+                }
+            }
+        }
+    }
+
+    private func patchMediaBitrate(lines: inout [String], media: String, bitrateKbps: Int?) {
+        guard let bitrateKbps, bitrateKbps > 0,
+            let start = lines.firstIndex(where: { $0.hasPrefix("m=\(media) ") })
+        else { return }
+        let end = mediaEndIndex(in: lines, after: start)
+        if let existing = lines[start..<end].firstIndex(where: { $0.hasPrefix("b=AS:") }) {
+            lines[existing] = "b=AS:\(bitrateKbps)"
+        } else {
+            lines.insert("b=AS:\(bitrateKbps)", at: start + 1)
+        }
+    }
+
+    private func patchOpusStereo(lines: inout [String]) {
+        let opusPayloads = Set<String>(
+            lines.compactMap { line in
+                guard line.hasPrefix("a=rtpmap:"),
+                    line.localizedCaseInsensitiveContains(" opus/")
+                else { return nil }
+                return line.dropFirst("a=rtpmap:".count).split(separator: " ").first.map(
+                    String.init)
+            })
+        for index in lines.indices where lines[index].hasPrefix("a=fmtp:") {
+            let parts = lines[index].dropFirst("a=fmtp:".count).split(separator: " ", maxSplits: 1)
+            guard parts.count == 2, opusPayloads.contains(String(parts[0])) else { continue }
+            var parameters = orderedParameters(String(parts[1]))
+            setParameter("stereo", value: "1", parameters: &parameters)
+            lines[index] = "a=fmtp:\(parts[0]) \(parameters.map(\.value).joined(separator: ";"))"
+        }
+    }
+
+    private func orderedParameters(_ raw: String) -> [(key: String, value: String)] {
+        raw.split(separator: ";").map { part in
+            let value = part.trimmingCharacters(in: .whitespaces)
+            return (
+                value.split(separator: "=", maxSplits: 1).first.map(String.init)?.lowercased()
+                    ?? value, value
+            )
+        }
+    }
+
+    private func setOptionalBitrate(
+        _ key: String,
+        _ value: Int?,
+        _ parameters: inout [(key: String, value: String)]
+    ) {
+        guard let value, value > 0 else { return }
+        setParameter(key, value: String(value), parameters: &parameters)
+    }
+
+    private func setParameter(
+        _ key: String,
+        value: String,
+        parameters: inout [(key: String, value: String)]
+    ) {
+        let normalized = key.lowercased()
+        if let index = parameters.firstIndex(where: { $0.key == normalized }) {
+            parameters[index] = (normalized, "\(normalized)=\(value)")
+        } else {
+            parameters.append((normalized, "\(normalized)=\(value)"))
+        }
+    }
+
+    private func parameter(named name: String, in raw: String) -> String? {
+        let prefix = "\(name.lowercased())="
+        return raw.split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.lowercased().hasPrefix(prefix) }
+            .map { String($0.dropFirst(prefix.count)) }
+    }
+
+    private func rank(_ profile: String?, profileOrder: [String]) -> Int {
+        guard let profile else { return profileOrder.count }
+        return profileOrder.firstIndex(where: { profile.hasPrefix($0) }) ?? profileOrder.count
+    }
+
+    private func mediaEndIndex(in lines: [String], after start: Int) -> Int {
+        let next = start + 1
+        guard next < lines.endIndex else { return lines.endIndex }
+        return lines[next..<lines.endIndex].firstIndex(where: { $0.hasPrefix("m=") })
+            ?? lines.endIndex
+    }
+}
+
+struct StreamingIceCandidateDescriptor: Equatable, Sendable {
+    let candidateType: String?
+    let transportProtocol: String?
+    let addressFamily: String?
+}
+
+enum StreamingNativeIceCandidateAdapter {
+    static func adapt(_ candidate: StreamingIceCandidate) -> StreamingIceCandidate? {
+        let trimmed = candidate.sdp.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let nativeSdp =
+            if trimmed.range(
+                of: "a=",
+                options: [.anchored, .caseInsensitive]
+            ) != nil {
+                String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                trimmed
+            }
+        guard !nativeSdp.isEmpty,
+            nativeSdp.caseInsensitiveCompare("end-of-candidates") != .orderedSame
+        else { return nil }
+
+        let fields = nativeSdp.split(whereSeparator: \Character.isWhitespace).map(String.init)
+        guard let prefix = fields.first,
+            prefix.range(of: "candidate:", options: [.anchored, .caseInsensitive]) != nil
+        else { return nil }
+
+        let usesUDP =
+            fields.indices.contains(2)
+            && fields[2].caseInsensitiveCompare("udp") == .orderedSame
+        let hasTCPType = fields.contains {
+            $0.caseInsensitiveCompare("tcptype") == .orderedSame
+                || $0.lowercased().hasPrefix("tcptype=")
+        }
+        guard !(usesUDP && hasTCPType) else { return nil }
+
+        return StreamingIceCandidate(
+            sdp: nativeSdp,
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex,
+            usernameFragment: candidate.usernameFragment,
+            source: candidate.source
+        )
+    }
+}
+
+enum StreamingIceCandidatePolicy {
+    static func descriptor(_ candidate: StreamingIceCandidate) -> StreamingIceCandidateDescriptor {
+        let fields = candidate.sdp.split(whereSeparator: \Character.isWhitespace).map(String.init)
+        let typeIndex = fields.firstIndex { $0.caseInsensitiveCompare("typ") == .orderedSame }
+        let candidateType = typeIndex.flatMap { index in
+            fields.indices.contains(index + 1) ? fields[index + 1].lowercased() : nil
+        }
+        let transportProtocol = fields.indices.contains(2) ? fields[2].lowercased() : nil
+        let address = fields.indices.contains(4) ? fields[4] : ""
+        let addressFamily: String? =
+            if address.contains(":") {
+                "ipv6"
+            } else if address.split(separator: ".").count == 4 {
+                "ipv4"
+            } else {
+                nil
+            }
+        return StreamingIceCandidateDescriptor(
+            candidateType: candidateType,
+            transportProtocol: transportProtocol,
+            addressFamily: addressFamily
+        )
+    }
+
+    static func allows(_ candidate: StreamingIceCandidate, plan: StreamingWebRtcPlan) -> Bool {
+        guard candidate.sdp != "a=end-of-candidates" else { return false }
+        let type = descriptor(candidate).candidateType
+        return type.map { plan.allowedCandidateTypes.contains($0) } ?? true
+    }
+
+    static func ordered(
+        _ candidates: [StreamingIceCandidate],
+        plan: StreamingWebRtcPlan
+    ) -> [StreamingIceCandidate] {
+        candidates.enumerated().filter { allows($0.element, plan: plan) }.sorted { left, right in
+            let leftDescriptor = descriptor(left.element)
+            let rightDescriptor = descriptor(right.element)
+            let leftKey = sortKey(leftDescriptor, plan: plan, originalIndex: left.offset)
+            let rightKey = sortKey(rightDescriptor, plan: plan, originalIndex: right.offset)
+            return leftKey.lexicographicallyPrecedes(rightKey)
+        }.map(\.element)
+    }
+
+    private static func sortKey(
+        _ descriptor: StreamingIceCandidateDescriptor,
+        plan: StreamingWebRtcPlan,
+        originalIndex: Int
+    ) -> [Int] {
+        let typeRank =
+            descriptor.candidateType.flatMap(plan.allowedCandidateTypes.firstIndex) ?? Int.max
+        let familyRank =
+            switch descriptor.addressFamily {
+            case "ipv6": plan.preferIPv6 ? 0 : 1
+            case "ipv4": plan.preferIPv6 ? 1 : 0
+            default: 2
+            }
+        let protocolRank = descriptor.transportProtocol == "udp" ? 0 : 1
+        return [typeRank, familyRank, protocolRank, originalIndex]
+    }
+}
+
+func streamingVideoTracksMatch(_ current: RTCVideoTrack?, _ next: RTCVideoTrack?) -> Bool {
+    switch (current, next) {
+    case (nil, nil):
+        true
+    case (let current?, let next?):
+        // libwebrtc 的 receiver getter 会新建包装对象，相等性比较其底层轨道。
+        current.isEqual(next)
+    default:
+        false
+    }
+}
+
+final class LibWebRTCPeerRuntimeFactory: StreamingPeerRuntimeFactory, @unchecked Sendable {
+    private let inputSession: StreamInputSession?
+    init(inputSession: StreamInputSession? = nil) { self.inputSession = inputSession }
+    func makeRuntime(
+        eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void
+    ) -> any StreamingPeerRuntime {
+        LibWebRTCPeerRuntime(eventSink: eventSink, inputSession: inputSession)
+    }
+}
+
+private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unchecked Sendable {
+    private struct StatsProjectionState {
+        var mediaSamples = StreamingMediaSampleTracker()
+        var lastVideoBytes: UInt64?
+        var lastObservedAtMilliseconds: Double?
+    }
+
+    private static let factory: RTCPeerConnectionFactory = {
+        RTCInitializeSSL()
+        return RTCPeerConnectionFactory(
+            encoderFactory: RTCDefaultVideoEncoderFactory(),
+            decoderFactory: RTCDefaultVideoDecoderFactory()
+        )
+    }()
+
+    private let apiQueue = DispatchQueue(
+        label: "com.xbxrc.ios.webrtc.peer-runtime",
+        qos: .userInitiated
+    )
+    private let eventSink: @Sendable (StreamingPeerEvent) -> Void
+    private let inputSession: StreamInputSession?
+    private var initialAudioMuted = false
+    private var peerConnection: RTCPeerConnection?
+    private let videoTrackLock = NSLock()
+    private var acceptsVideoTracks = false
+    private var attachedVideoTrack: RTCVideoTrack?
+    private var attachedAudioTrack: RTCAudioTrack?
+    private var microphoneTrack: RTCAudioTrack?
+    private var audioTransceiver: RTCRtpTransceiver?
+    private var frameProbe: FirstVideoFrameProbe?
+    private var didEmitAudioTrackReady = false
+    private var dataChannels: XboxStreamDataChannels?
+    private var statsTask: Task<Void, Never>?
+    private var statsRequestGate = StreamingStatsRequestGate()
+    private var statsProjectionState = StatsProjectionState()
+    private var activePlan: StreamingWebRtcPlan?
+    private var pendingQualityPlan: StreamingWebRtcPlan?
+    private var remoteVideoCapKbps: Int?
+    private var frameFeedback: StreamingFrameFeedbackSession?
+    private var feedbackFactory: RTCPeerConnectionFactory?
+    private lazy var audioLifecycle = StreamingAudioLifecycleCoordinator {
+        [weak self] event, payload in
+        self?.eventSink(.audioLifecycle(event: event, payload: payload))
+    }
+
+    init(
+        eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void,
+        inputSession: StreamInputSession?
+    ) {
+        self.eventSink = eventSink
+        self.inputSession = inputSession
+    }
+
+    func makeOffer(
+        configuration prepared: StreamingPreparedSignaling,
+        iceRestart: Bool
+    ) async throws -> String {
+        var requested = prepared
+        if iceRestart, let activePlan { requested.webRtcPlan = activePlan }
+        let prepared = requested
+        activePlan = prepared.webRtcPlan
+        try await StreamingAudioPermissionCoordinator.requestMicrophoneIfNeeded(
+            for: prepared.webRtcPlan.audioDirection
+        )
+        if iceRestart {
+            guard let peerConnection else {
+                throw StreamingRuntimeError.peerConnectionCreationFailed
+            }
+            return try await createAndApplyOffer(
+                on: peerConnection,
+                plan: prepared.webRtcPlan,
+                iceRestart: true
+            )
+        }
+
+        frameFeedback?.invalidate()
+        frameFeedback =
+            StreamingFrameFeedbackSession(
+                preventResolutionDrops: prepared.webRtcPlan.preventResolutionDrops)
+        try await runOnAPIQueue { [self] in
+            try audioLifecycle.start(audioDirection: prepared.webRtcPlan.audioDirection)
+            statsProjectionState = StatsProjectionState()
+            let configuration = RTCConfiguration()
+            configuration.sdpSemantics = .unifiedPlan
+            configuration.continualGatheringPolicy = .gatherOnce
+            configuration.iceTransportPolicy =
+                prepared.webRtcPlan.iceTransportPolicy == "relay"
+                ? .relay
+                : .all
+            configuration.iceServers = prepared.iceServers.map { server in
+                if let username = server.username, let credential = server.credential {
+                    RTCIceServer(
+                        urlStrings: server.urls,
+                        username: username,
+                        credential: credential
+                    )
+                } else {
+                    RTCIceServer(urlStrings: server.urls)
+                }
+            }
+            let constraints = RTCMediaConstraints(
+                mandatoryConstraints: nil,
+                optionalConstraints: ["DtlsSrtpKeyAgreement": "true"]
+            )
+            let defaultFactory = Self.factory
+            feedbackFactory = frameFeedback.map {
+                RTCPeerConnectionFactory(
+                    encoderFactory: RTCDefaultVideoEncoderFactory(),
+                    decoderFactory: StreamingFeedbackVideoDecoderFactory(feedback: $0))
+            }
+            guard
+                let peer = (feedbackFactory ?? defaultFactory).peerConnection(
+                    with: configuration,
+                    constraints: constraints,
+                    delegate: self
+                )
+            else {
+                throw StreamingRuntimeError.peerConnectionCreationFailed
+            }
+            peerConnection = peer
+            setVideoTrackAttachmentActive(true)
+
+            let audioInit = RTCRtpTransceiverInit()
+            audioInit.direction = rtcDirection(prepared.webRtcPlan.audioDirection)
+            let audioTransceiver = peer.addTransceiver(of: .audio, init: audioInit)
+            self.audioTransceiver = audioTransceiver
+            let videoInit = RTCRtpTransceiverInit()
+            videoInit.direction = rtcDirection(prepared.webRtcPlan.videoDirection)
+            let videoTransceiver = peer.addTransceiver(of: .video, init: videoInit)
+            try preferCodecs(
+                audioTransceiver: audioTransceiver,
+                audioDirection: prepared.webRtcPlan.audioDirection,
+                videoTransceiver: videoTransceiver,
+                videoDirection: prepared.webRtcPlan.videoDirection
+            )
+        }
+        guard let peer = peerConnection else {
+            throw StreamingRuntimeError.peerConnectionCreationFailed
+        }
+
+        let channels = await MainActor.run {
+            XboxStreamDataChannels(
+                inputSession: self.inputSession ?? StreamInputSession(),
+                frameFeedback: self.frameFeedback,
+                targetVideoWidth: prepared.webRtcPlan.targetVideoWidth,
+                targetVideoHeight: prepared.webRtcPlan.targetVideoHeight,
+                eventSink: { [weak self] label, event in
+                    IOSRuntimeTrace.state(
+                        domain: "ios-streaming",
+                        event: "dataChannelStateChanged",
+                        payload: [
+                            "label": .string(label),
+                            "event": .string(event),
+                        ],
+                        dimension: .network,
+                        importance: .debug
+                    )
+                    self?.eventSink(.dataChannelEvent(label: label, event: event))
+                },
+                failureSink: { [weak self] message in
+                    self?.eventSink(.failed(message))
+                }
+            )
+        }
+        let createdDataChannels = try await runOnAPIQueue {
+            var createdChannels: [XboxStreamCreatedDataChannel] = []
+            var failedLabels: [String] = []
+            for profile in streamDataChannelProfiles() {
+                let configuration = RTCDataChannelConfiguration()
+                configuration.isOrdered = profile.ordered
+                configuration.`protocol` = profile.protocolName
+                if let channel = peer.dataChannel(
+                    forLabel: profile.label,
+                    configuration: configuration
+                ) {
+                    createdChannels.append(
+                        XboxStreamCreatedDataChannel(label: profile.label, channel: channel)
+                    )
+                } else {
+                    failedLabels.append(profile.label)
+                }
+            }
+            return CreatedPeerDataChannelsResult(
+                createdChannels: createdChannels,
+                failedLabels: failedLabels
+            )
+        }
+        await MainActor.run {
+            channels.attachCreatedChannels(
+                createdDataChannels.createdChannels,
+                failedLabels: createdDataChannels.failedLabels
+            )
+        }
+        dataChannels = channels
+        eventSink(.dataChannelEvent(label: "all", event: "profilesCreated"))
+        let dataChannelSnapshot = await MainActor.run { channels.debugSnapshot() }
+        let runtimeConfigurationPayload = Self.runtimeConfigurationPayload(
+            plan: prepared.webRtcPlan,
+            peer: peer,
+            dataChannelSnapshot: dataChannelSnapshot
+        )
+        IOSRuntimeTrace.snapshot(
+            domain: "ios-streaming",
+            event: "peerRuntimeConfigured",
+            payload: runtimeConfigurationPayload,
+            dimension: .network,
+            importance: .key
+        )
+
+        return try await createAndApplyOffer(
+            on: peer,
+            plan: prepared.webRtcPlan,
+            iceRestart: false
+        )
+    }
+
+    private func createAndApplyOffer(
+        on peer: RTCPeerConnection,
+        plan: StreamingWebRtcPlan,
+        iceRestart: Bool
+    ) async throws -> String {
+        let offerConstraints = RTCMediaConstraints(
+            mandatoryConstraints: iceRestart ? ["IceRestart": "true"] : nil,
+            optionalConstraints: nil
+        )
+        let offer = try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<RTCSessionDescription, Error>) in
+            apiQueue.async {
+                peer.offer(for: offerConstraints) {
+                    description, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let description {
+                        continuation.resume(returning: description)
+                    } else {
+                        continuation.resume(throwing: StreamingRuntimeError.missingLocalDescription)
+                    }
+                }
+            }
+        }
+        let projectedOffer = RTCSessionDescription(
+            type: offer.type,
+            sdp: StreamingOfferSdpProjector().project(offer.sdp, plan: plan)
+        )
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming",
+            event: "localOfferPrepared",
+            payload: [
+                "iceRestart": .bool(iceRestart),
+                "offerSummary": StreamingRuntimeDiagnostics.sdpSummaryPayload(projectedOffer.sdp),
+                "threadContext": StreamingRuntimeDiagnostics.threadContextPayload(),
+            ],
+            dimension: .network,
+            importance: .key
+        )
+        try await setLocalDescription(projectedOffer, on: peer)
+        return projectedOffer.sdp
+    }
+
+    func applyAnswer(_ sdp: String) async throws {
+        guard let peerConnection else {
+            throw StreamingRuntimeError.peerConnectionCreationFailed
+        }
+        let startedAt = Date()
+        let dataChannelSnapshot = await MainActor.run { dataChannels?.debugSnapshot() }
+        let peerSnapshot = Self.peerSnapshotPayload(
+            peerConnection: peerConnection,
+            dataChannelSnapshot: dataChannelSnapshot
+        )
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming",
+            event: "remoteDescriptionApplyStarted",
+            payload: [
+                "answerBytes": .integer(Int64(sdp.utf8.count)),
+                "answerSummary": StreamingRuntimeDiagnostics.sdpSummaryPayload(sdp),
+                "peerSnapshot": peerSnapshot,
+                "threadContext": StreamingRuntimeDiagnostics.threadContextPayload(),
+            ],
+            dimension: .network,
+            importance: .key
+        )
+        let answer = RTCSessionDescription(type: .answer, sdp: sdp)
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            IOSRuntimeTrace.state(
+                domain: "ios-streaming",
+                event: "remoteDescriptionSetWillDispatch",
+                payload: [
+                    "threadContext": StreamingRuntimeDiagnostics.threadContextPayload()
+                ],
+                dimension: .network,
+                importance: .key
+            )
+            apiQueue.async {
+                IOSRuntimeTrace.state(
+                    domain: "ios-streaming",
+                    event: "remoteDescriptionSetDispatched",
+                    payload: [
+                        "elapsedMs": .integer(Int64(Date().timeIntervalSince(startedAt) * 1_000)),
+                        "threadContext": StreamingRuntimeDiagnostics.threadContextPayload(),
+                    ],
+                    dimension: .network,
+                    importance: .key
+                )
+                IOSRuntimeTrace.state(
+                    domain: "ios-streaming",
+                    event: "remoteDescriptionSetInvoking",
+                    payload: [
+                        "threadContext": StreamingRuntimeDiagnostics.threadContextPayload()
+                    ],
+                    dimension: .network,
+                    importance: .key
+                )
+                peerConnection.setRemoteDescription(answer) { error in
+                    let nsError = error as NSError?
+                    IOSRuntimeTrace.state(
+                        domain: "ios-streaming",
+                        event: "remoteDescriptionApplyCallback",
+                        payload: [
+                            "elapsedMs": .integer(
+                                Int64(Date().timeIntervalSince(startedAt) * 1_000)
+                            ),
+                            "hasError": .bool(error != nil),
+                            "errorDomain": nsError.map { .string($0.domain) } ?? .null,
+                            "errorCode": nsError.map { .integer(Int64($0.code)) } ?? .null,
+                            "threadContext": StreamingRuntimeDiagnostics.threadContextPayload(),
+                        ],
+                        dimension: .network,
+                        importance: .key
+                    )
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            }
+        }
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming",
+            event: "remoteDescriptionApplyCompleted",
+            payload: [
+                "elapsedMs": .integer(Int64(Date().timeIntervalSince(startedAt) * 1_000)),
+                "threadContext": StreamingRuntimeDiagnostics.threadContextPayload(),
+            ],
+            dimension: .network,
+            importance: .key
+        )
+        _ = try await runOnAPIQueue { [self] in
+            remoteVideoCapKbps = StreamingOfferSdpProjector.videoBitrateCapKbps(in: sdp)
+            if let plan = pendingQualityPlan, let requested = plan.maxVideoBitrateKbps,
+                let cap = remoteVideoCapKbps,
+                abs(Double(cap - requested)) <= Double(requested)
+                    * 0.02
+            {
+                activePlan = plan
+            }
+            pendingQualityPlan = nil
+            return attachExistingReceiverTracks(
+                on: peerConnection, reason: "remoteDescriptionApplied")
+        }
+        try await startStatsCollection()
+    }
+
+    func addRemoteCandidates(_ candidates: [StreamingIceCandidate]) async throws {
+        guard let peerConnection else {
+            throw StreamingRuntimeError.peerConnectionCreationFailed
+        }
+        let plan = activePlan ?? .desktopWebRtcDirect
+        let nativeCandidates = candidates.compactMap(StreamingNativeIceCandidateAdapter.adapt)
+        let orderedCandidates = StreamingIceCandidatePolicy.ordered(nativeCandidates, plan: plan)
+        var appliedCount = 0
+        var addFailureCount = 0
+        for candidate in orderedCandidates {
+            let rtcCandidate = RTCIceCandidate(
+                sdp: candidate.sdp,
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                sdpMid: candidate.sdpMid
+            )
+            do {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, Error>) in
+                    apiQueue.async {
+                        peerConnection.add(rtcCandidate) { error in
+                            if let error {
+                                continuation.resume(throwing: error)
+                            } else {
+                                continuation.resume(returning: ())
+                            }
+                        }
+                    }
+                }
+                appliedCount += 1
+            } catch {
+                addFailureCount += 1
+            }
+        }
+        IOSRuntimeTrace.event(
+            domain: "ios-streaming",
+            event: "remoteIceCandidatesApplied",
+            payload: [
+                "inputCount": .integer(Int64(candidates.count)),
+                "nativeCandidateCount": .integer(Int64(nativeCandidates.count)),
+                "orderedCandidateCount": .integer(Int64(orderedCandidates.count)),
+                "appliedCount": .integer(Int64(appliedCount)),
+                "addFailureCount": .integer(Int64(addFailureCount)),
+            ],
+            dimension: .network,
+            importance: .key
+        )
+    }
+
+    func stopInputAndHaptics() async {
+        frameFeedback?.invalidate()
+        if let dataChannels {
+            await MainActor.run {
+                dataChannels.stopInputAndHaptics()
+            }
+        }
+        dataChannels = nil
+    }
+
+    func debugSnapshot() async -> StreamingPeerDebugSnapshot {
+        let transceivers = peerConnection?.transceivers ?? []
+        let dataChannelSnapshot = await MainActor.run {
+            dataChannels?.debugSnapshot()
+        }
+        return StreamingPeerDebugSnapshot(
+            signalingState: peerConnection.map(Self.signalingStateName) ?? "missing",
+            iceConnectionState: peerConnection.map(Self.iceConnectionStateName) ?? "missing",
+            iceGatheringState: peerConnection.map(Self.iceGatheringStateName) ?? "missing",
+            transceiverCount: transceivers.count,
+            audioReceiverTrackCount: transceivers.filter {
+                $0.receiver.track is RTCAudioTrack
+            }.count,
+            videoReceiverTrackCount: transceivers.filter {
+                $0.receiver.track is RTCVideoTrack
+            }.count,
+            localDescriptionSet: peerConnection?.localDescription != nil,
+            remoteDescriptionSet: peerConnection?.remoteDescription != nil,
+            dataChannels: dataChannelSnapshot
+        )
+    }
+
+    func setAudioMuted(_ muted: Bool) async throws {
+        try await runOnAPIQueue { [self] in
+            initialAudioMuted = muted
+            attachedAudioTrack?.isEnabled = !muted
+        }
+    }
+
+    func makeMicrophoneOffer(enabled: Bool) async throws -> String {
+        if enabled {
+            try await StreamingAudioPermissionCoordinator.requestMicrophoneIfNeeded(
+                for: .sendReceive)
+        }
+        try Task.checkCancellation()
+        let plan = try await runOnAPIQueue { [self] in
+            guard peerConnection != nil, let transceiver = audioTransceiver, var plan = activePlan
+            else {
+                throw StreamingRuntimeError.superseded
+            }
+            if enabled {
+                try audioLifecycle.reconfigure(audioDirection: .sendReceive)
+                let factory = feedbackFactory ?? Self.factory
+                let track = factory.audioTrack(
+                    with: factory.audioSource(
+                        with: RTCMediaConstraints(
+                            mandatoryConstraints: nil, optionalConstraints: nil)),
+                    trackId: "xbxrc-microphone")
+                microphoneTrack = track
+                transceiver.sender.track = track
+                var directionError: NSError?
+                transceiver.setDirection(.sendRecv, error: &directionError)
+                if let directionError { throw directionError }
+                plan.audioDirection = .sendReceive
+            } else {
+                microphoneTrack?.isEnabled = false
+                transceiver.sender.track = nil
+                microphoneTrack = nil
+                var directionError: NSError?
+                transceiver.setDirection(.recvOnly, error: &directionError)
+                if let directionError { throw directionError }
+                try audioLifecycle.reconfigure(audioDirection: .receiveOnly)
+                plan.audioDirection = .receiveOnly
+            }
+            activePlan = plan
+            return plan
+        }
+        try Task.checkCancellation()
+        guard let peer = peerConnection else { throw StreamingRuntimeError.superseded }
+        return try await createAndApplyOffer(on: peer, plan: plan, iceRestart: false)
+    }
+
+    func stopMicrophoneCapture() async {
+        try? await runOnAPIQueue { [self] in
+            microphoneTrack?.isEnabled = false
+            microphoneTrack = nil
+            audioTransceiver?.sender.track = nil
+            var directionError: NSError?
+            audioTransceiver?.setDirection(.recvOnly, error: &directionError)
+            if let directionError { throw directionError }
+            activePlan?.audioDirection = .receiveOnly
+            if peerConnection != nil {
+                try audioLifecycle.reconfigure(audioDirection: .receiveOnly)
+            }
+        }
+    }
+
+    func requestVideoKeyframe() async -> Bool {
+        await dataChannels?.requestVideoKeyframe() ?? false
+    }
+
+    func remoteVideoBitrateCapKbps() async -> Int? {
+        try? await runOnAPIQueue { [self] in remoteVideoCapKbps }
+    }
+
+    func makeQualityOffer(maxVideoBitrateKbps: Int) async throws -> String {
+        let plan = try await runOnAPIQueue { [self] in
+            guard var plan = activePlan else { throw StreamingRuntimeError.superseded }
+            plan = plan.withVideoBitrateCap(maxVideoBitrateKbps)
+            pendingQualityPlan = plan
+            return plan
+        }
+        guard let peer = peerConnection else { throw StreamingRuntimeError.superseded }
+        return try await createAndApplyOffer(on: peer, plan: plan, iceRestart: false)
+    }
+
+    func rollbackMediaNegotiation() async throws {
+        try await runOnAPIQueue { [self] in pendingQualityPlan = nil }
+        guard let peer = peerConnection, peer.signalingState == .haveLocalOffer else { return }
+        try await setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: peer)
+    }
+
+    func closeTransport() async {
+        frameFeedback?.invalidate()
+        audioLifecycle.stop()
+        if let dataChannels {
+            await dataChannels.closeAfterInputDrain()
+        }
+        dataChannels = nil
+        statsTask?.cancel()
+        statsTask = nil
+        setVideoTrackAttachmentActive(false)
+        try? await runOnAPIQueue { [self] in
+            statsRequestGate.invalidate()
+            peerConnection?.close()
+            peerConnection = nil
+            feedbackFactory = nil
+            attachedAudioTrack = nil
+            microphoneTrack?.isEnabled = false
+            microphoneTrack = nil
+            audioTransceiver = nil
+            statsProjectionState = StatsProjectionState()
+        }
+        activePlan = nil
+        pendingQualityPlan = nil
+        frameFeedback = nil
+    }
+
+    private func preferCodecs(
+        audioTransceiver: RTCRtpTransceiver?,
+        audioDirection: StreamingMediaDirection,
+        videoTransceiver: RTCRtpTransceiver?,
+        videoDirection: StreamingMediaDirection
+    ) throws {
+        if let audioTransceiver {
+            let capabilities = capabilities(
+                forKind: kRTCMediaStreamTrackKindAudio,
+                role: StreamingCodecPreferencePolicy.capabilityRole(for: audioDirection)
+            )
+            let codecs = capabilities.codecs.sorted {
+                StreamingCodecPreferencePolicy.audioCodecRank($0.name)
+                    < StreamingCodecPreferencePolicy.audioCodecRank($1.name)
+            }
+            try audioTransceiver.setCodecPreferences(codecs, error: ())
+        }
+        if let videoTransceiver {
+            let capabilities = capabilities(
+                forKind: kRTCMediaStreamTrackKindVideo,
+                role: StreamingCodecPreferencePolicy.capabilityRole(for: videoDirection)
+            )
+            let codecs = capabilities.codecs.sorted {
+                StreamingCodecPreferencePolicy.videoCodecRank($0.name)
+                    < StreamingCodecPreferencePolicy.videoCodecRank($1.name)
+            }
+            try videoTransceiver.setCodecPreferences(codecs, error: ())
+        }
+    }
+
+    private func capabilities(
+        forKind kind: String,
+        role: StreamingRtpCapabilityRole
+    ) -> RTCRtpCapabilities {
+        switch role {
+        case .sender:
+            Self.factory.rtpSenderCapabilities(forKind: kind)
+        case .receiver:
+            Self.factory.rtpReceiverCapabilities(forKind: kind)
+        }
+    }
+
+    private func rtcDirection(_ direction: StreamingMediaDirection) -> RTCRtpTransceiverDirection {
+        switch direction {
+        case .sendReceive: .sendRecv
+        case .receiveOnly: .recvOnly
+        }
+    }
+
+    private func setLocalDescription(
+        _ description: RTCSessionDescription,
+        on peer: RTCPeerConnection
+    ) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            apiQueue.async {
+                peer.setLocalDescription(description) { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            }
+        }
+    }
+
+    private func runOnAPIQueue<T: Sendable>(
+        _ operation: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            apiQueue.async {
+                do {
+                    let result = try operation()
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    private func attachVideoTrack(_ track: RTCVideoTrack) -> Bool {
+        let probe = FirstVideoFrameProbe { [weak self] in
+            self?.eventSink(.firstVideoFrame)
+        }
+        videoTrackLock.lock()
+        guard acceptsVideoTracks else {
+            videoTrackLock.unlock()
+            return false
+        }
+        if streamingVideoTracksMatch(attachedVideoTrack, track), frameProbe != nil {
+            videoTrackLock.unlock()
+            return false
+        }
+        if let attachedVideoTrack, let frameProbe {
+            attachedVideoTrack.remove(frameProbe)
+        }
+        attachedVideoTrack = track
+        frameProbe = probe
+        track.add(probe)
+        videoTrackLock.unlock()
+        eventSink(
+            .videoTrack(StreamingVideoTrackHandle(rawValue: track, frameFeedback: frameFeedback)))
+        return true
+    }
+
+    @discardableResult
+    private func attachAudioTrack(_ track: RTCAudioTrack) -> Bool {
+        videoTrackLock.lock()
+        guard acceptsVideoTracks, !didEmitAudioTrackReady else {
+            videoTrackLock.unlock()
+            return false
+        }
+        didEmitAudioTrackReady = true
+        attachedAudioTrack = track
+        videoTrackLock.unlock()
+        track.isEnabled = !initialAudioMuted
+        eventSink(.audioTrackReady)
+        return true
+    }
+
+    private func setVideoTrackAttachmentActive(_ active: Bool) {
+        videoTrackLock.lock()
+        acceptsVideoTracks = active
+        if let attachedVideoTrack, let frameProbe {
+            attachedVideoTrack.remove(frameProbe)
+        }
+        attachedVideoTrack = nil
+        frameProbe = nil
+        didEmitAudioTrackReady = false
+        attachedAudioTrack = nil
+        videoTrackLock.unlock()
+    }
+
+    private func startStatsCollection() async throws {
+        statsTask?.cancel()
+        let statsGeneration = try await runOnAPIQueue { [self] in
+            statsProjectionState = StatsProjectionState()
+            return statsRequestGate.activate()
+        }
+        statsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, !Task.isCancelled else { return }
+                self.collectStats(generation: statsGeneration)
+            }
+        }
+    }
+
+    private func collectStats(generation: UInt64) {
+        apiQueue.async { [weak self] in
+            guard let self, let peerConnection = self.peerConnection,
+                self.statsRequestGate.begin(generation: generation)
+            else { return }
+            peerConnection.statistics { [weak self] report in
+                guard let self else { return }
+                self.apiQueue.async {
+                    guard self.statsRequestGate.complete(generation: generation) else { return }
+                    let stats = self.projectStats(report)
+                    if stats.framesDecoded > 0 || stats.inboundVideoBytes > 0 {
+                        self.attachExistingReceiverTracks(
+                            on: peerConnection,
+                            reason: "statsMediaObserved"
+                        )
+                    }
+                    self.eventSink(.stats(stats))
+                }
+            }
+        }
+    }
+
+    private func projectStats(_ report: RTCStatisticsReport) -> StreamingPeerStats {
+        let observedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
+        var inboundVideoBytes: UInt64 = 0
+        var inboundAudioBytes: UInt64 = 0
+        var framesDecoded: UInt64 = 0
+        var framesDropped: UInt64 = 0
+        var videoPackets = StreamingVideoPacketStatistics()
+        var framesReceived: UInt64?
+        var observedFramesDecoded: UInt64?
+        var allReceivedFramesObserved = true
+        var allDecodedFramesObserved = true
+        var pairID: String?
+        var jitterSeconds: Double?
+        var freezeCount: UInt64?
+        var freezeDurationSeconds: Double?
+        var nackCount: UInt64?
+        var pliCount: UInt64?
+        var firCount: UInt64?
+        var roundTripTimeSeconds: Double?
+        var selectedCandidatePairProtocol: String?
+        var selectedCandidatePairAddressFamily: String?
+        var selectedLocalCandidateType: String?
+        var selectedRemoteCandidateType: String?
+        for statistic in report.statistics.values {
+            if statistic.type == "inbound-rtp" {
+                let kind =
+                    Self.stringValue(statistic.values["kind"])
+                    ?? Self.stringValue(statistic.values["mediaType"])
+                let bytes = Self.uintValue(statistic.values["bytesReceived"])
+                videoPackets.observe(
+                    kind: kind,
+                    received: Self.uintValue(statistic.values["packetsReceived"]),
+                    lost: (statistic.values["packetsLost"] as? NSNumber)?.int64Value)
+                if kind == "video" {
+                    inboundVideoBytes += bytes
+                    framesDecoded += Self.uintValue(statistic.values["framesDecoded"])
+                    if let count = Self.optionalUIntValue(statistic.values["framesDecoded"]) {
+                        observedFramesDecoded = (observedFramesDecoded ?? 0) + count
+                    } else {
+                        allDecodedFramesObserved = false
+                    }
+                    if let count = Self.optionalUIntValue(statistic.values["framesReceived"]) {
+                        framesReceived = (framesReceived ?? 0) + count
+                    } else {
+                        allReceivedFramesObserved = false
+                    }
+                    framesDropped += Self.uintValue(statistic.values["framesDropped"])
+                    jitterSeconds = Self.doubleValue(statistic.values["jitter"])
+                    freezeCount = Self.optionalUIntValue(statistic.values["freezeCount"])
+                    freezeDurationSeconds = Self.doubleValue(
+                        statistic.values["totalFreezesDuration"]
+                    )
+                    nackCount = Self.optionalUIntValue(statistic.values["nackCount"])
+                    pliCount = Self.optionalUIntValue(statistic.values["pliCount"])
+                    firCount = Self.optionalUIntValue(statistic.values["firCount"])
+                } else if kind == "audio" {
+                    inboundAudioBytes += bytes
+                }
+            } else if statistic.type == "candidate-pair",
+                Self.stringValue(statistic.values["state"]) == "succeeded",
+                Self.boolValue(statistic.values["nominated"])
+                    || Self.boolValue(statistic.values["selected"])
+            {
+                pairID = statistic.id
+                roundTripTimeSeconds = Self.doubleValue(
+                    statistic.values["currentRoundTripTime"]
+                )
+                let pair = Self.projectCandidatePair(statistic, report: report)
+                selectedCandidatePairProtocol = pair.transportProtocol
+                selectedCandidatePairAddressFamily = pair.addressFamily
+                selectedLocalCandidateType = pair.localCandidateType
+                selectedRemoteCandidateType = pair.remoteCandidateType
+            }
+        }
+
+        let packetsReceived = videoPackets.received
+        let packetsLost = videoPackets.lost
+        let videoPacketsLost = videoPackets.observedLoss
+        if !allReceivedFramesObserved { framesReceived = nil }
+        if !allDecodedFramesObserved { observedFramesDecoded = nil }
+        let mediaSample = statsProjectionState.mediaSamples.observe(
+            inboundVideoBytes: inboundVideoBytes,
+            packetsReceived: packetsReceived,
+            framesDecoded: framesDecoded,
+            observedAtMilliseconds: observedAtMilliseconds
+        )
+        let receiveBitrateBps = Self.ratePerSecond(
+            current: inboundVideoBytes,
+            previous: statsProjectionState.lastVideoBytes,
+            elapsedMilliseconds: statsProjectionState.lastObservedAtMilliseconds.map {
+                observedAtMilliseconds - $0
+            },
+            multiplier: 8
+        )
+        statsProjectionState.lastVideoBytes = inboundVideoBytes
+        statsProjectionState.lastObservedAtMilliseconds = observedAtMilliseconds
+
+        var projected = StreamingPeerStats(
+            inboundVideoBytes: inboundVideoBytes,
+            inboundAudioBytes: inboundAudioBytes,
+            framesDecoded: framesDecoded,
+            framesDropped: framesDropped,
+            packetsLost: packetsLost,
+            roundTripTimeSeconds: roundTripTimeSeconds,
+            jitterSeconds: jitterSeconds,
+            packetsReceived: packetsReceived,
+            receiveBitrateBps: receiveBitrateBps,
+            freezeCount: freezeCount,
+            freezeDurationSeconds: freezeDurationSeconds,
+            nackCount: nackCount,
+            pliCount: pliCount,
+            firCount: firCount,
+            selectedCandidatePairProtocol: selectedCandidatePairProtocol,
+            selectedCandidatePairAddressFamily: selectedCandidatePairAddressFamily,
+            selectedLocalCandidateType: selectedLocalCandidateType,
+            selectedRemoteCandidateType: selectedRemoteCandidateType,
+            firstMediaAtMilliseconds: mediaSample.firstMediaAtMilliseconds,
+            lastMediaAtMilliseconds: mediaSample.lastMediaAtMilliseconds,
+            frameSupplyDelta: mediaSample.frameSupplyDelta
+        )
+        projected.observedAtMilliseconds = observedAtMilliseconds
+        projected.framesReceived = framesReceived
+        projected.observedFramesDecoded = observedFramesDecoded
+        projected.videoPacketsLost = videoPacketsLost
+        projected.selectedCandidatePairID = pairID
+        return projected
+    }
+
+    @discardableResult
+    private func attachExistingReceiverTracks(
+        on peerConnection: RTCPeerConnection,
+        reason: String
+    ) -> Bool {
+        var didAttachAnyTrack = false
+        let transceivers = peerConnection.transceivers
+        for transceiver in transceivers {
+            if let videoTrack = transceiver.receiver.track as? RTCVideoTrack {
+                if attachVideoTrack(videoTrack) {
+                    traceReceiverTrackDiscovered(
+                        kind: "video",
+                        reason: reason,
+                        transceiverCount: transceivers.count
+                    )
+                    didAttachAnyTrack = true
+                }
+            } else if let audioTrack = transceiver.receiver.track as? RTCAudioTrack {
+                if attachAudioTrack(audioTrack) {
+                    traceReceiverTrackDiscovered(
+                        kind: "audio",
+                        reason: reason,
+                        transceiverCount: transceivers.count
+                    )
+                    didAttachAnyTrack = true
+                }
+            }
+        }
+        return didAttachAnyTrack
+    }
+
+    private func traceReceiverTrackDiscovered(
+        kind: String,
+        reason: String,
+        transceiverCount: Int
+    ) {
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming",
+            event: "receiverTrackDiscovered",
+            payload: [
+                "kind": .string(kind),
+                "reason": .string(reason),
+                "transceiverCount": .integer(Int64(transceiverCount)),
+            ],
+            dimension: .mediaSupply,
+            importance: .key
+        )
+    }
+
+    private static func projectCandidatePair(
+        _ pair: RTCStatistics,
+        report: RTCStatisticsReport
+    ) -> (
+        transportProtocol: String?,
+        addressFamily: String?,
+        localCandidateType: String?,
+        remoteCandidateType: String?
+    ) {
+        let local = stringValue(pair.values["localCandidateId"])
+            .flatMap { report.statistics[$0] }
+        let remote = stringValue(pair.values["remoteCandidateId"])
+            .flatMap { report.statistics[$0] }
+        let transportProtocol =
+            stringValue(local?.values["protocol"])
+            ?? stringValue(remote?.values["protocol"])
+        let localFamily = candidateAddressFamily(local)
+        let remoteFamily = candidateAddressFamily(remote)
+        let addressFamily: String? =
+            if localFamily == nil, remoteFamily == nil {
+                nil
+            } else {
+                "local:\(localFamily ?? "unknown"),remote:\(remoteFamily ?? "unknown")"
+            }
+        return (
+            transportProtocol?.lowercased(),
+            addressFamily,
+            stringValue(local?.values["candidateType"])?.lowercased(),
+            stringValue(remote?.values["candidateType"])?.lowercased()
+        )
+    }
+
+    private static func candidateAddressFamily(_ statistic: RTCStatistics?) -> String? {
+        guard
+            let address = stringValue(statistic?.values["address"])
+                ?? stringValue(statistic?.values["ip"])
+        else { return nil }
+        if address.contains(":") { return "ipv6" }
+        if address.split(separator: ".").count == 4 { return "ipv4" }
+        return "unknown"
+    }
+
+    private static func ratePerSecond(
+        current: UInt64,
+        previous: UInt64?,
+        elapsedMilliseconds: Double?,
+        multiplier: Double
+    ) -> Double? {
+        guard let previous, current >= previous,
+            let elapsedMilliseconds, elapsedMilliseconds > 0
+        else { return nil }
+        return Double(current - previous) * multiplier * 1_000 / elapsedMilliseconds
+    }
+
+    nonisolated private static func stringValue(_ value: NSObject?) -> String? {
+        value as? String
+    }
+
+    nonisolated private static func uintValue(_ value: NSObject?) -> UInt64 {
+        (value as? NSNumber)?.uint64Value ?? 0
+    }
+
+    nonisolated private static func optionalUIntValue(_ value: NSObject?) -> UInt64? {
+        (value as? NSNumber)?.uint64Value
+    }
+
+    nonisolated private static func intValue(_ value: NSObject?) -> Int64 {
+        (value as? NSNumber)?.int64Value ?? 0
+    }
+
+    nonisolated private static func doubleValue(_ value: NSObject?) -> Double? {
+        (value as? NSNumber)?.doubleValue
+    }
+
+    nonisolated private static func boolValue(_ value: NSObject?) -> Bool {
+        (value as? NSNumber)?.boolValue ?? false
+    }
+
+    private static func runtimeConfigurationPayload(
+        plan: StreamingWebRtcPlan,
+        peer: RTCPeerConnection,
+        dataChannelSnapshot: StreamingDataChannelDebugSnapshot?
+    ) -> [String: IOSRuntimeTraceValue] {
+        var payload = StreamingRuntimeDiagnostics.runtimeContextPayload(plan: plan)
+        payload["peerSnapshot"] = peerSnapshotPayload(
+            peerConnection: peer,
+            dataChannelSnapshot: dataChannelSnapshot
+        )
+        return payload
+    }
+
+    private static func peerSnapshotPayload(
+        peerConnection: RTCPeerConnection,
+        dataChannelSnapshot: StreamingDataChannelDebugSnapshot?
+    ) -> IOSRuntimeTraceValue {
+        let transceivers = peerConnection.transceivers
+        return .object([
+            "signalingState": .string(signalingStateName(peerConnection)),
+            "iceConnectionState": .string(iceConnectionStateName(peerConnection)),
+            "iceGatheringState": .string(iceGatheringStateName(peerConnection)),
+            "transceiverCount": .integer(Int64(transceivers.count)),
+            "audioReceiverTrackCount": .integer(
+                Int64(
+                    transceivers.filter {
+                        $0.receiver.track is RTCAudioTrack
+                    }.count)),
+            "videoReceiverTrackCount": .integer(
+                Int64(
+                    transceivers.filter {
+                        $0.receiver.track is RTCVideoTrack
+                    }.count)),
+            "localDescriptionSet": .bool(peerConnection.localDescription != nil),
+            "remoteDescriptionSet": .bool(peerConnection.remoteDescription != nil),
+            "dataChannels": dataChannelSnapshot.map(dataChannelSnapshotPayload) ?? .null,
+        ])
+    }
+
+    private static func dataChannelSnapshotPayload(
+        _ snapshot: StreamingDataChannelDebugSnapshot
+    ) -> IOSRuntimeTraceValue {
+        .object([
+            "readyStates": .object(snapshot.readyStates.mapValues(IOSRuntimeTraceValue.string)),
+            "phases": .object(snapshot.phases.mapValues(IOSRuntimeTraceValue.string)),
+            "handshakeAcknowledged": .bool(snapshot.handshakeAcknowledged),
+            "controlReady": .bool(snapshot.controlReady),
+            "inputStarted": .bool(snapshot.inputStarted),
+            "terminalReason": snapshot.terminalReason.map(IOSRuntimeTraceValue.string) ?? .null,
+        ])
+    }
+
+    private static func signalingStateName(_ peerConnection: RTCPeerConnection) -> String {
+        switch peerConnection.signalingState {
+        case .stable: "stable"
+        case .haveLocalOffer: "haveLocalOffer"
+        case .haveLocalPrAnswer: "haveLocalPrAnswer"
+        case .haveRemoteOffer: "haveRemoteOffer"
+        case .haveRemotePrAnswer: "haveRemotePrAnswer"
+        case .closed: "closed"
+        @unknown default: "unknown"
+        }
+    }
+
+    private static func iceConnectionStateName(_ peerConnection: RTCPeerConnection) -> String {
+        switch peerConnection.iceConnectionState {
+        case .new: "new"
+        case .checking: "checking"
+        case .connected: "connected"
+        case .completed: "completed"
+        case .failed: "failed"
+        case .disconnected: "disconnected"
+        case .closed: "closed"
+        case .count: "count"
+        @unknown default: "unknown"
+        }
+    }
+
+    private static func iceGatheringStateName(_ peerConnection: RTCPeerConnection) -> String {
+        switch peerConnection.iceGatheringState {
+        case .new: "new"
+        case .gathering: "gathering"
+        case .complete: "complete"
+        @unknown default: "unknown"
+        }
+    }
+}
+
+extension LibWebRTCPeerRuntime: RTCPeerConnectionDelegate {
+    func peerConnection(_: RTCPeerConnection, didChange _: RTCSignalingState) {}
+    func peerConnection(_: RTCPeerConnection, didAdd _: RTCMediaStream) {}
+    func peerConnection(_: RTCPeerConnection, didRemove _: RTCMediaStream) {}
+    func peerConnectionShouldNegotiate(_: RTCPeerConnection) {}
+
+    func peerConnection(
+        _: RTCPeerConnection,
+        didChange newState: RTCIceConnectionState
+    ) {
+        let state: StreamingPeerConnectionState =
+            switch newState {
+            case .new: .new
+            case .checking: .checking
+            case .connected, .completed: .connected
+            case .disconnected: .disconnected
+            case .failed: .failed
+            case .closed: .closed
+            case .count: .failed
+            @unknown default: .failed
+            }
+        eventSink(.connectionStateChanged(state))
+    }
+
+    func peerConnection(
+        _: RTCPeerConnection,
+        didChange newState: RTCIceGatheringState
+    ) {
+        guard newState == .complete else { return }
+        eventSink(.localIceGatheringComplete)
+    }
+
+    func peerConnection(
+        _: RTCPeerConnection,
+        didGenerate candidate: RTCIceCandidate
+    ) {
+        let projected = StreamingIceCandidate(
+            sdp: candidate.sdp,
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex
+        )
+        let plan = activePlan ?? .desktopWebRtcDirect
+        guard StreamingIceCandidatePolicy.allows(projected, plan: plan) else { return }
+        eventSink(.localCandidate(projected))
+    }
+
+    func peerConnection(_: RTCPeerConnection, didRemove _: [RTCIceCandidate]) {}
+    func peerConnection(_: RTCPeerConnection, didOpen _: RTCDataChannel) {}
+
+    func peerConnection(
+        _ peerConnection: RTCPeerConnection,
+        didStartReceivingOn transceiver: RTCRtpTransceiver
+    ) {
+        if let videoTrack = transceiver.receiver.track as? RTCVideoTrack {
+            guard self.peerConnection === peerConnection else { return }
+            _ = attachVideoTrack(videoTrack)
+        } else if let audioTrack = transceiver.receiver.track as? RTCAudioTrack {
+            guard self.peerConnection === peerConnection else { return }
+            _ = attachAudioTrack(audioTrack)
+        }
+    }
+}
+
+private final class FirstVideoFrameProbe: NSObject, RTCVideoRenderer {
+    private let onFirstFrame: @Sendable () -> Void
+    private let lock = NSLock()
+    private var receivedFirstFrame = false
+
+    init(onFirstFrame: @escaping @Sendable () -> Void) {
+        self.onFirstFrame = onFirstFrame
+    }
+
+    func setSize(_: CGSize) {}
+
+    func renderFrame(_ frame: RTCVideoFrame?) {
+        guard frame != nil else { return }
+        lock.lock()
+        guard !receivedFirstFrame else {
+            lock.unlock()
+            return
+        }
+        receivedFirstFrame = true
+        lock.unlock()
+        onFirstFrame()
+    }
+}

@@ -7,6 +7,9 @@ use std::time::{Duration, Instant};
 use super::flow::SessionFlowError;
 use super::store::SessionCancelToken;
 
+pub const RESOLVING_CONTEXT_TIMEOUT: Duration = Duration::from_secs(90);
+pub const CONSOLE_READY_SMARTGLASS_CACHE_TTL: Duration = Duration::from_secs(2);
+
 #[derive(Clone)]
 pub(crate) struct OwnedSession {
     pub id: String,

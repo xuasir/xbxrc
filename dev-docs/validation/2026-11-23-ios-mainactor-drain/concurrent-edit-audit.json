@@ -1,0 +1,309 @@
+{
+  "indexPreserved": true,
+  "indexSha256": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "unownedFiles": [
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/README.md",
+      "baselineSha256": "b514b4b360852d3778170ef20f5c70ee22eabaf74c581d863bdd4396b4ee1141",
+      "currentSha256": "b514b4b360852d3778170ef20f5c70ee22eabaf74c581d863bdd4396b4ee1141",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/README.md",
+      "baselineSha256": "27b4912a770daa16f2b7eddaa985cd3c57f8388728947f4094630df1ce53ad83",
+      "currentSha256": "27b4912a770daa16f2b7eddaa985cd3c57f8388728947f4094630df1ce53ad83",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/analysis-input.json",
+      "baselineSha256": "30c96041133a0d8f43f8d7cf812bc8fb137ea1da8bf6e9e12e152f8a577c13ab",
+      "currentSha256": "30c96041133a0d8f43f8d7cf812bc8fb137ea1da8bf6e9e12e152f8a577c13ab",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/analyze_post_fix.py",
+      "baselineSha256": "58c12767735e666ed213928452eb4d75faf58d5cf2dbc4b768e607e1ae910f45",
+      "currentSha256": "58c12767735e666ed213928452eb4d75faf58d5cf2dbc4b768e607e1ae910f45",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/artifact-manifest.json",
+      "baselineSha256": "23a06125341b24ac9a1fa4a34dc45fe586b9795dc80861e4c1cc41b623bb51a0",
+      "currentSha256": "23a06125341b24ac9a1fa4a34dc45fe586b9795dc80861e4c1cc41b623bb51a0",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/base-analysis.json",
+      "baselineSha256": "ed8c7de7e64d6507dc97af1877327645b21feabdb316dd5673ed0c55e1690a42",
+      "currentSha256": "ed8c7de7e64d6507dc97af1877327645b21feabdb316dd5673ed0c55e1690a42",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/cleanup.json",
+      "baselineSha256": "8ed445b0a8f5dc8552941f0b5066916776be57fff8f849ee788d86ab221e6484",
+      "currentSha256": "8ed445b0a8f5dc8552941f0b5066916776be57fff8f849ee788d86ab221e6484",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/comparison.json",
+      "baselineSha256": "0b4bf4a9945e1a3199d4320c5c68d4c04e0d589d36fd96e6e7b8e81f1d56f523",
+      "currentSha256": "0b4bf4a9945e1a3199d4320c5c68d4c04e0d589d36fd96e6e7b8e81f1d56f523",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/core-analysis.json",
+      "baselineSha256": "f9f370cd929dfda3da2a61a05315c69492dec84e8d4f7605d7ee1ea72f02b0d0",
+      "currentSha256": "f9f370cd929dfda3da2a61a05315c69492dec84e8d4f7605d7ee1ea72f02b0d0",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/evidence-anchors.json",
+      "baselineSha256": "5a8e200314e66ffd994fb4b7d96a94d3fb10d0a2f1546fb7b6e72c5bf67a45bf",
+      "currentSha256": "5a8e200314e66ffd994fb4b7d96a94d3fb10d0a2f1546fb7b6e72c5bf67a45bf",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/health-summary.json",
+      "baselineSha256": "c8af8e5d84f627516c62f2aa73063eb4c5d97e7ebdf1ae477136f259c0bd5479",
+      "currentSha256": "c8af8e5d84f627516c62f2aa73063eb4c5d97e7ebdf1ae477136f259c0bd5479",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/normal-supply-summary.json",
+      "baselineSha256": "07ee19930c527745975aaee2225c944dc84a19fa54a9aee198ce5b0aff80c666",
+      "currentSha256": "07ee19930c527745975aaee2225c944dc84a19fa54a9aee198ce5b0aff80c666",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/source-excerpts.txt",
+      "baselineSha256": "7ad647357f629248494fbf284e14b1e026a83d32c8ecc2a1cbea7c2380786f74",
+      "currentSha256": "7ad647357f629248494fbf284e14b1e026a83d32c8ecc2a1cbea7c2380786f74",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/source-hashes.json",
+      "baselineSha256": "9839aa24d47ad584d7ed7f186541fc448ffc413c36c114a55ece7eac22c50de9",
+      "currentSha256": "9839aa24d47ad584d7ed7f186541fc448ffc413c36c114a55ece7eac22c50de9",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/startup-analysis.json",
+      "baselineSha256": "eaaed109a80c17fe864c858454e19385fe815481604c8182bec91bb7652b2766",
+      "currentSha256": "eaaed109a80c17fe864c858454e19385fe815481604c8182bec91bb7652b2766",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/steady-windows.csv",
+      "baselineSha256": "0ac9a6ae9d7e3fa477a3b28490046933b4649533b93d1cf8e47403207423f9d7",
+      "currentSha256": "0ac9a6ae9d7e3fa477a3b28490046933b4649533b93d1cf8e47403207423f9d7",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/terminal-anchors.json",
+      "baselineSha256": "c17f5de5acb9d6abfcd0a2e7f2fe6b7edab787fccfddf73cb73043d4c56199e1",
+      "currentSha256": "c17f5de5acb9d6abfcd0a2e7f2fe6b7edab787fccfddf73cb73043d4c56199e1",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/user-confirmation.json",
+      "baselineSha256": "a17eff1015154dfb4f79b1cd8f0bcc648ae6e2429b432b940da43a6ade029225",
+      "currentSha256": "a17eff1015154dfb4f79b1cd8f0bcc648ae6e2429b432b940da43a6ade029225",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/validation.json",
+      "baselineSha256": "45acf372ad042195bb4f01ccc2d3643c08c234e7a2803903249f90e6e9971264",
+      "currentSha256": "45acf372ad042195bb4f01ccc2d3643c08c234e7a2803903249f90e6e9971264",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/README.md",
+      "baselineSha256": "45998fc61573463a326dab70ee231143cb60299c1b122236826d31616d255395",
+      "currentSha256": "45998fc61573463a326dab70ee231143cb60299c1b122236826d31616d255395",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/baseline-analysis.json",
+      "baselineSha256": "4b88dfdfb892cbc234a7e9b3e163e9976506343bf57cc3c03c88a94a311e1af4",
+      "currentSha256": "4b88dfdfb892cbc234a7e9b3e163e9976506343bf57cc3c03c88a94a311e1af4",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/build-and-test-plan.json",
+      "baselineSha256": "bbcaad9b7295f37ec735c361c2668063a5253252bbd2c8c5f8d3ca0f6142b511",
+      "currentSha256": "bbcaad9b7295f37ec735c361c2668063a5253252bbd2c8c5f8d3ca0f6142b511",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/cleanup-plan.json",
+      "baselineSha256": "0c17d39902a072f7d41dd6b071f1c2b1ffc2821506b755e921a82997a176515c",
+      "currentSha256": "0c17d39902a072f7d41dd6b071f1c2b1ffc2821506b755e921a82997a176515c",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/cleanup.json",
+      "baselineSha256": "fd00f318b0611a0beaa182250f9073910db1ad96aa1f02ec6d3dc47bd7713994",
+      "currentSha256": "fd00f318b0611a0beaa182250f9073910db1ad96aa1f02ec6d3dc47bd7713994",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/diagnostics.json",
+      "baselineSha256": "ad6c3e88e28e30892fb923ccf61443f6c30ca356b58b0642218242932f1d8379",
+      "currentSha256": "ad6c3e88e28e30892fb923ccf61443f6c30ca356b58b0642218242932f1d8379",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/format-ranges.json",
+      "baselineSha256": "8a397de48d587738c93c2e0eed61c3beba9ea37b142de8425bf3fe5b1302a252",
+      "currentSha256": "8a397de48d587738c93c2e0eed61c3beba9ea37b142de8425bf3fe5b1302a252",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/simulator-summary.json",
+      "baselineSha256": "a26d0c6670348f972bbae1cbc6dab3a7f31ce58ebcd13738644805f4b0d3a4ff",
+      "currentSha256": "a26d0c6670348f972bbae1cbc6dab3a7f31ce58ebcd13738644805f4b0d3a4ff",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/source-hashes.json",
+      "baselineSha256": "4b10d5203cd7dcf1f3770ea9fe710aa2d5b33cc67502e1e8017c552ed152f9e0",
+      "currentSha256": "4b10d5203cd7dcf1f3770ea9fe710aa2d5b33cc67502e1e8017c552ed152f9e0",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "baselineSha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+      "currentSha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "baselineSha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+      "currentSha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "baselineSha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+      "currentSha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "baselineSha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+      "currentSha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/XBXRCTests/XBXRCTests.swift",
+      "baselineSha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+      "currentSha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/scripts/check-streaming-core-trace.py",
+      "baselineSha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+      "currentSha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/sources/iosapp/scripts/tests/test_check_streaming_core_trace.py",
+      "baselineSha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+      "currentSha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/swift-format.json",
+      "baselineSha256": "30dc2b50f04daa641233ec9a6fdf1e4c07d13206cf452f712dbb4364ef5607cf",
+      "currentSha256": "30dc2b50f04daa641233ec9a6fdf1e4c07d13206cf452f712dbb4364ef5607cf",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/task-changes.diff",
+      "baselineSha256": "cb02367df080f9ec7649a93efc3d1812d1b591df996eeca0f1303a05410f0fec",
+      "currentSha256": "cb02367df080f9ec7649a93efc3d1812d1b591df996eeca0f1303a05410f0fec",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/task-input.json",
+      "baselineSha256": "bc968433c322146015ac5c5721dcb5419714122d929bcf04ea3c17b7de247b93",
+      "currentSha256": "bc968433c322146015ac5c5721dcb5419714122d929bcf04ea3c17b7de247b93",
+      "sameBytes": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/validation.json",
+      "baselineSha256": "20b9822d92fa00694ee7af1c846fcd2c94617f02ee0dc22979ad5c1a238bc460",
+      "currentSha256": "20b9822d92fa00694ee7af1c846fcd2c94617f02ee0dc22979ad5c1a238bc460",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+      "baselineSha256": "90ee3232a071d1577e3a3a2a7a9dcae3b415e94a1d701f0ff24de5cf9e77aa31",
+      "currentSha256": "90ee3232a071d1577e3a3a2a7a9dcae3b415e94a1d701f0ff24de5cf9e77aa31",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+      "baselineSha256": "21f16921163a0236fd6644e53d016119b7da46c434f85329ed48387d9eccc4c4",
+      "currentSha256": "21f16921163a0236fd6644e53d016119b7da46c434f85329ed48387d9eccc4c4",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+      "baselineSha256": "83b953e796ace04fd598b3d67ccd75947fbffd71eabdb93f2606e11286afbb24",
+      "currentSha256": "83b953e796ace04fd598b3d67ccd75947fbffd71eabdb93f2606e11286afbb24",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "baselineSha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+      "currentSha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "baselineSha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+      "currentSha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRC/Resources/Localizable.xcstrings",
+      "baselineSha256": "b481dcc1f375212d00cc8eafb12c6750fdf37d112dd3e05ee82d001141b1e71a",
+      "currentSha256": "b481dcc1f375212d00cc8eafb12c6750fdf37d112dd3e05ee82d001141b1e71a",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+      "baselineSha256": "d2aeef52741ba7ff9098811a6ea9637ec3ffc92c8efc3c1b61c034a60bb3c0e7",
+      "currentSha256": "d2aeef52741ba7ff9098811a6ea9637ec3ffc92c8efc3c1b61c034a60bb3c0e7",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/scripts/check-streaming-core-trace.py",
+      "baselineSha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+      "currentSha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+      "sameBytes": true
+    },
+    {
+      "path": "iosapp/scripts/tests/test_check_streaming_core_trace.py",
+      "baselineSha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+      "currentSha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+      "sameBytes": true
+    }
+  ],
+  "supplementalBuildFix": {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "baselineSha256": "a8d849c2c6e6dd83a22842275c2fb2c31d510f805ebf6cb18fc79a6a72aabf4f",
+    "scope": "仅orientationPicker函数添加MainActor隔离；保留现有方向胶囊改动",
+    "trigger": "模拟器首轮Swift6 RegionIsolation编译错误"
+  },
+  "supplementalTestBuildFix": {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "baselineSha256": "be5731bde7aa2c5d4c62e0e321267cbfba94db5c3c40728f8822c3983f84c7b1",
+    "scope": "截图capture以关闭本地动画替代写入只读accessibilityReduceMotion环境；保留当前截图探针",
+    "trigger": "测试目标编译中WritableKeyPath不匹配"
+  },
+  "relatedManifestUpdates": "related-manifest-updates.json；本任务证据指纹同步",
+  "unownedChangesObservedDuringParallelCleanup": [],
+  "retainedTaskSourceHashesMatch": 5
+}

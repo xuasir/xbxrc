@@ -85,6 +85,7 @@ extension View {
 
   func appResponsiveTypography() -> some View {
     modifier(AppResponsiveTypographyModifier())
+      .labelStyle(AppIconLabelStyle())
   }
 }
 
@@ -423,6 +424,5 @@ private struct StreamingPageRoot: View {
 
   var body: some View {
     StreamingPlayerView(store: store)
-      .ignoresSafeArea()
   }
 }

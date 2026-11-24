@@ -1,0 +1,43 @@
+diff --git a/iosapp/XBXRC/App/LaunchExperienceView.swift b/iosapp/XBXRC/App/LaunchExperienceView.swift
+index 03478f4e..3a8f4864 100644
+--- a/iosapp/XBXRC/App/LaunchExperienceView.swift
++++ b/iosapp/XBXRC/App/LaunchExperienceView.swift
+@@ -12,7 +12,8 @@ struct LaunchExperienceView: View {
+     var body: some View {
+         GeometryReader { geometry in
+             ZStack {
+-                Color.white
++                // 系统启动屏与恢复层共用颜色资产，统一深浅色外观。
++                Color("LaunchBackground")
+ 
+                 Image("LaunchIcon")
+                     .resizable()
+diff --git a/iosapp/XBXRC/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json b/iosapp/XBXRC/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json
+index e8ef0f13..7e37a576 100644
+--- a/iosapp/XBXRC/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json
++++ b/iosapp/XBXRC/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json
+@@ -11,6 +11,24 @@
+           "red" : "1.000"
+         }
+       }
++    },
++    {
++      "appearances" : [
++        {
++          "appearance" : "luminosity",
++          "value" : "dark"
++        }
++      ],
++      "idiom" : "universal",
++      "color" : {
++        "color-space" : "srgb",
++        "components" : {
++          "alpha" : "1.000",
++          "blue" : "0.152941",
++          "green" : "0.180392",
++          "red" : "0.125490"
++        }
++      }
+     }
+   ],
+   "info" : {

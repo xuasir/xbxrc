@@ -6,6 +6,7 @@ struct HostInstalledGamesView: View {
     @EnvironmentObject private var data: XboxDataStore
     @EnvironmentObject private var settings: AppSettingsStore
     @EnvironmentObject private var streaming: StreamingFeatureStore
+    @EnvironmentObject private var cloud: CloudLibraryStore
     @Environment(\.appPageIsActive) private var isActive
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -105,7 +106,7 @@ struct HostInstalledGamesView: View {
         .onChange(of: storageDevices.map(\.id)) { _, devices in
             if storageID != "all", !devices.contains(storageID) { storageID = "all" }
         }
-        .refreshable { await load(refresh: true) }
+        .appRefreshable { await load(refresh: true) }
         .navigationDestination(item: $selectedGame) { game in
             if let titleID = game.titleID {
                 PersonalGameDetailView(
@@ -118,9 +119,26 @@ struct HostInstalledGamesView: View {
                             productID: game.productID),
                     installedGame: game, host: host)
             } else {
+                let detailState =
+                    game.productID.map { cloud.productDetailState($0) }
+                    ?? XboxSingleDataState()
+                let detail = detailState.value
                 AppInformationPage {
                     Section {
-                        Text(game.name).appFont(.title, weight: .bold)
+                        HStack(alignment: .center, spacing: 12) {
+                            Text(detail?.name ?? game.name).appFont(.title, weight: .bold)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            HostStreamButton(host: host, size: 44, action: startHost)
+                                .accessibilityIdentifier("personal-game-start-stream")
+                        }
+                        if let productID = game.productID {
+                            AppSectionRequestState(
+                                title: "游戏资料", status: detailState.requestStatus,
+                                identifier: "installed-game-catalog"
+                            ) {
+                                await cloud.loadProductDetail(productID: productID, refresh: true)
+                            }
+                        }
                         LabeledContent("大小", value: bytes(game.sizeBytes))
                         if let date = game.installedAt {
                             LabeledContent(
@@ -136,16 +154,27 @@ struct HostInstalledGamesView: View {
                                     Date.FormatStyle(date: .abbreviated, time: .omitted).locale(
                                         locale)))
                         }
-                    }
-                    Section {
-                        Button("串流此主机", systemImage: "play.fill") {
-                            startHost()
-                        }.disabled(!host.canStartRemotePlay)
                     } footer: {
                         Text("连接后进入主机界面，选择此游戏开始游玩。")
                     }
+                    if let description = detail?.description, !description.isEmpty {
+                        Section("游戏简介") {
+                            Text(description).appFont(.body)
+                        }
+                    }
                 }
                 .appPageToolbar("游戏详情")
+                .task(id: "\(auth.ownerGeneration):\(cloud.productScopeID):\(game.productID ?? "")")
+                {
+                    if let productID = game.productID {
+                        await cloud.loadProductDetail(productID: productID)
+                    }
+                }
+                .appRefreshable {
+                    if let productID = game.productID {
+                        await cloud.loadProductDetail(productID: productID, refresh: true)
+                    }
+                }
             }
         }
     }
@@ -219,18 +248,7 @@ struct HostInstalledGamesView: View {
     }
 
     private var startButton: some View {
-        Button {
-            startHost()
-        } label: {
-            Image(systemName: "play.fill").appFont(.section, weight: .semibold)
-                .offset(x: 2).frame(width: 56, height: 56)
-                .foregroundStyle(.white)
-                .background(AppThemePalette.brand, in: Circle())
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
-        }
-        .buttonStyle(.plain).disabled(!host.canStartRemotePlay)
-        .opacity(host.canStartRemotePlay ? 1 : 0.45)
-        .accessibilityLabel("串流此主机")
+        HostStreamButton(host: host, action: startHost)
         .accessibilityIdentifier("installed-start-stream")
     }
 
@@ -397,7 +415,30 @@ struct HostInstalledGamesView: View {
     }
     private func startHost() {
         if let target = host.streamTargetID {
-            streaming.startHome(targetID: target) { try await auth.prepareHomeAccess() }
+            streaming.startHome(targetID: target) { startup in
+                try await auth.prepareHomeAccess(startup: startup)
+            }
         }
+    }
+}
+
+/// 主机概览与游戏标题共用圆形串流入口和可用状态。
+struct HostStreamButton: View {
+    let host: XboxHostSummary
+    var size: CGFloat = 56
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "play.fill")
+                .font(.system(size: size >= 56 ? 20 : 16, weight: .semibold))
+                .offset(x: 1.5).frame(width: size, height: size)
+                .foregroundStyle(.white)
+                .background(AppThemePalette.brand, in: Circle())
+        }
+        .buttonStyle(.plain).disabled(!host.canStartRemotePlay)
+        .opacity(host.canStartRemotePlay ? 1 : 0.45)
+        .accessibilityLabel("串流此主机")
+        .accessibilityHint("连接后进入主机界面，选择此游戏开始游玩。")
     }
 }

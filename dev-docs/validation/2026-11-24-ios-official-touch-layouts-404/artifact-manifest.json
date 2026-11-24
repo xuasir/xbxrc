@@ -1,0 +1,94 @@
+{
+  "README.md": {
+    "bytes": 2693,
+    "sha256": "a229d70349f5048c60cb44ea19ce5080f039685c86901be991c0cd5d1cafe29f"
+  },
+  "bindgen-r2-summary.txt": {
+    "bytes": 2412,
+    "sha256": "7e89e53ab724a710854c145d68afe6185dda00a015e9ac2fa6a8b4d760579cc4"
+  },
+  "catalog-regression-summary.json": {
+    "bytes": 395,
+    "sha256": "cfbe8b78a50a7619a967a7da24dd889cb47e36fc5ef4f63bc6ed1c15ff699815"
+  },
+  "cleanup-r2.json": {
+    "bytes": 853,
+    "sha256": "e6a1a20b249157ce54739da1bec25ce0bef7bd47e132f5db5415d184cc88f7c8"
+  },
+  "cleanup.json": {
+    "bytes": 678,
+    "sha256": "77c7851456a5c143c0f6da9846674d0f01604ed6922db39d78385330ce16da74"
+  },
+  "cloud-catalog-contract.txt": {
+    "bytes": 5986,
+    "sha256": "0b0067954ede01ed2a683d3dd00b98499f7a59dcfc04b8283f7ca6d1b0ee07e0"
+  },
+  "cloud-catalog-source.json": {
+    "bytes": 525,
+    "sha256": "6e05b7b47eaa88c7f1a8234d707b74530d070a0e208681bf37bc56068f58c57a"
+  },
+  "device-build-r2.json": {
+    "bytes": 2393,
+    "sha256": "c8168e14c2c954c971b54ace79996abe57091388aa16563f55659e02ae9fbcd6"
+  },
+  "format-summary.json": {
+    "bytes": 208,
+    "sha256": "1ae79abd03b3bf9d94d5d8c64ee5a90472a382cae95fe4634a6cf695647de408"
+  },
+  "ipad-recovered.png": {
+    "bytes": 3840911,
+    "sha256": "50939b6b088502be6eb4aa5739092f23e7f9cab91d41fe704c059820ab4ca124"
+  },
+  "ipad-shared-retry.png": {
+    "bytes": 4716237,
+    "sha256": "8c865d546dd658f7833caba477ad2042d5190d74c23b2e46f78094e07bcbd3d1"
+  },
+  "live-request-diagnostics.json": {
+    "bytes": 734,
+    "sha256": "3c4ceb190b46933a915a00a739862d64c5899a19af65b3a4f41760d05d11f48f"
+  },
+  "official-sdk-contract.txt": {
+    "bytes": 1060,
+    "sha256": "a5e20c8f93274a0c776571b5f25a034f5f3a352afa90eb2ed6be31120a7b0ff6"
+  },
+  "official-sdk-source.json": {
+    "bytes": 416,
+    "sha256": "c76e7869abe2ebfcceff945945bdc12981bea6f3b7fee9dec2bc965c38a42cad"
+  },
+  "rust-contract-summary.txt": {
+    "bytes": 765,
+    "sha256": "9d9a492cd50bdf503520a5bcc935a467c2ab1f101a3e3ab904af6d8b9dc29ab5"
+  },
+  "source-hashes-r2.json": {
+    "bytes": 1123,
+    "sha256": "d16388b85a0cc829358d31fab0adeb3433ba52f186dff663e2f84fa3aee4b7b1"
+  },
+  "source-hashes.json": {
+    "bytes": 776,
+    "sha256": "bfb44f71b6b4da596f372bcd23305ab7d6ce0b4c18c134e33458593dee6617ac"
+  },
+  "task-changes-r2.diff": {
+    "bytes": 27529,
+    "sha256": "65ffb38107f84355ba582ed89fdf908f6d91d10d6443b6b15657d5166bb59979"
+  },
+  "task-changes.diff": {
+    "bytes": 17226,
+    "sha256": "b88289c4ca8ae6c2d96aa68dda5284fc67d7453d492bc443a8daa682126f3029"
+  },
+  "temporary-source-restoration.json": {
+    "bytes": 107,
+    "sha256": "4dc9ad3adaaee79080aabea8f16f25afd36b4a127f27aed5b17ceb601533696a"
+  },
+  "ui-smoke-summary.json": {
+    "bytes": 377,
+    "sha256": "a947ecadf37346d5993174e6f3d107f39fa372e5b888dca49cad4ea1e12d809c"
+  },
+  "user-404.png": {
+    "bytes": 442457,
+    "sha256": "5c44ffa801ef93818350c37e521cb830b4788903982a058c61a983d06ca58e35"
+  },
+  "validation-summary.json": {
+    "bytes": 1598,
+    "sha256": "c9e3120659c452ea91bb55049995dc40eb956c64dc2b0dd2ce2a2f80d6e571ee"
+  }
+}

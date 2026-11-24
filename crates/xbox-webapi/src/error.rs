@@ -304,6 +304,7 @@ pub fn sanitize_service_code(value: &str) -> Option<String> {
         "TooManyRequests",
         "InternalServerError",
         "ServiceUnavailable",
+        "ServerNeverRegistered",
         "UnsupportedCountry",
         "UnsupportedRegion",
         "BlockedRegion",

@@ -1,0 +1,20 @@
+{
+  "removed_root": "/private/tmp/xbxrc-ios-media-half-panels-20261124-a",
+  "exists_after_cleanup": false,
+  "allocated_bytes_removed": 1398771712,
+  "logical_bytes_removed": 1381009752,
+  "allocated_mib_removed": 1333.97,
+  "free_bytes_before": 46694400000,
+  "free_bytes_after": 48332800000,
+  "free_bytes_delta": 1638400000,
+  "free_gib_after": 45.01,
+  "retained": [
+    "9张截图（8张最终截图、1张进度失败诊断）",
+    "测试与格式摘要",
+    "必要失败诊断及修复记录",
+    "归档UI探针和夹具服务器源码",
+    "源码哈希和恢复、清理记录"
+  ],
+  "source_restoration": "temporary-source-restoration.json",
+  "process_check": "process-check.json"
+}

@@ -1,0 +1,17 @@
+Test Case '-[XBXRCTests.StreamingControlsStateTests testControlsStateReturnsToDockAfterSheet]' started.
+Test Case '-[XBXRCTests.StreamingControlsStateTests testControlsStateReturnsToDockAfterSheet]' passed (0.005 seconds).
+Test Case '-[XBXRCTests.StreamingControlsStateTests testNativeHiddenControlsKeepTouchHitRouting]' started.
+Test Case '-[XBXRCTests.StreamingControlsStateTests testNativeHiddenControlsKeepTouchHitRouting]' passed (0.665 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.671 (0.673) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.671 (0.676) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.671 (0.792) seconds
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testQuickControlsAutoHideAndBlankTapPreservesGamepadAndMenuGesture]' started.
+    t =    12.98s Added attachment named 'streaming-quick-buttons-hidden'
+    t =    14.72s Checking `Expect predicate `label == "16"` for object "stream-touch-last-buttons" StaticText`
+    t =    16.51s Added attachment named 'streaming-quick-buttons-revealed'
+    t =    27.06s Added attachment named 'streaming-quick-buttons-revealed-portrait'
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testQuickControlsAutoHideAndBlankTapPreservesGamepadAndMenuGesture]' passed (27.374 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 27.374 (27.378) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 27.374 (27.382) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 27.374 (27.387) seconds
+** TEST SUCCEEDED **

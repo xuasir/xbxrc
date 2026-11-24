@@ -1,0 +1,354 @@
+--- crates/xbox-ios-bridge/src/touch_layouts/mod.rs r2 baseline
++++ crates/xbox-ios-bridge/src/touch_layouts/mod.rs
+@@ -9,7 +9,7 @@
+     XboxTouchLayoutChoice, XboxTouchLayoutSnapshot,
+ };
+ use xbox_streaming::Target;
+-use xbox_touch_layouts::{decode_bundle, title_bundles, TouchBundle};
++use xbox_touch_layouts::{decode_bundle, title_bundles, TouchBundle, TouchBundleDescriptor};
+ use xbox_webapi::XcloudApi;
+ 
+ #[derive(uniffi::Object)]
+@@ -139,21 +139,20 @@
+ pub async fn fetch_official_touch_bundles(
+     access_handle: String,
+     xbox_title_id: String,
++    product_id: String,
+ ) -> Result<Vec<XboxOfficialTouchBundleChoice>, XboxBridgeError> {
+     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
+     let title_id = normalize_title(&xbox_title_id)?;
+-    let response = XcloudApi::new(access.host.clone(), access.bearer_token.clone())
+-        .input_configs(&title_id)
+-        .await
+-        .map_err(crate::query_failure::query_error)?;
++    let product_id = normalize_product(&product_id)?;
++    let api = XcloudApi::new(access.host.clone(), access.bearer_token.clone());
++    let bundles = cloud_title_bundles(&api, &product_id, &title_id).await?;
+     load_scoped_stream_access(
+         &access_handle,
+         Target::Cloud,
+         Some(&access.account_id),
+         Some(access.owner_generation),
+     )?;
+-    Ok(title_bundles(&response, &title_id)
+-        .map_err(|error| invalid(&error.to_string()))?
++    Ok(bundles
+         .into_iter()
+         .map(|bundle| XboxOfficialTouchBundleChoice {
+             id: bundle.id,
+@@ -176,19 +175,9 @@
+ ) -> Result<Arc<XboxOfficialTouchBundle>, XboxBridgeError> {
+     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
+     let title_id = normalize_title(&xbox_title_id)?;
+-    if product_id.is_empty()
+-        || product_id.len() > 32
+-        || !product_id.bytes().all(|byte| byte.is_ascii_alphanumeric())
+-    {
+-        return Err(invalid("游戏商品身份无效"));
+-    }
++    let product_id = normalize_product(&product_id)?;
+     let api = XcloudApi::new(access.host.clone(), access.bearer_token.clone());
+-    let configuration = api
+-        .input_configs(&title_id)
+-        .await
+-        .map_err(crate::query_failure::query_error)?;
+-    let bundles =
+-        title_bundles(&configuration, &title_id).map_err(|error| invalid(&error.to_string()))?;
++    let bundles = cloud_title_bundles(&api, &product_id, &title_id).await?;
+     if !bundles.iter().any(|bundle| bundle.id == bundle_id) {
+         return Err(invalid("此官方布局包未关联当前游戏或版本等待支持"));
+     }
+@@ -203,7 +192,7 @@
+         Some(access.owner_generation),
+     )?;
+     let identity = types::GameIdentity {
+-        product_id: product_id.to_ascii_uppercase(),
++        product_id,
+         title_id,
+         name: game_name.chars().take(120).collect(),
+     };
+@@ -220,6 +209,29 @@
+     .await
+ }
+ 
++async fn cloud_title_bundles(
++    api: &XcloudApi,
++    product_id: &str,
++    title_id: &str,
++) -> Result<Vec<TouchBundleDescriptor>, XboxBridgeError> {
++    // 云游戏布局随标题详情下发；目录与下载归属校验共用此查询。
++    let response = api
++        .get_titles_by_ids(&[product_id.to_owned()], "productId")
++        .await
++        .map_err(crate::query_failure::query_error)?;
++    title_bundles(&response, product_id, title_id).map_err(|error| invalid(&error.to_string()))
++}
++
++fn normalize_product(product: &str) -> Result<String, XboxBridgeError> {
++    if product.is_empty()
++        || product.len() > 32
++        || !product.bytes().all(|byte| byte.is_ascii_alphanumeric())
++    {
++        return Err(invalid("游戏商品身份无效"));
++    }
++    Ok(product.to_ascii_uppercase())
++}
++
+ fn normalize_title(title: &str) -> Result<String, XboxBridgeError> {
+     title
+         .parse::<u64>()
+--- crates/xbox-touch-layouts/src/catalog.rs r2 baseline
++++ crates/xbox-touch-layouts/src/catalog.rs
+@@ -11,28 +11,40 @@
+     pub layout_version: String,
+ }
+ 
+-/// 输入配置查询只消费当前 Xbox Title ID；单条无身份返回沿原查询范围归属。
++/// 云标题详情同时匹配商品与 Xbox 身份；外层 titleId 属于串流服务。
+ pub fn title_bundles(
+     response: &Value,
++    product_id: &str,
+     title_id: &str,
+ ) -> Result<Vec<TouchBundleDescriptor>, TouchBundleError> {
+     let entries = response
+         .as_array()
+         .or_else(|| response.get("results").and_then(Value::as_array))
+-        .ok_or_else(|| invalid("官方标题输入配置需要为列表"))?;
+-    let entry = entries.iter().find(|entry| {
+-        let identity = entry.get("xboxTitleId").or_else(|| entry.get("titleId"));
+-        match identity {
+-            Some(Value::String(value)) => value == title_id,
+-            Some(Value::Number(value)) => value.to_string() == title_id,
+-            None => entries.len() == 1,
+-            _ => false,
+-        }
+-    });
++        .ok_or_else(|| invalid("官方云标题详情需要为列表"))?;
++    let title_id = title_id
++        .parse::<u64>()
++        .ok()
++        .filter(|value| *value > 0)
++        .ok_or_else(|| invalid("Xbox 游戏身份无效"))?;
++    let entry = entries
++        .iter()
++        .filter_map(|entry| entry.get("details"))
++        .find(|details| {
++            let identity = match details.get("xboxTitleId") {
++                Some(Value::String(value)) => value.parse::<u64>().ok(),
++                Some(Value::Number(value)) => value.as_u64(),
++                _ => None,
++            };
++            identity == Some(title_id)
++                && details
++                    .get("productId")
++                    .and_then(Value::as_str)
++                    .is_some_and(|value| value.eq_ignore_ascii_case(product_id))
++        });
+     let Some(entry) = entry else {
+         return Ok(Vec::new());
+     };
+-    let Some(tabs) = entry.get("supportedTabs") else {
++    let Some(tabs) = entry.get("supportedTabs").filter(|tabs| !tabs.is_null()) else {
+         return Ok(Vec::new());
+     };
+     let tabs = tabs
+@@ -102,27 +114,75 @@
+         json!({"id":id,"tabVersion":version,"manifestVersion":"2.0.0.0","layoutVersion":"4.1.0.0"})
+     }
+ 
++    fn title(product: &str, id: Value, tabs: Value) -> Value {
++        json!({"titleId":"CLOUD_STREAM_TITLE", "details":{
++            "productId":product,"xboxTitleId":id,"supportedTabs":tabs
++        }})
++    }
++
+     #[test]
+     fn chooses_only_requested_title_and_latest_numeric_version() {
+-        let data = json!([
+-            {"titleId":"20","supportedTabs":[tab("other", "9.0.0.0")]},
+-            {"titleId":"10","supportedTabs":[tab("old", "2.0.0.0"),tab("latest", "10.0.0.0")]}
+-        ]);
+-        let result = title_bundles(&data, "10").unwrap();
++        let data = json!({"results":[
++            title("OTHER",json!(20),json!([tab("other", "9.0.0.0")])),
++            title("game",json!(10),json!([tab("old", "2.0.0.0"),tab("latest", "10.0.0.0")]))
++        ]});
++        let result = title_bundles(&data, "GAME", "10").unwrap();
+         assert_eq!(result[0].id, "latest");
+         assert_eq!(result.len(), 2);
+-        assert!(title_bundles(&data, "30").unwrap().is_empty());
++        assert!(title_bundles(&data, "GAME", "30").unwrap().is_empty());
++        assert!(title_bundles(&data, "OTHER", "10").unwrap().is_empty());
++    }
++
++    #[test]
++    fn requires_nested_cloud_identity_and_accepts_numeric_strings() {
++        let data = json!([title(
++            "GAME",
++            json!("0010"),
++            json!([tab("bundle", "1.0.0.0")])
++        )]);
++        assert_eq!(title_bundles(&data, "GAME", "10").unwrap().len(), 1);
++        for data in [
++            json!([{"titleId":"10","supportedTabs":[tab("other", "1.0.0.0")]}]),
++            json!([{"details":{"supportedTabs":[tab("other", "1.0.0.0")]}}]),
++            json!([{"titleId":"10","details":{"productId":"GAME","xboxTitleId":20,
++                "supportedTabs":[tab("other", "1.0.0.0")]}}]),
++        ] {
++            assert!(title_bundles(&data, "GAME", "10").unwrap().is_empty());
++        }
++    }
++
++    #[test]
++    fn native_touch_titles_have_an_empty_catalog() {
++        for tabs in [Value::Null, json!([])] {
++            let data = json!([title("GAME", json!(10), tabs)]);
++            assert!(title_bundles(&data, "GAME", "10").unwrap().is_empty());
++        }
++        let data = json!([{"details":{"productId":"GAME","xboxTitleId":10}}]);
++        assert!(title_bundles(&data, "GAME", "10").unwrap().is_empty());
++        assert!(title_bundles(&json!({}), "GAME", "10").is_err());
++        assert!(
++            title_bundles(&json!([title("GAME", json!(10), json!({}))]), "GAME", "10").is_err()
++        );
+     }
+ 
+     #[test]
+     fn unknown_format_version_is_filtered_and_bad_identity_rejected() {
+         let mut newer = tab("future", "1.0.0.0");
+         newer["layoutVersion"] = json!("5.0.0.0");
+-        assert!(title_bundles(&json!([{"supportedTabs":[newer]}]), "10")
+-            .unwrap()
+-            .is_empty());
+         assert!(title_bundles(
+-            &json!([{"supportedTabs":[tab("../escape","1.0.0.0")]}]),
++            &json!([title("GAME", json!(10), json!([newer]))]),
++            "GAME",
++            "10"
++        )
++        .unwrap()
++        .is_empty());
++        assert!(title_bundles(
++            &json!([title(
++                "GAME",
++                json!(10),
++                json!([tab("../escape", "1.0.0.0")])
++            )]),
++            "GAME",
+             "10"
+         )
+         .is_err());
+--- iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift r2 baseline
++++ iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
+@@ -63,9 +63,9 @@
+                 throw TouchLayoutError.invalid("此游戏的 Xbox 身份暂缺")
+             }
+             try Task.checkCancellation()
+-            stage = "inputConfigurations"
++            stage = "cloudTitleDetails"
+             let bundles = try await fetchOfficialTouchBundles(
+-                accessHandle: accessHandle, xboxTitleId: titleID)
++                accessHandle: accessHandle, xboxTitleId: titleID, productId: game.productID)
+             try Task.checkCancellation()
+             IOSRuntimeTrace.event(
+                 domain: "touch-layouts", event: "officialTouchCatalogSucceeded",
+--- docs/project-task.md r2 baseline
++++ docs/project-task.md
+@@ -8,14 +8,15 @@
+ 
+ | ID | Task | Status | Started On | Notes |
+ | --- | --- | --- | --- | --- |
+-| 2026-11-24-ios-refresh-stream-detail | 精简下拉刷新反馈与串流快捷入口，修正安装游戏详情语言和播放动作 | In Progress | 2026-11-24 | simple；原生下拉统一等待反馈，快捷菜单/布局并排透底，详情复用目录语言与圆形播放入口；定向冒烟后归档与清理。 |
++| 2026-11-24-ios-stream-quick-autohide | 串流快捷按钮自动隐藏与空白单击唤回 | In Progress | 2026-11-24 | simple；沿既有5秒计时和菜单手势，两个快捷入口共同显隐；空白单击恢复，虚拟手柄触点分流，布局加载暂停隐藏；最小定向冒烟后归档清理。 |
++| 2026-11-24-ios-refresh-stream-detail | 精简下拉刷新反馈与串流快捷入口，修正安装游戏详情语言和播放动作 | Done | 2026-11-24 | simple；原生下拉统一反馈、正文spinner 3→0→3，左上44pt快捷图标并排8pt、12%背景覆盖率；商品资料沿目录市场/语言缓存，标题右侧圆形串流入口。原生1项及UI2项冒烟、定向Swift格式/diff通过，5张最终截图归档；探针精确恢复，清理约601.19MiB。[证据](../dev-docs/validation/2026-11-24-ios-refresh-stream-detail/README.md)。 |
+ | 2026-11-24-ios-pc-http-parity-audit | 整理 iOS 全部 HTTP 请求与 PC 的发起、恢复和错误差异 | In Progress | 2026-11-24 | complex只读审计；覆盖业务/串流控制/图片与下载入口、client配置、预算、重试、取消/缓存和错误诊断；以当前源码区分共享策略与iOS差异，后续修复需另行确认。 |
+ | 2026-11-24-ios-login-instability-trace | 分析移动端登录超时与不稳定 | Done | 2026-11-24 | simple只读；37行/1会话/7次beginLogin失败：5次network(149–398ms)、2次timeout(6.121/6.722s)。startup PASS，all仅缺3项游戏库锚点；5/12/18s预算与Never重试核对，逐请求分类及实机网络根因接续。7组锚点与9个业务文件hash复核通过，临时0、原件保留。[证据](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-login-instability/diagnostic-39a03964/README.md)。 |
+ | 2026-11-24-ios-root-content-top-clipping | 修复五个主页面顶部内容裁切与视口高度 | Done | 2026-11-24 | simple；切页导航背景168pt超出真实底边116pt，52pt遮挡首行；独立背景容器以原生边缘约束和宿主安全区管理修复。原生1项及正式入口五页切换1项冒烟、格式/diff通过，5张最终截图与2张诊断图归档；临时探针恢复，清理约922.39MiB。[证据](../dev-docs/validation/2026-11-24-ios-root-content-top-clipping/README.md)。 |
+ | 2026-11-24-ios-banner-header-consistency | 统一通顶媒体背景与游戏身份区下方 Tab | Done | 2026-11-24 | simple；页面与标题栏共用窗口裁切、透出渐隐和当前页面归属，宽幅背景保留刷新回退；游戏 Logo/名称位于公共身份区，Tab 在其下方切换正文，短窗紧凑显示。Simulator构建、2项定向冒烟及格式/diff通过，9张最终截图与1张诊断截图归档；临时探针恢复，清理625.71MiB。[证据](../dev-docs/validation/2026-11-24-ios-banner-header-consistency/README.md)。 |
+ | 2026-11-24-ios-ui-style-consistency | iOS 图文对齐与 Tab、胶囊选择样式统一 | Done | 2026-11-24 | simple；首行图文居中、窄屏大字号入口、选项宽度与选中动效统一；诊断分组、官方布局、重置与触屏保存共用胶囊。4组原生快照、3条UI冒烟及Simulator构建通过，9张稳定截图归档；临时探针恢复，清理684.18MiB。[证据](../dev-docs/validation/2026-11-24-ios-ui-style-consistency/README.md)。 |
+-| 2026-11-24-ios-official-touch-layouts-404 | 官方布局身份请求与统一重试提示修复 | Validation Pending | 2026-11-24 | simple；商品身份查询对齐官方 alternateIds/alternateIdType，查询/下载/预览统一类型化失败与共享重试，补阶段诊断。5项Rust合同、1条iPad UI冒烟与模拟器/Mac编译通过；Mac XCTest在发请求前被系统终止，真实服务回包待Xcode应用内确认。[证据](../dev-docs/validation/2026-11-24-ios-official-touch-layouts-404/README.md)。 |
+-| 2026-11-23-ios-saved-official-touch-layouts | 官方游戏触屏布局保存到本机并在 Home 串流实时切换 | Validation Pending | 2026-11-23 | complex；实现与自动冒烟完成：官方布局查询/预览/本机库、资源回收、串流选择与标准/最近单按钮循环；删除按钮行尾、标题旁默认标记和首次读取期间最近记录保护完成。Swift 60项、手机/iPad各3项UI、设备编译及格式通过；11-24官方身份字段与共享重试已修正，5项Rust/1条UI通过；真实回包按Mac应用内验收接续，Home实机待验；按11-24用户要求收尾采用最小冒烟。[RFC](rfcs/2026-11-23-ios-saved-official-touch-layouts.md) · [证据](../dev-docs/validation/2026-11-23-ios-saved-official-touch-layouts/README.md)。 |
++| 2026-11-24-ios-official-touch-layouts-404 | 官方布局云目录 404 与统一重试提示修复 | Validation Pending | 2026-11-24 | simple；云目录和下载归属校验改用商品查询 /v2/titles 的 details.supportedTabs，严格匹配商品/Xbox身份，null目录按空状态处理；共享重试沿用现有样式。4项新增Rust目录回归、绑定生成和iPhoneOS编译通过，复用此前5项API合同与1条iPad UI冒烟；真实服务回包待Xcode应用内确认。[证据](../dev-docs/validation/2026-11-24-ios-official-touch-layouts-404/README.md)。 |
++| 2026-11-23-ios-saved-official-touch-layouts | 官方游戏触屏布局保存到本机并在 Home 串流实时切换 | Validation Pending | 2026-11-23 | complex；实现与自动冒烟完成：官方布局查询/预览/本机库、资源回收、串流选择与标准/最近单按钮循环；删除按钮行尾、标题旁默认标记和首次读取期间最近记录保护完成。Swift 60项、手机/iPad各3项UI、设备编译及格式通过；11-24官方身份字段、云目录接口与共享重试已修正，新增4项目录合同/绑定/iPhoneOS编译通过，复用5项API合同/1条UI；真实回包按Mac应用内验收接续，Home实机待验；按11-24用户要求收尾采用最小冒烟。[RFC](rfcs/2026-11-23-ios-saved-official-touch-layouts.md) · [证据](../dev-docs/validation/2026-11-23-ios-saved-official-touch-layouts/README.md)。 |
+ | 2026-11-23-ios-launch-dark-mode | 启动画面适配暗黑模式 | Done | 2026-11-23 | simple；系统启动屏与SwiftUI恢复层共用LaunchBackground，暗色采用画布色#202E27、浅色白底；生产视图/资源Simulator构建、手机/iPad8组颜色/居中及外观覆盖、格式/解析/diff通过。6图归档，验收应用卸载、原外观恢复，临时清理50.06MiB；实机冷启动过渡接续手动确认。[证据](../dev-docs/validation/2026-11-23-ios-launch-dark-mode/README.md)。 |
+ | 2026-11-23-ios-startup-pc-parity | 启动流程完全对齐PC | Validation Pending | 2026-11-23 | complex；共享凭据缓存/目标续期、checkpoint、90秒上下文、Home发现/唤醒与Cloud准入完成，既有Rust339项与Swift102项通过。17:47新日志确认Web缓存89ms复用；Cloud准备两次deviceToken网络失败、一次SISU5.01s超时。固定网络细分与类型化Query诊断接续修复，Rust93项、iOS37项、iPhoneOS构建/小栈/绑定复现通过；待完整实机网络、待机唤醒与连接trace。[RFC](rfcs/2026-11-23-ios-startup-pc-parity.md)；[新日志证据](../dev-docs/validation/2026-11-23-ios-startup-pc-parity/fresh-trace-472b306e/README.md)。 |
+ | 2026-11-23-ios-auth-timeout-trace | 分析云连接间歇性授权超时 | Done | 2026-11-23 | simple只读；第5分片90行、4次Cloud授权6.342–14.032s超时，分片结构PASS；5s建连/12s请求预算、iOS全量授权与PC复用差异已核对，具体接口及成功样本接续；原件/锚点/hash归档，临时0。[证据](../dev-docs/validation/2026-11-23-ios-home-access-failure/runtime-trace-1795416820801-5/README.md)。 |
+--- docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md r2 baseline
++++ docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md
+@@ -15,7 +15,7 @@
+ 
+ 当前 iOS 正式触屏使用 `TouchGamepadOverlay → TouchInputAccumulator → StreamInputSession`；`StreamingTouchLayoutController` 初始化时读取通用 Xbox 资源。现有本地自定义模板记录标准控件的位置和外观，模板控件身份由 `TouchLayoutTemplate.standardControlIDs` 校验。
+ 
+-公共 Rust `XcloudApi.input_configs()` 已提供 `POST /v2/titles/inputconfigs`，通过 `xboxTitleId` 查询标题输入配置。官方布局下载 API、真实 `supportedTabs` 返回和 TAKX 包消费进入本任务实施范围。游戏列表中的 `supportedInputTypes` 用于展示输入能力，实际布局可用性由输入配置和布局包共同判定。
++云游戏通过公共 Rust `XcloudApi.get_titles_by_ids()` 的 `POST /v2/titles` 按商品 ID 查询标题详情，布局目录来自 `details.supportedTabs`。公共 `input_configs()` 对应 Home 串流中的动态标题输入配置。官方布局下载 API、真实 `supportedTabs` 返回和 TAKX 包消费进入本任务实施范围。游戏列表中的 `supportedInputTypes` 用于展示输入能力，实际布局可用性由标题详情和布局包共同判定。
+ 
+ 官方 TAKX 分发为 ZIP 包，包含 Manifest、Context、多个 layout JSON 和图片资源；历史原文显示先按 `manifestVersion/layoutVersion/tabVersion` 选择包，再按语言和 DPI 加载布局与资源。当前 Swift normalizer 支持直接 Layout 和常用控件，并对 `$ref`、部分 schema、资源及行为生成兼容性诊断。
+ 
+@@ -49,7 +49,7 @@
+ 
+ ### 云游戏详情：保存适配布局
+ 
+-- 游戏详情增加紧凑的“触屏布局”区域，入口为“查看官方布局”；首次进入查询官方输入配置和包目录。
++- 游戏详情增加紧凑的“触屏布局”区域，入口为“查看官方布局”；首次进入查询云标题详情和官方包目录。
+ - 查询过程中保留游戏详情与开始串流入口，布局区域显示局部加载、失败和重试状态。
+ - 列表展示包版本、布局名、默认标记、兼容状态和保存状态；选中后使用正式 Surface 本地预览。
+ - 点击“保存到本机”后取得包与必要资源、完成解析和能力校验，再原子提交本机记录；成功反馈显示游戏名和布局名。
+@@ -80,7 +80,7 @@
+ | 身份或字段 | 语义 |
+ | --- | --- |
+ | `productID` | 云游戏详情与展示关联 |
+-| `xboxTitleID` | 官方输入配置与游戏布局关联 |
++| `xboxTitleID` | 云标题详情与游戏布局关联，和商品 ID 共同核验包归属 |
+ | `streamTitleID` | 云串流会话目标，保持现有职责 |
+ | `bundleID / bundleVersion` | 官方包及版本身份 |
+ | `manifestVersion / layoutVersion` | 格式兼容判定；与包自身版本分别保存 |
+@@ -99,7 +99,7 @@
+ 
+ ## Official Bundle Compatibility
+ 
+-1. 沿公共输入配置接口提取真实 `supportedTabs`，记录 `id/tabVersion/manifestVersion/layoutVersion`，按实现能力选择最新可用包。
++1. 沿公共云标题查询接口提取真实 `details.supportedTabs`，同时匹配商品 ID 和 `details.xboxTitleId`，记录 `id/tabVersion/manifestVersion/layoutVersion`，按实现能力选择最新可用包。下载前沿同一接口核验包归属。
+ 2. 核对当前公开客户端的下载请求、认证和二进制返回，新增公共 API；二进制读取采用独立有界策略，复用现有 HTTP 客户端及授权续期。
+ 3. Rust 完成 TAKX 解包、Manifest 校验、语言回退、资产密度选择、definitions 和 Context 引用展开；交付默认状态下的低频布局快照和本地资产身份。
+ 4. Swift 扩展现有 normalizer 和 Surface，消费已解析官方布局及必要图片资源；控件状态机、几何、来源聚合和 `TouchCapabilityReport` 继续共用。
+@@ -187,3 +187,4 @@
+ - 2026-11-24 | validation-pending：iPad 3 项 UI、本轮 60 项 Swift 定向验证及 iPhoneOS 编译通过，新增两项测试覆盖首次读取成功前保留最近布局、读取失败保留和成功空列表清理。用户要求最小冒烟，后续复用已有结果。用户确认登录位于 iPad 模拟器；外部 CLI 访问 Keychain 返回 -34018，复制应用签名/访问组的提案被自动审批拒绝，实际包采用应用内正常保存后读取资源的路径。14 张最终截图、1 张定位图、测试摘要、诊断和 47 份源指纹已归档至[证据](../../dev-docs/validation/2026-11-23-ios-saved-official-touch-layouts/README.md)；真实官方包和 Home 实机待验，最终 Report 随完整验收收口。
+ - 2026-11-24 | cleanup：确认相关构建、测试和导出进程结束后清理 r1/r2/r3 登记临时根，删除 4909 个文件、原占用约 2.30 GiB；观察到可用空间增加约 2.26 GiB，清理后可用约 46.38 GiB。登记路径已不存在，共享 SDK/Rust 缓存、应用本机布局库与登录保留。[清理记录](../../dev-docs/validation/2026-11-23-ios-saved-official-touch-layouts/cleanup.json)。
+ - 2026-11-24 | bugfix / validation-pending：用户反馈布局目录全部 404 和重试样式偏差。公开 SDK 的商品身份查询使用 `alternateIds` / `alternateIdType`；公共 Rust 原请求写入 `ids` / `idType`，本轮已修正合同。查询、下载、预览统一复用 `SectionRequestFailure` 与 `AppSectionRequestState`，新增 `titleIdentity` / `inputConfigurations` 阶段诊断。5 项 Rust 合同与 1 条 iPad UI 冒烟通过，Mac 签名应用编译成功；XCTest 启动在建立连接前被系统终止，本轮真实请求为 0，服务回包继续由正常 Xcode 应用验证。临时测试探针和方案已恢复，截图和摘要见[本轮证据](../../dev-docs/validation/2026-11-24-ios-official-touch-layouts-404/README.md)。
++- 2026-11-24 | cloud-catalog-fix / validation-pending：用户重跑后仍见加载失败。核对微软 `game-stream` 调用上下文确认 Cloud 从标题详情 `details.supportedTabs` 初始化布局，Home 的动态标题才调用 `inputconfigs`。目录与下载前归属校验共用商品 ID 的 `/v2/titles` 查询，同时核验 `details.productId` / `details.xboxTitleId`，空或 null 布局目录进入空状态；诊断阶段更新为 `cloudTitleDetails`。4 项目录回归、绑定生成与 iPhoneOS 编译通过，复用已通过的共享重试 UI 冒烟；已请求正常 Xcode 应用确认一次预览和保存。r2 临时根为 `/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r2`，清理与来源摘录归档到上述证据目录。
+--- iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift r2 baseline
++++ iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift
+@@ -8120,11 +8120,11 @@
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+ }
+-public func fetchOfficialTouchBundles(accessHandle: String, xboxTitleId: String)async throws  -> [XboxOfficialTouchBundleChoice]  {
++public func fetchOfficialTouchBundles(accessHandle: String, xboxTitleId: String, productId: String)async throws  -> [XboxOfficialTouchBundleChoice]  {
+     return
+         try  await uniffiRustCallAsync(
+             rustFutureFunc: {
+-                uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundles(FfiConverterString.lower(accessHandle),FfiConverterString.lower(xboxTitleId)
++                uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundles(FfiConverterString.lower(accessHandle),FfiConverterString.lower(xboxTitleId),FfiConverterString.lower(productId)
+                 )
+             },
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+@@ -8279,7 +8279,7 @@
+     if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundle() != 35998) {
+         return InitializationResult.apiChecksumMismatch
+     }
+-    if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundles() != 62753) {
++    if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundles() != 61851) {
+         return InitializationResult.apiChecksumMismatch
+     }
+     if (uniffi_xbox_ios_bridge_checksum_method_xboxauthobserver_checkpoint() != 9291) {
+--- iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h r2 baseline
++++ iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h
+@@ -719,7 +719,7 @@
+ #endif
+ #ifndef UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_FETCH_OFFICIAL_TOUCH_BUNDLES
+ #define UNIFFI_FFIDEF_UNIFFI_XBOX_IOS_BRIDGE_FN_FUNC_FETCH_OFFICIAL_TOUCH_BUNDLES
+-uint64_t uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundles(RustBuffer access_handle, RustBuffer xbox_title_id
++uint64_t uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundles(RustBuffer access_handle, RustBuffer xbox_title_id, RustBuffer product_id
+ );
+ #endif
+ #ifndef UNIFFI_FFIDEF_FFI_XBOX_IOS_BRIDGE_RUSTBUFFER_ALLOC

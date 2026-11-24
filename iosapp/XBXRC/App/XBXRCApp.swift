@@ -15,6 +15,7 @@ struct XBXRCApp: App {
     @StateObject private var cloudStore: CloudLibraryStore
     @StateObject private var favorites: CloudFavoritesStore
     @StateObject private var streamingStore: StreamingFeatureStore
+    @StateObject private var savedTouchLayouts: SavedTouchLayoutsStore
 
     init() {
         let settingsStore: AppSettingsStore
@@ -84,6 +85,18 @@ struct XBXRCApp: App {
         _streamingStore = StateObject(
             wrappedValue: StreamingFeatureStore(settingsProvider: settingsStore)
         )
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--official-touch-layouts-ui-test") {
+                _savedTouchLayouts = StateObject(
+                    wrappedValue: SavedTouchLayoutsStore(
+                        client: OfficialTouchLayoutsUITestFixtures.client()))
+                OfficialTouchLayoutsUITestFixtures.addTemplate(to: settingsStore)
+            } else {
+                _savedTouchLayouts = StateObject(wrappedValue: SavedTouchLayoutsStore())
+            }
+        #else
+            _savedTouchLayouts = StateObject(wrappedValue: SavedTouchLayoutsStore())
+        #endif
         IOSRuntimeTrace.event(
             domain: "ios-app",
             event: "appLaunchStarted",
@@ -132,11 +145,23 @@ struct XBXRCApp: App {
                 .environmentObject(settingsStore)
                 .environmentObject(streamingStore)
                 .environmentObject(favorites)
+                .environmentObject(savedTouchLayouts)
                 .environment(\.locale, settingsStore.mobile.appLanguage.locale)
                 .preferredColorScheme(settingsStore.appearanceMode.colorScheme)
                 .onChange(of: settingsStore.mobile) { _, preferences in
                     MobileInteractionFeedback.play(preferences)
+                    streamingStore.touchLayout.reconcile(
+                        preferences: preferences, library: savedTouchLayouts)
                 }
+                .onChange(of: savedTouchLayouts.layouts) { _, _ in
+                    streamingStore.touchLayout.reconcile(
+                        preferences: settingsStore.mobile, library: savedTouchLayouts)
+                }
+                .onChange(of: savedTouchLayouts.hasLoadedLayouts) { _, _ in
+                    streamingStore.touchLayout.reconcile(
+                        preferences: settingsStore.mobile, library: savedTouchLayouts)
+                }
+                .task { await savedTouchLayouts.reload() }
                 .task {
                     #if DEBUG
                         if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")

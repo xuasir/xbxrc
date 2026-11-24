@@ -1,0 +1,554 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "79FF2297-6C93-409D-8E53-59A51F8B62AD",
+      "deviceName" : "iPhone 17e",
+      "modelName" : "iPhone 17e",
+      "osBuildNumber" : "24A434",
+      "osVersion" : "27.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.011s",
+                  "durationInSeconds" : 0.011322975158691406,
+                  "name" : "testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState()",
+                  "nodeIdentifier" : "StreamingControlsStateTests/testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingControlsStateTests/testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.074s",
+                  "durationInSeconds" : 0.07369792461395264,
+                  "name" : "testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas()",
+                  "nodeIdentifier" : "StreamingControlsStateTests/testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingControlsStateTests/testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "StreamingControlsStateTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingControlsStateTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.052s",
+                  "durationInSeconds" : 0.05188906192779541,
+                  "name" : "testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.18s",
+                  "durationInSeconds" : 0.17562901973724365,
+                  "name" : "testBackgroundPipelineReadinessReplaysOncePerVisibleInterval()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testBackgroundPipelineReadinessReplaysOncePerVisibleInterval()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testBackgroundPipelineReadinessReplaysOncePerVisibleInterval",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00062s",
+                  "durationInSeconds" : 0.0006220340728759766,
+                  "name" : "testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0012s",
+                  "durationInSeconds" : 0.0012389421463012695,
+                  "name" : "testDifferentNativeTracksWithSameIdentifierRequireReattachment()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testDifferentNativeTracksWithSameIdentifierRequireReattachment()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testDifferentNativeTracksWithSameIdentifierRequireReattachment",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00061s",
+                  "durationInSeconds" : 0.0006070137023925781,
+                  "name" : "testFailedCompletionRetriesFrameAndPrefersNewerCandidate()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testFailedCompletionRetriesFrameAndPrefersNewerCandidate()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testFailedCompletionRetriesFrameAndPrefersNewerCandidate",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.014s",
+                  "durationInSeconds" : 0.014347076416015625,
+                  "name" : "testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00098s",
+                  "durationInSeconds" : 0.0009839534759521484,
+                  "name" : "testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.028s",
+                  "durationInSeconds" : 0.02760899066925049,
+                  "name" : "testHealthBurstPreservesLatestCountersAndFlushesTailOnce()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testHealthBurstPreservesLatestCountersAndFlushesTailOnce()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testHealthBurstPreservesLatestCountersAndFlushesTailOnce",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00065s",
+                  "durationInSeconds" : 0.0006470680236816406,
+                  "name" : "testHealthContextChangeAndResetDiscardOldPendingSnapshot()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testHealthContextChangeAndResetDiscardOldPendingSnapshot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testHealthContextChangeAndResetDiscardOldPendingSnapshot",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0011s",
+                  "durationInSeconds" : 0.0011190176010131836,
+                  "name" : "testIngressAndDrawPreparationTimingSurviveRedaction()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressAndDrawPreparationTimingSurviveRedaction()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressAndDrawPreparationTimingSurviveRedaction",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.004s",
+                  "durationInSeconds" : 0.003985047340393066,
+                  "name" : "testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00051s",
+                  "durationInSeconds" : 0.0005129575729370117,
+                  "name" : "testIngressDrainKeepsLatestReplacementCountsAndResetBoundary()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressDrainKeepsLatestReplacementCountsAndResetBoundary()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressDrainKeepsLatestReplacementCountsAndResetBoundary",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00059s",
+                  "durationInSeconds" : 0.0005871057510375977,
+                  "name" : "testIngressReplacementKeepsOriginalDrainScheduleTime()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressReplacementKeepsOriginalDrainScheduleTime()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressReplacementKeepsOriginalDrainScheduleTime",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00043s",
+                  "durationInSeconds" : 0.0004329681396484375,
+                  "name" : "testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00087s",
+                  "durationInSeconds" : 0.0008690357208251953,
+                  "name" : "testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00047s",
+                  "durationInSeconds" : 0.0004659891128540039,
+                  "name" : "testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.014s",
+                  "durationInSeconds" : 0.013849973678588867,
+                  "name" : "testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.014s",
+                  "durationInSeconds" : 0.013514995574951172,
+                  "name" : "testLateResumeValidationKeepsNewVisibilityRevisionSuspended()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testLateResumeValidationKeepsNewVisibilityRevisionSuspended()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testLateResumeValidationKeepsNewVisibilityRevisionSuspended",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.22s",
+                  "durationInSeconds" : 0.21865904331207275,
+                  "name" : "testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0045s",
+                  "durationInSeconds" : 0.004458069801330566,
+                  "name" : "testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.013s",
+                  "durationInSeconds" : 0.013157963752746582,
+                  "name" : "testResumeKeepsFreshPresentUntilValidationCompletes()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testResumeKeepsFreshPresentUntilValidationCompletes()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testResumeKeepsFreshPresentUntilValidationCompletes",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00062s",
+                  "durationInSeconds" : 0.0006170272827148438,
+                  "name" : "testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.16s",
+                  "durationInSeconds" : 0.15810298919677734,
+                  "name" : "testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0096s",
+                  "durationInSeconds" : 0.009624958038330078,
+                  "name" : "testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility()",
+                  "nodeIdentifier" : "StreamingDisplayCallbackTests/testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "StreamingDisplayCallbackTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.012s",
+                  "durationInSeconds" : 0.012442946434020996,
+                  "name" : "testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0061s",
+                  "durationInSeconds" : 0.0060520172119140625,
+                  "name" : "testMetadataRequiresMatchingDecodeAndCompletedRendering()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testMetadataRequiresMatchingDecodeAndCompletedRendering()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testMetadataRequiresMatchingDecodeAndCompletedRendering",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00052s",
+                  "durationInSeconds" : 0.0005179643630981445,
+                  "name" : "testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "[Internal] Thread running at User-initiated quality-of-service class waiting on a thread without a QoS class specified (base priority 31). Investigate ways to avoid priority inversions",
+                      "nodeType" : "Runtime Warning",
+                      "sourceLocation" : {
+                        "filePath" : "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift",
+                        "lineNumber" : 51
+                      }
+                    }
+                  ],
+                  "duration" : "0.51s",
+                  "durationInSeconds" : 0.513105034828186,
+                  "name" : "testNativeH264DecoderForwardsFirstFrameFromBackgroundQueue()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testNativeH264DecoderForwardsFirstFrameFromBackgroundQueue()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testNativeH264DecoderForwardsFirstFrameFromBackgroundQueue",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00057s",
+                  "durationInSeconds" : 0.0005729198455810547,
+                  "name" : "testNormalAndResolutionHoldModesSendMetadataAndKeepRawObservations()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testNormalAndResolutionHoldModesSendMetadataAndKeepRawObservations()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testNormalAndResolutionHoldModesSendMetadataAndKeepRawObservations",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0004s",
+                  "durationInSeconds" : 0.00039696693420410156,
+                  "name" : "testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.001s",
+                  "durationInSeconds" : 0.0010380744934082031,
+                  "name" : "testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0092s",
+                  "durationInSeconds" : 0.009165048599243164,
+                  "name" : "testWrapperForwardsOriginalDecoderFramesAndLifecycle()",
+                  "nodeIdentifier" : "StreamingFrameFeedbackTests/testWrapperForwardsOriginalDecoderFramesAndLifecycle()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests/testWrapperForwardsOriginalDecoderFramesAndLifecycle",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "StreamingFrameFeedbackTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingFrameFeedbackTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.0006s",
+                  "durationInSeconds" : 0.0006020069122314453,
+                  "name" : "testCounterWindowsPreserveZeroSupplyAndResetOnGenerationOrRegression()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testCounterWindowsPreserveZeroSupplyAndResetOnGenerationOrRegression()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testCounterWindowsPreserveZeroSupplyAndResetOnGenerationOrRegression",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.3s",
+                  "durationInSeconds" : 0.2995990514755249,
+                  "name" : "testFlushIncludesRemainingDropsWithinNoticeInterval()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testFlushIncludesRemainingDropsWithinNoticeInterval()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testFlushIncludesRemainingDropsWithinNoticeInterval",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.013s",
+                  "durationInSeconds" : 0.013444900512695312,
+                  "name" : "testGpuAndDrawableLatencyHaveIndependentSourcesAndBoundedWindows()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testGpuAndDrawableLatencyHaveIndependentSourcesAndBoundedWindows()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testGpuAndDrawableLatencyHaveIndependentSourcesAndBoundedWindows",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0073s",
+                  "durationInSeconds" : 0.007269024848937988,
+                  "name" : "testLightweightKeepsHealthAndSamplesPerFrameEvidence()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testLightweightKeepsHealthAndSamplesPerFrameEvidence()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testLightweightKeepsHealthAndSamplesPerFrameEvidence",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.009s",
+                  "durationInSeconds" : 0.009000062942504883,
+                  "name" : "testOversizedRowIsCountedAndSubsequentEvidencePersists()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testOversizedRowIsCountedAndSubsequentEvidencePersists()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testOversizedRowIsCountedAndSubsequentEvidencePersists",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00076s",
+                  "durationInSeconds" : 0.0007610321044921875,
+                  "name" : "testPacketStatisticsUseVideoScopeAndPreserveMissingObservations()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testPacketStatisticsUseVideoScopeAndPreserveMissingObservations()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testPacketStatisticsUseVideoScopeAndPreserveMissingObservations",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.16s",
+                  "durationInSeconds" : 0.1568089723587036,
+                  "name" : "testProfileDisableFlushesAcceptedEvidenceAndDropSummary()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testProfileDisableFlushesAcceptedEvidenceAndDropSummary()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testProfileDisableFlushesAcceptedEvidenceAndDropSummary",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.46s",
+                  "durationInSeconds" : 0.4574519395828247,
+                  "name" : "testQueueHasHardCapacityReservedAnchorsAndExactDropSummary()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testQueueHasHardCapacityReservedAnchorsAndExactDropSummary()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testQueueHasHardCapacityReservedAnchorsAndExactDropSummary",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.068s",
+                  "durationInSeconds" : 0.06754100322723389,
+                  "name" : "testTimestampUsesEventSourceWhileQueueDelayIsSeparate()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testTimestampUsesEventSourceWhileQueueDelayIsSeparate()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testTimestampUsesEventSourceWhileQueueDelayIsSeparate",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0099s",
+                  "durationInSeconds" : 0.009852051734924316,
+                  "name" : "testUnavailableStorageHasBoundedMemoryExplicitExportErrorAndRecovery()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testUnavailableStorageHasBoundedMemoryExplicitExportErrorAndRecovery()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testUnavailableStorageHasBoundedMemoryExplicitExportErrorAndRecovery",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.012s",
+                  "durationInSeconds" : 0.012002944946289062,
+                  "name" : "testWriteFailureCountsLostTailAndRecoversWithoutRepeatingPrefix()",
+                  "nodeIdentifier" : "TraceReliabilityTests/testWriteFailureCountsLostTailAndRecoversWithoutRepeatingPrefix()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests/testWriteFailureCountsLostTailAndRecoversWithoutRepeatingPrefix",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "TraceReliabilityTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/TraceReliabilityTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.92s",
+                  "durationInSeconds" : 0.9166959524154663,
+                  "name" : "testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+                  "nodeIdentifier" : "XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.029s",
+                  "durationInSeconds" : 0.028882980346679688,
+                  "name" : "testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.069s",
+                  "durationInSeconds" : 0.06908297538757324,
+                  "name" : "testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.22s",
+                  "durationInSeconds" : 0.21580803394317627,
+                  "name" : "testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.16s",
+                  "durationInSeconds" : 0.15841293334960938,
+                  "name" : "testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.045s",
+                  "durationInSeconds" : 0.045207977294921875,
+                  "name" : "testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0083s",
+                  "durationInSeconds" : 0.008311033248901367,
+                  "name" : "testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules()",
+                  "nodeIdentifier" : "XBXRCTests/testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "XBXRCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "XBXRCTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "XBXRC",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

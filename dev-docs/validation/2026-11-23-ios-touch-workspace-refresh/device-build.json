@@ -1,0 +1,16 @@
+{
+  "build": "r6-device",
+  "result": "Passed",
+  "appSourceHashes": {
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "855ef6be39dc613f83fdcf272a27fe63fd6b4663ea60f6a69c8acd2ba8420c85",
+    "iosapp/XBXRC/Features/Controllers/ControllerView.swift": "155ec63230422d5dce79b4d93a464fcaf3f559b4b7a8b3c350f2f2fc4fd8e27e",
+    "iosapp/XBXRC/App/AppOrientation.swift": "0e48ea93e792ce44743ed15762e13ac3a953fcd77ec3de51b0822f4aa44abe8a",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "7afe7925ec74df3c76f03cb611b5f4e7336f5beb5bc2fe74225cf675e9e3de26",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "51bfe8d21022fb83ec20777aad0e14289e24a2914cf0d6b7b7222b5fcea10e06",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "6678a1a0c100944347c0e12fa3117f25b3fa34756fb7bc3dd232a5c00be1fbab",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": "569a236f261c6c364ee7095da755495db93775125404454f5785bae011e53e31"
+  },
+  "minimumOSVersion": "26.0",
+  "bundleIdentifier": "com.xuasir.xbxrc.ios",
+  "binary": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123/r4-device/DerivedData/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC: Mach-O 64-bit executable arm64"
+}

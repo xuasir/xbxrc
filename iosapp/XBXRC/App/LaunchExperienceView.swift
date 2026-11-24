@@ -12,7 +12,8 @@ struct LaunchExperienceView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.white
+                // 系统启动屏与恢复层共用颜色资产，统一深浅色外观。
+                Color("LaunchBackground")
 
                 Image("LaunchIcon")
                     .resizable()

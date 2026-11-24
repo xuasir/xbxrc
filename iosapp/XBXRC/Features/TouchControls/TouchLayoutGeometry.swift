@@ -62,8 +62,10 @@ enum TouchLayoutGeometry {
         }
     }
 
-    static func normalizedPosition(_ point: CGPoint, size: CGSize) -> CGPoint {
-        let available = availableRect(size: size)
+    static func normalizedPosition(
+        _ point: CGPoint, size: CGSize, insets: TouchSurfaceInsets = .init()
+    ) -> CGPoint {
+        let available = availableRect(size: size, insets: insets)
         return CGPoint(
             x: min(1, max(0, (point.x - available.minX) / available.width)),
             y: min(1, max(0, (point.y - available.minY) / available.height)))

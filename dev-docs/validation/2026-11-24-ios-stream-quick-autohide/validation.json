@@ -1,0 +1,31 @@
+{
+  "task": "2026-11-24-ios-stream-quick-autohide",
+  "result": "Passed",
+  "build": "iOS Simulator arm64 / CODE_SIGNING_ALLOWED=NO",
+  "tests": {
+    "passed": 3,
+    "failed": 0,
+    "state": "testControlsStateReturnsToDockAfterSheet",
+    "native": "testNativeHiddenControlsKeepTouchHitRouting",
+    "ui": "testQuickControlsAutoHideAndBlankTapPreservesGamepadAndMenuGesture"
+  },
+  "checks": {
+    "shared_five_second_auto_hide": "Passed",
+    "hidden_touch_button_mask": 16,
+    "native_touch_hit": "TouchLayoutSurfaceView",
+    "landscape_blank_reveal": "Passed",
+    "portrait_blank_reveal": "Passed",
+    "blank_tap_keeps_menu_collapsed": "Passed",
+    "two_finger_menu_and_manual_close": "Passed",
+    "shortcut_gap_points": 8,
+    "temporary_native_probe_removed": true,
+    "swift_format_changed_ranges": "Passed",
+    "scoped_git_diff_check": "Passed",
+    "visual_review": "横竖屏快捷按钮并排、位于安全区，虚拟手柄保持完整",
+    "task_temporary_root_cleaned": true
+  },
+  "native_timer": "独立原生窗口使用100ms定向验证隐藏后命中；UI采用生产同值5秒",
+  "screenshots": 3,
+  "device": "iPhone 18 Pro / iOS 27.0",
+  "manual_acceptance": "真实串流手感沿实机验收"
+}

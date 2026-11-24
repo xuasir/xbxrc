@@ -1,0 +1,163 @@
+--- baseline/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
++++ iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
+@@ -649,10 +649,31 @@
+     var colorScheme: ColorScheme = .light
+     var isActive = true
+     private let hosting = UIHostingController(rootView: AnyView(EmptyView()))
++    private let backdrop = UIView()
++    private var backdropConstraints: [NSLayoutConstraint] = []
++    private weak var backdropWindow: UIWindow?
+ 
+     override func loadView() {
+       view = UIView()
+       view.isUserInteractionEnabled = false
++      hosting.safeAreaRegions = []
++      hosting.view.backgroundColor = .clear
++      hosting.view.isUserInteractionEnabled = false
++      hosting.view.accessibilityElementsHidden = true
++      hosting.view.translatesAutoresizingMaskIntoConstraints = false
++      backdrop.isUserInteractionEnabled = false
++      backdrop.accessibilityElementsHidden = true
++      backdrop.clipsToBounds = true
++      backdrop.translatesAutoresizingMaskIntoConstraints = false
++      // 独立容器持有背景，原生导航的工具项排布与背景边界各自维护。
++      backdrop.layer.zPosition = -1
++      backdrop.addSubview(hosting.view)
++      NSLayoutConstraint.activate([
++        hosting.view.topAnchor.constraint(equalTo: backdrop.topAnchor),
++        hosting.view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
++        hosting.view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
++        hosting.view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
++      ])
+     }
+ 
+     override func viewWillAppear(_ animated: Bool) {
+@@ -672,12 +693,12 @@
+ 
+     override func viewDidDisappear(_ animated: Bool) {
+       super.viewDidDisappear(animated)
+-      hosting.view.removeFromSuperview()
++      removeBackdrop()
+     }
+ 
+     func updateBackdrop() {
+       guard isActive else {
+-        hosting.view.removeFromSuperview()
++        removeBackdrop()
+         return
+       }
+       guard let window = view.window,
+@@ -688,30 +709,43 @@
+       guard let page = navigation.topViewController?.viewIfLoaded,
+         view.isDescendant(of: page)
+       else {
+-        hosting.view.removeFromSuperview()
++        removeBackdrop()
+         return
+       }
+       let bar = navigation.navigationBar
+       let bounds = canvasBounds ?? window.bounds
+-      let top = max(0, bar.convert(.zero, to: window).y - bounds.minY)
+-      let localRegion = CGRect(
+-        x: 0, y: -top, width: bar.bounds.width, height: bar.bounds.height + top)
+-      let region = bar.convert(localRegion, to: window)
++      // 背景按完整导航容器中的真实边界取样，保持窗口画布的同一坐标。
++      let barRegion = bar.convert(bar.bounds, to: window)
++      let navigationRegion = navigation.view.convert(navigation.view.bounds, to: window)
++      let region = CGRect(
++        x: barRegion.minX, y: navigationRegion.minY, width: barRegion.width,
++        height: max(0, barRegion.maxY - navigationRegion.minY))
+       hosting.rootView = AnyView(
+         AppPageBackdrop(artwork: artwork, canvasRegion: region, onArtworkSuccess: onArtworkSuccess)
+           .environment(\.appCanvasBounds, bounds)
+-          .frame(width: region.width, height: region.height, alignment: .topLeading)
+           .clipped()
+           .environment(\.colorScheme, colorScheme)
+       )
+-      hosting.view.backgroundColor = .clear
+-      hosting.view.isUserInteractionEnabled = false
+-      hosting.view.accessibilityElementsHidden = true
+-      hosting.view.clipsToBounds = true
+-      // 标题和操作始终绘制在遮挡背景上方，兼容导航栏对子视图的重排。
+-      hosting.view.layer.zPosition = -1
+-      hosting.view.frame = localRegion
+-      if hosting.view.superview !== bar { bar.insertSubview(hosting.view, at: 0) }
++      if backdrop.superview !== bar || backdropWindow !== window {
++        removeBackdrop()
++        bar.insertSubview(backdrop, at: 0)
++        // 原生约束随导航栏每帧布局，遮挡范围始终止于真实底边。
++        backdropConstraints = [
++          backdrop.topAnchor.constraint(equalTo: navigation.view.topAnchor),
++          backdrop.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
++          backdrop.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
++          backdrop.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
++        ]
++        NSLayoutConstraint.activate(backdropConstraints)
++        backdropWindow = window
++      }
++    }
++
++    private func removeBackdrop() {
++      NSLayoutConstraint.deactivate(backdropConstraints)
++      backdropConstraints.removeAll()
++      backdrop.removeFromSuperview()
++      backdropWindow = nil
+     }
+   }
+ }
+
+--- baseline/iosapp/XBXRCUITests/PCPageInteractionTests.swift
++++ iosapp/XBXRCUITests/PCPageInteractionTests.swift
+@@ -28,10 +28,25 @@
+       XCTAssertTrue(title.waitForExistence(timeout: 5))
+       let navigation = app.navigationBars.firstMatch
+       let logo = app.descendants(matching: .any)["page-xbox-logo"].firstMatch
++      let firstContent: XCUIElement
++      switch section {
++      case "hosts": firstContent = app.staticTexts["host-selected-name"].firstMatch
++      case "library":
++        firstContent =
++          app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "最近游玩")).firstMatch
++      case "my": firstContent = app.staticTexts["移动端验收"].firstMatch
++      case "controller":
++        // 首行随实际连接的手柄名称更新，按正文滚动容器定位。
++        firstContent = app.scrollViews.firstMatch.staticTexts.firstMatch
++      default: firstContent = app.staticTexts["应用偏好"].firstMatch
++      }
++      XCTAssertTrue(firstContent.waitForExistence(timeout: 5))
++      XCTAssertGreaterThanOrEqual(firstContent.frame.minY, navigation.frame.maxY + 20)
++      XCTAssertGreaterThan(try titleContrast(app: app, title: firstContent), 30)
+       save(app, "reading-root-\(section)")
+       XCTAssertGreaterThan(try titleContrast(app: app, title: title), 30)
+       geometry.append(
+-        "\(section): navigation=\(navigation.frame), logo=\(logo.frame), title=\(title.frame)"
++        "\(section): navigation=\(navigation.frame), logo=\(logo.frame), title=\(title.frame), firstContent=\(firstContent.frame)"
+       )
+       XCTAssertTrue(logo.exists, "根页应使用一致的Xbox标志和标题位置：\(section)")
+       XCTAssertEqual(logo.label, "Xbox")
+
+--- baseline/iosapp/DESIGN.md
++++ iosapp/DESIGN.md
+@@ -12,7 +12,7 @@
+ | P02 语义可辨 | 标题通过字号与字重建立层级，事实采用标签和值，操作通过动词、边界或方向指示表达用途。选中状态同时具有表面变化和 VoiceOver 标记。 | `appFont`、`AppMetric`、`AppFactGroup`、`AppNavigationRow` |
+ | P03 工具成组 | 搜索占满一行；少量互斥条件直接横向切换；筛选、排序与重置组成同一工具行。工具表面采用满圆角胶囊，视觉尺寸与触屏尺寸分别确定。 | `AppContentSearch`、`AppSegmentedFilter`、`AppInformationPicker`、`AppContentToolbar` |
+ | P04 信息成组 | 同一主题的事实和指标共用一张卡片；独立主题具有独立标题与表面。图片表达身份，文本表达内容，主动作具有明确视觉权重。 | `AppMetricGrid`、`AppFactGroup`、`appSurface` |
+-| P05 连续画布 | 页面背景、状态栏、标题区和侧栏共用窗口画布。媒体背景按完整窗口坐标渐变透出，标题栏裁切相同区域；滚动视口在标题区下方完整裁切，顶部保持稳定遮盖。 | `AppPageBackdrop`、`AppThemeBackground`、`AppArtworkBackdrop`、`appPageToolbar`、`AppPageScroll` |
++| P05 连续画布 | 页面背景、状态栏、标题区和侧栏共用窗口画布。媒体背景按完整窗口坐标渐变透出，标题栏裁切相同区域；顶部背景由独立容器以原生约束绑定完整导航顶边与导航栏底边，滚动首行完整显示。 | `AppPageBackdrop`、`AppThemeBackground`、`AppArtworkBackdrop`、`appPageToolbar`、`AppPageScroll` |
+ | P06 密度有序 | 空间按信息重要程度分配。正文和事实按自然高度布局，相关说明紧贴控件，分页动作在列表末尾居中。 | `AppLayoutPolicy`、`AppInlineHint`、`AppLoadMoreButton` |
+ | P07 自适应可操作 | 内容字体保留完整 Dynamic Type 缩放；长文真实换行，横向选项可滚动，辅助字号下事实与指标改为单列。交互区域至少 44pt。 | `appResponsiveTypography`、`AppWrappingLayout`、原生控件与无障碍状态 |
+ 
+@@ -97,7 +97,7 @@
+ | 区域 | 布局合同 |
+ | --- | --- |
+ | 顶部 | 状态栏与原生导航栏共享窗口画布；根页左侧为 28pt Xbox 图形、40pt 固定槽位、12pt 槽位与标题间距；标题工具区 44pt，右侧按页面语义安排操作 |
+-| 中部 | 使用透明滚动视口；内容宽窗居中限宽，顶部完整裁切；图片、信息卡片与设置行各自提供所属表面 |
++| 中部 | 使用透明滚动视口；内容宽窗居中限宽，从导航真实底边的24pt内边距开始，顶部完整裁切；图片、信息卡片与设置行各自提供所属表面 |
+ | 底部 | 五个等宽导航依次为主机 / 云游戏 / 我的 / 控制器 / 设置；26pt 图形、48pt 导航行、上下各 8pt 内边距；胶囊限宽 560pt，左右最少 24pt、下沿距屏幕 24pt |
+ 
+ 底栏使用 `ultraThinMaterial` 悬浮表面，画布色覆盖率为深色 38%、浅色 28%。系统底部安全区计入实际 24pt 下沿距离；键盘出现时沿键盘顶边保留 24pt。滚动末尾以 88pt 内容边距保障最后操作可达。
+
+--- baseline/docs/project-task.md (task row)
++++ docs/project-task.md (task row)
+@@ -0,0 +1 @@
++| 2026-11-24-ios-root-content-top-clipping | 修复五个主页面顶部内容裁切与视口高度 | Done | 2026-11-24 | simple；切页导航背景168pt超出真实底边116pt，52pt遮挡首行；独立背景容器以原生边缘约束和宿主安全区管理修复。原生1项及正式入口五页切换1项冒烟、格式/diff通过，5张最终截图与2张诊断图归档；临时探针恢复，清理约922.39MiB。[证据](../dev-docs/validation/2026-11-24-ios-root-content-top-clipping/README.md)。 |

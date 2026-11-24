@@ -1,0 +1,43 @@
+[
+  {
+    "path": "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift",
+    "ranges": [
+      [
+        638,
+        1329
+      ]
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+    "ranges": [
+      [
+        5568,
+        5913
+      ],
+      [
+        6379,
+        6472
+      ],
+      [
+        6759,
+        6782
+      ]
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "ranges": [
+      [
+        87273,
+        90560
+      ]
+    ],
+    "exitCode": 0,
+    "output": ""
+  }
+]

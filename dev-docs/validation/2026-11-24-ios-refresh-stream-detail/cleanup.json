@@ -1,0 +1,30 @@
+{
+  "temporary_root": "/private/tmp/xbxrc-ios-detail-controls-20261124-p2srqked",
+  "temporary_top_level_entries": [
+    "DerivedData",
+    "baseline",
+    "exports",
+    "format-2.json",
+    "format-4.json",
+    "native-control.log",
+    "native-control.xcresult",
+    "native-exports",
+    "native-final.log",
+    "native-final.xcresult",
+    "smoke.log",
+    "smoke.xcresult"
+  ],
+  "entry_count": 5564,
+  "logical_bytes": 614006992,
+  "allocated_bytes_estimate": 630394880,
+  "released_mib_estimate": 601.19,
+  "free_bytes_before": 48742400000,
+  "all_task_build_test_export_processes_finished": true,
+  "retained_evidence": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-refresh-stream-detail",
+  "retained_shared_source_packages": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "tmpdir": "/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/",
+  "temporary_root_removed": true,
+  "free_bytes_after": 49561600000,
+  "free_gib_after": 46.16,
+  "free_bytes_delta": 819200000
+}

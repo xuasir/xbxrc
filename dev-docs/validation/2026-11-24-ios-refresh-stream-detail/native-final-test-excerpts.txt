@@ -1,0 +1,12 @@
+Test Case '-[XBXRCTests.PCDataParityTests testNativePullRefreshAndInstalledLocaleSmoke]' started.
+RefreshLocaleSmoke: pullRefreshing=false
+RefreshLocaleSmoke: native window ready
+RefreshLocaleSmoke: before spinners=3
+RefreshLocaleSmoke: scroll=HostingScrollView, refreshControl=Optional(<SwiftUI.PlatformRefreshControlProxy: 0x10a5c8280; baseClass = UIRefreshControl; frame = (0 0; 390 60); hidden = YES; autoresize = W; layer = <CALayer: 0x10a529200>>)
+RefreshLocaleSmoke: pullRefreshing=true
+RefreshLocaleSmoke: pullRefreshing=false
+Test Case '-[XBXRCTests.PCDataParityTests testNativePullRefreshAndInstalledLocaleSmoke]' passed (1.778 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.778 (1.779) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.778 (1.781) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.778 (1.782) seconds
+** TEST SUCCEEDED **

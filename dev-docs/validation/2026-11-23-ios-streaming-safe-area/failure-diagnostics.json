@@ -1,0 +1,147 @@
+{
+  "automatedFailures": [],
+  "formatFollowup": "r6-popup 最终 Swift 格式严格检查通过。",
+  "nativeWindowEvidence": [
+    {
+      "device": "iPhone 18 Pro",
+      "round": "r6-popup",
+      "orientation": 1,
+      "window": [
+        0.0,
+        0.0,
+        402.0,
+        874.0
+      ],
+      "safe": [
+        0.0,
+        62.0,
+        402.0,
+        778.0
+      ],
+      "attachment": "final/iphone-streaming-safe-region-1.txt"
+    },
+    {
+      "device": "iPhone 18 Pro",
+      "round": "r6-popup",
+      "orientation": 4,
+      "window": [
+        0.0,
+        0.0,
+        874.0,
+        402.0
+      ],
+      "safe": [
+        62.0,
+        0.0,
+        750.0,
+        382.0
+      ],
+      "attachment": "final/iphone-streaming-safe-region-4.txt"
+    },
+    {
+      "device": "iPhone 18 Pro",
+      "round": "r6-popup",
+      "orientation": 3,
+      "window": [
+        0.0,
+        0.0,
+        874.0,
+        402.0
+      ],
+      "safe": [
+        62.0,
+        0.0,
+        750.0,
+        382.0
+      ],
+      "attachment": "final/iphone-streaming-safe-region-3.txt"
+    },
+    {
+      "device": "iPad Pro 13-inch (M5)",
+      "round": "r6-popup",
+      "orientation": 1,
+      "window": [
+        0.0,
+        0.0,
+        1032.0,
+        1376.0
+      ],
+      "safe": [
+        0.0,
+        0.0,
+        1032.0,
+        1356.0
+      ],
+      "attachment": "final/ipad-streaming-safe-region-1.txt"
+    },
+    {
+      "device": "iPad Pro 13-inch (M5)",
+      "round": "r6-popup",
+      "orientation": 4,
+      "window": [
+        0.0,
+        0.0,
+        1376.0,
+        1032.0
+      ],
+      "safe": [
+        0.0,
+        0.0,
+        1376.0,
+        1012.0
+      ],
+      "attachment": "final/ipad-streaming-safe-region-4.txt"
+    },
+    {
+      "device": "iPad Pro 13-inch (M5)",
+      "round": "r6-popup",
+      "orientation": 3,
+      "window": [
+        0.0,
+        0.0,
+        1376.0,
+        1032.0
+      ],
+      "safe": [
+        0.0,
+        0.0,
+        1376.0,
+        1012.0
+      ],
+      "attachment": "final/ipad-streaming-safe-region-3.txt"
+    }
+  ],
+  "priorBuildErrors": [
+    {
+      "round": "r3-menu",
+      "log": "r3-menu/phone-xcodebuild.log",
+      "errors": [
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:481:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Authentication/AuthStore.swift:557:37: error: passing non-escaping parameter 'checkpoint' to function expecting an '@escaping' closure",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Library/GameDetailView.swift:499:65: error: cannot find 'startup' in scope"
+      ],
+      "classification": "compile",
+      "supersededBy": "r4-final compilation and passing tests"
+    },
+    {
+      "round": "r3-menu",
+      "log": "r3-menu/phone-r2-xcodebuild.log",
+      "errors": [
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6736:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:6704:16: error: passing closure as a 'sending' parameter risks causing data races between code in the current isolation context and concurrent execution of the closure [#RegionIsolation::SendingClosureRisksDataRace]"
+      ],
+      "classification": "compile",
+      "supersededBy": "r4-final compilation and passing tests"
+    }
+  ],
+  "currentRound": {
+    "r5Ipad": "两项安全区通过；会话切换后的即时行查询失败，末帧诊断已保留。",
+    "r6PhoneInitial": "两项安全区通过；恢复切换后的即时行查询失败。",
+    "finalUITestAssertions": "每次点击校验 isSelected，目标行在任意无障碍类型中等待至多5秒；手机与iPad最终通过。",
+    "concurrentCompileInterruption": "认证模块新增 networkErrorKind 的生成绑定同步期间发生一次编译错误；绑定同步后最终编译和测试通过。",
+    "approvalTimeout": "手机测试首次自动审查超时，按工具提示重试一次后获准并执行。",
+    "finalOutstandingFailures": [],
+    "image": "diagnostics/r5-ipad-segment-selection.png",
+    "logs": "logs/verification-excerpts.txt"
+  }
+}

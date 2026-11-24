@@ -64,6 +64,7 @@ struct MobilePictureSettingsView: View {
     var videoContentMode: Binding<StreamingVideoContentMode>? = nil
     var onSaveDefault: (() -> Void)? = nil
     var onRestoreDefault: (() -> Void)? = nil
+    var showsBack = true
     var body: some View {
         AppSettingsForm {
             Section {
@@ -132,7 +133,7 @@ struct MobilePictureSettingsView: View {
                 }
             }
         }
-        .appPageToolbar("画面调节")
+        .appPageToolbar("画面调节", showsBack: showsBack)
     }
 
     private var supportsSuperResolution: Bool {

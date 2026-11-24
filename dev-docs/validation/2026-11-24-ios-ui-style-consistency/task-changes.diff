@@ -1,0 +1,565 @@
+--- a/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
++++ b/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
+@@ -68,6 +68,45 @@
+   }
+ }
+ 
++private enum AppFirstTextLineCenter: AlignmentID {
++  static func defaultValue(in dimensions: ViewDimensions) -> CGFloat {
++    // 扣除后续文字行的基线距离，图标始终对齐首行的垂直中心。
++    (dimensions.height - (dimensions[.lastTextBaseline] - dimensions[.firstTextBaseline])) / 2
++  }
++}
++
++private extension VerticalAlignment {
++  static let appFirstTextLineCenter = VerticalAlignment(AppFirstTextLineCenter.self)
++}
++
++struct AppIconLabelStyle: LabelStyle {
++  var spacing: CGFloat = 6
++
++  func makeBody(configuration: Configuration) -> some View {
++    HStack(alignment: .appFirstTextLineCenter, spacing: spacing) {
++      configuration.icon
++        .alignmentGuide(.appFirstTextLineCenter) { $0[VerticalAlignment.center] }
++        .accessibilityHidden(true)
++      configuration.title.fixedSize(horizontal: false, vertical: true)
++    }
++  }
++}
++
++enum AppContentControlMetrics {
++  static let minimumHitSize: CGFloat = 44
++  static let horizontalPadding: CGFloat = 12
++  static let verticalPadding: CGFloat = 12
++  static let labelSpacing: CGFloat = 6
++  static let trackInset: CGFloat = 6
++  static let selectionInset: CGFloat = 2
++  static let tabSpacing: CGFloat = 24
++  static let underlineHeight: CGFloat = 3
++
++  static func animation(reduceMotion: Bool) -> Animation {
++    reduceMotion ? .easeInOut(duration: 0.16) : .smooth(duration: 0.24)
++  }
++}
++
+ enum AppLayoutPolicy {
+   static let contentMaximumWidth: CGFloat = 1_040
+   static let settingsMaximumWidth: CGFloat = 760
+@@ -170,7 +209,20 @@
+   /// 筛选与下拉共用实色底槽，44pt操作区内保留相同的视觉留白。
+   func appFilterTrackSurface() -> some View {
+     background {
+-      Capsule().fill(AppThemePalette.filterTrack).padding(.vertical, 6)
++      Capsule().fill(AppThemePalette.filterTrack)
++        .padding(.vertical, AppContentControlMetrics.trackInset)
++    }
++  }
++
++  func appFilterSelectionSurface(isSelected: Bool, namespace: Namespace.ID) -> some View {
++    background {
++      if isSelected {
++        Capsule().fill(AppThemePalette.filterSelection)
++          .matchedGeometryEffect(id: "filter-selection", in: namespace)
++          .padding(
++            .vertical,
++            AppContentControlMetrics.trackInset + AppContentControlMetrics.selectionInset)
++      }
+     }
+   }
+ }
+@@ -855,19 +907,21 @@
+   var compact = false
+   @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 24
+ 
++  private var displayedIconSize: CGFloat { min(32, max(24, iconSize)) }
++
+   var body: some View {
+     HStack(spacing: 16) {
+-      AppIconView(icon, size: iconSize)
++      AppIconView(icon, size: displayedIconSize)
+         .foregroundStyle(AppThemePalette.icon)
+-        .frame(width: max(24, iconSize), height: max(24, iconSize))
+       VStack(alignment: .leading, spacing: 4) {
+-        Text(LocalizedStringKey(title)).appFont(.body)
++        Text(LocalizedStringKey(title)).appFont(.body, weight: .semibold)
+           .foregroundStyle(AppThemePalette.textPrimary)
++          .fixedSize(horizontal: false, vertical: true)
+         Text(LocalizedStringKey(subtitle)).appFont(compact ? .caption : .bodySmall)
+           .foregroundStyle(AppThemePalette.textSecondary)
+           .fixedSize(horizontal: false, vertical: true)
+       }
+-      Spacer(minLength: 8)
++      .frame(maxWidth: .infinity, alignment: .leading)
+       AppIconView(.chevron, size: 16)
+         .foregroundStyle(AppThemePalette.textSecondary)
+     }
+@@ -1155,8 +1209,10 @@
+   }
+   var body: some View {
+     Button(role: role, action: action) {
+-      HStack {
+-        if let systemImage { Image(systemName: systemImage) }
++      if let systemImage {
++        Label(LocalizedStringKey(title), systemImage: systemImage)
++          .labelStyle(AppIconLabelStyle())
++      } else {
+         Text(LocalizedStringKey(title))
+       }
+     }
+--- a/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
++++ b/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
+@@ -123,15 +123,15 @@
+   }
+ 
+   var body: some View {
+-    HStack(alignment: .firstTextBaseline, spacing: 6) {
+-      Image(systemName: "info.circle")
+-        .font(.system(size: 11))
+-        .accessibilityHidden(true)
++    Label {
+       Text(LocalizedStringKey(text))
+         .appFont(.caption)
+         .fixedSize(horizontal: false, vertical: true)
+         .accessibilityIdentifier("settings-hint-\(identifier)")
+-    }
++    } icon: {
++      Image(systemName: "info.circle").appFont(.caption)
++    }
++    .labelStyle(AppIconLabelStyle())
+     .foregroundStyle(AppThemePalette.textSecondary)
+     .frame(maxWidth: .infinity, alignment: .leading)
+   }
+@@ -335,8 +335,29 @@
+   }
+ }
+ 
++/// 预留选中字重的宽度，切换时保持文字与相邻控件的位置稳定。
++private struct AppSelectionText: View {
++  let title: String
++  let selected: Bool
++  let style: AppTextStyle
++
++  var body: some View {
++    ZStack {
++      Text(LocalizedStringKey(title)).appFont(style, weight: .semibold)
++        .hidden().accessibilityHidden(true)
++      Text(LocalizedStringKey(title))
++        .appFont(style, weight: selected ? .semibold : .regular)
++    }
++    .fixedSize(horizontal: true, vertical: false)
++    .accessibilityElement(children: .ignore)
++    .accessibilityLabel(Text(LocalizedStringKey(title)))
++  }
++}
++
+ /// 内容分类统一为透明文字Tab，选中下划线与完整无障碍名称共用。
+ struct AppTextTabs<Selection: Hashable>: View {
++  @Environment(\.accessibilityReduceMotion) private var reduceMotion
++  @Namespace private var selectionAnimation
+   @Binding var selection: Selection
+   let values: [Selection]
+   let title: (Selection) -> String
+@@ -347,22 +368,23 @@
+   var body: some View {
+     ScrollViewReader { proxy in
+       ScrollView(.horizontal) {
+-        HStack(spacing: 24) {
++        HStack(spacing: AppContentControlMetrics.tabSpacing) {
+           ForEach(values, id: \.self) { value in
+             Button {
+               selection = value
+             } label: {
+-              Text(LocalizedStringKey(title(value)))
+-                .appFont(.body, weight: selection == value ? .semibold : .regular)
++              AppSelectionText(title: title(value), selected: selection == value, style: .body)
+                 .foregroundStyle(
+                   selection == value
+                     ? AppThemePalette.brand : AppThemePalette.textSecondary
+                 )
+-                .fixedSize(horizontal: true, vertical: false)
+-                .frame(minWidth: 44, minHeight: 48, alignment: .leading)
++                .padding(.vertical, AppContentControlMetrics.verticalPadding)
++                .frame(minWidth: AppContentControlMetrics.minimumHitSize, minHeight: 48)
+                 .overlay(alignment: .bottom) {
+                   if selection == value {
+-                    Capsule().fill(AppThemePalette.brand).frame(height: 3)
++                    Capsule().fill(AppThemePalette.brand)
++                      .frame(height: AppContentControlMetrics.underlineHeight)
++                      .matchedGeometryEffect(id: "content-selection", in: selectionAnimation)
+                   }
+                 }
+                 .contentShape(Rectangle())
+@@ -372,12 +394,17 @@
+             .accessibilityAddTraits(selection == value ? .isSelected : [])
+           }
+         }.padding(.horizontal, inset)
++          .animation(
++            AppContentControlMetrics.animation(reduceMotion: reduceMotion), value: selection)
+       }
+       .scrollIndicators(.hidden)
+       .fixedSize(horizontal: false, vertical: true).frame(minHeight: 52)
+       .accessibilityIdentifier(identifier)
++      .onAppear { proxy.scrollTo(selection, anchor: .center) }
+       .onChange(of: selection) { _, value in
+-        withAnimation { proxy.scrollTo(value, anchor: .center) }
++        withAnimation(AppContentControlMetrics.animation(reduceMotion: reduceMotion)) {
++          proxy.scrollTo(value, anchor: .center)
++        }
+       }
+     }
+   }
+@@ -546,13 +573,14 @@
+       // inline 将所有选项直接放在第一层菜单，点击即可切换。
+       Picker(title, selection: $selection, content: content).pickerStyle(.inline)
+     } label: {
+-      HStack(spacing: 8) {
++      HStack(spacing: AppContentControlMetrics.labelSpacing) {
+         Text(LocalizedStringKey(selectedTitle)).appFont(.bodySmall, weight: .semibold)
+         AppIconView(.chevron, size: 10).rotationEffect(.degrees(90))
+       }
+       .foregroundStyle(AppThemePalette.textPrimary)
+-      .padding(.horizontal, 12).padding(.vertical, 12)
+-      .frame(minHeight: 44).contentShape(Rectangle())
++      .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
++      .padding(.vertical, AppContentControlMetrics.verticalPadding)
++      .frame(minHeight: AppContentControlMetrics.minimumHitSize).contentShape(Rectangle())
+       .appFilterTrackSurface()
+     }
+     .fixedSize(horizontal: true, vertical: false).buttonStyle(.plain)
+@@ -566,6 +594,8 @@
+ /// 互斥筛选共用底槽，选中胶囊内缩2pt；视觉表面与44pt触屏区分别确定。
+ struct AppSegmentedFilter<Selection: Hashable>: View {
+   @EnvironmentObject private var settings: AppSettingsStore
++  @Environment(\.accessibilityReduceMotion) private var reduceMotion
++  @Namespace private var selectionAnimation
+   @Binding var selection: Selection
+   let values: [Selection]
+   let title: (Selection) -> String
+@@ -583,9 +613,12 @@
+       .accessibilityElement(children: .contain)
+       .accessibilityLabel(Text(LocalizedStringKey(label)))
+       .accessibilityIdentifier(identifier)
++      .onAppear { proxy.scrollTo(selection, anchor: .center) }
+       .onChange(of: selection) { _, value in
+         MobileInteractionFeedback.play(settings.mobile)
+-        withAnimation { proxy.scrollTo(value, anchor: .center) }
++        withAnimation(AppContentControlMetrics.animation(reduceMotion: reduceMotion)) {
++          proxy.scrollTo(value, anchor: .center)
++        }
+       }
+     }
+   }
+@@ -596,20 +629,18 @@
+         Button {
+           selection = value
+         } label: {
+-          Text(LocalizedStringKey(title(value)))
+-            .appFont(.bodySmall, weight: selection == value ? .semibold : .regular)
++          AppSelectionText(title: title(value), selected: selection == value, style: .bodySmall)
+             .foregroundStyle(AppThemePalette.textPrimary)
+-            .fixedSize(horizontal: true, vertical: false)
+-            .padding(.horizontal, 12)
+-            .padding(.vertical, 12)
+-            .frame(minWidth: 44, maxWidth: fillsWidth ? .infinity : nil, minHeight: 44)
+-            .background {
+-              if selection == value {
+-                Capsule()
+-                  .fill(AppThemePalette.filterSelection)
+-                  .padding(.vertical, 8)
+-              }
+-            }
++            .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
++            .padding(.vertical, AppContentControlMetrics.verticalPadding)
++            .frame(
++              minWidth: AppContentControlMetrics.minimumHitSize,
++              maxWidth: fillsWidth ? .infinity : nil,
++              minHeight: AppContentControlMetrics.minimumHitSize
++            )
++            .appFilterSelectionSurface(
++              isSelected: selection == value, namespace: selectionAnimation
++            )
+             .contentShape(Rectangle())
+         }
+         .buttonStyle(.plain).id(value)
+@@ -617,8 +648,25 @@
+         .accessibilityAddTraits(selection == value ? .isSelected : [])
+       }
+     }
+-    .padding(.horizontal, 2)
++    .padding(.horizontal, AppContentControlMetrics.selectionInset)
+     .appFilterTrackSurface()
++    .animation(AppContentControlMetrics.animation(reduceMotion: reduceMotion), value: selection)
++  }
++}
++
++/// 工具动作与选择器共用胶囊尺寸，品牌文字表达可执行操作。
++struct AppContentCapsuleButtonStyle: ButtonStyle {
++  func makeBody(configuration: Configuration) -> some View {
++    configuration.label.appFont(.bodySmall, weight: .semibold)
++      .foregroundStyle(AppThemePalette.brand)
++      .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
++      .padding(.vertical, AppContentControlMetrics.verticalPadding)
++      .frame(
++        minWidth: AppContentControlMetrics.minimumHitSize,
++        minHeight: AppContentControlMetrics.minimumHitSize
++      )
++      .appFilterTrackSurface().contentShape(Rectangle())
++      .opacity(configuration.isPressed ? 0.7 : 1)
+   }
+ }
+ 
+--- a/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
++++ b/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
+@@ -95,6 +95,7 @@
+ 
+ private struct AppPlainRequestNotice: View {
+     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
++    @ScaledMetric(relativeTo: .body) private var actionIconSize: CGFloat = 18
+     let title: String
+     let reason: String
+     var detail: String? = nil
+@@ -131,11 +132,14 @@
+     }
+     private var retryLabel: some View {
+         HStack(spacing: 5) {
+-            if isBusy {
+-                ProgressView().controlSize(.small)
+-            } else {
+-                Image(systemName: "arrow.clockwise")
++            Group {
++                if isBusy {
++                    ProgressView().controlSize(.small)
++                } else {
++                    Image(systemName: "arrow.clockwise")
++                }
+             }
++            .frame(width: actionIconSize, height: actionIconSize).accessibilityHidden(true)
+             Text(LocalizedStringKey(actionTitle))
+         }
+         .appFont(.body, weight: .semibold).foregroundStyle(AppThemePalette.brand)
+--- a/iosapp/XBXRC/App/AppRootView.swift
++++ b/iosapp/XBXRC/App/AppRootView.swift
+@@ -85,6 +85,7 @@
+ 
+   func appResponsiveTypography() -> some View {
+     modifier(AppResponsiveTypographyModifier())
++      .labelStyle(AppIconLabelStyle())
+   }
+ }
+ 
+--- a/iosapp/XBXRC/Features/Profile/PersonalPages.swift
++++ b/iosapp/XBXRC/Features/Profile/PersonalPages.swift
+@@ -269,10 +269,12 @@
+           }
+           .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
+           if let activity {
+-            HStack(alignment: .firstTextBaseline, spacing: 6) {
++            Label {
++              Text(activity).fixedSize(horizontal: false, vertical: true)
++            } icon: {
+               AppIconView(.controller, size: 14)
+-              Text(activity).fixedSize(horizontal: false, vertical: true)
+             }
++            .labelStyle(AppIconLabelStyle())
+             .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
+           }
+         }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+@@ -279,8 +279,7 @@
+ 
+     private var saveButton: some View {
+         Button("保存", action: onSave)
+-            .frame(minWidth: 44, minHeight: 44)
+-            .buttonStyle(.bordered).buttonBorderShape(.capsule)
++            .buttonStyle(AppContentCapsuleButtonStyle())
+             .accessibilityIdentifier(saveIdentifier)
+     }
+ 
+@@ -303,7 +302,7 @@
+             AppIconView(.sliders, size: 20).frame(width: 44, height: 44)
+         }
+         .buttonStyle(.plain)
+-        .background(AppThemePalette.filterTrack, in: Capsule())
++        .appFilterTrackSurface()
+         .accessibilityLabel(Text(LocalizedStringKey(showsSettings ? "收起设置" : "展开设置")))
+         .accessibilityValue(Text(LocalizedStringKey(showsSettings ? "已展开" : "已收起")))
+         .accessibilityIdentifier("touch-workspace-settings")
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -104,30 +104,44 @@
+ 
+     private func bundlePicker(_ catalog: OfficialTouchCatalog) -> some View {
+         VStack(alignment: .leading, spacing: 12) {
+-            Picker("官方版本", selection: $selectedBundleID) {
+-                ForEach(catalog.bundles) { choice in
+-                    Text(verbatim: choice.tabVersion).tag(choice.id)
+-                }
+-            }
+-            .accessibilityIdentifier("official-touch-bundle-picker")
+-            .disabled(library.isSaving)
++            Text("官方版本").appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++            AppContentToolbar {
++                AppInformationPicker(
++                    "官方版本", selection: $selectedBundleID,
++                    selectedTitle: catalog.bundles.first { $0.id == selectedBundleID }?.tabVersion
++                        ?? "官方版本"
++                ) {
++                    ForEach(catalog.bundles) { choice in
++                        Text(verbatim: choice.tabVersion).tag(choice.id)
++                    }
++                }
++                .accessibilityIdentifier("official-touch-bundle-picker")
++                .disabled(library.isSaving)
++            }
+             if let bundle {
+-                Picker("包内布局", selection: $selectedLayoutID) {
+-                    ForEach(bundle.choices) { choice in
+-                        Text(
+-                            verbatim: choice.name
+-                                + (choice.isDefault
+-                                    ? " · " + appLocalizedString("默认", locale: locale) : "")
+-                        )
+-                        .tag(choice.id)
+-                    }
+-                }
+-                .accessibilityIdentifier("official-touch-layout-picker")
+-                .disabled(library.isSaving)
++                Text("包内布局").appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++                AppContentToolbar {
++                    AppInformationPicker(
++                        "包内布局", selection: $selectedLayoutID,
++                        selectedTitle: bundle.choices.first { $0.id == selectedLayoutID }.map {
++                            layoutChoiceTitle($0)
++                        } ?? "包内布局"
++                    ) {
++                        ForEach(bundle.choices) { choice in
++                            Text(verbatim: layoutChoiceTitle(choice)).tag(choice.id)
++                        }
++                    }
++                    .accessibilityIdentifier("official-touch-layout-picker")
++                    .disabled(library.isSaving)
++                }
+             }
+         }
+         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+         .appSurface(radius: AppLayoutPolicy.cardRadius)
++    }
++
++    private func layoutChoiceTitle(_ choice: XboxTouchLayoutChoice) -> String {
++        choice.name + (choice.isDefault ? " · " + appLocalizedString("默认", locale: locale) : "")
+     }
+ 
+     @ViewBuilder
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+@@ -124,13 +124,9 @@
+ 
+     var body: some View {
+         VStack(spacing: compact ? 6 : 12) {
+-            Picker("诊断分组", selection: $group) {
+-                ForEach(StreamingDiagnosticGroup.allCases) { tab in
+-                    Text(LocalizedStringKey(tab.title)).tag(tab)
+-                }
+-            }
+-            .pickerStyle(.segmented)
+-            .accessibilityIdentifier("stream-diagnostic-groups")
++            AppSegmentedFilter(
++                selection: $group, values: StreamingDiagnosticGroup.allCases,
++                title: { $0.title }, identifier: "stream-diagnostic-groups", label: "诊断分组")
+             ScrollView {
+                 LazyVStack(spacing: 0) {
+                     ForEach(model.rows(group)) { row in
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
+@@ -33,14 +33,17 @@
+       }
+     } label: {
+       HStack(spacing: 6) {
+-        if controller.pendingSelection != nil {
+-          ProgressView()
+-        } else {
+-          Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+-            .font(.system(size: 16))
++        Group {
++          if controller.pendingSelection != nil {
++            ProgressView().controlSize(.small)
++          } else {
++            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
++              .font(.system(size: 16))
++          }
+         }
++        .frame(width: 20, height: 20).accessibilityHidden(true)
+         Text(LocalizedStringKey(isStandard ? "标准" : "最近"))
+-          .font(.caption.weight(.medium)).lineLimit(1)
++          .appFont(.caption, weight: .semibold).lineLimit(1)
+       }
+       .foregroundStyle(.white).padding(.horizontal, 10).frame(minWidth: 44, minHeight: 44)
+     }
+--- a/iosapp/DESIGN.md
++++ b/iosapp/DESIGN.md
+@@ -1,6 +1,6 @@
+ # XBXRC iOS / iPad 设计规范
+ 
+-版本：2026-11-23。覆盖五个根页、信息与设置子页、媒体详情、控制器工具及串流操作层。本文统一本轮图片批注与既有视觉合同，后续页面和公共组件按此规范验收。
++版本：2026-11-24。覆盖五个根页、信息与设置子页、媒体详情、控制器工具及串流操作层。本文统一本轮图片批注与既有视觉合同，后续页面和公共组件按此规范验收。
+ 
+ iPhone 与 iPad 共用 SwiftUI 页面壳层、原生 NavigationStack、主题令牌和交互组件。窗口宽度、系统字号与内容语义共同决定布局；认证、Xbox 数据、会话和信令继续消费现有 Rust 领域合同。
+ 
+@@ -32,6 +32,8 @@
+ 标题工具栏保留固定几何，根页标题最大 32pt，子页标题最大 24pt；长标题以单行收敛并保留完整 VoiceOver 名称。正文、说明、事实和内容工具采用真实缩放，布局通过换行、单列与局部横向滚动承接辅助字号。
+ 
+ 标签与值相隔 4pt，标题与正文形成可读分组。状态和说明使用次级文字色；品牌色表达主动作、选中项和重要活动状态。可点击条目同时具备完整名称、值与操作区域。
++
++图标与文字组合共用 `AppIconLabelStyle`：图形中心对齐首行文字中心，多行说明的图标随首行定位。资源图标与 SF Symbols 沿相同对齐规则布局；图标和等待指示共用随字号缩放的槽位，加载切换保持文字起点稳定。页面入口图标在24～32pt间缩放，标题和说明占满剩余宽度，窄屏辅助字号保持完整单词换行。
+ 
+ ## 颜色与表面
+ 
+@@ -85,6 +87,8 @@
+ 同行下拉菜单与互斥筛选共用 `appFilterTrackSurface` 实色底槽、主文字色、垂直内边距和满圆角轮廓。常规档视觉高度约32pt，辅助字号按相同文字留白自然增高；背景保持平整，边界由底槽与画布的色差表达。
+ 
+ 视觉高度由 44pt 操作区内的垂直留白形成。系统字号增大时胶囊、内容 Tab 与输入记录按文字自然增高；选项和菜单值保留可读文字，触屏区域沿真实绑定生效。
++
++胶囊控件共用 `AppContentControlMetrics` 的内边距、44pt操作区、6pt底槽留白与2pt选中内缩。文字 Tab 和互斥选项预留 semibold 字重的文字宽度，切换保留相邻选项的位置；选中表面采用240ms过渡，减少动态效果时采用160ms过渡。串流诊断分组、官方布局选项、工具区重置与触屏保存沿同一公共控件装配。
+ 
+ ## 页面壳层与导航
+ 
+--- a/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
++++ b/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
+@@ -265,7 +265,7 @@
+           touchOnly = false
+           sort = .source
+         }
+-        .buttonStyle(AppInformationActionStyle())
++        .buttonStyle(AppContentCapsuleButtonStyle())
+       }
+     }
+     .accessibilityIdentifier("cloud-browser-tools")
+--- a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -299,7 +299,7 @@
+         let panel = app.otherElements["stream-diagnostics-floating-panel"]
+         XCTAssertTrue(panel.waitForExistence(timeout: 5))
+         XCTAssertLessThan(panel.frame.width, window.width * 0.7)
+-        let groups = app.segmentedControls["stream-diagnostic-groups"]
++        let groups = app.descendants(matching: .any)["stream-diagnostic-groups"].firstMatch
+         XCTAssertTrue(groups.waitForExistence(timeout: 5))
+         for (title, key) in [
+             ("网络", "rtt"), ("显示", "receivedFps"), ("恢复", "recoveryEffect"),
+--- a/iosapp/XBXRCUITests/PCPageInteractionTests.swift
++++ b/iosapp/XBXRCUITests/PCPageInteractionTests.swift
+@@ -450,10 +450,11 @@
+     app.buttons["personal-game-section-album"].tap()
+     let empty = app.descendants(matching: .any)["album-empty-state"].firstMatch
+     XCTAssertTrue(empty.waitForExistence(timeout: 5))
+-    let types = app.scrollViews["album-media-types"]
++    let types = app.descendants(matching: .any)["album-media-types"].firstMatch
+     let scroll = app.scrollViews["app-information-scroll"].firstMatch
+     XCTAssertEqual(empty.frame.midX, scroll.frame.midX, accuracy: 2)
+-    XCTAssertEqual(empty.frame.midY, (types.frame.maxY + scroll.frame.maxY) / 2, accuracy: 24)
++    let contentBottom = min(scroll.frame.maxY, app.buttons["primary-navigation-hosts"].frame.minY)
++    XCTAssertEqual(empty.frame.midY, (types.frame.maxY + contentBottom) / 2, accuracy: 24)
+     save(app, "priority-game-album-empty")
+     let clips = app.buttons["album-media-types-clip"]
+     XCTAssertTrue(clips.isHittable)

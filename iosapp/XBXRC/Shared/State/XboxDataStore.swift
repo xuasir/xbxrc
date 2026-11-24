@@ -113,6 +113,7 @@ final class XboxDataStore: ObservableObject {
     private var boundOwnerGeneration: UInt64?
     private var fallbackOwnerKey: String?
     private var initialActivations: Set<XboxDataSurface> = []
+    private var activationFailures: [XboxDataSurface: Date] = [:]
     private var hostRefreshTask: Task<Void, Never>?
     private var hostRefreshTaskID: UUID?
     private var libraryRefreshTask: Task<Void, Never>?
@@ -214,7 +215,7 @@ final class XboxDataStore: ObservableObject {
         }
         hostRefreshTask = task
         hostRefreshTaskID = taskID
-        await task.value
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         if hostRefreshTaskID == taskID {
             hostRefreshTask = nil
             hostRefreshTaskID = nil
@@ -363,7 +364,7 @@ final class XboxDataStore: ObservableObject {
         }
         libraryRefreshTask = task
         libraryRefreshTaskID = taskID
-        await task.value
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         if libraryRefreshTaskID == taskID {
             libraryRefreshTask = nil
             libraryRefreshTaskID = nil
@@ -595,7 +596,7 @@ final class XboxDataStore: ObservableObject {
             )
         }
         achievementRefreshes[key] = AchievementRefreshHandle(id: taskID, task: task)
-        await task.value
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         clearAchievementTask(for: key, matching: taskID)
     }
 
@@ -926,6 +927,7 @@ final class XboxDataStore: ObservableObject {
         achievementRefreshes.values.forEach { $0.task.cancel() }
         achievementRefreshes = [:]
         initialActivations = []
+        activationFailures = [:]
         hostRefreshOperationID = nil
         hostPowerOperationID = nil
         hosts = []
@@ -953,7 +955,8 @@ final class XboxDataStore: ObservableObject {
         guard webTokenJSON != nil else {
             return
         }
-        guard initialActivations.insert(surface).inserted else {
+        let retry = activationFailures[surface].map { Date().timeIntervalSince($0) >= 15 } ?? false
+        guard initialActivations.insert(surface).inserted || retry else {
             IOSRuntimeTrace.decision(
                 domain: "xbox-data",
                 event: "surfaceActivationSkipped",
@@ -963,7 +966,17 @@ final class XboxDataStore: ObservableObject {
             )
             return
         }
+        let owner = nativeQueryContext()
         await operation()
+        guard let owner, ownsNativeQuery(owner) else { return }
+        let phase: DataLoadPhase
+        switch surface {
+        case .hosts: phase = hostPhase
+        case .library: phase = libraryPhase
+        case .achievements(let key): phase = achievementStates[key]?.phase ?? .idle
+        }
+        if phase == .idle { initialActivations.remove(surface) }
+        activationFailures[surface] = phase == .failed ? .now : nil
     }
 
     func nativeQueryContext() -> XboxDataRequestContext? {

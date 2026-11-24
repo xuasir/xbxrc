@@ -1,0 +1,14 @@
+[
+  {
+    "name": "priority-game-album-empty.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "original": "45E4B318-EF94-4AC5-83B5-C176F6EED575.png",
+    "timestamp": 1795495843.919
+  },
+  {
+    "name": "priority-game-overview.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+    "original": "6C40A044-7B2F-41BA-8804-D4C833CFDCE7.png",
+    "timestamp": 1795495838.05
+  }
+]

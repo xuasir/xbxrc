@@ -1,0 +1,130 @@
+{
+  "source": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-472B306E-7D42-452E-AC23-844411487EBF.jsonl",
+  "sha256": "bc553db229e09b97898a73ecd36d49b91877672936dac0f5045f10161e187565",
+  "bytes": 38665,
+  "rows": 78,
+  "sessions": 1,
+  "startTsMs": 1795427229155,
+  "endTsMs": 1795427385029,
+  "durationMs": 155874,
+  "authRestore": {
+    "scope": "web",
+    "cacheReused": true,
+    "seq": 9,
+    "restoreSucceededSeq": 12,
+    "elapsedMs": 89
+  },
+  "cloudPreparations": [
+    {
+      "index": 1,
+      "actualStreamingLaunch": false,
+      "oauthMs": 615,
+      "oauthCheckpointSeq": 35,
+      "firstFailedStep": "deviceToken",
+      "failedStepMs": 156,
+      "failedSeq": 38,
+      "kind": "network",
+      "retriable": true
+    },
+    {
+      "index": 2,
+      "actualStreamingLaunch": false,
+      "oauthMs": 564,
+      "oauthCheckpointSeq": 51,
+      "firstFailedStep": "deviceToken",
+      "failedStepMs": 132,
+      "failedSeq": 54,
+      "kind": "network",
+      "retriable": true
+    },
+    {
+      "index": 3,
+      "actualStreamingLaunch": true,
+      "streamLaunchSeq": 63,
+      "oauthMs": 1251,
+      "oauthCheckpointSeq": 71,
+      "deviceMs": 4839,
+      "firstFailedStep": "sisuAuthorize",
+      "failedStepMs": 5011,
+      "failedSeq": 76,
+      "kind": "timeout",
+      "retriable": true
+    }
+  ],
+  "configuration": {
+    "pcAndIosSharedConstructor": true,
+    "connectTimeoutMs": 5000,
+    "requestTimeoutMs": 12000,
+    "requestTotalTimeoutMs": 18000,
+    "startupContextTimeoutMs": 90000,
+    "interpretation": "SISU 5011ms高度吻合连接预算；具体DNS/TCP/TLS成因缺少细分类别"
+  },
+  "diagnosticDefect": {
+    "innerSeq": [
+      38,
+      54
+    ],
+    "innerKind": "network",
+    "innerRetriable": true,
+    "outerSeq": [
+      40,
+      41,
+      42,
+      56,
+      57
+    ],
+    "outerKind": "requestFailed",
+    "outerRetriable": false,
+    "cause": "CloudLibraryDiagnostics以NSError描述文本推导类型与可重试性，忽略Query类型化事实",
+    "fixStatus": "implemented-and-validated"
+  },
+  "networkEnvironment": {
+    "earlierUserConfirmed": "Wi-Fi 裸连",
+    "freshTraceNetworkSwitches": "awaiting_user_confirmation"
+  },
+  "eventCounts": {
+    "streamLaunchStarted": 1,
+    "authRequestStarted": 0,
+    "sessionReady": 0,
+    "firstFramePresented": 0,
+    "terminalSelected": 0,
+    "traceBudgetNotice": 0
+  },
+  "coverage": {
+    "boundaryOutcome": "导出末行是内层失败，外层终态缺证据",
+    "streamingAcceptance": "授权失败使会话/peer/playing及清理锚点缺证据",
+    "crashEvidence": "该导出无法判断崩溃或手动导出时机",
+    "exportUserOutcome": "awaiting_user_confirmation"
+  },
+  "health": {
+    "network": {
+      "status": "FAIL",
+      "evidence": "两次deviceToken网络失败；一次SISU授权超时"
+    },
+    "receiveRecoveryChain": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "reason": "会话创建之前失败"
+    },
+    "mediaSupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "reason": "会话创建之前失败"
+    },
+    "steadySupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "reason": "会话创建之前失败"
+    },
+    "submitPresentTails": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "reason": "会话创建之前失败"
+    },
+    "frameSupplyDelta": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "reason": "会话创建之前失败"
+    }
+  },
+  "credentialRequestCounts": {
+    "authRequestStarted": 7,
+    "authRequestSucceeded": 4,
+    "authRequestFailed": 3
+  }
+}

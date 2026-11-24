@@ -1,0 +1,47 @@
+{
+  "actionTitle" : "Testing project XBXRC with scheme XBXRC",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "arm64",
+    "deviceId" : "79FF2297-6C93-409D-8E53-59A51F8B62AD",
+    "deviceName" : "iPhone 17e",
+    "modelName" : "iPhone 17e",
+    "osBuildNumber" : "24A434",
+    "osVersion" : "27.0",
+    "platform" : "iOS Simulator"
+  },
+  "endTime" : 1795405123.12,
+  "errorCount" : 2,
+  "errors" : [
+    {
+      "issueType" : "Uncategorized",
+      "message" : "Testing cancelled because the build failed."
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "RegionIsolation",
+      "message" : "Non-Sendable 'some View'-typed result can not be returned from main actor-isolated instance method 'appSettingsInformation(ownsPadding:)' to nonisolated context",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift#EndingColumnNumber=5&EndingLineNumber=176&StartingColumnNumber=5&StartingLineNumber=176&Timestamp=817097912.260367"
+    }
+  ],
+  "startTime" : 1795405112.193,
+  "status" : "failed",
+  "warningCount" : 2,
+  "warnings" : [
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "ActorIsolatedCall",
+      "message" : "Call to main actor-isolated instance method 'appSettingsInformation(ownsPadding:)' in a synchronous nonisolated context",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift#EndingColumnNumber=5&EndingLineNumber=176&StartingColumnNumber=5&StartingLineNumber=176&Timestamp=817097912.260367"
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "ActorIsolatedCall",
+      "message" : "Call to main actor-isolated initializer 'init(selection:values:title:identifier:label:fillsWidth:)' in a synchronous nonisolated context",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift#EndingColumnNumber=4&EndingLineNumber=172&StartingColumnNumber=4&StartingLineNumber=172&Timestamp=817097912.260367"
+    }
+  ]
+}

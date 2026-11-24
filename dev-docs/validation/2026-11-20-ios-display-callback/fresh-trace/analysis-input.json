@@ -1,0 +1,12 @@
+{
+  "source": {
+    "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795187951399-1.jsonl",
+    "sha256": "24ac24de981cf9c15a1eafb558b6d14a8f28fb91fbfbe5a01e35afffbc90612d",
+    "rows": 33877,
+    "firstTsMs": 1795187951399,
+    "lastTsMs": 1795188247993
+  },
+  "scriptSha256": "58c12767735e666ed213928452eb4d75faf58d5cf2dbc4b768e607e1ae910f45",
+  "quantileMethod": "nearest rank",
+  "fpsMethod": "sum of counter deltas / sum of actual sampleWindowMs; foreground samples fully contained in active scene intervals after first completion"
+}

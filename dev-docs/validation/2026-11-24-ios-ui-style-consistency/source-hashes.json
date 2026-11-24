@@ -1,0 +1,54 @@
+{
+  "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": {
+    "baseline_sha256": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "final_sha256": "a0bdb5a39b92b5b8f46132e875c0088a3d03aa8ec55af46530e96220f6bd6007"
+  },
+  "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": {
+    "baseline_sha256": "cf7a5a150ca86f8b2f658e2944185371fc5fba933a06831a5899f329fc068697",
+    "final_sha256": "0d1908951725d3466820b64baf5d82da1d7cdd69d693759962591e46264730e8"
+  },
+  "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift": {
+    "baseline_sha256": "1b4a652326c16db5066dfe09c59c4a62e25a4c4ba4ca2cb4fa8a90665d4570fe",
+    "final_sha256": "9f5938a57d9b3a0313578571f572f4cdd54b3a312f541ec586cba2f5cff64c04"
+  },
+  "iosapp/XBXRC/App/AppRootView.swift": {
+    "baseline_sha256": "54a820f9201771d0ea28f29eb895783b4e442972e8762f4973291e5a795aca6b",
+    "final_sha256": "e5ed9cc749d178e8573391d482df468ec6f74edcedecdf43b5ad49a940cb950a"
+  },
+  "iosapp/XBXRC/Features/Profile/PersonalPages.swift": {
+    "baseline_sha256": "21afa98b94d0073fbc2cac46bcd045266885b9bb5fac4ee9943cf90f5223950a",
+    "final_sha256": "5e20d0e0aa971a018d532d0aabf13848f0e010299634fe564a2b5133a6e44cbb"
+  },
+  "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": {
+    "baseline_sha256": "3498ced1885222faa57c25d2fa82691cda2ff4b0258e843ff47491860bc17b9d",
+    "final_sha256": "0415d7f7640cdf5599eb6fdaff5f307c8df4e07690f38a0775291d81f8895c3a"
+  },
+  "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift": {
+    "baseline_sha256": "03b6833dc0392d32b5df339498d14e84a994bf7817aa0b6f9df95a9ae4b3536a",
+    "final_sha256": "f587b74bc5691ea8cb517dca441ec965f08e9643fc718583bae0643d8b215f9a"
+  },
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": {
+    "baseline_sha256": "57678c4a273704cb8e62b3c3b349355ea8d5bcddc6a7856dd8e7659869556f9d",
+    "final_sha256": "fa41b412370abadc433aa2bea9579c64d7ad1041cdc9a26f0fe002caaa488035"
+  },
+  "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": {
+    "baseline_sha256": "ac86e90611c49aadda69b3af652709b2b48d08fe4aee67284f7cb82fdba13998",
+    "final_sha256": "dab26ba9e8e558e94ea8a3f942b46ec725e2d68a0b4b80c6a7451991695db2ba"
+  },
+  "iosapp/DESIGN.md": {
+    "baseline_sha256": "0737fcbdb346e9c6198114d0399dd64d77b39eceeffb59128a2dd70a463d2911",
+    "final_sha256": "68ef4c51bff4eb7248346ca349739bf0924877da3faaa131d8ba6b3e932cf3ea"
+  },
+  "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": {
+    "baseline_sha256": "6678a1a0c100944347c0e12fa3117f25b3fa34756fb7bc3dd232a5c00be1fbab",
+    "final_sha256": "222a65a7819041f56bc66af87f2aa3e5c16d3f7549ca72d798a4a03de29f990b"
+  },
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": {
+    "baseline_sha256": "61afd85b035629d77d0a9ad2154723c88dcd43fda8ecd5fa6ac45daea8d30472",
+    "final_sha256": "1bc580f1c7c0b5ed91d5ed61f8f62f57575d31dce38a1edf143278503fbeb693"
+  },
+  "iosapp/XBXRCUITests/PCPageInteractionTests.swift": {
+    "baseline_sha256": "aa1a9b74d131bac2db89fbd3b0bec76752b99ef5bc7d292afdda25a25b71f9c0",
+    "final_sha256": "6435cc7ed4c1c5e3252cfdb93fe38eeaef15cf74b1891053b5f846423b73aa71"
+  }
+}

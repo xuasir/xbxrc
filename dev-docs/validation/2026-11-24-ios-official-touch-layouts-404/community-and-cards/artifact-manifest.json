@@ -1,0 +1,154 @@
+{
+  "README.md": {
+    "sha256": "ec8139afefd81396f0afe4260710af05787eebd777bda98b242547d0c18cd4db",
+    "bytes": 3573
+  },
+  "api-tests.txt": {
+    "sha256": "5561734330f31655d04ca1292e0f85dbbd231b1930975ec191c73d4da4717c8a",
+    "bytes": 1895
+  },
+  "attachment-manifest.json": {
+    "sha256": "44f1a9c3c507821e5d0d83d64206aaac516412df123b1ca997b4c37c06d5c74f",
+    "bytes": 2126
+  },
+  "bindgen.txt": {
+    "sha256": "9f67e554cb9af740603bb9597cfc97d7b506969dff1cd08388750db3187546f7",
+    "bytes": 1372
+  },
+  "card-attachment-manifest.json": {
+    "sha256": "6137f53c11a2daacc3b9521c4c411e9052dde7a4ed24246398f3f5f99d2d4697",
+    "bytes": 773
+  },
+  "card-only-build-summary.json": {
+    "sha256": "e2bdc650ed8e335afb6fbb7f14d1a098322aebb0e579d9302f5de6f3303672e7",
+    "bytes": 1620
+  },
+  "card-only-ui-summary.json": {
+    "sha256": "03c04261f406ebc01bf8765fb51659278491f7dcf7a45a01c8a195212d475204",
+    "bytes": 735
+  },
+  "cleanup-plan.json": {
+    "sha256": "781dca5c808203898d2ea3c672cdf0a547b6860cc7312dea3f4cbdab295f819d",
+    "bytes": 1301
+  },
+  "cleanup.json": {
+    "sha256": "7402ab060c3979f0e8523e22df09d58d0e7d35b3376c8481fe1b07cc5e953503",
+    "bytes": 2759
+  },
+  "community-touch-layout-cards.png": {
+    "sha256": "81b6eb54215e8a74e4f72aa041aa8ceb7292cc1752b074ca46a3454ba04feb17",
+    "bytes": 3673699
+  },
+  "community-touch-preview-landscape.png": {
+    "sha256": "69dff17ee06642bc446ef8d86ec5d2de86e9440daa7401258b0d905fd7e8a1da",
+    "bytes": 106268
+  },
+  "community-touch-preview-portrait.png": {
+    "sha256": "2a12d3e076678d846d68609edf191b6872033620ec87b8899999578e25ae8e50",
+    "bytes": 104502
+  },
+  "community-touch-saved-library.png": {
+    "sha256": "c2b340f05504f3a4b7b22d3a5cb00988a359c3d02f79e098d7e395d9c1e6465d",
+    "bytes": 3699944
+  },
+  "compact-card-detail.png": {
+    "sha256": "5814f19e0d97f7622c6af43791755c442b9cd876a2a12f45b32229b56cd35db9",
+    "bytes": 231845
+  },
+  "diagnostic-analysis.json": {
+    "sha256": "79eb966129565e055290f1002ab81425686d2695dc23268b06f1e6549f461cf9",
+    "bytes": 5526
+  },
+  "failure-and-final-diagnostics.json": {
+    "sha256": "5beaec4c271b842dfee21f7b28fb3be58126a577e925e643aac3274993d20945",
+    "bytes": 6949
+  },
+  "fixtures/community-game.json": {
+    "sha256": "c8d9647788fc13f49d58fc638890813c4d4db4a3284923bfc8840d09b0f6724d",
+    "bytes": 98
+  },
+  "fixtures/community-shenmue.json": {
+    "sha256": "5481b15652788de6d484953db0caf07ee57369e22d2db8d9ce5fc92fc02e2cb3",
+    "bytes": 4911
+  },
+  "fullscreen-build-summary.json": {
+    "sha256": "02236727470a64c5692b13ac62b62868513a4603c2c9204009cb6520981d9c49",
+    "bytes": 2008
+  },
+  "fullscreen-ui-summary.json": {
+    "sha256": "af5547c1dac396e50476937161079a867abb362eee264efae45ece6f250deac8",
+    "bytes": 735
+  },
+  "mixed-sources-ui-summary.json": {
+    "sha256": "9d591fab172fe0262b2c40e64ade7229119fff14ae32518524a8c835fda405c8",
+    "bytes": 735
+  },
+  "previous-card-build-summary.json": {
+    "sha256": "d30350e320d94fc982ee2d51ecd67bf237d7809d9ff63dc3573cfa09324eed07",
+    "bytes": 2008
+  },
+  "previous-card-ui-summary.json": {
+    "sha256": "87b00d676c6682bde740cb56070d01952cc0b67be11cc93bed3fb833000693d2",
+    "bytes": 735
+  },
+  "process-check.json": {
+    "sha256": "f22c2b713ef1b694481d4fb1deb4eed65e223ada724fbb327f260a39ee14246c",
+    "bytes": 68
+  },
+  "real-community-sample.json": {
+    "sha256": "3179e5625ef7391e48e27f61e4a534038251d5aea71317648e9d6867e6912a30",
+    "bytes": 156
+  },
+  "screenshot-orientation.json": {
+    "sha256": "7b3697dfc4f2d81d3d2dbe255cf1a7c56d00b3b70df13b41cb64b972173d7c89",
+    "bytes": 1253
+  },
+  "selection-probe.txt": {
+    "sha256": "4537fd8fb0d40e19f2ac4af9c3d9539640c0287290d479ab01bea2b56d305f52",
+    "bytes": 35
+  },
+  "source-baseline.json": {
+    "sha256": "17cafc671a94e96681a156e4bedfbbb4ef5abb74085ce9667b6a2cb066032942",
+    "bytes": 2407
+  },
+  "source-hashes.json": {
+    "sha256": "6ab77253834b8c75113d786709f63a6e072a4e29cfa4c86f7d0156e568412cd8",
+    "bytes": 3723
+  },
+  "storage-tests.txt": {
+    "sha256": "169f0671f75ed547c8dd72f1e1632f7ccc6950968e233e19be4ae805b376d341",
+    "bytes": 2169
+  },
+  "task-changes-centered-save.diff": {
+    "sha256": "d01a89adf8e97c65a75928ac25749a23dfc0ae825035e77d40281be9bd037186",
+    "bytes": 2368
+  },
+  "task-changes-compact.diff": {
+    "sha256": "a2acfd7373389063553543ecbaa2c201a30102a36b298336c7e8941f021b85c9",
+    "bytes": 9357
+  },
+  "task-changes-fullscreen.diff": {
+    "sha256": "c659c20dd687b44619231c08b9e7fba3c4530f62e54dc7117015377833c35643",
+    "bytes": 33474
+  },
+  "task-changes-shared-workspace.diff": {
+    "sha256": "a73faa4de1d1f307681c3a5b9e94f8186cbe7112a01f183130599a3297ffd75b",
+    "bytes": 25700
+  },
+  "task-changes-source-and-community.diff": {
+    "sha256": "a61290d530f5e84375d4ab68bf1f3063af701aadddab2b2c5d54ffce0e40448b",
+    "bytes": 71777
+  },
+  "temporary-source-restoration.json": {
+    "sha256": "b96a1c44437e981a0b2f0838204b074d3e52adeda144ef4475ae8c22941f0ad0",
+    "bytes": 263
+  },
+  "touch-tests.txt": {
+    "sha256": "a56b0cae660d40def177bfe2ae26b54a16baf96d831fca8bab35226cd00a356e",
+    "bytes": 1786
+  },
+  "validation.json": {
+    "sha256": "7994054c2f0329c4d853369d7de4880dcc00c29127668f38ca95db414ba71ca3",
+    "bytes": 1154
+  }
+}

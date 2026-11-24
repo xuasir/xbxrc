@@ -1,0 +1,7 @@
+{
+  "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "probe_removed": true,
+  "baseline_sha256": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+  "restored_sha256": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+  "baseline_matches": true
+}

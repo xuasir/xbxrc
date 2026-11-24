@@ -1,0 +1,80 @@
+[
+  {
+    "section": "主机",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "background_frames": []
+  },
+  {
+    "section": "云游戏",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "background_frames": [
+      {
+        "height": 116,
+        "width": 390,
+        "x": 0,
+        "y": 0
+      }
+    ]
+  },
+  {
+    "section": "我的",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "background_frames": [
+      {
+        "height": 116,
+        "width": 390,
+        "x": 0,
+        "y": 0
+      }
+    ]
+  },
+  {
+    "section": "控制器",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "background_frames": [
+      {
+        "height": 116,
+        "width": 390,
+        "x": 0,
+        "y": 0
+      }
+    ]
+  },
+  {
+    "section": "设置",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "background_frames": [
+      {
+        "height": 116,
+        "width": 390,
+        "x": 0,
+        "y": 0
+      }
+    ]
+  }
+]

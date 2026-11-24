@@ -1,0 +1,1854 @@
+{
+  "source": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+  "sourceBytes": 81801,
+  "sourceSha256": "cd82f52c28fceed59cedca8199cddcc48cfc30a331cfc2446204280ae5cd5456",
+  "rowCount": 171,
+  "sessionCount": 1,
+  "firstTimeShanghai": "2026-11-23T11:59:41.035000+08:00",
+  "lastTimeShanghai": "2026-11-23T13:46:08.789000+08:00",
+  "profiles": [
+    "production"
+  ],
+  "comparison": {
+    "priorArchive": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-home-access-failure/diagnostic-01b7be96/analysis.json",
+    "priorSourceAvailable": false,
+    "priorRowCount": 90,
+    "newRowCount": 171,
+    "addedRows": 81,
+    "sameSession": true,
+    "prefixBytes": 42046,
+    "prefixSha256MatchesPrior": true,
+    "priorEndSeq": 90,
+    "priorMissingTerminalNowObserved": [
+      "homeAccessBoundaryFailed",
+      "accessPrepareFailed",
+      "terminalSelected",
+      "streamingStateChanged"
+    ]
+  },
+  "userConfirmedContext": {
+    "attemptWindowShanghai": "2026-11-23 13:44–13:46",
+    "network": "Wi-Fi 裸连",
+    "consoleState": "待机",
+    "source": "用户本轮澄清回复",
+    "actualWakeSetting": "开启（用户确认）",
+    "traceWakeSettingObserved": null,
+    "pcCanConnect": true
+  },
+  "attempts": [
+    {
+      "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+      "generation": 1,
+      "launchSeq": 86,
+      "launchTimeShanghai": "2026-11-23T12:17:56.999000+08:00",
+      "accessSucceededSeq": [],
+      "accessDurationFromLaunchMs": null,
+      "sessionCreateStartedSeq": [],
+      "terminalSeq": [
+        93
+      ],
+      "terminalReason": [
+        "runtime.failed"
+      ],
+      "createToTerminalMs": null,
+      "observedEvents": {
+        "streamingStateChanged": 2,
+        "streamLaunchStarted": 1,
+        "accessPrepareStarted": 1,
+        "accessPrepareFailed": 1,
+        "terminalSelected": 1
+      }
+    },
+    {
+      "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+      "generation": 2,
+      "launchSeq": 96,
+      "launchTimeShanghai": "2026-11-23T12:18:02.467000+08:00",
+      "accessSucceededSeq": [],
+      "accessDurationFromLaunchMs": null,
+      "sessionCreateStartedSeq": [],
+      "terminalSeq": [
+        103
+      ],
+      "terminalReason": [
+        "runtime.failed"
+      ],
+      "createToTerminalMs": null,
+      "observedEvents": {
+        "streamingStateChanged": 3,
+        "streamLaunchStarted": 1,
+        "accessPrepareStarted": 1,
+        "accessPrepareFailed": 1,
+        "terminalSelected": 1
+      }
+    },
+    {
+      "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+      "generation": 4,
+      "launchSeq": 149,
+      "launchTimeShanghai": "2026-11-23T13:44:46.082000+08:00",
+      "accessSucceededSeq": [
+        155
+      ],
+      "accessDurationFromLaunchMs": 18047,
+      "sessionCreateStartedSeq": [
+        157
+      ],
+      "terminalSeq": [
+        160
+      ],
+      "terminalReason": [
+        "session.failed"
+      ],
+      "createToTerminalMs": 54837,
+      "observedEvents": {
+        "streamingStateChanged": 3,
+        "streamLaunchStarted": 1,
+        "accessPrepareStarted": 1,
+        "accessPrepareSucceeded": 1,
+        "sessionCreateStarted": 1,
+        "sessionTerminal": 1,
+        "terminalSelected": 1,
+        "presentationDetached": 1,
+        "iceTasksCancelled": 1,
+        "remoteSessionClosed": 1,
+        "accessReleased": 1
+      }
+    },
+    {
+      "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+      "generation": 5,
+      "launchSeq": 167,
+      "launchTimeShanghai": "2026-11-23T13:46:01.981000+08:00",
+      "accessSucceededSeq": [],
+      "accessDurationFromLaunchMs": null,
+      "sessionCreateStartedSeq": [],
+      "terminalSeq": [],
+      "terminalReason": [],
+      "createToTerminalMs": null,
+      "observedEvents": {
+        "streamingStateChanged": 1,
+        "streamLaunchStarted": 1,
+        "accessPrepareStarted": 1
+      }
+    }
+  ],
+  "anchors": [
+    {
+      "line": 85,
+      "seq": 85,
+      "tsMs": 1795407476999,
+      "timeShanghai": "2026-11-23T12:17:56.999000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "preparingAccess",
+        "target": "home"
+      }
+    },
+    {
+      "line": 86,
+      "seq": 86,
+      "tsMs": 1795407476999,
+      "timeShanghai": "2026-11-23T12:17:56.999000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamLaunchStarted",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "operationId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 89,
+      "seq": 89,
+      "tsMs": 1795407477332,
+      "timeShanghai": "2026-11-23T12:17:57.332000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "54D802CA-D12D-450C-836C-152160DBF53E",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 90,
+      "seq": 90,
+      "tsMs": 1795407478516,
+      "timeShanghai": "2026-11-23T12:17:58.516000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 1182,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "requestFailed",
+        "errorType": "XboxBridgeError",
+        "operationId": "54D802CA-D12D-450C-836C-152160DBF53E",
+        "platform": "ios",
+        "retriable": false,
+        "timeout": false
+      }
+    },
+    {
+      "line": 91,
+      "seq": 91,
+      "tsMs": 1795407478517,
+      "timeShanghai": "2026-11-23T12:17:58.517000+08:00",
+      "domain": "auth",
+      "event": "homeAccessBoundaryFailed",
+      "payload": {
+        "elapsedMs": 1185,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "requestFailed",
+        "errorType": "XboxBridgeError",
+        "operationId": "84CC9DF0-0FC3-4BD3-BFA1-83B26CA8B9F8",
+        "ownerGeneration": 1,
+        "platform": "ios",
+        "retriable": false,
+        "timeout": false
+      }
+    },
+    {
+      "line": 92,
+      "seq": 92,
+      "tsMs": 1795407478517,
+      "timeShanghai": "2026-11-23T12:17:58.517000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessPrepareFailed",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "generation": 1,
+        "operationId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 93,
+      "seq": 93,
+      "tsMs": 1795407478517,
+      "timeShanghai": "2026-11-23T12:17:58.517000+08:00",
+      "domain": "ios-streaming",
+      "event": "terminalSelected",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "operationId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "platform": "ios",
+        "reason": "runtime.failed",
+        "retryable": true
+      }
+    },
+    {
+      "line": 94,
+      "seq": 94,
+      "tsMs": 1795407478519,
+      "timeShanghai": "2026-11-23T12:17:58.519000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": true,
+        "state": "failed",
+        "target": "home"
+      }
+    },
+    {
+      "line": 95,
+      "seq": 95,
+      "tsMs": 1795407482467,
+      "timeShanghai": "2026-11-23T12:18:02.467000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "generation": 2,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "preparingAccess",
+        "target": "home"
+      }
+    },
+    {
+      "line": 96,
+      "seq": 96,
+      "tsMs": 1795407482467,
+      "timeShanghai": "2026-11-23T12:18:02.467000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamLaunchStarted",
+      "payload": {
+        "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "generation": 2,
+        "operationId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 99,
+      "seq": 99,
+      "tsMs": 1795407482491,
+      "timeShanghai": "2026-11-23T12:18:02.491000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "A44A7867-F1D4-4AE6-90BF-B9AFDDBF7C3E",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 100,
+      "seq": 100,
+      "tsMs": 1795407483290,
+      "timeShanghai": "2026-11-23T12:18:03.290000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 797,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "requestFailed",
+        "errorType": "XboxBridgeError",
+        "operationId": "A44A7867-F1D4-4AE6-90BF-B9AFDDBF7C3E",
+        "platform": "ios",
+        "retriable": false,
+        "timeout": false
+      }
+    },
+    {
+      "line": 101,
+      "seq": 101,
+      "tsMs": 1795407483291,
+      "timeShanghai": "2026-11-23T12:18:03.291000+08:00",
+      "domain": "auth",
+      "event": "homeAccessBoundaryFailed",
+      "payload": {
+        "elapsedMs": 799,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "requestFailed",
+        "errorType": "XboxBridgeError",
+        "operationId": "EADE4ABA-1B03-4B2A-AC43-7516EC8A1B9F",
+        "ownerGeneration": 1,
+        "platform": "ios",
+        "retriable": false,
+        "timeout": false
+      }
+    },
+    {
+      "line": 102,
+      "seq": 102,
+      "tsMs": 1795407483291,
+      "timeShanghai": "2026-11-23T12:18:03.291000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessPrepareFailed",
+      "payload": {
+        "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "generation": 2,
+        "operationId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 103,
+      "seq": 103,
+      "tsMs": 1795407483291,
+      "timeShanghai": "2026-11-23T12:18:03.291000+08:00",
+      "domain": "ios-streaming",
+      "event": "terminalSelected",
+      "payload": {
+        "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "generation": 2,
+        "operationId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "platform": "ios",
+        "reason": "runtime.failed",
+        "retryable": true
+      }
+    },
+    {
+      "line": 104,
+      "seq": 104,
+      "tsMs": 1795407483293,
+      "timeShanghai": "2026-11-23T12:18:03.293000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+        "generation": 2,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": true,
+        "state": "failed",
+        "target": "home"
+      }
+    },
+    {
+      "line": 124,
+      "seq": 124,
+      "tsMs": 1795407719742,
+      "timeShanghai": "2026-11-23T12:21:59.742000+08:00",
+      "domain": "auth",
+      "event": "cloudAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 8584,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "1BB97C78-ACC1-42C4-9D36-F645371B21A1",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 125,
+      "seq": 125,
+      "tsMs": 1795407719743,
+      "timeShanghai": "2026-11-23T12:21:59.743000+08:00",
+      "domain": "auth",
+      "event": "cloudAccessBoundaryFailed",
+      "payload": {
+        "elapsedMs": 8664,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "7FB06E80-5DAA-4E05-AE11-4381DD566E17",
+        "ownerGeneration": 1,
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 130,
+      "seq": 130,
+      "tsMs": 1795407754409,
+      "timeShanghai": "2026-11-23T12:22:34.409000+08:00",
+      "domain": "auth",
+      "event": "cloudAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 6605,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "3D8C95ED-9E24-4D56-9895-B6EC2C73A51C",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 131,
+      "seq": 131,
+      "tsMs": 1795407754409,
+      "timeShanghai": "2026-11-23T12:22:34.409000+08:00",
+      "domain": "auth",
+      "event": "cloudAccessBoundaryFailed",
+      "payload": {
+        "elapsedMs": 6677,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "13E9FC57-BC15-4558-A5D4-13CB1571959F",
+        "ownerGeneration": 1,
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 146,
+      "seq": 146,
+      "tsMs": 1795412681355,
+      "timeShanghai": "2026-11-23T13:44:41.355000+08:00",
+      "domain": "xbox-data",
+      "event": "hostsRefreshStarted",
+      "payload": {
+        "existingHosts": 1,
+        "hadContent": true,
+        "operationId": "9BF423F2-0CA7-496A-BB7A-FDF7DDCB84DF",
+        "platform": "ios",
+        "reason": "manualPull"
+      }
+    },
+    {
+      "line": 147,
+      "seq": 147,
+      "tsMs": 1795412683154,
+      "timeShanghai": "2026-11-23T13:44:43.154000+08:00",
+      "domain": "xbox-data",
+      "event": "hostsRefreshSucceeded",
+      "payload": {
+        "elapsedMs": 1798,
+        "hosts": 1,
+        "operationId": "9BF423F2-0CA7-496A-BB7A-FDF7DDCB84DF",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 148,
+      "seq": 148,
+      "tsMs": 1795412686082,
+      "timeShanghai": "2026-11-23T13:44:46.082000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "preparingAccess",
+        "target": "home"
+      }
+    },
+    {
+      "line": 149,
+      "seq": 149,
+      "tsMs": 1795412686082,
+      "timeShanghai": "2026-11-23T13:44:46.082000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamLaunchStarted",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 150,
+      "seq": 150,
+      "tsMs": 1795412686130,
+      "timeShanghai": "2026-11-23T13:44:46.130000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessPrepareStarted",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 151,
+      "seq": 151,
+      "tsMs": 1795412686130,
+      "timeShanghai": "2026-11-23T13:44:46.130000+08:00",
+      "domain": "auth",
+      "event": "homeAccessBoundaryStarted",
+      "payload": {
+        "operationId": "1C0E8570-46AA-4886-B233-C1B268E6446A",
+        "ownerGeneration": 1,
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 152,
+      "seq": 152,
+      "tsMs": 1795412686131,
+      "timeShanghai": "2026-11-23T13:44:46.131000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "9CBB60E4-C5A8-4693-85C1-251D2D42ECD4",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 153,
+      "seq": 153,
+      "tsMs": 1795412704044,
+      "timeShanghai": "2026-11-23T13:45:04.044000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundarySucceeded",
+      "payload": {
+        "appLevel": 2,
+        "elapsedMs": 17913,
+        "leaseExpiresAtMs": 1795413594040,
+        "leaseGeneration": 1,
+        "operationId": "9CBB60E4-C5A8-4693-85C1-251D2D42ECD4",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 154,
+      "seq": 154,
+      "tsMs": 1795412704129,
+      "timeShanghai": "2026-11-23T13:45:04.129000+08:00",
+      "domain": "auth",
+      "event": "homeAccessBoundarySucceeded",
+      "payload": {
+        "appLevel": 2,
+        "elapsedMs": 17999,
+        "operationId": "1C0E8570-46AA-4886-B233-C1B268E6446A",
+        "platform": "ios",
+        "sessionPersisted": true
+      }
+    },
+    {
+      "line": 155,
+      "seq": 155,
+      "tsMs": 1795412704129,
+      "timeShanghai": "2026-11-23T13:45:04.129000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessPrepareSucceeded",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 156,
+      "seq": 156,
+      "tsMs": 1795412704134,
+      "timeShanghai": "2026-11-23T13:45:04.134000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "creatingSession",
+        "target": "home"
+      }
+    },
+    {
+      "line": 157,
+      "seq": 157,
+      "tsMs": 1795412704134,
+      "timeShanghai": "2026-11-23T13:45:04.134000+08:00",
+      "domain": "ios-streaming",
+      "event": "sessionCreateStarted",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 159,
+      "seq": 159,
+      "tsMs": 1795412758971,
+      "timeShanghai": "2026-11-23T13:45:58.971000+08:00",
+      "domain": "ios-streaming",
+      "event": "sessionTerminal",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios",
+        "reason": "session.failed"
+      }
+    },
+    {
+      "line": 160,
+      "seq": 160,
+      "tsMs": 1795412758971,
+      "timeShanghai": "2026-11-23T13:45:58.971000+08:00",
+      "domain": "ios-streaming",
+      "event": "terminalSelected",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios",
+        "reason": "session.failed",
+        "retryable": true
+      }
+    },
+    {
+      "line": 161,
+      "seq": 161,
+      "tsMs": 1795412758971,
+      "timeShanghai": "2026-11-23T13:45:58.971000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": true,
+        "state": "failed",
+        "target": "home"
+      }
+    },
+    {
+      "line": 162,
+      "seq": 162,
+      "tsMs": 1795412758990,
+      "timeShanghai": "2026-11-23T13:45:58.990000+08:00",
+      "domain": "ios-streaming",
+      "event": "presentationDetached",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 163,
+      "seq": 163,
+      "tsMs": 1795412758990,
+      "timeShanghai": "2026-11-23T13:45:58.990000+08:00",
+      "domain": "ios-streaming",
+      "event": "iceTasksCancelled",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 164,
+      "seq": 164,
+      "tsMs": 1795412758990,
+      "timeShanghai": "2026-11-23T13:45:58.990000+08:00",
+      "domain": "ios-streaming",
+      "event": "remoteSessionClosed",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 165,
+      "seq": 165,
+      "tsMs": 1795412758990,
+      "timeShanghai": "2026-11-23T13:45:58.990000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessReleased",
+      "payload": {
+        "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "generation": 4,
+        "operationId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 166,
+      "seq": 166,
+      "tsMs": 1795412761981,
+      "timeShanghai": "2026-11-23T13:46:01.981000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+        "generation": 5,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "preparingAccess",
+        "target": "home"
+      }
+    },
+    {
+      "line": 167,
+      "seq": 167,
+      "tsMs": 1795412761981,
+      "timeShanghai": "2026-11-23T13:46:01.981000+08:00",
+      "domain": "ios-streaming",
+      "event": "streamLaunchStarted",
+      "payload": {
+        "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+        "generation": 5,
+        "operationId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 168,
+      "seq": 168,
+      "tsMs": 1795412762002,
+      "timeShanghai": "2026-11-23T13:46:02.002000+08:00",
+      "domain": "ios-streaming",
+      "event": "accessPrepareStarted",
+      "payload": {
+        "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+        "generation": 5,
+        "operationId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 169,
+      "seq": 169,
+      "tsMs": 1795412762002,
+      "timeShanghai": "2026-11-23T13:46:02.002000+08:00",
+      "domain": "auth",
+      "event": "homeAccessBoundaryStarted",
+      "payload": {
+        "operationId": "2B8C6462-01E6-4A6D-85B5-DF2C8FB364E0",
+        "ownerGeneration": 1,
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 170,
+      "seq": 170,
+      "tsMs": 1795412762002,
+      "timeShanghai": "2026-11-23T13:46:02.002000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "933B00CD-B492-487A-BAFC-187BB4CF7E1F",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 171,
+      "seq": 171,
+      "tsMs": 1795412768789,
+      "timeShanghai": "2026-11-23T13:46:08.789000+08:00",
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 6782,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "933B00CD-B492-487A-BAFC-187BB4CF7E1F",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    }
+  ],
+  "sourceHashes": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "76a2e4e5b5838fbb11cbd8abc03f4b4b2776e5388be1bb4781130da5732a23fc",
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+    "iosapp/XBXRC/Features/Settings/SettingsRootView.swift": "258e1afcf0483c5f967df81dbca3b966b5589bb28d6355f68df7e01672ef0bd4",
+    "iosapp/XBXRC/Features/Settings/AppSettingsStore.swift": "5fab2fba013f79805b582c0bebd2178f657673b73796ecb06d25bfe248eb9196",
+    "iosapp/XBXRC/Features/Settings/MobilePreferences.swift": "638dbfe30cfe4b175a4bf6e218fb65e0b6414d31aca3184d1dbf04854d8f6905",
+    "crates/xbox-ios-bridge/src/streaming.rs": "94cf435603088cb5d908f4dcdd094999277a22391ffa67c59d94add61a7863e5",
+    "crates/xbox-ios-bridge/src/streaming/startup.rs": "044490fd78687f8ca9597a5d8109129484362d5ee679e673b8cb0d383c35f055",
+    "crates/xbox-ios-bridge/src/streaming/home_context.rs": "8d426a7d8173de4895d9f06bb3ed878f6dcd87a432182b5a62ed7a1c1b690fbe",
+    "crates/xbox-streaming/src/session/startup.rs": "c088df9122157a1d7ad5945086f5340d9fe1c414ee2720078061bac0250df7e2",
+    "crates/xbox-streaming/src/session/discovery.rs": "e84828ca236e938f1d4cf87a7c893820c3fcab8f483235689616e49ab6169625",
+    "crates/xbox-streaming/src/policy/session/compiler.rs": "f3a8036fba27bd705d508d23cec73ac379c670f1705ba2d0d88d493036dff931"
+  },
+  "temporaryArtifacts": [],
+  "cleanup": {
+    "status": "completed",
+    "createdTemporaryPaths": [],
+    "removedPaths": [],
+    "retainedInput": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+    "reclaimedBytes": 0
+  },
+  "conclusions": {
+    "confirmed": [
+      "用户确认 13:44–13:46 使用 Wi-Fi 裸连，Xbox 主机处于待机。",
+      "新导出包含同一 session 的 171 行；前 90 行原始字节 SHA-256 与上轮输入一致，追加 81 行。",
+      "上轮 seq=90 后的外层失败收口已在 seq=91–94 补齐，终态支持用户主动重试。",
+      "generation=4 在 seq=153–155 完成主机串流授权，UniFFI 边界 17913 ms，外层 17999 ms；从点击启动到 accessPrepareSucceeded 为 18047 ms。",
+      "generation=4 进入 sessionCreateStarted 后 54837 ms 以 session.failed 结束；诊断记录了 presentationDetached、iceTasksCancelled、remoteSessionClosed 与 accessReleased。",
+      "generation=5 重试在 homeAccessUniFFIBoundary 内 6782 ms 后返回 Network error: request timed out；导出最后一行是该失败。",
+      "裸连在该 Wi-Fi 上至少完成了一次主机串流授权；会话准备仍失败，授权路径同时呈现间歇性超时。"
+    ],
+    "highestConfidenceCause": {
+      "completedAttempt": {
+        "generation": 4,
+        "stage": "remote session startup before sessionReady",
+        "reason": "session.failed",
+        "createToTerminalMs": 54837,
+        "rootCauseSpecificity": "阶段与终态已确认，具体底层网络/唤醒/服务错误待补充"
+      },
+      "lastAttempt": {
+        "generation": 5,
+        "stage": "home access authentication preparation",
+        "reason": "request timed out",
+        "elapsedMs": 6782,
+        "rootCauseSpecificity": "授权请求超时已确认，故障认证步骤与端点类别待补充"
+      }
+    },
+    "codeFindings": [
+      {
+        "path": "iosapp/XBXRC/Features/Settings/MobilePreferences.swift",
+        "line": 23,
+        "finding": "移动偏好 powerOn 默认 false。"
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Settings/SettingsRootView.swift",
+        "line": 287,
+        "finding": "用户设置名称为“连接时唤醒主机”，说明要求主机启用远程功能。"
+      },
+      {
+        "path": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+        "line": 752,
+        "finding": "实际 powerOn 偏好透传至 Rust session 设置。"
+      },
+      {
+        "path": "crates/xbox-streaming/src/policy/session/compiler.rs",
+        "line": 265,
+        "finding": "wake_console 与 require_console_ready 由 home target 和 power_on 联合决定。"
+      },
+      {
+        "path": "crates/xbox-ios-bridge/src/streaming.rs",
+        "line": 693,
+        "finding": "session.start 包含控制面上下文准备与公共远程会话启动；Swift 的 sessionCreateStarted 包括这一整个阶段。"
+      },
+      {
+        "path": "crates/xbox-ios-bridge/src/streaming.rs",
+        "line": 1084,
+        "finding": "启动上下文包括跨区域主机发现。"
+      },
+      {
+        "path": "crates/xbox-streaming/src/session/discovery.rs",
+        "line": 29,
+        "finding": "主机发现单区域查询预算 5 秒，总预算 30 秒。"
+      },
+      {
+        "path": "crates/xbox-streaming/src/policy/session/compiler.rs",
+        "line": 17,
+        "finding": "启动与主机就绪默认预算均为 90 秒；本次 54.837 秒为观测耗时。"
+      },
+      {
+        "path": "crates/xbox-ios-bridge/src/streaming.rs",
+        "line": 1561,
+        "finding": "共享 SessionFlowError 被映射为带状态的 Http 或 Remote 错误。"
+      },
+      {
+        "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+        "line": 1950,
+        "finding": "fail 记录 session.failed 并将错误提示按 terminal reason 收口；只有 StreamingRuntimeError 使用其 localizedDescription。"
+      },
+      {
+        "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+        "line": 341,
+        "finding": "startup progress 轮询发送到 UI；当前路径的步骤和错误类别待补充到 trace。"
+      }
+    ],
+    "gaps": [
+      "generation=4 trace 留下通用 session.failed；实际失败于主机区域发现、待机唤醒、就绪等待或会话 API 的细分信息需要启动步骤与错误类别。",
+      "用户已确认唤醒设置开启；Rust实际收到的powerOn、电源事实和唤醒命令执行结果需要诊断记录。",
+      "generation=5 的外层 homeAccessBoundaryFailed、accessPrepareFailed、terminalSelected 与 failed 状态需要导出后续原始行。",
+      "应用标识为 0.1.0 / build 1 / debug；源码核对使用当前工作区，具体二进制源码身份需更细的 build 标识。"
+    ],
+    "healthCoverage": {
+      "network": {
+        "observed": "认证层存在成功、连接失败和超时；本轮主机列表刷新约 1.8 秒成功。",
+        "latestWindow": "Wi-Fi 裸连一次主机访问授权成功，远程会话准备失败，后续授权重试超时。",
+        "iceAndTransportHealth": "观测停在 sessionReady 前，ICE/DTLS 运行阶段指标待后续成功会话。"
+      },
+      "recoveryChain": {
+        "observedDimensionRows": 0,
+        "assessment": "ReferenceChain、RecoveryLedger、cleanAnchorCommitted、DisplayStable 需要媒体接入后观测。"
+      },
+      "mediaSupply": {
+        "observedDimensionRows": 0,
+        "assessment": "供给阶段尚待 sessionReady 与媒体接入。"
+      },
+      "steadySupply": {
+        "observedDimensionRows": 0,
+        "assessment": "连续播放窗口待建立。"
+      },
+      "submitPresentTail": {
+        "observedDimensionRows": 0,
+        "assessment": "submit/present 长尾需要渲染窗口。"
+      },
+      "frameSupplyDelta": {
+        "assessment": "帧供给 delta 需要媒体供给与展示锚点。"
+      }
+    },
+    "nextAction": {
+      "priority": "以唤醒已开启且PC可连接为前提，补齐iOS实际启动配置、阶段与具体错误并对照两端实现。",
+      "settings": "用户确认连接时唤醒主机已开启；Rust收到的本次值与唤醒执行结果待trace核验。",
+      "diagnostics": "记录powerOnRequested、控制会话构造、Rust启动进度和sessionFailure的脱敏错误分类。"
+    },
+    "validation": {
+      "baseGate": "PASS",
+      "baseFailures": {
+        "budgetViolations": 0,
+        "coverageViolations": 0,
+        "invalidRows": 0,
+        "noRows": 0,
+        "pairingViolations": 0,
+        "privacyViolations": 0,
+        "schemaViolations": 0,
+        "sequenceViolations": 0
+      },
+      "streamingGate": "FAIL",
+      "streamingCoreViolations": 26,
+      "streamingInterpretation": "串流成功合同缺少 sessionReady、完整 peer epoch 与 playing；前置失败阶段尚未创建 peer 时，peerClosed 与 cleanup 的适用性按实际资源生命周期判断。",
+      "writerMaxFileBytes": 8388608,
+      "writerMaxFiles": 4,
+      "physicalExportBytes": 81801,
+      "pressureNotices": 0,
+      "originalWriterRetention": "当前输入为聚合诊断导出，物理滚动文件保留数待原始目录核验。",
+      "businessSourceEdits": 0,
+      "temporaryArtifacts": 0
+    },
+    "userCorrection": {
+      "wakeOnConnect": true,
+      "pcCanConnect": true,
+      "source": "用户在本轮补充",
+      "diagnosticPriority": "核对iOS与PC的宿主认证和会话启动差异"
+    }
+  },
+  "baseAnalysis": {
+    "budget": {
+      "aggregateExports": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl"
+      ],
+      "pressureNotices": 0,
+      "rawFiles": [],
+      "retention": [],
+      "violations": []
+    },
+    "coverage": {
+      "flows": {
+        "library": {
+          "checks": [
+            {
+              "alternatives": [
+                "libraryPageAppeared"
+              ],
+              "label": "library page",
+              "observed": [
+                "libraryPageAppeared"
+              ]
+            },
+            {
+              "alternatives": [
+                "cacheRestoreStarted"
+              ],
+              "label": "cache restore start",
+              "observed": [
+                "cacheRestoreStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "cacheRestoreFailed",
+                "cacheRestoreHit",
+                "cacheRestoreMiss",
+                "cacheRestoreRejected",
+                "cacheRestoreSkipped"
+              ],
+              "label": "cache restore outcome",
+              "observed": [
+                "cacheRestoreHit"
+              ]
+            },
+            {
+              "alternatives": [
+                "catalogActivationSkipped",
+                "catalogRefreshStarted"
+              ],
+              "label": "catalog activation decision",
+              "observed": [
+                "catalogActivationSkipped",
+                "catalogRefreshStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "contentPresented",
+                "skeletonPresented"
+              ],
+              "label": "library presentation",
+              "observed": [
+                "contentPresented"
+              ]
+            }
+          ],
+          "required": true
+        },
+        "startup": {
+          "checks": [
+            {
+              "alternatives": [
+                "appLaunchStarted"
+              ],
+              "label": "app launch",
+              "observed": [
+                "appLaunchStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "authRestoreStarted"
+              ],
+              "label": "auth restore start",
+              "observed": [
+                "authRestoreStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "authRestoreFailed",
+                "authRestoreSucceeded"
+              ],
+              "label": "auth restore outcome",
+              "observed": [
+                "authRestoreSucceeded"
+              ]
+            }
+          ],
+          "required": true
+        }
+      },
+      "missingRequiredAnchors": []
+    },
+    "failures": {
+      "budgetViolations": 0,
+      "coverageViolations": 0,
+      "invalidRows": 0,
+      "noRows": 0,
+      "pairingViolations": 0,
+      "privacyViolations": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0
+    },
+    "gate": "PASS",
+    "pairing": {
+      "evaluatedStarts": 5,
+      "violations": []
+    },
+    "privacy": {
+      "violations": []
+    },
+    "schema": {
+      "invalidRows": [],
+      "truncatedTails": [],
+      "violations": []
+    },
+    "scope": {
+      "categories": {
+        "decision": 10,
+        "event": 63,
+        "snapshot": 9,
+        "state": 89
+      },
+      "dimensions": {
+        "core": 29,
+        "frontend": 24,
+        "lifecycle": 82,
+        "network": 36
+      },
+      "domains": {
+        "auth": 34,
+        "cloud-library": 33,
+        "ios-app": 36,
+        "ios-streaming": 30,
+        "library-ui": 24,
+        "settings": 2,
+        "trace": 1,
+        "xbox-data": 11
+      },
+      "events": {
+        "accessPrepareFailed": 2,
+        "accessPrepareStarted": 4,
+        "accessPrepareSucceeded": 1,
+        "accessReleased": 1,
+        "activityOverlayCommitted": 3,
+        "appLaunchStarted": 1,
+        "appearanceModeChanged": 2,
+        "authRestoreSessionFound": 1,
+        "authRestoreStarted": 1,
+        "authRestoreSucceeded": 1,
+        "authSessionFallbackSucceeded": 1,
+        "authSessionRenewFailed": 1,
+        "authSessionRenewStarted": 1,
+        "cacheDiskLoadSucceeded": 1,
+        "cacheRestoreHit": 1,
+        "cacheRestoreScopeChanged": 1,
+        "cacheRestoreStarted": 8,
+        "catalogActivationRefreshRequired": 1,
+        "catalogActivationSkipped": 6,
+        "catalogActivationStarted": 7,
+        "catalogRefreshFailed": 1,
+        "catalogRefreshStarted": 1,
+        "cloudAccessBoundaryFailed": 3,
+        "cloudAccessBoundaryStarted": 3,
+        "cloudAccessUniFFIBoundaryFailed": 3,
+        "cloudAccessUniFFIBoundaryStarted": 3,
+        "contentPresented": 9,
+        "dataSessionBound": 2,
+        "dataStoreCleared": 1,
+        "fileOpened": 1,
+        "homeAccessBoundaryFailed": 2,
+        "homeAccessBoundaryStarted": 4,
+        "homeAccessBoundarySucceeded": 1,
+        "homeAccessUniFFIBoundaryFailed": 3,
+        "homeAccessUniFFIBoundaryStarted": 4,
+        "homeAccessUniFFIBoundarySucceeded": 1,
+        "hostsRefreshStarted": 3,
+        "hostsRefreshSucceeded": 3,
+        "iceTasksCancelled": 1,
+        "libraryActivationCompleted": 7,
+        "libraryActivationRequested": 7,
+        "libraryClearStarted": 1,
+        "libraryContentCommitted": 1,
+        "libraryPageAppeared": 1,
+        "libraryRefreshStarted": 1,
+        "libraryStateChanged": 2,
+        "presentationDetached": 1,
+        "remoteSessionClosed": 1,
+        "scenePhaseChanged": 35,
+        "sessionCreateStarted": 1,
+        "sessionTerminal": 1,
+        "streamLaunchStarted": 4,
+        "streamingStateChanged": 10,
+        "terminalSelected": 3,
+        "uniffiBoundaryFailed": 1
+      },
+      "files": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl"
+      ],
+      "firstTsMs": 1795406381035,
+      "importance": {
+        "essential": 22,
+        "key": 149
+      },
+      "lastTsMs": 1795412768789,
+      "profiles": {
+        "production": 171
+      },
+      "rows": 171,
+      "sessions": [
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22"
+      ]
+    },
+    "sequence": {
+      "sessions": {
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22": {
+          "duplicates": 0,
+          "firstSeq": 1,
+          "lastSeq": 171,
+          "regressions": 0,
+          "rows": 171
+        }
+      },
+      "violations": []
+    }
+  },
+  "streamingCoreAnalysis": {
+    "budget": {
+      "aggregateExports": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl"
+      ],
+      "pressureNotices": 0,
+      "rawFiles": [],
+      "retention": [],
+      "violations": []
+    },
+    "failures": {
+      "budgetViolations": 0,
+      "invalidRows": 0,
+      "noRows": 0,
+      "privacyViolations": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0,
+      "streamingCoreViolations": 26
+    },
+    "gate": "FAIL",
+    "privacy": {
+      "violations": []
+    },
+    "schema": {
+      "invalidRows": [],
+      "truncatedTails": [],
+      "violations": []
+    },
+    "scope": {
+      "files": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl"
+      ],
+      "firstTsMs": 1795406381035,
+      "lastTsMs": 1795412768789,
+      "profiles": {
+        "production": 171
+      },
+      "rows": 171,
+      "sessions": [
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22"
+      ]
+    },
+    "sequence": {
+      "sessions": {
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22": {
+          "duplicates": 0,
+          "firstSeq": 1,
+          "lastSeq": 171,
+          "regressions": 0,
+          "rows": 171
+        }
+      },
+      "violations": []
+    },
+    "streamingCore": {
+      "attempts": [
+        {
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "cleanup": {
+            "accessReleased": [],
+            "iceTasksCancelled": [],
+            "peerClosed": [],
+            "remoteSessionClosed": []
+          },
+          "completePeerEpochs": [],
+          "contextViolations": [],
+          "generation": 5,
+          "passed": false,
+          "peerEpochs": [],
+          "playingStates": [],
+          "rows": 3,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "sessionReady": [],
+          "targets": [
+            "home"
+          ],
+          "terminal": [],
+          "toleratedReorders": [],
+          "violations": [
+            {
+              "anchor": "sessionReady",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "peerEpochs": [],
+              "type": "no-complete-peer-epoch"
+            },
+            {
+              "anchor": "streamingStateChanged:playing",
+              "expected": "at least 1",
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "terminalSelected",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "iceTasksCancelled",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "peerClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "remoteSessionClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "accessReleased",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            }
+          ]
+        },
+        {
+          "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+          "cleanup": {
+            "accessReleased": [
+              {
+                "event": "accessReleased",
+                "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+                "line": 165,
+                "seq": 165,
+                "tsMs": 1795412758990
+              }
+            ],
+            "iceTasksCancelled": [
+              {
+                "event": "iceTasksCancelled",
+                "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+                "line": 163,
+                "seq": 163,
+                "tsMs": 1795412758990
+              }
+            ],
+            "peerClosed": [],
+            "remoteSessionClosed": [
+              {
+                "event": "remoteSessionClosed",
+                "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+                "line": 164,
+                "seq": 164,
+                "tsMs": 1795412758990
+              }
+            ]
+          },
+          "completePeerEpochs": [],
+          "contextViolations": [],
+          "generation": 4,
+          "passed": false,
+          "peerEpochs": [],
+          "playingStates": [],
+          "rows": 13,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "sessionReady": [],
+          "targets": [
+            "home"
+          ],
+          "terminal": [
+            {
+              "event": "terminalSelected",
+              "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+              "line": 160,
+              "seq": 160,
+              "tsMs": 1795412758971
+            }
+          ],
+          "toleratedReorders": [],
+          "violations": [
+            {
+              "anchor": "sessionReady",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "peerEpochs": [],
+              "type": "no-complete-peer-epoch"
+            },
+            {
+              "anchor": "streamingStateChanged:playing",
+              "expected": "at least 1",
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "peerClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            }
+          ]
+        },
+        {
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "cleanup": {
+            "accessReleased": [],
+            "iceTasksCancelled": [],
+            "peerClosed": [],
+            "remoteSessionClosed": []
+          },
+          "completePeerEpochs": [],
+          "contextViolations": [],
+          "generation": 2,
+          "passed": false,
+          "peerEpochs": [],
+          "playingStates": [],
+          "rows": 7,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "sessionReady": [],
+          "targets": [
+            "home"
+          ],
+          "terminal": [
+            {
+              "event": "terminalSelected",
+              "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+              "line": 103,
+              "seq": 103,
+              "tsMs": 1795407483291
+            }
+          ],
+          "toleratedReorders": [],
+          "violations": [
+            {
+              "anchor": "sessionReady",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "peerEpochs": [],
+              "type": "no-complete-peer-epoch"
+            },
+            {
+              "anchor": "streamingStateChanged:playing",
+              "expected": "at least 1",
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "iceTasksCancelled",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "peerClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "remoteSessionClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "accessReleased",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            }
+          ]
+        },
+        {
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "cleanup": {
+            "accessReleased": [],
+            "iceTasksCancelled": [],
+            "peerClosed": [],
+            "remoteSessionClosed": []
+          },
+          "completePeerEpochs": [],
+          "contextViolations": [],
+          "generation": 1,
+          "passed": false,
+          "peerEpochs": [],
+          "playingStates": [],
+          "rows": 6,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "sessionReady": [],
+          "targets": [
+            "home"
+          ],
+          "terminal": [
+            {
+              "event": "terminalSelected",
+              "file": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-33399546-02B7-40A6-AAF9-BCFA84B28947.jsonl",
+              "line": 93,
+              "seq": 93,
+              "tsMs": 1795407478517
+            }
+          ],
+          "toleratedReorders": [],
+          "violations": [
+            {
+              "anchor": "sessionReady",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "peerEpochs": [],
+              "type": "no-complete-peer-epoch"
+            },
+            {
+              "anchor": "streamingStateChanged:playing",
+              "expected": "at least 1",
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "iceTasksCancelled",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "peerClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "remoteSessionClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "accessReleased",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            }
+          ]
+        }
+      ],
+      "contextViolations": [],
+      "gate": "FAIL",
+      "generationViolations": [],
+      "rows": 30,
+      "violations": [
+        {
+          "anchor": "sessionReady",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "generation": 5,
+          "peerEpochs": [],
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "no-complete-peer-epoch"
+        },
+        {
+          "anchor": "streamingStateChanged:playing",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": "at least 1",
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "terminalSelected",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "iceTasksCancelled",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "peerClosed",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "remoteSessionClosed",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "accessReleased",
+          "attemptId": "A074411B-C2EA-48B1-AD10-FDA3A21CF29A",
+          "expected": 1,
+          "generation": 5,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "sessionReady",
+          "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+          "expected": 1,
+          "generation": 4,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+          "generation": 4,
+          "peerEpochs": [],
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "no-complete-peer-epoch"
+        },
+        {
+          "anchor": "streamingStateChanged:playing",
+          "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+          "expected": "at least 1",
+          "generation": 4,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "peerClosed",
+          "attemptId": "A1FC94DA-D14F-4FF4-8E40-99BD0E3B925C",
+          "expected": 1,
+          "generation": 4,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "sessionReady",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": 1,
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "generation": 2,
+          "peerEpochs": [],
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "no-complete-peer-epoch"
+        },
+        {
+          "anchor": "streamingStateChanged:playing",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": "at least 1",
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "iceTasksCancelled",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": 1,
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "peerClosed",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": 1,
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "remoteSessionClosed",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": 1,
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "accessReleased",
+          "attemptId": "D16E839E-AF9B-4C6F-9938-0CB8702A5673",
+          "expected": 1,
+          "generation": 2,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "sessionReady",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "generation": 1,
+          "peerEpochs": [],
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "no-complete-peer-epoch"
+        },
+        {
+          "anchor": "streamingStateChanged:playing",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": "at least 1",
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "iceTasksCancelled",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "peerClosed",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "remoteSessionClosed",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "accessReleased",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        }
+      ]
+    }
+  }
+}

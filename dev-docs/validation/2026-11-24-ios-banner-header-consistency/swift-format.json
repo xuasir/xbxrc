@@ -1,0 +1,168 @@
+[
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "ranges": [
+      [
+        42,
+        42
+      ],
+      [
+        47,
+        86
+      ],
+      [
+        94,
+        94
+      ],
+      [
+        108,
+        108
+      ],
+      [
+        110,
+        110
+      ],
+      [
+        124,
+        124
+      ],
+      [
+        128,
+        129
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+    "ranges": [
+      [
+        497,
+        497
+      ],
+      [
+        506,
+        506
+      ],
+      [
+        632,
+        632
+      ],
+      [
+        641,
+        641
+      ],
+      [
+        650,
+        651
+      ],
+      [
+        661,
+        667
+      ],
+      [
+        678,
+        678
+      ],
+      [
+        683,
+        687
+      ],
+      [
+        691,
+        697
+      ],
+      [
+        705,
+        709
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+    "ranges": [
+      [
+        279,
+        279
+      ],
+      [
+        306,
+        311
+      ],
+      [
+        314,
+        330
+      ],
+      [
+        332,
+        333
+      ],
+      [
+        338,
+        338
+      ],
+      [
+        347,
+        378
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+    "ranges": [
+      [
+        34,
+        37
+      ],
+      [
+        39,
+        40
+      ],
+      [
+        57,
+        58
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "ranges": [
+      [
+        428,
+        428
+      ],
+      [
+        437,
+        444
+      ],
+      [
+        458,
+        464
+      ],
+      [
+        470,
+        474
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "ranges": [
+      [
+        880,
+        1080
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

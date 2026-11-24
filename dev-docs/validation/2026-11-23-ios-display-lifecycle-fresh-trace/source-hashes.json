@@ -1,0 +1,52 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "sha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "sha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "sha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/scripts/check-streaming-core-trace.py",
+    "sha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/scripts/tests/test_check_streaming_core_trace.py",
+    "sha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "sha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "sha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+    "matchesPreviousValidatedSource": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "sha256": "76a2e4e5b5838fbb11cbd8abc03f4b4b2776e5388be1bb4781130da5732a23fc",
+    "matchesPreviousValidatedSource": null
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+    "sha256": "9394cb272577617133470793566dd85d376acd86297d75e6bbba881f0e9c27c0",
+    "matchesPreviousValidatedSource": null
+  },
+  {
+    "path": ".agents/skills/analyze-ios-runtime-trace/scripts/analyze_ios_runtime_trace.py",
+    "sha256": "7a4f33faade5536d53167d6ae7c4c92966ddb1e5dc5d0b020cb4af7a7ccdf6f9",
+    "matchesPreviousValidatedSource": null
+  }
+]

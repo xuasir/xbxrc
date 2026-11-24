@@ -1,0 +1,54 @@
+   Compiling syn v2.0.117
+   Compiling bitflags v2.11.0
+   Compiling futures-task v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling memchr v2.8.0
+   Compiling futures-util v0.3.32
+   Compiling system-configuration v0.7.0
+   Compiling security-framework v3.7.0
+   Compiling serde_json v1.0.149
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling synstructure v0.13.2
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling tokio-macros v2.6.1
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling tokio v1.50.0
+   Compiling zerofrom v0.1.6
+   Compiling thiserror v2.0.18
+   Compiling yoke v0.8.1
+   Compiling serde v1.0.228
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling chrono v0.4.44
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.4
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling tower-http v0.6.8
+   Compiling h2 v0.4.13
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling hyper v1.8.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.21s
+     Running unittests src/lib.rs (target/ios-bindgen/debug/deps/xbox_webapi-e5361a5e4f4240c0)
+
+running 1 test
+test community_touch_api::tests::limits_source_paths_to_pinned_repository_files ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 76 filtered out; finished in 0.00s
+

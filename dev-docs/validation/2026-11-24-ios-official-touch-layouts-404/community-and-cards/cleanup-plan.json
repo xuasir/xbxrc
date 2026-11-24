@@ -1,0 +1,22 @@
+{
+  "paths": [
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r1",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r2",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r3",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r4",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r5",
+    "/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r3",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/.fingerprint/xbox-touch-layouts-377bba8bfa81765f",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community-smoke",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community-smoke.d",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f.community_smoke.150f0547114026eb-cgu.0.rcgu.o",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f.d"
+  ],
+  "retained": [
+    "最终截图/摘要/诊断/源码指纹和差异",
+    "用户 Downloads 原始诊断",
+    "共享 SDK 与 Rust 依赖缓存",
+    "已安装应用、登录与本机布局库"
+  ]
+}

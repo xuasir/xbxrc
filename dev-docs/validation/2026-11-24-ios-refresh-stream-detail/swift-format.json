@@ -1,0 +1,438 @@
+[
+  {
+    "file": "iosapp/XBXRC/App/PCPageUITestFixtures.swift",
+    "lines": [
+      [
+        293,
+        293
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift",
+    "lines": [
+      [
+        120,
+        120
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Achievements/AchievementsView.swift",
+    "lines": [
+      [
+        104,
+        104
+      ],
+      [
+        115,
+        115
+      ],
+      [
+        147,
+        147
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+    "lines": [
+      [
+        9,
+        9
+      ],
+      [
+        109,
+        109
+      ],
+      [
+        122,
+        124
+      ],
+      [
+        127,
+        140
+      ],
+      [
+        156,
+        156
+      ],
+      [
+        159,
+        163
+      ],
+      [
+        166,
+        175
+      ],
+      [
+        249,
+        249
+      ],
+      [
+        422,
+        442
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Hosts/HostListView.swift",
+    "lines": [
+      [
+        133,
+        133
+      ],
+      [
+        251,
+        251
+      ],
+      [
+        292,
+        292
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "lines": [
+      [
+        244,
+        244
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+    "lines": [
+      [
+        131,
+        131
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "lines": [
+      [
+        139,
+        139
+      ],
+      [
+        162,
+        162
+      ],
+      [
+        188,
+        188
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+    "lines": [
+      [
+        118,
+        118
+      ],
+      [
+        277,
+        277
+      ],
+      [
+        302,
+        302
+      ],
+      [
+        306,
+        324
+      ],
+      [
+        361,
+        361
+      ],
+      [
+        371,
+        387
+      ],
+      [
+        415,
+        422
+      ],
+      [
+        424,
+        424
+      ],
+      [
+        457,
+        457
+      ],
+      [
+        484,
+        485
+      ],
+      [
+        487,
+        493
+      ],
+      [
+        545,
+        545
+      ],
+      [
+        553,
+        561
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+    "lines": [
+      [
+        74,
+        74
+      ],
+      [
+        213,
+        213
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+    "lines": [
+      [
+        91,
+        91
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+    "lines": [
+      [
+        68,
+        68
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "lines": [
+      [
+        33,
+        33
+      ],
+      [
+        40,
+        40
+      ],
+      [
+        43,
+        43
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+    "lines": [
+      [
+        35,
+        40
+      ],
+      [
+        42,
+        42
+      ],
+      [
+        43,
+        45
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        64,
+        87
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "lines": [
+      [
+        243,
+        243
+      ],
+      [
+        257,
+        257
+      ],
+      [
+        265,
+        265
+      ],
+      [
+        272,
+        272
+      ],
+      [
+        531,
+        558
+      ],
+      [
+        738,
+        738
+      ],
+      [
+        746,
+        746
+      ],
+      [
+        754,
+        755
+      ],
+      [
+        761,
+        761
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift",
+    "lines": [
+      [
+        6,
+        6
+      ],
+      [
+        20,
+        20
+      ],
+      [
+        29,
+        30
+      ],
+      [
+        36,
+        36
+      ],
+      [
+        67,
+        67
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/PCDataParityTests.swift",
+    "lines": [
+      [
+        3,
+        4
+      ],
+      [
+        825,
+        971
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "lines": [
+      [
+        454,
+        460
+      ]
+    ],
+    "indent": 2,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/Components/SkeletonPulse.swift",
+    "lines": [
+      [
+        5,
+        5
+      ],
+      [
+        12,
+        12
+      ],
+      [
+        15,
+        16
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "lines": [
+      [
+        355,
+        360
+      ],
+      [
+        366,
+        366
+      ]
+    ],
+    "indent": 4,
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

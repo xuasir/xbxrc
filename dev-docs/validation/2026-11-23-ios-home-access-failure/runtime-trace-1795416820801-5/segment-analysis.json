@@ -1,0 +1,208 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 47468,
+        "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+        "maxFileBytes": 8388608,
+        "maxFiles": 4,
+        "profile": "production",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Downloads",
+        "files": 1,
+        "maxFiles": 4,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "coverage": {
+    "flows": {
+      "library": {
+        "checks": [
+          {
+            "alternatives": [
+              "libraryPageAppeared"
+            ],
+            "label": "library page",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "cacheRestoreStarted"
+            ],
+            "label": "cache restore start",
+            "observed": [
+              "cacheRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreFailed",
+              "cacheRestoreHit",
+              "cacheRestoreMiss",
+              "cacheRestoreRejected",
+              "cacheRestoreSkipped"
+            ],
+            "label": "cache restore outcome",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ],
+            "label": "catalog activation decision",
+            "observed": [
+              "catalogActivationSkipped"
+            ]
+          },
+          {
+            "alternatives": [
+              "contentPresented",
+              "skeletonPresented"
+            ],
+            "label": "library presentation",
+            "observed": [
+              "contentPresented"
+            ]
+          }
+        ],
+        "required": false
+      },
+      "startup": {
+        "checks": [
+          {
+            "alternatives": [
+              "appLaunchStarted"
+            ],
+            "label": "app launch",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "authRestoreStarted"
+            ],
+            "label": "auth restore start",
+            "observed": []
+          },
+          {
+            "alternatives": [
+              "authRestoreFailed",
+              "authRestoreSucceeded"
+            ],
+            "label": "auth restore outcome",
+            "observed": []
+          }
+        ],
+        "required": false
+      }
+    },
+    "missingRequiredAnchors": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "coverageViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "gate": "PASS",
+  "pairing": {
+    "evaluatedStarts": 3,
+    "violations": []
+  },
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "categories": {
+      "decision": 7,
+      "event": 24,
+      "snapshot": 2,
+      "state": 57
+    },
+    "dimensions": {
+      "core": 32,
+      "frontend": 5,
+      "lifecycle": 31,
+      "network": 17,
+      "presentation": 5
+    },
+    "domains": {
+      "auth": 15,
+      "cloud-library": 34,
+      "image": 5,
+      "ios-app": 4,
+      "ios-streaming": 25,
+      "library-ui": 5,
+      "trace": 2
+    },
+    "events": {
+      "accessPrepareFailed": 4,
+      "accessPrepareStarted": 3,
+      "cacheRestoreStarted": 2,
+      "catalogActivationSkipped": 2,
+      "catalogActivationStarted": 2,
+      "cloudAccessBoundaryFailed": 4,
+      "cloudAccessBoundaryStarted": 3,
+      "cloudAccessUniFFIBoundaryFailed": 4,
+      "cloudAccessUniFFIBoundaryStarted": 4,
+      "contentPresented": 1,
+      "exportRequested": 1,
+      "fileOpened": 1,
+      "imageCandidatesExhausted": 5,
+      "libraryActivationCompleted": 2,
+      "libraryActivationRequested": 2,
+      "metadataPageBoundaryFailed": 1,
+      "metadataPageCommitted": 26,
+      "metadataPageFailed": 1,
+      "scenePhaseChanged": 4,
+      "streamLaunchStarted": 3,
+      "streamingStateChanged": 11,
+      "terminalSelected": 4
+    },
+    "files": [
+      "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl"
+    ],
+    "firstTsMs": 1795416820800,
+    "importance": {
+      "essential": 17,
+      "key": 73
+    },
+    "lastTsMs": 1795417534096,
+    "profiles": {
+      "production": 90
+    },
+    "rows": 90,
+    "sessions": [
+      "32F9018F-186F-47DD-8FFD-D7FDCF482109"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "32F9018F-186F-47DD-8FFD-D7FDCF482109": {
+        "duplicates": 0,
+        "firstSeq": 41307,
+        "lastSeq": 41396,
+        "regressions": 0,
+        "rows": 90
+      }
+    },
+    "violations": []
+  }
+}

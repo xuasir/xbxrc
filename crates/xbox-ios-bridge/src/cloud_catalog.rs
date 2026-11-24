@@ -69,7 +69,11 @@ pub async fn fetch_cloud_catalog(
         market: market.clone(),
         language: language.clone(),
     };
-    let flow = XboxCloudCatalogFlow::new(context.host.clone(), context.bearer_token);
+    let flow = XboxCloudCatalogFlow::with_xcloud_api(crate::cloud_access::query_xcloud_api(
+        &access_handle,
+        &context,
+        None,
+    )?);
     let (overlay, popular, leaving) = tokio::join!(
         flow.load_overlay(&scope),
         discovery_ranks("e7590b22-e299-44db-ae22-25c61405454c", &scope),
@@ -212,7 +216,11 @@ pub async fn hydrate_cloud_catalog_page(
         market: normalize_locale_part(&market, "US"),
         language: normalize_locale_part(&language, "en-US"),
     };
-    let flow = XboxCloudCatalogFlow::new(context.host, context.bearer_token);
+    let flow = XboxCloudCatalogFlow::with_xcloud_api(crate::cloud_access::query_xcloud_api(
+        &access_handle,
+        &context,
+        None,
+    )?);
     let hydration = flow.hydrate_products(&scope, &product_ids).await;
     if hydration.failed_chunk_count > 0 {
         return Err(XboxBridgeError::Data(

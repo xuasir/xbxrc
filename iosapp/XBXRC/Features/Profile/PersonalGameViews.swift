@@ -115,7 +115,7 @@ struct GameHistoryView: View {
       sort = statistics ? .playtime : .recent
       await load(refresh: false)
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
   }
 
   private func load(refresh: Bool) async {
@@ -274,8 +274,10 @@ struct PersonalGameDetailView: View {
   @EnvironmentObject private var auth: AuthStore
   @EnvironmentObject private var data: XboxDataStore
   @EnvironmentObject private var streaming: StreamingFeatureStore
+  @EnvironmentObject private var cloud: CloudLibraryStore
   @EnvironmentObject private var settings: AppSettingsStore
   @Environment(\.appPageIsActive) private var isActive
+  @Environment(\.dynamicTypeSize) private var textSize
   @State private var section: PersonalGameSection
   @State private var descriptionExpanded = false
 
@@ -297,74 +299,131 @@ struct PersonalGameDetailView: View {
   private var timeState: XboxSingleDataState<Int> {
     data.playerPlaytimeStates[key] ?? XboxSingleDataState()
   }
-  private var game: GameSummary {
+  private var record: GameSummary {
     detailState.value ?? data.historyState(targetID: targetID).items.first {
       $0.titleID == initialGame.titleID
     } ?? initialGame
   }
+  private var productID: String? {
+    installedGame?.productID ?? initialGame.productID ?? record.productID
+  }
+  private var productState: XboxSingleDataState<CloudProductDetails> {
+    productID.map { cloud.productDetailState($0) } ?? XboxSingleDataState()
+  }
+  private var game: GameSummary {
+    guard let detail = productState.value else { return record }
+    // 商品文案与图片按目录配置取值，个人记录继续提供成就和游玩事实。
+    return GameSummary(
+      id: record.id, titleID: record.titleID,
+      name: detail.name.isEmpty ? record.name : detail.name,
+      artworkURL: detail.tileURL ?? detail.posterURL ?? record.artworkURL,
+      heroURL: detail.heroURL ?? record.heroURL,
+      lastPlayedAt: record.lastPlayedAt, playtimeMinutes: record.playtimeMinutes,
+      achievementProgress: record.achievementProgress,
+      description: detail.description.isEmpty ? record.description : detail.description,
+      productID: productID, scid: record.scid)
+  }
+  private var coverURL: URL? {
+    game.artworkURL ?? initialGame.artworkURL ?? installedGame?.artworkURL
+  }
+  private var backdropURL: URL? {
+    game.heroURL ?? initialGame.heroURL ?? coverURL
+  }
 
   var body: some View {
-    VStack(spacing: 0) {
-      AppTextTabs(
-        selection: $section, values: PersonalGameSection.allCases, title: { $0.title },
-        identifier: "personal-game-sections", buttonPrefix: "personal-game-section"
-      )
-      .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
-      Group {
-        switch section {
-        case .overview: overview
-        case .achievements: AchievementComparisonView(game: game, targetID: targetID)
-        case .album: XboxAlbumView(fixedTitleID: game.titleID)
-        case .statistics: statistics
+    GeometryReader { geometry in
+      VStack(spacing: 0) {
+        // 游戏身份区在所有内容分类上方保持稳定，短窗和辅助字号收起额外留白。
+        header(compact: geometry.size.height < 520 || textSize.isAccessibilitySize)
+          .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
+        AppTextTabs(
+          selection: $section, values: PersonalGameSection.allCases, title: { $0.title },
+          identifier: "personal-game-sections", buttonPrefix: "personal-game-section"
+        )
+        .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
+        Group {
+          switch section {
+          case .overview: overview
+          case .achievements: AchievementComparisonView(game: game, targetID: targetID)
+          case .album: XboxAlbumView(fixedTitleID: game.titleID)
+          case .statistics: statistics
+          }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .appPageTransition(value: section)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .appPageTransition(value: section)
     }
     .appThemeCanvas().appPageToolbar(
-      game.name, artwork: .game(game.artworkURL ?? installedGame?.artworkURL)
+      game.name, artwork: .game(backdropURL)
     )
     .appInformationTypography()
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        AppRefreshButton(
-          "刷新统计", isRefreshing: detailState.isRefreshing || timeState.isRefreshing
-        ) {
-          await refreshCurrentSection()
-        }
-      }.sharedBackgroundVisibility(.hidden)
-    }
-    .task(id: "\(auth.ownerGeneration):\(key):\(isActive)") {
+    .task(
+      id: "\(auth.ownerGeneration):\(key):\(cloud.productScopeID):\(productID ?? ""):\(isActive)"
+    ) {
       guard isActive else { return }
       await load(refresh: false)
     }
   }
 
+  private func header(compact: Bool) -> some View {
+    HStack(alignment: .bottom, spacing: 16) {
+      PersonalArtwork(url: coverURL, size: compact ? 56 : 96)
+      VStack(alignment: .leading, spacing: compact ? 4 : 8) {
+        HStack(alignment: .center, spacing: 12) {
+          Text(game.name).appFont(.hero, weight: .semibold)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("personal-game-name")
+          if let host {
+            HostStreamButton(host: host, size: 44) {
+              if let target = host.streamTargetID {
+                streaming.startHome(targetID: target) { startup in
+                  try await auth.prepareHomeAccess(startup: startup)
+                }
+              }
+            }
+            .accessibilityIdentifier("personal-game-start-stream")
+          }
+        }
+        if let progress = game.achievementProgress {
+          Text(
+            appLocalizedFormat(
+              "%lld%% 成就进度", locale: locale, progress.percentage)
+          ).appFont(.bodySmall)
+            .foregroundStyle(AppThemePalette.textSecondary)
+        }
+        Text(
+          XboxPresentation.playtime(
+            timeState.hasSnapshot && timeState.failure == nil
+              ? timeState.value : game.playtimeMinutes, locale: locale)
+        )
+        .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .frame(maxWidth: .infinity, minHeight: compact ? 0 : 160, alignment: .bottomLeading)
+    .padding(.horizontal, AppLayoutPolicy.pageInset)
+    .padding(.top, compact ? AppLayoutPolicy.groupSpacing : AppLayoutPolicy.pageInset)
+    .padding(.bottom, AppLayoutPolicy.groupSpacing)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("personal-game-header")
+  }
+
   private var overview: some View {
     AppInformationPage {
       Section {
-        HStack(spacing: 16) {
-          PersonalArtwork(url: game.artworkURL ?? installedGame?.artworkURL, size: 96)
-          VStack(alignment: .leading, spacing: 8) {
-            Text(game.name).appFont(.hero, weight: .semibold)
-            if let progress = game.achievementProgress {
-              Text(
-                appLocalizedFormat(
-                  "%lld%% 成就进度", locale: locale, progress.percentage)
-              ).appFont(.bodySmall)
-                .foregroundStyle(AppThemePalette.textSecondary)
-            }
-            Text(
-              XboxPresentation.playtime(
-                timeState.hasSnapshot && timeState.failure == nil
-                  ? timeState.value : game.playtimeMinutes, locale: locale)
-            )
-            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+        if let productID {
+          AppSectionRequestState(
+            title: "游戏资料", status: productState.requestStatus,
+            identifier: "personal-game-catalog"
+          ) {
+            await cloud.loadProductDetail(productID: productID, refresh: true)
           }
-        }.frame(minHeight: 160, alignment: .bottomLeading).padding(
-          .bottom, AppLayoutPolicy.itemSpacing)
+        }
         AppSectionRequestState(
-          title: "游戏资料", status: detailState.requestStatus, identifier: "personal-game"
+          title: "游戏记录", status: detailState.requestStatus, identifier: "personal-game"
         ) {
           await data.loadLibraryGame(
             titleID: initialGame.titleID, targetID: targetID, refresh: true)
@@ -397,7 +456,7 @@ struct PersonalGameDetailView: View {
         }
       }
       if let installedGame {
-        Section("安装信息") {
+        Section {
           AppMetricGrid {
             if let host { AppMetric(title: "主机", value: host.name) }
             AppMetric(
@@ -424,23 +483,16 @@ struct PersonalGameDetailView: View {
                     locale)))
             }
           }
-        }
-      }
-      if let host {
-        Section {
-          Button("串流此主机", systemImage: "play.fill") {
-            if let target = host.streamTargetID {
-              streaming.startHome(targetID: target) {
-                try await auth.prepareHomeAccess()
-              }
-            }
-          }.disabled(!host.canStartRemotePlay)
+        } header: {
+          Text("安装信息")
         } footer: {
-          Text("连接后进入主机界面，选择此游戏开始游玩。")
+          if host != nil {
+            Text("连接后进入主机界面，选择此游戏开始游玩。")
+          }
         }
       }
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
   }
 
   private var statistics: some View {
@@ -492,32 +544,7 @@ struct PersonalGameDetailView: View {
         AppInlineHint("时长来自 Xbox，部分游戏受隐私与服务覆盖范围影响。", identifier: "playtime-source")
       }
     }
-    .refreshable { await load(refresh: true) }
-  }
-
-  private func refreshCurrentSection() async {
-    switch section {
-    case .overview, .statistics: await load(refresh: true)
-    case .achievements:
-      async let mine: Void = data.loadPlayerAchievements(
-        titleID: game.titleID,
-        locale: PreferredGameLocaleNormalizer.normalize(settings.preferredGameLocale),
-        refresh: true
-      )
-      if let targetID {
-        await data.loadPlayerAchievements(
-          titleID: game.titleID, targetID: targetID,
-          locale: PreferredGameLocaleNormalizer.normalize(settings.preferredGameLocale),
-          refresh: true)
-      }
-      await mine
-    case .album:
-      await withTaskGroup(of: Void.self) { group in
-        for kind in XboxAlbumKind.allCases {
-          group.addTask { await data.loadAlbum(kind: kind, refresh: true) }
-        }
-      }
-    }
+    .appRefreshable { await load(refresh: true) }
   }
 
   private func load(refresh: Bool) async {
@@ -525,6 +552,12 @@ struct PersonalGameDetailView: View {
       titleID: initialGame.titleID, targetID: targetID, refresh: refresh)
     async let time: Void = data.loadPlayerPlaytime(
       titleID: initialGame.titleID, targetID: targetID, refresh: refresh)
-    _ = await (detail, time)
+    async let product: Void = loadProduct(refresh: refresh)
+    _ = await (detail, time, product)
+  }
+
+  private func loadProduct(refresh: Bool) async {
+    guard let productID else { return }
+    await cloud.loadProductDetail(productID: productID, refresh: refresh)
   }
 }

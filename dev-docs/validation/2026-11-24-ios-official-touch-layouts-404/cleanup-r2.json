@@ -1,0 +1,28 @@
+{
+  "removedRoot": "/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r2",
+  "removed": [
+    "DerivedData",
+    "device.xcresult",
+    "device-cache-failure.xcresult",
+    "SDK source copies",
+    "source backups",
+    "one-time logs and metadata"
+  ],
+  "processCompletionEvidence": {
+    "catalogTestsSession5640": "completed",
+    "bindingGenerationSession49703": "completed",
+    "deviceBuildSession35721": "completed"
+  },
+  "allocatedBytesBeforeRemoval": 469209088,
+  "freeBytesBefore": 47923200000,
+  "freeBytesAfter": 48332800000,
+  "freeBytesDelta": 409600000,
+  "removedRootExists": false,
+  "preserved": [
+    "repository validation evidence",
+    "shared Rust target/ios, target/ios-bindgen and target/browser caches",
+    "target/ios-section-states-packages SDK cache",
+    "user application data"
+  ],
+  "at": "2026-11-24 15:27:58 CST"
+}

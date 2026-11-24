@@ -1,0 +1,1161 @@
+[
+  {
+    "line": 1,
+    "seq": 1,
+    "time": "2026-11-23T17:47:09.166+08:00",
+    "sinceLaunchMs": 11,
+    "domain": "trace",
+    "event": "fileOpened",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "reason": "initial"
+    }
+  },
+  {
+    "line": 2,
+    "seq": 2,
+    "time": "2026-11-23T17:47:09.155+08:00",
+    "sinceLaunchMs": 0,
+    "domain": "ios-app",
+    "event": "appLaunchStarted",
+    "op": null,
+    "facts": {
+      "appVersion": "0.1.0",
+      "buildConfiguration": "debug",
+      "buildNumber": "1",
+      "platform": "ios",
+      "writerQueueDelayMs": 14.511500000953674
+    }
+  },
+  {
+    "line": 3,
+    "seq": 3,
+    "time": "2026-11-23T17:47:09.196+08:00",
+    "sinceLaunchMs": 41,
+    "domain": "auth",
+    "event": "authRestoreStarted",
+    "op": "O1",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.037583231925964355
+    }
+  },
+  {
+    "line": 4,
+    "seq": 4,
+    "time": "2026-11-23T17:47:09.196+08:00",
+    "sinceLaunchMs": 41,
+    "domain": "xbox-data",
+    "event": "dataStoreCleared",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "reason": "signedOut",
+      "writerQueueDelayMs": 0.19258344173431396
+    }
+  },
+  {
+    "line": 5,
+    "seq": 5,
+    "time": "2026-11-23T17:47:09.196+08:00",
+    "sinceLaunchMs": 41,
+    "domain": "cloud-library",
+    "event": "libraryClearStarted",
+    "op": "O2",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.07737505435943604
+    }
+  },
+  {
+    "line": 6,
+    "seq": 6,
+    "time": "2026-11-23T17:47:09.196+08:00",
+    "sinceLaunchMs": 41,
+    "domain": "cloud-library",
+    "event": "libraryStateChanged",
+    "op": "O2",
+    "facts": {
+      "phase": "idle",
+      "platform": "ios",
+      "writerQueueDelayMs": 0.12262499332427979
+    }
+  },
+  {
+    "line": 7,
+    "seq": 7,
+    "time": "2026-11-23T17:47:09.205+08:00",
+    "sinceLaunchMs": 50,
+    "domain": "auth",
+    "event": "authRestoreSessionFound",
+    "op": "O1",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.2608751058578491
+    }
+  },
+  {
+    "line": 8,
+    "seq": 8,
+    "time": "2026-11-23T17:47:09.205+08:00",
+    "sinceLaunchMs": 50,
+    "domain": "auth",
+    "event": "authSessionRenewStarted",
+    "op": "O3",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.4055832624435425
+    }
+  },
+  {
+    "line": 9,
+    "seq": 9,
+    "time": "2026-11-23T17:47:09.220+08:00",
+    "sinceLaunchMs": 65,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O4",
+    "facts": {
+      "platform": "ios",
+      "scope": "web",
+      "skipCoreRefresh": true,
+      "stage": "validCredentialsReused",
+      "writerQueueDelayMs": 0.22195839881896973
+    }
+  },
+  {
+    "line": 10,
+    "seq": 10,
+    "time": "2026-11-23T17:47:09.238+08:00",
+    "sinceLaunchMs": 83,
+    "domain": "xbox-data",
+    "event": "dataSessionBound",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.10099995136260986
+    }
+  },
+  {
+    "line": 11,
+    "seq": 11,
+    "time": "2026-11-23T17:47:09.285+08:00",
+    "sinceLaunchMs": 130,
+    "domain": "auth",
+    "event": "authSessionRenewSucceeded",
+    "op": "O3",
+    "facts": {
+      "appLevel": 0,
+      "elapsedMs": 80,
+      "platform": "ios",
+      "regionPreset": "unitedStates",
+      "writerQueueDelayMs": 0.10529160499572754
+    }
+  },
+  {
+    "line": 12,
+    "seq": 12,
+    "time": "2026-11-23T17:47:09.285+08:00",
+    "sinceLaunchMs": 130,
+    "domain": "auth",
+    "event": "authRestoreSucceeded",
+    "op": "O1",
+    "facts": {
+      "elapsedMs": 89,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.21183347702026367
+    }
+  },
+  {
+    "line": 13,
+    "seq": 13,
+    "time": "2026-11-23T17:47:09.285+08:00",
+    "sinceLaunchMs": 130,
+    "domain": "cloud-library",
+    "event": "cacheRestoreStarted",
+    "op": "O5",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.29362499713897705
+    }
+  },
+  {
+    "line": 14,
+    "seq": 14,
+    "time": "2026-11-23T17:47:09.285+08:00",
+    "sinceLaunchMs": 130,
+    "domain": "cloud-library",
+    "event": "cacheRestoreScopeChanged",
+    "op": "O5",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.39649999141693115
+    }
+  },
+  {
+    "line": 15,
+    "seq": 15,
+    "time": "2026-11-23T17:47:09.286+08:00",
+    "sinceLaunchMs": 131,
+    "domain": "xbox-data",
+    "event": "dataSessionBound",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.05016660690307617
+    }
+  },
+  {
+    "line": 16,
+    "seq": 16,
+    "time": "2026-11-23T17:47:09.287+08:00",
+    "sinceLaunchMs": 132,
+    "domain": "xbox-data",
+    "event": "hostsRefreshStarted",
+    "op": "O6",
+    "facts": {
+      "platform": "ios",
+      "reason": "initialActivation",
+      "writerQueueDelayMs": 0.3381667137145996
+    }
+  },
+  {
+    "line": 17,
+    "seq": 17,
+    "time": "2026-11-23T17:47:09.306+08:00",
+    "sinceLaunchMs": 151,
+    "domain": "cloud-library",
+    "event": "cacheDiskLoadSucceeded",
+    "op": "O7",
+    "facts": {
+      "elapsedMs": 20,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.19808340072631836
+    }
+  },
+  {
+    "line": 18,
+    "seq": 18,
+    "time": "2026-11-23T17:47:09.307+08:00",
+    "sinceLaunchMs": 152,
+    "domain": "cloud-library",
+    "event": "cacheRestoreHit",
+    "op": "O5",
+    "facts": {
+      "elapsedMs": 22,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.10262501239776611
+    }
+  },
+  {
+    "line": 19,
+    "seq": 19,
+    "time": "2026-11-23T17:47:09.340+08:00",
+    "sinceLaunchMs": 185,
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.15358340740203857
+    }
+  },
+  {
+    "line": 20,
+    "seq": 20,
+    "time": "2026-11-23T17:47:11.286+08:00",
+    "sinceLaunchMs": 2131,
+    "domain": "xbox-data",
+    "event": "hostsRefreshSucceeded",
+    "op": "O6",
+    "facts": {
+      "elapsedMs": 1998,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.17445838451385498
+    }
+  },
+  {
+    "line": 21,
+    "seq": 21,
+    "time": "2026-11-23T17:47:13.220+08:00",
+    "sinceLaunchMs": 4065,
+    "domain": "library-ui",
+    "event": "libraryActivationRequested",
+    "op": "O8",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.13337492942810059
+    }
+  },
+  {
+    "line": 22,
+    "seq": 22,
+    "time": "2026-11-23T17:47:13.220+08:00",
+    "sinceLaunchMs": 4065,
+    "domain": "cloud-library",
+    "event": "catalogActivationStarted",
+    "op": null,
+    "facts": {
+      "phase": "loaded",
+      "platform": "ios",
+      "writerQueueDelayMs": 0.3119584321975708
+    }
+  },
+  {
+    "line": 23,
+    "seq": 23,
+    "time": "2026-11-23T17:47:13.220+08:00",
+    "sinceLaunchMs": 4065,
+    "domain": "cloud-library",
+    "event": "cacheRestoreStarted",
+    "op": "O9",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.3976249694824219
+    }
+  },
+  {
+    "line": 24,
+    "seq": 24,
+    "time": "2026-11-23T17:47:13.220+08:00",
+    "sinceLaunchMs": 4065,
+    "domain": "cloud-library",
+    "event": "catalogActivationRefreshRequired",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "reason": "initialActivation",
+      "writerQueueDelayMs": 0.5262500047683716
+    }
+  },
+  {
+    "line": 25,
+    "seq": 25,
+    "time": "2026-11-23T17:47:13.220+08:00",
+    "sinceLaunchMs": 4065,
+    "domain": "library-ui",
+    "event": "libraryPageAppeared",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.562000036239624
+    }
+  },
+  {
+    "line": 26,
+    "seq": 26,
+    "time": "2026-11-23T17:47:13.245+08:00",
+    "sinceLaunchMs": 4090,
+    "domain": "library-ui",
+    "event": "contentPresented",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.12729167938232422
+    }
+  },
+  {
+    "line": 27,
+    "seq": 27,
+    "time": "2026-11-23T17:47:13.264+08:00",
+    "sinceLaunchMs": 4109,
+    "domain": "image",
+    "event": "imageCandidatesExhausted",
+    "op": "O10",
+    "facts": {
+      "platform": "ios",
+      "reason": "emptyCandidateSet",
+      "writerQueueDelayMs": 0.1469583511352539
+    }
+  },
+  {
+    "line": 28,
+    "seq": 28,
+    "time": "2026-11-23T17:47:13.289+08:00",
+    "sinceLaunchMs": 4134,
+    "domain": "cloud-library",
+    "event": "catalogRefreshStarted",
+    "op": "O11",
+    "facts": {
+      "platform": "ios",
+      "reason": "initialActivation",
+      "writerQueueDelayMs": 0.15320825576782227
+    }
+  },
+  {
+    "line": 29,
+    "seq": 29,
+    "time": "2026-11-23T17:47:13.323+08:00",
+    "sinceLaunchMs": 4168,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "op": "O12",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.056583404541015625
+    }
+  },
+  {
+    "line": 30,
+    "seq": 30,
+    "time": "2026-11-23T17:47:13.324+08:00",
+    "sinceLaunchMs": 4169,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.017958402633666992
+    }
+  },
+  {
+    "line": 31,
+    "seq": 31,
+    "time": "2026-11-23T17:47:13.324+08:00",
+    "sinceLaunchMs": 4169,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "skipCoreRefresh": false,
+      "stage": "refreshPolicy",
+      "writerQueueDelayMs": 0.12666678428649902
+    }
+  },
+  {
+    "line": 32,
+    "seq": 32,
+    "time": "2026-11-23T17:47:13.324+08:00",
+    "sinceLaunchMs": 4169,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreAndDownstreamRefreshStarted",
+      "writerQueueDelayMs": 0.21012496948242188
+    }
+  },
+  {
+    "line": 33,
+    "seq": 33,
+    "time": "2026-11-23T17:47:13.324+08:00",
+    "sinceLaunchMs": 4169,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.2947499752044678
+    }
+  },
+  {
+    "line": 34,
+    "seq": 34,
+    "time": "2026-11-23T17:47:13.940+08:00",
+    "sinceLaunchMs": 4785,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "elapsedMs": 615,
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestSucceeded",
+      "writerQueueDelayMs": 0.4499167203903198
+    }
+  },
+  {
+    "line": 35,
+    "seq": 35,
+    "time": "2026-11-23T17:47:13.946+08:00",
+    "sinceLaunchMs": 4791,
+    "domain": "auth",
+    "event": "credentialCheckpointCommitted",
+    "op": null,
+    "facts": {
+      "coreOnly": true,
+      "hasTokenCache": true,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.1622081995010376
+    }
+  },
+  {
+    "line": 36,
+    "seq": 36,
+    "time": "2026-11-23T17:47:13.947+08:00",
+    "sinceLaunchMs": 4792,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreCredentialsPersistCompleted",
+      "writerQueueDelayMs": 0.17941665649414062
+    }
+  },
+  {
+    "line": 37,
+    "seq": 37,
+    "time": "2026-11-23T17:47:13.947+08:00",
+    "sinceLaunchMs": 4792,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.4217500686645508
+    }
+  },
+  {
+    "line": 38,
+    "seq": 38,
+    "time": "2026-11-23T17:47:14.103+08:00",
+    "sinceLaunchMs": 4948,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "elapsedMs": 156,
+      "errorKind": "network",
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "retriable": true,
+      "stage": "authRequestFailed",
+      "writerQueueDelayMs": 0.29666662216186523
+    }
+  },
+  {
+    "line": 39,
+    "seq": 39,
+    "time": "2026-11-23T17:47:14.103+08:00",
+    "sinceLaunchMs": 4948,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O13",
+    "facts": {
+      "errorKind": "network",
+      "platform": "ios",
+      "retriable": true,
+      "stage": "refreshFailed",
+      "writerQueueDelayMs": 0.45654165744781494
+    }
+  },
+  {
+    "line": 40,
+    "seq": 40,
+    "time": "2026-11-23T17:47:14.104+08:00",
+    "sinceLaunchMs": 4949,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "op": "O13",
+    "facts": {
+      "elapsedMs": 779,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "platform": "ios",
+      "retriable": false,
+      "timeout": false,
+      "writerQueueDelayMs": 0.3012082576751709
+    }
+  },
+  {
+    "line": 41,
+    "seq": 41,
+    "time": "2026-11-23T17:47:14.105+08:00",
+    "sinceLaunchMs": 4950,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "op": "O12",
+    "facts": {
+      "elapsedMs": 781,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "platform": "ios",
+      "retriable": false,
+      "timeout": false,
+      "writerQueueDelayMs": 7.517833232879639
+    }
+  },
+  {
+    "line": 42,
+    "seq": 42,
+    "time": "2026-11-23T17:47:14.105+08:00",
+    "sinceLaunchMs": 4950,
+    "domain": "cloud-library",
+    "event": "catalogRefreshFailed",
+    "op": "O11",
+    "facts": {
+      "elapsedMs": 815,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "phase": "loaded",
+      "platform": "ios",
+      "retriable": false,
+      "timeout": false,
+      "writerQueueDelayMs": 7.530166745185852
+    }
+  },
+  {
+    "line": 43,
+    "seq": 43,
+    "time": "2026-11-23T17:47:14.105+08:00",
+    "sinceLaunchMs": 4950,
+    "domain": "cloud-library",
+    "event": "libraryStateChanged",
+    "op": "O11",
+    "facts": {
+      "elapsedMs": 816,
+      "phase": "loaded",
+      "platform": "ios",
+      "writerQueueDelayMs": 7.643416523933411
+    }
+  },
+  {
+    "line": 44,
+    "seq": 44,
+    "time": "2026-11-23T17:47:14.155+08:00",
+    "sinceLaunchMs": 5000,
+    "domain": "library-ui",
+    "event": "libraryActivationCompleted",
+    "op": "O8",
+    "facts": {
+      "phase": "loaded",
+      "platform": "ios",
+      "writerQueueDelayMs": 0.15087509155273438
+    }
+  },
+  {
+    "line": 45,
+    "seq": 45,
+    "time": "2026-11-23T17:47:21.128+08:00",
+    "sinceLaunchMs": 11973,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "op": "O14",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.04812502861022949
+    }
+  },
+  {
+    "line": 46,
+    "seq": 46,
+    "time": "2026-11-23T17:47:21.198+08:00",
+    "sinceLaunchMs": 12043,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.08979165554046631
+    }
+  },
+  {
+    "line": 47,
+    "seq": 47,
+    "time": "2026-11-23T17:47:21.198+08:00",
+    "sinceLaunchMs": 12043,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "skipCoreRefresh": false,
+      "stage": "refreshPolicy",
+      "writerQueueDelayMs": 0.13899993896484375
+    }
+  },
+  {
+    "line": 48,
+    "seq": 48,
+    "time": "2026-11-23T17:47:21.198+08:00",
+    "sinceLaunchMs": 12043,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreAndDownstreamRefreshStarted",
+      "writerQueueDelayMs": 0.3390001058578491
+    }
+  },
+  {
+    "line": 49,
+    "seq": 49,
+    "time": "2026-11-23T17:47:21.198+08:00",
+    "sinceLaunchMs": 12043,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.47925007343292236
+    }
+  },
+  {
+    "line": 50,
+    "seq": 50,
+    "time": "2026-11-23T17:47:21.763+08:00",
+    "sinceLaunchMs": 12608,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "elapsedMs": 564,
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestSucceeded",
+      "writerQueueDelayMs": 1.3742082118988037
+    }
+  },
+  {
+    "line": 51,
+    "seq": 51,
+    "time": "2026-11-23T17:47:21.776+08:00",
+    "sinceLaunchMs": 12621,
+    "domain": "auth",
+    "event": "credentialCheckpointCommitted",
+    "op": null,
+    "facts": {
+      "coreOnly": true,
+      "hasTokenCache": true,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.12233328819274902
+    }
+  },
+  {
+    "line": 52,
+    "seq": 52,
+    "time": "2026-11-23T17:47:21.776+08:00",
+    "sinceLaunchMs": 12621,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreCredentialsPersistCompleted",
+      "writerQueueDelayMs": 0.13812482357025146
+    }
+  },
+  {
+    "line": 53,
+    "seq": 53,
+    "time": "2026-11-23T17:47:21.776+08:00",
+    "sinceLaunchMs": 12621,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.23170828819274902
+    }
+  },
+  {
+    "line": 54,
+    "seq": 54,
+    "time": "2026-11-23T17:47:21.908+08:00",
+    "sinceLaunchMs": 12753,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "elapsedMs": 132,
+      "errorKind": "network",
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "retriable": true,
+      "stage": "authRequestFailed",
+      "writerQueueDelayMs": 0.23879170417785645
+    }
+  },
+  {
+    "line": 55,
+    "seq": 55,
+    "time": "2026-11-23T17:47:21.908+08:00",
+    "sinceLaunchMs": 12753,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O15",
+    "facts": {
+      "errorKind": "network",
+      "platform": "ios",
+      "retriable": true,
+      "stage": "refreshFailed",
+      "writerQueueDelayMs": 0.3799999952316284
+    }
+  },
+  {
+    "line": 56,
+    "seq": 56,
+    "time": "2026-11-23T17:47:21.908+08:00",
+    "sinceLaunchMs": 12753,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "op": "O15",
+    "facts": {
+      "elapsedMs": 709,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "platform": "ios",
+      "retriable": false,
+      "timeout": false,
+      "writerQueueDelayMs": 0.29916656017303467
+    }
+  },
+  {
+    "line": 57,
+    "seq": 57,
+    "time": "2026-11-23T17:47:21.908+08:00",
+    "sinceLaunchMs": 12753,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "op": "O14",
+    "facts": {
+      "elapsedMs": 780,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "platform": "ios",
+      "retriable": false,
+      "timeout": false,
+      "writerQueueDelayMs": 0.3489999771118164
+    }
+  },
+  {
+    "line": 58,
+    "seq": 58,
+    "time": "2026-11-23T17:48:33.340+08:00",
+    "sinceLaunchMs": 84185,
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.8322916030883789
+    }
+  },
+  {
+    "line": 59,
+    "seq": 59,
+    "time": "2026-11-23T17:48:33.402+08:00",
+    "sinceLaunchMs": 84247,
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.23850011825561523
+    }
+  },
+  {
+    "line": 60,
+    "seq": 60,
+    "time": "2026-11-23T17:49:29.039+08:00",
+    "sinceLaunchMs": 139884,
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 6.399624943733215
+    }
+  },
+  {
+    "line": 61,
+    "seq": 61,
+    "time": "2026-11-23T17:49:29.830+08:00",
+    "sinceLaunchMs": 140675,
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.7004166841506958
+    }
+  },
+  {
+    "line": 62,
+    "seq": 62,
+    "time": "2026-11-23T17:49:33.776+08:00",
+    "sinceLaunchMs": 144621,
+    "domain": "ios-streaming",
+    "event": "streamingStateChanged",
+    "op": null,
+    "facts": {
+      "platform": "ios",
+      "retryable": null,
+      "state": "preparingAccess",
+      "writerQueueDelayMs": 0.40074992179870605
+    }
+  },
+  {
+    "line": 63,
+    "seq": 63,
+    "time": "2026-11-23T17:49:33.776+08:00",
+    "sinceLaunchMs": 144621,
+    "domain": "ios-streaming",
+    "event": "streamLaunchStarted",
+    "op": "O16",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.6137499809265137
+    }
+  },
+  {
+    "line": 64,
+    "seq": 64,
+    "time": "2026-11-23T17:49:33.909+08:00",
+    "sinceLaunchMs": 144754,
+    "domain": "ios-streaming",
+    "event": "accessPrepareStarted",
+    "op": "O16",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.17420828342437744
+    }
+  },
+  {
+    "line": 65,
+    "seq": 65,
+    "time": "2026-11-23T17:49:33.909+08:00",
+    "sinceLaunchMs": 144754,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "op": "O17",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.4720417261123657
+    }
+  },
+  {
+    "line": 66,
+    "seq": 66,
+    "time": "2026-11-23T17:49:33.910+08:00",
+    "sinceLaunchMs": 144755,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "writerQueueDelayMs": 0.022124886512756348
+    }
+  },
+  {
+    "line": 67,
+    "seq": 67,
+    "time": "2026-11-23T17:49:33.911+08:00",
+    "sinceLaunchMs": 144756,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "skipCoreRefresh": false,
+      "stage": "refreshPolicy",
+      "writerQueueDelayMs": 0.37641656398773193
+    }
+  },
+  {
+    "line": 68,
+    "seq": 68,
+    "time": "2026-11-23T17:49:33.911+08:00",
+    "sinceLaunchMs": 144756,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreAndDownstreamRefreshStarted",
+      "writerQueueDelayMs": 0.47870826721191406
+    }
+  },
+  {
+    "line": 69,
+    "seq": 69,
+    "time": "2026-11-23T17:49:33.911+08:00",
+    "sinceLaunchMs": 144756,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.7006666660308838
+    }
+  },
+  {
+    "line": 70,
+    "seq": 70,
+    "time": "2026-11-23T17:49:35.163+08:00",
+    "sinceLaunchMs": 146008,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "elapsedMs": 1251,
+      "platform": "ios",
+      "requestStage": "oauthRefresh",
+      "stage": "authRequestSucceeded",
+      "writerQueueDelayMs": 0.5057916641235352
+    }
+  },
+  {
+    "line": 71,
+    "seq": 71,
+    "time": "2026-11-23T17:49:35.175+08:00",
+    "sinceLaunchMs": 146020,
+    "domain": "auth",
+    "event": "credentialCheckpointCommitted",
+    "op": null,
+    "facts": {
+      "coreOnly": true,
+      "hasTokenCache": true,
+      "platform": "ios",
+      "writerQueueDelayMs": 0.140541672706604
+    }
+  },
+  {
+    "line": 72,
+    "seq": 72,
+    "time": "2026-11-23T17:49:35.175+08:00",
+    "sinceLaunchMs": 146020,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "scope": "cloud",
+      "stage": "coreCredentialsPersistCompleted",
+      "writerQueueDelayMs": 0.20758318901062012
+    }
+  },
+  {
+    "line": 73,
+    "seq": 73,
+    "time": "2026-11-23T17:49:35.176+08:00",
+    "sinceLaunchMs": 146021,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.31187498569488525
+    }
+  },
+  {
+    "line": 74,
+    "seq": 74,
+    "time": "2026-11-23T17:49:40.016+08:00",
+    "sinceLaunchMs": 150861,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "elapsedMs": 4839,
+      "platform": "ios",
+      "requestStage": "deviceToken",
+      "stage": "authRequestSucceeded",
+      "writerQueueDelayMs": 0.39499998092651367
+    }
+  },
+  {
+    "line": 75,
+    "seq": 75,
+    "time": "2026-11-23T17:49:40.016+08:00",
+    "sinceLaunchMs": 150861,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "platform": "ios",
+      "requestStage": "sisuAuthorize",
+      "stage": "authRequestStarted",
+      "writerQueueDelayMs": 0.704291820526123
+    }
+  },
+  {
+    "line": 76,
+    "seq": 76,
+    "time": "2026-11-23T17:49:45.028+08:00",
+    "sinceLaunchMs": 155873,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "elapsedMs": 5011,
+      "errorKind": "timeout",
+      "platform": "ios",
+      "requestStage": "sisuAuthorize",
+      "retriable": true,
+      "stage": "authRequestFailed",
+      "writerQueueDelayMs": 0.9327501058578491
+    }
+  },
+  {
+    "line": 77,
+    "seq": 77,
+    "time": "2026-11-23T17:49:45.028+08:00",
+    "sinceLaunchMs": 155873,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "op": "O18",
+    "facts": {
+      "errorKind": "timeout",
+      "platform": "ios",
+      "retriable": true,
+      "stage": "refreshFailed",
+      "writerQueueDelayMs": 1.4497915506362915
+    }
+  },
+  {
+    "line": 78,
+    "seq": 78,
+    "time": "2026-11-23T17:49:45.029+08:00",
+    "sinceLaunchMs": 155874,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "op": "O18",
+    "facts": {
+      "elapsedMs": 11117,
+      "errorCode": 0,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "platform": "ios",
+      "retriable": true,
+      "timeout": true,
+      "writerQueueDelayMs": 0.8047916889190674
+    }
+  }
+]

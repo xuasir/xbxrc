@@ -1,0 +1,52 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName" : "iPhone 18 Pro",
+        "modelName" : "iPhone 18 Pro",
+        "osBuildNumber" : "24A434",
+        "osVersion" : "27.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 1,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.0",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1795496110.862,
+  "passedTests" : 1,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795495772.245,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertNotEqual failed: (\"740 bytes\") is equal to (\"740 bytes\") - 进入游戏后标题栏应使用游戏背景",
+      "targetName" : "XBXRCTests",
+      "testIdentifier" : 1,
+      "testIdentifierString" : "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedBannerHeaderSmoke",
+      "testName" : "testScopedBannerHeaderSmoke()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 2
+}

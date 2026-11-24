@@ -1,0 +1,58 @@
+[
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "swiftParse",
+    "file": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "sessionBoundary",
+    "exitCode": 0,
+    "output": "streaming session boundary check passed\n"
+  },
+  {
+    "check": "diffCheck",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "check": "preserveIndex",
+    "exitCode": 0,
+    "sha256": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146"
+  },
+  {
+    "check": "frontendLintFix",
+    "exitCode": 0,
+    "log": "frontend-lint-fix.log"
+  }
+]

@@ -1,0 +1,557 @@
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift
+@@ -10,8 +10,8 @@
+     @EnvironmentObject private var auth: AuthStore
+     @EnvironmentObject private var library: SavedTouchLayoutsStore
+     @EnvironmentObject private var settings: AppSettingsStore
+-    @State private var input = TouchInputAccumulator()
+     @State private var prepared: PreparedTouchLayout?
++    @State private var orientation: TouchLayoutOrientation = .portrait
+     @State private var previewError: SectionRequestFailure?
+     @State private var saveError: String?
+     @State private var saving = false
+@@ -20,83 +20,86 @@
+     private var canSave: Bool { prepared?.layout.report.isSupported == true }
+ 
+     var body: some View {
++        Group {
++            if let prepared {
++                TouchLayoutWorkspace(
++                    title: "布局预览", saveIdentifier: "official-touch-preview-save",
++                    onSave: saveAndClose, orientation: $orientation,
++                    appearance: .init(
++                        opacity: settings.mobile.touchOpacity, scale: settings.mobile.touchScale),
++                    configuration: .init(identity: prepared.id, scale: settings.mobile.touchScale),
++                    preparedLayout: prepared, onBack: saveAndClose,
++                    backIdentifier: "official-touch-preview-close",
++                    backLabel: canSave ? "保存并退出" : "退出预览", saving: saving,
++                    saveDisabled: !canSave || library.isSaving,
++                    backDisabled: canSave && library.isSaving
++                ) {
++                    LabeledContent("游戏") { Text(verbatim: gameName) }
++                    LabeledContent("布局") { Text(verbatim: choice.name) }
++                    LabeledContent("版本") { Text(verbatim: bundle.version) }
++                    if let author = prepared.layout.author, !author.isEmpty {
++                        Text(verbatim: appLocalizedFormat("作者 %@", locale: locale, author))
++                            .appFont(.caption)
++                    }
++                    Text("触摸按键体验布局").appFont(.caption)
++                    if !canSave {
++                        Text("布局等待适配").appFont(.bodySmall)
++                        ForEach(
++                            prepared.layout.report.issues.filter { $0.severity == .unsupported }
++                        ) {
++                            Text(verbatim: $0.message).appFont(.caption)
++                        }
++                    }
++                }
++            } else {
++                loadingPreview
++            }
++        }
++        .environment(\.colorScheme, .dark).preferredColorScheme(.dark)
++        .interactiveDismissDisabled()
++        .task(id: previewRevision) { await preparePreview() }
++        .onChange(of: auth.ownerGeneration) { _, _ in
++            saveTask?.cancel()
++            dismiss()
++        }
++        .onDisappear { saveTask?.cancel() }
++        .alert(
++            "保存布局失败",
++            isPresented: Binding(
++                get: { saveError != nil }, set: { if !$0 { saveError = nil } }
++            )
++        ) {
++            Button("重试", action: saveAndClose)
++            Button("完成", role: .cancel) { saveError = nil }
++        } message: {
++            Text(verbatim: saveError ?? "")
++        }
++    }
++
++    private var loadingPreview: some View {
+         ZStack(alignment: .topLeading) {
+-            GeometryReader { geometry in
+-                let frame = StreamingTouchViewportPolicy.frame(in: geometry.size)
+-                Color(white: 0.06)
+-                if let prepared {
+-                    TouchLayoutSurface(
+-                        input: input, opacity: settings.mobile.touchOpacity,
+-                        assets: prepared.assets, capturesEmptySpace: false,
+-                        configuration: .init(
+-                            identity: prepared.id, scale: settings.mobile.touchScale)
+-                    )
+-                    .frame(width: frame.width, height: frame.height)
+-                    .position(x: frame.midX, y: frame.midY)
+-                    .accessibilityIdentifier("official-touch-full-preview")
+-                } else if let previewError {
++            Color(white: 0.06).ignoresSafeArea()
++            Group {
++                if let previewError {
+                     AppSectionRequestState(
+                         title: "布局预览",
+                         status: SectionRequestStatus(phase: .failed, failure: previewError),
+                         identifier: "official-touch-preview"
+                     ) { previewRevision += 1 }
+-                    .padding(24).frame(width: geometry.size.width, height: geometry.size.height)
+                 } else {
+                     ProgressView("正在准备布局预览")
+-                        .frame(width: geometry.size.width, height: geometry.size.height)
+                 }
+-            }.ignoresSafeArea()
+-            previewToolbar
++            }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
++            Button {
++                dismiss()
++            } label: {
++                AppIconView(.chevron, size: 18).rotationEffect(.degrees(180))
++                    .frame(width: 44, height: 44)
++            }.buttonStyle(.plain).padding(16).accessibilityLabel("退出预览")
++                .accessibilityIdentifier("official-touch-preview-close")
+         }
+-        .environment(\.colorScheme, .dark).preferredColorScheme(.dark)
+-        .statusBarHidden(true).interactiveDismissDisabled()
+-        .task(id: previewRevision) { await preparePreview() }
+-        .onChange(of: auth.ownerGeneration) { _, _ in
+-            saveTask?.cancel()
+-            dismiss()
+-        }
+-        .onDisappear {
+-            saveTask?.cancel()
+-            input.cancelAll(reason: "officialPreviewClosed")
+-        }
+-    }
+-
+-    private var previewToolbar: some View {
+-        HStack(alignment: .top, spacing: 12) {
+-            Button(action: saveAndClose) {
+-                HStack(spacing: 8) {
+-                    if saving { ProgressView() } else { Image(systemName: "xmark") }
+-                    Text(saving ? "正在保存布局" : canSave ? "保存并退出" : "退出预览")
+-                }
+-            }
+-            .frame(minWidth: 44, minHeight: 44)
+-            .disabled(saving || (canSave && library.isSaving))
+-            .accessibilityIdentifier("official-touch-preview-close")
+-            VStack(alignment: .leading, spacing: 4) {
+-                Text(verbatim: gameName).font(.headline)
+-                Text(verbatim: choice.name).font(.caption)
+-                if let author = prepared?.layout.author, !author.isEmpty {
+-                    Text(verbatim: appLocalizedFormat("作者 %@", locale: locale, author))
+-                        .font(.caption)
+-                }
+-                Text("旋转设备或调整窗口以切换方向")
+-                    .font(.caption).foregroundStyle(.white.opacity(0.7))
+-                if let prepared, !prepared.layout.report.isSupported {
+-                    Text("布局等待适配").font(.caption)
+-                    ForEach(prepared.layout.report.issues.filter { $0.severity == .unsupported }) {
+-                        Text(verbatim: $0.message).font(.caption)
+-                    }
+-                }
+-                if let saveError {
+-                    Text(verbatim: saveError).font(.caption)
+-                        .accessibilityIdentifier("official-touch-save-error")
+-                }
+-            }.padding(.vertical, 8)
+-            Spacer(minLength: 0)
+-        }
+-        .foregroundStyle(.white).padding(12)
+-        .appSurface(radius: 14, prominent: true, forceDark: true)
+-        .padding(12)
++        .appResponsiveTypography().foregroundStyle(AppThemePalette.textPrimary)
++        .tint(AppThemePalette.brand)
+     }
+ 
+     private func preparePreview() async {
+@@ -110,7 +113,6 @@
+             let result = try await PreparedTouchLayout.prepare(snapshot)
+             try Task.checkCancellation()
+             guard ownerGeneration == auth.ownerGeneration else { return }
+-            input.load(result.layout)
+             prepared = result
+         } catch {
+             guard !Task.isCancelled, !SectionRequestFailure.isCancellation(error) else { return }
+@@ -127,7 +129,6 @@
+         // 保存成功后退出，失败时保留预览并允许再次保存。
+         saving = true
+         saveError = nil
+-        input.cancelAll(reason: "officialPreviewSaving")
+         saveTask = Task { @MainActor in
+             defer { saving = false }
+             do {
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -206,43 +206,52 @@
+     @State private var errorMessage: String?
+     @State private var saveTask: Task<Void, Never>?
+     @State private var previewContext: GameTouchLayoutContext?
++    @State private var saveButtonWidth: CGFloat = 110
+     private var saved: XboxSavedTouchLayout? { context.saved(in: library.layouts) }
+     var body: some View {
+-        VStack(alignment: .leading, spacing: 10) {
++        VStack(alignment: .leading, spacing: 8) {
+             ZStack(alignment: .bottomTrailing) {
+                 Button {
+                     previewContext = context
+                 } label: {
+-                    VStack(alignment: .leading, spacing: 8) {
++                    VStack(alignment: .leading, spacing: 4) {
+                         HStack(alignment: .firstTextBaseline, spacing: 8) {
+                             Text(verbatim: context.choice.name).appFont(.body, weight: .semibold)
++                                .lineLimit(1)
+                             if context.choice.isDefault {
+                                 Text("默认布局").appFont(.caption).foregroundStyle(
+-                                    AppThemePalette.brand)
++                                    AppThemePalette.brand
++                                )
++                                .fixedSize()
+                             }
+                             Spacer(minLength: 8)
+-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(
+-                                AppThemePalette.textSecondary
++                            Image(systemName: "chevron.right").font(.caption)
++                                .foregroundStyle(AppThemePalette.textSecondary)
++                                .accessibilityIdentifier("game-touch-arrow-\(context.id)")
++                        }
++                        VStack(alignment: .leading, spacing: 4) {
++                            GameTouchSourceVersion(
++                                descriptor: context.descriptor, version: context.bundle.version)
++                            Text(
++                                saved == nil
++                                    ? "尚未保存"
++                                    : saved?.bundleVersion == context.bundle.version
++                                        ? "已保存到本机" : "有新版本可更新"
+                             )
+-                            .accessibilityIdentifier("game-touch-arrow-\(context.id)")
++                            .appFont(.caption)
++                            .foregroundStyle(
++                                saved == nil ? AppThemePalette.textSecondary : AppThemePalette.brand
++                            )
++                            .accessibilityIdentifier("game-touch-saved-\(context.id)")
+                         }
+-                        GameTouchSourceVersion(
+-                            descriptor: context.descriptor, version: context.bundle.version)
+-                        Text(
+-                            saved == nil
+-                                ? "尚未保存"
+-                                : saved?.bundleVersion == context.bundle.version
+-                                    ? "已保存到本机" : "有新版本可更新"
+-                        )
+-                        .appFont(.caption).foregroundStyle(
+-                            saved == nil ? AppThemePalette.textSecondary : AppThemePalette.brand
+-                        )
+-                        .accessibilityIdentifier("game-touch-saved-\(context.id)")
+-                    }.padding(.bottom, 52)
+-                        .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+-                        .contentShape(Rectangle())
+-                }.buttonStyle(.plain).disabled(saving).accessibilityIdentifier(
+-                    "game-touch-preview-\(context.id)")
++                        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
++                        .padding(.trailing, saveButtonWidth + 12)
++                    }
++                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
++                    .contentShape(Rectangle())
++                }
++                .buttonStyle(.plain).disabled(saving)
++                .accessibilityIdentifier("game-touch-preview-\(context.id)")
+                 Button(action: saveLayout) {
+                     if saving {
+                         ProgressView()
+@@ -252,11 +261,18 @@
+                                 ? "保存到本机"
+                                 : saved?.bundleVersion == context.bundle.version ? "重新保存" : "更新布局")
+                     }
+-                }.buttonStyle(.bordered).tint(AppThemePalette.brand).frame(minHeight: 44)
+-                    .disabled(
+-                        saving || library.isSaving || unsupported || !context.choice.issues.isEmpty
+-                    )
+-                    .accessibilityIdentifier("game-touch-save-\(context.id)")
++                }
++                .buttonStyle(AppContentCapsuleButtonStyle()).frame(minHeight: 44)
++                .fixedSize(horizontal: true, vertical: false)
++                .onGeometryChange(for: CGFloat.self) {
++                    $0.size.width
++                } action: {
++                    saveButtonWidth = $0
++                }
++                .disabled(
++                    saving || library.isSaving || unsupported || !context.choice.issues.isEmpty
++                )
++                .accessibilityIdentifier("game-touch-save-\(context.id)")
+             }
+             if unsupported || !context.choice.issues.isEmpty {
+                 Text("布局等待适配").appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+@@ -265,7 +281,7 @@
+                 Text(verbatim: errorMessage).appFont(.caption).foregroundStyle(
+                     AppThemePalette.textSecondary)
+             }
+-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).appSurface(
++        }.padding(12).frame(maxWidth: .infinity, alignment: .leading).appSurface(
+             radius: AppLayoutPolicy.cardRadius
+         )
+         .accessibilityElement(children: .contain).accessibilityIdentifier(
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+@@ -153,7 +153,7 @@
+ }
+ 
+ /// 画布占满实际窗口，工具浮在上方；收起设置后直接体验串流中的按键尺寸。
+-private struct TouchLayoutWorkspace<SettingsContent: View>: View {
++struct TouchLayoutWorkspace<SettingsContent: View>: View {
+     @Environment(\.dismiss) private var dismiss
+     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+     let title: String
+@@ -163,6 +163,13 @@
+     let appearance: TouchLayoutAppearance
+     let configuration: TouchLayoutConfiguration
+     var onMove: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)? = nil
++    var preparedLayout: PreparedTouchLayout? = nil
++    var onBack: (() -> Void)? = nil
++    var backIdentifier = "touch-workspace-back"
++    var backLabel = "返回"
++    var saving = false
++    var saveDisabled = false
++    var backDisabled = false
+     @ViewBuilder let settingsContent: () -> SettingsContent
+     @State private var showsSettings = false
+     @State private var settingsHeight: CGFloat = 280
+@@ -177,9 +184,11 @@
+             ZStack(alignment: .top) {
+                 TouchLayoutCanvas(
+                     orientation: $orientation, appearance: appearance,
+-                    configuration: configuration, settingsPresented: showsSettings, onMove: onMove
++                    configuration: configuration, settingsPresented: showsSettings || saving,
++                    onMove: onMove, preparedLayout: preparedLayout
+                 )
+                 .ignoresSafeArea()
++                .allowsHitTesting(!saving)
+                 VStack(spacing: 12) {
+                     VStack(spacing: 12) {
+                         workspaceTools
+@@ -268,19 +277,23 @@
+ 
+     private var backButton: some View {
+         Button {
+-            dismiss()
++            if let onBack { onBack() } else { dismiss() }
+         } label: {
+             AppIconView(.chevron, size: 18).rotationEffect(.degrees(180))
+                 .frame(width: 44, height: 44)
+         }
+-        .buttonStyle(.plain).accessibilityLabel("返回")
+-        .accessibilityIdentifier("touch-workspace-back")
++        .buttonStyle(.plain).disabled(saving || backDisabled)
++        .accessibilityLabel(Text(LocalizedStringKey(backLabel)))
++        .accessibilityIdentifier(backIdentifier)
+     }
+ 
+     private var saveButton: some View {
+-        Button("保存", action: onSave)
+-            .buttonStyle(AppContentCapsuleButtonStyle())
+-            .accessibilityIdentifier(saveIdentifier)
++        Button(action: onSave) {
++            if saving { ProgressView() } else { Text("保存") }
++        }
++        .buttonStyle(AppContentCapsuleButtonStyle())
++        .disabled(saving || saveDisabled)
++        .accessibilityIdentifier(saveIdentifier)
+     }
+ 
+     private var orientationControl: some View {
+@@ -316,6 +329,7 @@
+     let configuration: TouchLayoutConfiguration
+     let settingsPresented: Bool
+     var onMove: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)? = nil
++    var preparedLayout: PreparedTouchLayout? = nil
+     @State private var input = TouchInputAccumulator()
+     @State private var loadError: String?
+ 
+@@ -336,11 +350,15 @@
+                 }
+                 TouchLayoutSurface(
+                     input: input, opacity: appearance.opacity,
++                    assets: preparedLayout?.assets ?? .empty,
+                     configuration: configuration, onMoveControl: onMove
+                 )
+                 .frame(width: frame.width, height: frame.height)
+                 .position(x: frame.midX, y: frame.midY)
+-                .accessibilityIdentifier("touch-layout-preview")
++                .accessibilityIdentifier(
++                    preparedLayout == nil ? "touch-layout-preview" : "official-touch-full-preview"
++                )
++                .accessibilityValue(actualOrientation.rawValue)
+                 if let loadError { Text(verbatim: loadError).foregroundStyle(.white).padding() }
+             }
+         }
+@@ -350,7 +368,7 @@
+             orientation = $0
+         }
+         .onAppear {
+-            do { input.load(try TouchLayoutCatalog.standard()) } catch {
++            do { input.load(try preparedLayout?.layout ?? TouchLayoutCatalog.standard()) } catch {
+                 loadError = error.localizedDescription
+             }
+         }
+--- a/iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift
++++ b/iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift
+@@ -456,3 +456,16 @@
+         return result.games.filter { $0[keyPath: key] != nil }.sorted { ($0[keyPath: key] ?? 0) < ($1[keyPath: key] ?? 0) }.map(\.productID)
+     }
+ }
++
++// 旧调用保留简洁构造，新增诊断字段通过正式生成绑定按需传入。
++extension XboxQueryFailure {
++    init(
++        kind: XboxQueryFailureKind, statusCode: UInt16?, retriable: Bool,
++        retryAfterSeconds: UInt64?
++    ) {
++        self.init(
++            kind: kind, statusCode: statusCode, retriable: retriable,
++            retryAfterSeconds: retryAfterSeconds, networkErrorKind: nil,
++            serviceCode: nil, protocolErrorCode: nil)
++    }
++}
+--- a/iosapp/XBXRC/Resources/Localizable.xcstrings
++++ b/iosapp/XBXRC/Resources/Localizable.xcstrings
+@@ -1,6 +1,74 @@
+ {
+   "sourceLanguage" : "zh-Hans",
+   "strings" : {
++    "正在下载媒体" : {
++      "extractionState": "manual",
++      "localizations": {
++        "en": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "Downloading media"
++          }
++        },
++        "zh-Hans": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "正在下载媒体"
++          }
++        }
++      }
++    },
++    "正在更新媒体链接" : {
++      "extractionState": "manual",
++      "localizations": {
++        "en": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "Updating media link"
++          }
++        },
++        "zh-Hans": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "正在更新媒体链接"
++          }
++        }
++      }
++    },
++    "取消下载" : {
++      "extractionState": "manual",
++      "localizations": {
++        "en": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "Cancel download"
++          }
++        },
++        "zh-Hans": {
++          "stringUnit": {
++            "state": "translated",
++            "value": "取消下载"
++          }
++        }
++      }
++    },
++    "保存布局失败" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Could not save layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "保存布局失败"
++          }
++        }
++      }
++    },
+     "保存并退出" : {
+       "extractionState" : "manual",
+       "localizations" : {
+--- a/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+@@ -33,19 +33,25 @@
+     let saveButton = app.buttons["game-touch-save-" + prefix + "default"]
+     XCTAssertGreaterThan(saveButton.frame.midY, previewEntry.frame.midY)
+     XCTAssertGreaterThan(saveButton.frame.midX, previewEntry.frame.midX)
++    let card = app.descendants(matching: .any)["game-touch-card-" + prefix + "default"].firstMatch
++    XCTAssertLessThanOrEqual(card.frame.height, 96)
++    XCTAssertGreaterThanOrEqual(saveButton.frame.height, 44)
+     save(app, "community-touch-layout-cards")
+     previewEntry.tap()
+     XCTAssertTrue(
+       app.descendants(matching: .any)["official-touch-full-preview"].firstMatch.waitForExistence(
+         timeout: 8))
++    waitForPreviewOrientation(app, orientation: "portrait")
+     save(app, "community-touch-preview-portrait")
+     XCUIDevice.shared.orientation = .landscapeLeft
+     waitForLandscape(app)
++    waitForPreviewOrientation(app, orientation: "landscape")
+     save(app, "community-touch-preview-landscape")
+     XCUIDevice.shared.orientation = .portrait
+     let portrait = XCTNSPredicateExpectation(
+       predicate: NSPredicate { _, _ in app.frame.height > app.frame.width }, object: nil)
+     XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 5), .completed)
++    waitForPreviewOrientation(app, orientation: "portrait")
+     let close = app.buttons["official-touch-preview-close"]
+     XCTAssertTrue(close.label.contains("保存并退出"))
+     close.tap()
+@@ -135,6 +141,7 @@
+     waitSaved(app.buttons["game-touch-preview-fixture-1:default"])
+     save(app, "official-touch-saved-default")
+     app.buttons["game-touch-preview-fixture-1:unsupported"].tap()
++    app.buttons["touch-workspace-settings"].tap()
+     XCTAssertTrue(app.staticTexts["布局等待适配"].waitForExistence(timeout: 5))
+     XCTAssertTrue(app.buttons["official-touch-preview-close"].label.contains("退出预览"))
+     save(app, "official-touch-unsupported")
+@@ -304,6 +311,19 @@
+     XCTAssertTrue(element.isHittable)
+   }
+ 
++  private func waitForPreviewOrientation(_ app: XCUIApplication, orientation: String) {
++    let surface = app.descendants(matching: .any)["official-touch-full-preview"].firstMatch
++    let ready = XCTNSPredicateExpectation(
++      predicate: NSPredicate(format: "value == %@", orientation), object: surface)
++    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
++    let controls = app.buttons.matching(
++      NSPredicate(format: "identifier BEGINSWITH %@", "touch-control-"))
++    XCTAssertGreaterThan(controls.count, 0)
++    for control in controls.allElementsBoundByIndex {
++      XCTAssertTrue(app.frame.contains(control.frame))
++    }
++  }
++
+   private func waitForLandscape(_ app: XCUIApplication) {
+     let landscape = XCTNSPredicateExpectation(
+       predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: app)
+@@ -323,7 +343,8 @@
+   }
+ 
+   private func save(_ app: XCUIApplication, _ name: String) {
+-    let attachment = XCTAttachment(screenshot: app.screenshot())
++    // 整屏抓图沿设备旋转保留完整画布，避免应用矩形在横屏坐标中裁剪。
++    let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+     attachment.name = name
+     attachment.lifetime = .keepAlways
+     add(attachment)

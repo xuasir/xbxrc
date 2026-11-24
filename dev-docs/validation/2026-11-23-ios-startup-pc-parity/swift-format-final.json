@@ -1,0 +1,34 @@
+[
+  {
+    "file": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+    "offsets": [
+      [
+        19464,
+        19598
+      ]
+    ],
+    "exitCode": 0,
+    "output": "",
+    "contentChanged": false
+  },
+  {
+    "file": "iosapp/XBXRCTests/PCDataParityTests.swift",
+    "offsets": [
+      [
+        25086,
+        25248
+      ],
+      [
+        36284,
+        36446
+      ],
+      [
+        36775,
+        36937
+      ]
+    ],
+    "exitCode": 0,
+    "output": "",
+    "contentChanged": true
+  }
+]

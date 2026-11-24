@@ -265,7 +265,10 @@ final class PCDataParityTests: XCTestCase {
             return try await PCPageCloudClient().loadProductDetail(
                 productID: product, market: market, language: language)
         }
-        let store = CloudLibraryStore(client: client, settingsProvider: settings)
+        let detailRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: detailRoot) }
+        let store = CloudLibraryStore(client: client, settingsProvider: settings,
+            detailRepository: CloudProductDetailRepository(root: detailRoot))
         let productID = PCPageFixtures.cloudGames()[0].productID
         let english = Task { await store.loadProductDetail(productID: productID) }
         try await waitFor { await delayed.wasRequested }
@@ -280,6 +283,97 @@ final class PCDataParityTests: XCTestCase {
         XCTAssertFalse(store.productDetailState(productID).isRefreshing)
         settings.mobile.catalogLanguage = "en-US"
         XCTAssertEqual(store.productDetailState(productID).phase, .idle)
+    }
+
+    @MainActor
+    func testCancelledCatalogActivationAllowsNextEntry() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let calls = PCRequestLog()
+        var client = ScriptedPCCloudClient()
+        client.catalog = { market, language in
+            await calls.record("started")
+            if await calls.values.count == 1 { try await Task.sleep(for: .seconds(30)) }
+            return try await PCPageCloudClient().loadCatalog(accessHandle: "fixture", market: market, language: language)
+        }
+        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
+        let access: @MainActor () async throws -> PreparedCloudAccess = {
+            try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
+        }
+        let activation = Task { await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access) }
+        try await waitFor { await calls.values.count == 1 }
+        activation.cancel()
+        await activation.value
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertNil(store.catalogFailure)
+        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
+        XCTAssertEqual(store.phase, .loaded)
+        let count = await calls.values.count
+        XCTAssertEqual(count, 2)
+    }
+
+    @MainActor
+    func testFailedCatalogActivationWaitsForCooldownAndReenters() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let calls = PCRequestLog()
+        var client = ScriptedPCCloudClient()
+        client.catalog = { market, language in
+            await calls.record("started")
+            if await calls.values.count == 1 { throw URLError(.timedOut) }
+            return try await PCPageCloudClient().loadCatalog(accessHandle: "fixture", market: market, language: language)
+        }
+        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
+        let access: @MainActor () async throws -> PreparedCloudAccess = {
+            try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
+        }
+        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
+        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
+        let before = await calls.values.count
+        XCTAssertEqual(before, 1)
+        store.catalogFailure?.retryAt = .distantPast
+        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
+        let after = await calls.values.count
+        XCTAssertEqual(after, 2)
+        XCTAssertEqual(store.phase, .loaded)
+    }
+
+    @MainActor
+    func testCloudConsumersKeepOneRecoveryBoundary() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let calls = PCRequestLog()
+        var client = ScriptedPCCloudClient()
+        client.catalog = { _, _ in
+            await calls.record("catalog")
+            throw SectionRequestFailure(kind: .authentication)
+        }
+        client.source = { _ in
+            await calls.record("source")
+            throw SectionRequestFailure(kind: .authentication)
+        }
+        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
+        let access: @MainActor () async throws -> PreparedCloudAccess = {
+            await calls.record("prepare")
+            return try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
+        }
+        await store.refresh(reason: .initialActivation, prepareAccess: access)
+        await store.retrySource("recent", prepareAccess: access)
+        do {
+            let _: Bool = try await store.withCloudAccess(prepareAccess: access) { _ in
+                await calls.record("resource")
+                throw SectionRequestFailure(kind: .authentication)
+            }
+            XCTFail("Completed target recovery must retain rejection")
+        } catch { XCTAssertEqual(SectionRequestFailure(error: error).kind, .authentication) }
+        let recorded = await calls.values
+        for consumer in ["catalog", "source", "resource"] {
+            XCTAssertEqual(recorded.filter { $0 == consumer }.count, 1)
+        }
+        XCTAssertEqual(recorded.filter { $0 == "prepare" }.count, 3)
     }
 
     @MainActor
@@ -442,17 +536,27 @@ private struct ScriptedPCCloudClient: XboxCloudDataClient {
         return try await PCPageCloudClient().loadProductDetail(
             productID: productID, market: market, language: language)
     }
-    func prepareAccess(refreshToken: String, seedJSON: String, forceRegionIP: String) async throws
+    func prepareAccess(
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
+    ) async throws
         -> PreparedCloudAccess
     {
         try await PCPageCloudClient().prepareAccess(
-            refreshToken: refreshToken, seedJSON: seedJSON, forceRegionIP: forceRegionIP)
+            session: session, forceRegionIP: forceRegionIP, checkpoint: checkpoint,
+            authProvider: authProvider, startup: startup)
     }
-    func prepareHomeAccess(refreshToken: String, seedJSON: String, forceRegionIP: String)
+    func prepareHomeAccess(
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
+    )
         async throws -> PreparedHomeAccess
     {
         try await PCPageCloudClient().prepareHomeAccess(
-            refreshToken: refreshToken, seedJSON: seedJSON, forceRegionIP: forceRegionIP)
+            session: session, forceRegionIP: forceRegionIP, checkpoint: checkpoint,
+            authProvider: authProvider, startup: startup)
     }
     func loadCatalog(accessHandle: String, market: String, language: String) async throws
         -> RemoteCloudCatalogSnapshot
@@ -499,7 +603,9 @@ extension PCDataParityTests {
         let store = CloudLibraryStore(client: client, repository: repository)
         let access: @MainActor () async throws -> PreparedCloudAccess = {
             try await PCPageCloudClient().prepareAccess(
-                refreshToken: "fixture", seedJSON: "{}", forceRegionIP: "")
+                session: StoredAuthSession(bridgeSession: PCPageFixtures.bridgeSession),
+                forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
         }
         await store.refresh(reason: .initialActivation, prepareAccess: access)
         await repository.delayNextSave()
@@ -718,14 +824,18 @@ extension PCDataParityTests {
         let store = CloudLibraryStore(client: client, repository: repository)
         await store.refresh(reason: .initialActivation) {
             try await PCPageCloudClient().prepareAccess(
-                refreshToken: "fixture", seedJSON: "{}", forceRegionIP: "")
+                session: StoredAuthSession(bridgeSession: PCPageFixtures.bridgeSession),
+                forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
         }
         let recentRanks = store.games.map(\.recentRank)
         let recentTime = store.sourceStates["recent"]?.updatedAt
         XCTAssertEqual(store.sourceStates["popular"]?.failure?.kind, .timeout)
         await store.retrySource("popular") {
             try await PCPageCloudClient().prepareAccess(
-                refreshToken: "fixture", seedJSON: "{}", forceRegionIP: "")
+                session: StoredAuthSession(bridgeSession: PCPageFixtures.bridgeSession),
+                forceRegionIP: "",
+                checkpoint: { _ in }, authProvider: nil, startup: nil)
         }
         let requested = await calls.values
         XCTAssertEqual(requested, ["popular"])
@@ -788,7 +898,11 @@ private actor SectionRenewalAuthClient: XboxAuthClient {
     {
         PCPageFixtures.bridgeSession
     }
-    func renewLogin(refreshToken: String, seedJSON: String, forceRegionIP: String) async throws
+    func renewLogin(
+        session: StoredAuthSession, forceRegionIP: String, scope: XboxAuthScope,
+        forceCoreRefresh: Bool, rejectedToken: String?,
+        checkpoint: @escaping AuthCredentialCheckpoint
+    ) async throws
         -> AuthSession
     {
         count += 1

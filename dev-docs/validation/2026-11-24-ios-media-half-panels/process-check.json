@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-11-24T17:41:28.740067+08:00",
+  "command": "pgrep -fl /private/tmp/xbxrc-ios-media-half-panels-20261124-a",
+  "execution": "只读沙盒外检查",
+  "exit_code": 1,
+  "matched_processes": [],
+  "result": "Passed"
+}

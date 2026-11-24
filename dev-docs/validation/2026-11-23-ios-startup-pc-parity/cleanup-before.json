@@ -1,0 +1,10 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-startup-pc-20261123-cfnj_z17",
+  "allocatedBytes": 958672896,
+  "filesystemBefore": "Filesystem   1024-blocks      Used Available Capacity iused     ifree %iused  Mounted on\n/dev/disk3s5   482797652 391600000  50000000    89% 6638042 502321960    1%   /System/Volumes/Data\n",
+  "retainedSharedCaches": [
+    "target/ios-bindgen",
+    "target/ios-webrtc",
+    "target/debug"
+  ]
+}

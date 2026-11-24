@@ -1,0 +1,111 @@
+file: /Users/guo.xu/Downloads/XBXRC-Diagnostic-472B306E-7D42-452E-AC23-844411487EBF.jsonl
+rows: 78
+time_range_ms: 1795427229166 -> 1795427385029 (duration=155.863s)
+trace_profiles: production=78
+trace_modes: production=78
+dimensions: network=43, lifecycle=21, core=9, frontend=4, presentation=1
+importance: key=63, essential=15
+categories: event=55, state=16, decision=4, snapshot=3
+domains: auth=46, cloud-library=12, ios-app=6, xbox-data=5, library-ui=4, ios-streaming=3, trace=1, image=1
+sessions: A714E7DB-7930-4D4B-9403-82CFF439B6FC=78
+
+phase_anchors:
+  - none
+
+phase_windows:
+  - none
+
+long_gaps:
+  - gap=71.432s left=(seq=57 tsMs=1795427241908 event/auth/cloudAccessBoundaryFailed summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))) right=(seq=58 tsMs=1795427313340 state/ios-app/scenePhaseChanged summary={"from": "active", "platform": "ios", "sourceMonotonicMs": 828631064.4062917, "to": "inactive", "writerQueueDelayMs": 0.8322916030883789})
+  - gap=55.637s left=(seq=59 tsMs=1795427313402 state/ios-app/scenePhaseChanged summary={"from": "inactive", "platform": "ios", "sourceMonotonicMs": 828631126.5300417, "to": "background", "writerQueueDelayMs": 0.23850011825561523}) right=(seq=60 tsMs=1795427369039 state/ios-app/scenePhaseChanged summary={"from": "background", "platform": "ios", "sourceMonotonicMs": 828651050.98325, "to": "inactive", "writerQueueDelayMs": 6.399624943733215})
+  - gap=11.120s left=(seq=64 tsMs=1795427373909 state/ios-streaming/accessPrepareStarted summary={"attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C", "generation": 1, "operationId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C", "platform": "ios", "sourceMonotonicMs": 828655921.3692) right=(seq=78 tsMs=1795427385029 event/auth/cloudAccessUniFFIBoundaryFailed summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.timeout, statusCode: nil, retriable: true, retryAfterSeconds: nil)))
+  - gap=7.753s left=(seq=44 tsMs=1795427234155 snapshot/library-ui/libraryActivationCompleted summary=loaded) right=(seq=56 tsMs=1795427241908 event/auth/cloudAccessUniFFIBoundaryFailed summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil)))
+  - gap=3.946s left=(seq=61 tsMs=1795427369830 state/ios-app/scenePhaseChanged summary={"from": "inactive", "platform": "ios", "sourceMonotonicMs": 828651841.73025, "to": "active", "writerQueueDelayMs": 0.7004166841506958}) right=(seq=62 tsMs=1795427373776 state/ios-streaming/streamingStateChanged summary={"attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C", "generation": 1, "hasVideoTrack": false, "platform": "ios", "retryable": null, "sourceMonotonicMs": 828655787.6480417, "state")
+  - gap=1.946s left=(seq=19 tsMs=1795427229340 state/ios-app/scenePhaseChanged summary={"from": "inactive", "platform": "ios", "sourceMonotonicMs": 828547064.3467083, "to": "active", "writerQueueDelayMs": 0.15358340740203857}) right=(seq=20 tsMs=1795427231286 state/xbox-data/hostsRefreshSucceeded summary={"elapsedMs": 1998, "hosts": 1, "operationId": "1F19C58E-99DA-42B6-9A2E-425B87EA4510", "platform": "ios", "sourceMonotonicMs": 828549009.70525, "writerQueueDelayMs": 0.174458384513)
+  - gap=1.934s left=(seq=20 tsMs=1795427231286 state/xbox-data/hostsRefreshSucceeded summary={"elapsedMs": 1998, "hosts": 1, "operationId": "1F19C58E-99DA-42B6-9A2E-425B87EA4510", "platform": "ios", "sourceMonotonicMs": 828549009.70525, "writerQueueDelayMs": 0.174458384513) right=(seq=24 tsMs=1795427233220 decision/cloud-library/catalogActivationRefreshRequired summary=initialActivation)
+
+anomaly_windows:
+  - tsMs=1795427234104 -> 1795427234105 duration=0.001s rows=3 signals=error=3
+    - seq=40 tsMs=1795427234104 event/auth/cloudAccessUniFFIBoundaryFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+    - seq=41 tsMs=1795427234105 event/auth/cloudAccessBoundaryFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+    - seq=42 tsMs=1795427234105 event/cloud-library/catalogRefreshFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - tsMs=1795427241908 -> 1795427241908 duration=0.000s rows=2 signals=error=2
+    - seq=56 tsMs=1795427241908 event/auth/cloudAccessUniFFIBoundaryFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+    - seq=57 tsMs=1795427241908 event/auth/cloudAccessBoundaryFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - tsMs=1795427385029 -> 1795427385029 duration=0.000s rows=1 signals=error=1
+    - seq=78 tsMs=1795427385029 event/auth/cloudAccessUniFFIBoundaryFailed signal=error summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.timeout, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+
+recovery_audit:
+  - picture_recovery_transition:
+    - events=0 to_phases=none causes=none
+  - picture_recovery_blocker_observed:
+    - events=0 gates=none blocker_kinds=none
+  - video_ingress_termination:
+    - events=0 causes=none upstream_causes=none
+  - first_frame_latency_observed:
+    - events=0 terminal_phases=none incomplete_reasons=none
+  - h264_inspection_observed:
+    - events=0 reject_classification=none post_recovery_degradation=0
+  - ledger_rows=0 connecting_windows=0 silence_threshold_ms=3000 silence_breaches=0
+  - failed_terminal_count=0 reasons=none
+  - failed_terminal_unlock=0/0
+  - successful_action_samples=0 increments=0
+  - presentation_health:
+    - host_mailbox_states=0 displayed_frame_stale=0 retained_old_frame_risk=0 frame_drop_events=0 recovery_valued_frame_drops=0
+    - cadence=none
+    - no_pending_pressure=none
+    - frame_drop_reasons=none
+    - frame_drop_details=none
+  - keyframe_effectiveness:
+    - episodes=0 sent=0 response_observed=0 packet_seen=0 decoded=0 missed=0 invalid_response=0 effective=0 effective_rate=0.0
+    - chain_recovered=0 chain_build_success_rate=0.0 chain_failed_after_success=0 suppression=none
+    - failure_reasons=none
+    - effective_failure_reasons=none
+  - nack_effectiveness:
+    - events=0 sent=0 recovered=0 recovered_late=0 skipped=0 expired=0 effective=0 ineffective=0 effective_rate=0.0
+    - actions=none
+    - disposition=none
+    - unrecoverable_reasons=none
+  - repairability_persistence:
+    - samples=0 present_row_ratio=0.0 longest_missing_gap_ms=0 max_missing_streak_rows=78
+  - recovery_effectiveness:
+    - score=0.0 components=chainBuildSuccessRate=0.0, keyframeEffectiveRate=0.0, nackEffectiveRate=0.0, repairabilityPersistenceRate=0.0
+
+top_events:
+  -    27 event/auth/credentialFlowStage
+  -     5 state/ios-app/scenePhaseChanged
+  -     3 event/auth/cloudAccessBoundaryStarted
+  -     3 event/auth/cloudAccessUniFFIBoundaryStarted
+  -     3 event/auth/credentialCheckpointCommitted
+  -     3 event/auth/cloudAccessUniFFIBoundaryFailed
+  -     2 state/cloud-library/libraryStateChanged
+  -     2 event/xbox-data/dataSessionBound
+  -     2 event/cloud-library/cacheRestoreStarted
+  -     2 event/auth/cloudAccessBoundaryFailed
+  -     1 state/trace/fileOpened
+  -     1 event/ios-app/appLaunchStarted
+  -     1 event/auth/authRestoreStarted
+  -     1 state/xbox-data/dataStoreCleared
+  -     1 event/cloud-library/libraryClearStarted
+  -     1 decision/auth/authRestoreSessionFound
+  -     1 event/auth/authSessionRenewStarted
+  -     1 state/auth/authSessionRenewSucceeded
+  -     1 state/auth/authRestoreSucceeded
+  -     1 decision/cloud-library/cacheRestoreScopeChanged
+
+suspicious_rows:
+  - seq=1 tsMs=1795427229166 state/trace/fileOpened signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=initial
+  - seq=11 tsMs=1795427229285 state/auth/authSessionRenewSucceeded signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"appLevel": 0, "elapsedMs": 80, "operationId": "D2F5798F-AE28-4412-8E21-4F3D438E86E3", "platform": "ios", "regionPreset": "unitedStates", "sourceMonotonicMs": 828547009.1342084, "
+  - seq=38 tsMs=1795427234103 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"elapsedMs": 156, "errorKind": "network", "operationId": "E5536A11-735A-40D9-BDFB-3D3871AD4BFC", "platform": "ios", "requestStage": "deviceToken", "retriable": true, "sourceMonoto
+  - seq=39 tsMs=1795427234103 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"errorKind": "network", "operationId": "E5536A11-735A-40D9-BDFB-3D3871AD4BFC", "platform": "ios", "retriable": true, "sourceMonotonicMs": 828551827.5558333, "stage": "refreshFaile
+  - seq=40 tsMs=1795427234104 event/auth/cloudAccessUniFFIBoundaryFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - seq=41 tsMs=1795427234105 event/auth/cloudAccessBoundaryFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - seq=42 tsMs=1795427234105 event/cloud-library/catalogRefreshFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - seq=43 tsMs=1795427234105 state/cloud-library/libraryStateChanged signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=loaded
+  - seq=54 tsMs=1795427241908 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"elapsedMs": 132, "errorKind": "network", "operationId": "CC3ADD92-4157-4833-8594-36D24BAD780A", "platform": "ios", "requestStage": "deviceToken", "retriable": true, "sourceMonoto
+  - seq=55 tsMs=1795427241908 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"errorKind": "network", "operationId": "CC3ADD92-4157-4833-8594-36D24BAD780A", "platform": "ios", "retriable": true, "sourceMonotonicMs": 828559632.066625, "stage": "refreshFailed
+  - seq=56 tsMs=1795427241908 event/auth/cloudAccessUniFFIBoundaryFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - seq=57 tsMs=1795427241908 event/auth/cloudAccessBoundaryFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+  - seq=76 tsMs=1795427385028 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"elapsedMs": 5011, "errorKind": "timeout", "operationId": "D63005F2-1252-44BD-BEC9-E41BA749F435", "platform": "ios", "requestStage": "sisuAuthorize", "retriable": true, "sourceMon
+  - seq=77 tsMs=1795427385028 event/auth/credentialFlowStage signal=suspicious session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary={"errorKind": "timeout", "operationId": "D63005F2-1252-44BD-BEC9-E41BA749F435", "platform": "ios", "retriable": true, "sourceMonotonicMs": 828667039.792875, "stage": "refreshFailed
+  - seq=78 tsMs=1795427385029 event/auth/cloudAccessUniFFIBoundaryFailed signal=error session=A714E7DB-7930-4D4B-9403-82CFF439B6FC summary=XBXRC.XboxBridgeError#0: XBXRC.XboxBridgeError.Query(failure: XBXRC.XboxQueryFailure(kind: XBXRC.XboxQueryFailureKind.timeout, statusCode: nil, retriable: true, retryAfterSeconds: nil))

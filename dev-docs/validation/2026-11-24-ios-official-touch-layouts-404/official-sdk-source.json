@@ -1,0 +1,15 @@
+{
+  "source": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+  "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+  "contract": {
+    "titleQueryKeys": [
+      "alternateIds",
+      "alternateIdType"
+    ],
+    "inputConfigurationKeys": [
+      "titleIds",
+      "titleIdType"
+    ],
+    "bundleDownload": "/v1/sessions/tabs/{id}/download?noRedirect=true"
+  }
+}

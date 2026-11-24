@@ -1,0 +1,16 @@
+{
+  "sessionProbe": [
+    {
+      "deviceId": "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+      "keychainStatus": -34018,
+      "cloudAccessPresent": false
+    },
+    {
+      "deviceId": "754F69D9-2451-47ED-95AB-69596D404F2D",
+      "keychainStatus": -34018,
+      "cloudAccessPresent": false
+    }
+  ],
+  "download": "requires-app-scoped-access",
+  "scope": "one-official-game-smoke"
+}

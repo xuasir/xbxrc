@@ -1,0 +1,14 @@
+Test Case '-[XBXRCTests.PCDataParityTests testNativePullRefreshAndInstalledLocaleSmoke]' started.
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:848: error: -[XBXRCTests.PCDataParityTests testNativePullRefreshAndInstalledLocaleSmoke] : failed: caught error: "InvalidTransition { 
+  phase: idle
+  targetPhase: failed(deinit)
+Test Case '-[XBXRCTests.PCDataParityTests testNativePullRefreshAndInstalledLocaleSmoke]' failed (3.346 seconds).
+	 Executed 1 test, with 1 failure (1 unexpected) in 3.346 (3.348) seconds
+	 Executed 1 test, with 1 failure (1 unexpected) in 3.346 (3.350) seconds
+	 Executed 1 test, with 1 failure (1 unexpected) in 3.346 (3.351) seconds
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' passed (28.857 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 28.857 (28.866) seconds
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' started.
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections]' passed (30.296 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 30.296 (30.297) seconds

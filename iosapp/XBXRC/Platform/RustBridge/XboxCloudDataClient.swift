@@ -79,14 +79,18 @@ protocol XboxCloudDataClient: Sendable {
         async throws
         -> UInt64?
     func prepareAccess(
-        refreshToken: String,
-        seedJSON: String,
-        forceRegionIP: String
+        session: StoredAuthSession,
+        forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?,
+        startup: XboxStreamStartup?
     ) async throws -> PreparedCloudAccess
     func prepareHomeAccess(
-        refreshToken: String,
-        seedJSON: String,
-        forceRegionIP: String
+        session: StoredAuthSession,
+        forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?,
+        startup: XboxStreamStartup?
     ) async throws -> PreparedHomeAccess
     func loadCatalog(
         accessHandle: String,
@@ -104,9 +108,11 @@ protocol XboxCloudDataClient: Sendable {
 
 struct RustXboxCloudDataClient: XboxCloudDataClient {
     func prepareAccess(
-        refreshToken: String,
-        seedJSON: String,
-        forceRegionIP: String
+        session: StoredAuthSession,
+        forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?,
+        startup: XboxStreamStartup?
     ) async throws -> PreparedCloudAccess {
         let operationID = UUID().uuidString
         let startedAt = Date()
@@ -120,9 +126,12 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
         )
         do {
             let result = try await prepareCloudAccess(
-                refreshToken: refreshToken,
-                seedJson: seedJSON,
-                forceRegionIp: forceRegionIP
+                session: session.bridgeSession,
+                forceRegionIp: forceRegionIP,
+                observer: RustAuthCheckpointObserver(
+                    checkpoint: checkpoint, operationID: operationID),
+                startup: startup,
+                authProvider: authProvider
             )
             IOSRuntimeTrace.event(
                 domain: "auth",
@@ -167,9 +176,11 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
     }
 
     func prepareHomeAccess(
-        refreshToken: String,
-        seedJSON: String,
-        forceRegionIP: String
+        session: StoredAuthSession,
+        forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?,
+        startup: XboxStreamStartup?
     ) async throws -> PreparedHomeAccess {
         let operationID = UUID().uuidString
         let startedAt = Date()
@@ -183,9 +194,12 @@ struct RustXboxCloudDataClient: XboxCloudDataClient {
         )
         do {
             let result = try await XBXRC.prepareHomeAccess(
-                refreshToken: refreshToken,
-                seedJson: seedJSON,
-                forceRegionIp: forceRegionIP
+                session: session.bridgeSession,
+                forceRegionIp: forceRegionIP,
+                observer: RustAuthCheckpointObserver(
+                    checkpoint: checkpoint, operationID: operationID),
+                startup: startup,
+                authProvider: authProvider
             )
             IOSRuntimeTrace.event(
                 domain: "auth",
@@ -440,5 +454,18 @@ extension XboxCloudDataClient {
         if result.unavailableSources.contains(source) { throw XboxNativeQueryError.unavailable }
         let key: KeyPath<CloudLibraryGame, Int?> = source == "recent" ? \.recentRank : source == "newest" ? \.newRank : source == "popular" ? \.popularRank : \.leavingRank
         return result.games.filter { $0[keyPath: key] != nil }.sorted { ($0[keyPath: key] ?? 0) < ($1[keyPath: key] ?? 0) }.map(\.productID)
+    }
+}
+
+// 旧调用保留简洁构造，新增诊断字段通过正式生成绑定按需传入。
+extension XboxQueryFailure {
+    init(
+        kind: XboxQueryFailureKind, statusCode: UInt16?, retriable: Bool,
+        retryAfterSeconds: UInt64?
+    ) {
+        self.init(
+            kind: kind, statusCode: statusCode, retriable: retriable,
+            retryAfterSeconds: retryAfterSeconds, networkErrorKind: nil,
+            serviceCode: nil, protocolErrorCode: nil)
     }
 }

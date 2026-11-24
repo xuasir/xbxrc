@@ -1,0 +1,32 @@
+[
+  {
+    "phase": "xcode-arguments",
+    "reason": "Xcode 27 参数名为 -clonedSourcePackagesDirPath",
+    "resolved": true
+  },
+  {
+    "phase": "swift-compilation",
+    "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+    "reason": "ViewDimensions.center 同时匹配水平与垂直对齐",
+    "resolution": "显式使用 VerticalAlignment.center",
+    "resolved": true
+  },
+  {
+    "phase": "ui-test-lookup",
+    "reason": "自适应选择器按可用宽度选择 HStack 或 ScrollView，固定按 ScrollView 查询导致定位失败",
+    "resolution": "按控件标识查询任意可访问元素",
+    "resolved": true
+  },
+  {
+    "phase": "ui-test-geometry",
+    "reason": "居中公式包含悬浮底栏覆盖的窗口空间",
+    "resolution": "按筛选底边到悬浮底栏顶边之间的可用区域校准",
+    "resolved": true
+  },
+  {
+    "phase": "visual-review",
+    "reason": "窄屏辅助字号的入口图标挤压标题列，英文单词被拆行",
+    "resolution": "图标最大32pt，文字列占满剩余宽度",
+    "resolved": true
+  }
+]

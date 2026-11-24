@@ -1,0 +1,175 @@
+{
+  "generatedAt": "2026-11-23T12:14:45.924492+08:00",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 6339,
+      "sha256": "45998fc61573463a326dab70ee231143cb60299c1b122236826d31616d255395"
+    },
+    {
+      "path": "actor-format.log",
+      "bytes": 139,
+      "sha256": "d66e60cbe4e39f6589ee7572f082c003627441155c7cd9dcddfb974e5dce1fa6"
+    },
+    {
+      "path": "base-analyzer-tests.log",
+      "bytes": 101,
+      "sha256": "b0bd6f2298e2537c36b4e09d68c64628ae9843ad52921b73c1f393fc87296345"
+    },
+    {
+      "path": "baseline-analysis.json",
+      "bytes": 6323,
+      "sha256": "4b88dfdfb892cbc234a7e9b3e163e9976506343bf57cc3c03c88a94a311e1af4"
+    },
+    {
+      "path": "build-and-test-plan.json",
+      "bytes": 2552,
+      "sha256": "bbcaad9b7295f37ec735c361c2668063a5253252bbd2c8c5f8d3ca0f6142b511"
+    },
+    {
+      "path": "cleanup-plan.json",
+      "bytes": 5265,
+      "sha256": "0c17d39902a072f7d41dd6b071f1c2b1ffc2821506b755e921a82997a176515c"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 5658,
+      "sha256": "fd00f318b0611a0beaa182250f9073910db1ad96aa1f02ec6d3dc47bd7713994"
+    },
+    {
+      "path": "core-analyzer-tests.log",
+      "bytes": 116,
+      "sha256": "f39639c0debc7ef1343113df4bff8d42f35d6e2961f397f02cbb9f862d155b93"
+    },
+    {
+      "path": "device-build-summary.log",
+      "bytes": 3707,
+      "sha256": "f6a5cce67fcf3477d04212ae123f175062c4df2a1a71075b2a1df2aea5d6469e"
+    },
+    {
+      "path": "diagnostics.json",
+      "bytes": 1423,
+      "sha256": "ad6c3e88e28e30892fb923ccf61443f6c30ca356b58b0642218242932f1d8379"
+    },
+    {
+      "path": "format-ranges.json",
+      "bytes": 644,
+      "sha256": "8a397de48d587738c93c2e0eed61c3beba9ea37b142de8425bf3fe5b1302a252"
+    },
+    {
+      "path": "initial-core-analyzer-diagnostic.log",
+      "bytes": 804,
+      "sha256": "a0628fbe09106e245a6836f8011d0b0af5c0b99dbf5c4d1d057017376cfebd2a"
+    },
+    {
+      "path": "parse-and-diff.log",
+      "bytes": 81,
+      "sha256": "8361330ba934908f6ca1415aea8da2215305636b292d6a30014124202b6d31ee"
+    },
+    {
+      "path": "patch-validation.log",
+      "bytes": 97,
+      "sha256": "38a597286d03760e824f742855e4132c947bc8371fb81b3e3bdc4770f856bd54"
+    },
+    {
+      "path": "scoped-format.log",
+      "bytes": 96,
+      "sha256": "2933ab6ac9f46921a93180b9e0292a20ef0cdd981cceb868061f1c2819635cd7"
+    },
+    {
+      "path": "session-boundary.log",
+      "bytes": 40,
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571"
+    },
+    {
+      "path": "simulator-summary.json",
+      "bytes": 1211,
+      "sha256": "a26d0c6670348f972bbae1cbc6dab3a7f31ce58ebcd13738644805f4b0d3a4ff"
+    },
+    {
+      "path": "simulator-tests.log",
+      "bytes": 12994,
+      "sha256": "68f10761617b514a526a4c4f7acc0dd38230a02c0f1c848991bfe55de4e0be41"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 1940,
+      "sha256": "4b10d5203cd7dcf1f3770ea9fe710aa2d5b33cc67502e1e8017c552ed152f9e0"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "bytes": 74961,
+      "sha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "bytes": 102364,
+      "sha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "bytes": 84391,
+      "sha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "bytes": 10033,
+      "sha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035"
+    },
+    {
+      "path": "sources/iosapp/XBXRCTests/XBXRCTests.swift",
+      "bytes": 194983,
+      "sha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c"
+    },
+    {
+      "path": "sources/iosapp/scripts/check-streaming-core-trace.py",
+      "bytes": 39476,
+      "sha256": "0f95dcc019b8827c553463a4c16e801ab0c5ad33ba3f4c248439e4ea5b043691"
+    },
+    {
+      "path": "sources/iosapp/scripts/tests/test_check_streaming_core_trace.py",
+      "bytes": 23649,
+      "sha256": "6a1ea7149b71d9d544295c9f49c3ad8513eb92ce5c00e54c50aab0edc364a336"
+    },
+    {
+      "path": "swift-format.json",
+      "bytes": 2814,
+      "sha256": "30dc2b50f04daa641233ec9a6fdf1e4c07d13206cf452f712dbb4364ef5607cf"
+    },
+    {
+      "path": "swift-format.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "task-changes.diff",
+      "bytes": 45405,
+      "sha256": "cb02367df080f9ec7649a93efc3d1812d1b591df996eeca0f1303a05410f0fec"
+    },
+    {
+      "path": "task-input.json",
+      "bytes": 2728,
+      "sha256": "bc968433c322146015ac5c5721dcb5419714122d929bcf04ea3c17b7de247b93"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 1582,
+      "sha256": "20b9822d92fa00694ee7af1c846fcd2c94617f02ee0dc22979ad5c1a238bc460"
+    }
+  ],
+  "trackingDocuments": [
+    {
+      "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+      "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+    },
+    {
+      "path": "docs/reports/2026-11-20-ios-display-callback.md",
+      "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436"
+    }
+  ],
+  "manualValidationStatus": "Validation Pending"
+}

@@ -1,0 +1,121 @@
+{
+  "task": "2026-11-23-ios-home-startup-diagnostics",
+  "recordedAt": "2026-11-23T14:49:34.387835+08:00",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 3508,
+      "sha256": "3698e74a0567b59bd35748e9cc3e128b16446231f430c911ae6004fe938c0a72"
+    },
+    {
+      "path": "baseline.json",
+      "bytes": 1958,
+      "sha256": "8d5c72cf92f6cf9cb6743facc38010122bc53579b8ceed3170b67f46b700842a"
+    },
+    {
+      "path": "cleanup-plan.json",
+      "bytes": 1605,
+      "sha256": "7822b9bbbb4c314c713eda2d42a52799321f912185c22938bafe0b9730f53a38"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 1901,
+      "sha256": "c9365bcc3ca71f10fa99c43a3c456c5c61ac7777fbc002cc8403c69c35b3e071"
+    },
+    {
+      "path": "device-build-summary.json",
+      "bytes": 1772,
+      "sha256": "f82313843e42de775d6361cdd28541d12984b403a03ad84773e65aa67cf919bd"
+    },
+    {
+      "path": "format.json",
+      "bytes": 782,
+      "sha256": "2f2803ccf449bd9b2dc566cf82781b2bbf11b018e0c3adfba9c3a7567b96c614"
+    },
+    {
+      "path": "logs/boundary.log",
+      "bytes": 40,
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571"
+    },
+    {
+      "path": "logs/device-build-excerpts.txt",
+      "bytes": 3623,
+      "sha256": "14077dc0d941f31bacaeef812ee84d453e2af4686852e1ae859e2383bc1940bd"
+    },
+    {
+      "path": "logs/device-build-sandbox.txt",
+      "bytes": 950,
+      "sha256": "76ff8a67b445b64a10013b62a2d308fd0cad6da01d3b08b43427d61be64f29b7"
+    },
+    {
+      "path": "logs/swift-test.log",
+      "bytes": 4553,
+      "sha256": "42619159c1b569914ec588d79fa6ce28af88ed903a118bb5894d2a393e4e544f"
+    },
+    {
+      "path": "probe/Package.swift",
+      "bytes": 268,
+      "sha256": "343dbab0568eab82883b011cd7d56977b527da74e1857fef3869c4f1cbb397ed"
+    },
+    {
+      "path": "probe/ProductionTypes.swift",
+      "bytes": 4438,
+      "sha256": "46e9146aaff47edaba4b26403122e1e9b8de33e25936b2adfcfe128ddaaaf596"
+    },
+    {
+      "path": "probe-input.json",
+      "bytes": 563,
+      "sha256": "5472d8406cdb6b0b0017affab6ab0e807a1aceaca6edf73090e0cc48e5f4e9d2"
+    },
+    {
+      "path": "process-check.json",
+      "bytes": 333,
+      "sha256": "12f6737e754eab20fdca3d0ea4508fe36c2e2779a405c4a5acb5b1a001ba5368"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 3288,
+      "sha256": "97dabac1be5cc2d1fd713b83b6a518dc84dbed950aee26d62d262cb69061baea"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "bytes": 104088,
+      "sha256": "7c18eed962a923d5417712f23c48494a3c33841f43fab031bbbc0e5975b898e8"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+      "bytes": 7441,
+      "sha256": "61b981f98c20d1dd149a4ab369421cdb70cb152c603511e4c408ebdaaa7b2a8c"
+    },
+    {
+      "path": "sources/iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "bytes": 82852,
+      "sha256": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391"
+    },
+    {
+      "path": "sources/iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+      "bytes": 5887,
+      "sha256": "bce7ca71f850df76c0a086d74307efaff19f1068f641136b0097b1526095273a"
+    },
+    {
+      "path": "static-checks.json",
+      "bytes": 1411,
+      "sha256": "5048239548234a3c7383af9ad550318c35be1445253c6da618ec6941b034e6d3"
+    },
+    {
+      "path": "task-changes.diff",
+      "bytes": 25885,
+      "sha256": "9c53b84668ff3e7d71ae54d8fee71ab45f85d45578be9bce9bab9124c2baec77"
+    },
+    {
+      "path": "tests.json",
+      "bytes": 2687,
+      "sha256": "5abd18176d5247dd436d886c3022e607f7b3bce2c8018010a927516d307345a6"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 2551,
+      "sha256": "279b1baedbe1501855170c47781914e1511b1606d96f58884f6edcdd36b03263"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-11-23T15:24:33.749529+08:00",
+  "result": "PASS",
+  "scope": "只读日志分析与证据归档",
+  "segmentGate": "PASS",
+  "fullFlowGate": "FAIL：当前轮转分片有5项覆盖缺口",
+  "streamingCoreGate": "FAIL：授权前失败样本有28项成功合同缺口",
+  "rawInputHashVerified": true,
+  "privacyViolations": 0,
+  "attemptPairingReviewed": true,
+  "currentSourceInferenceReviewed": true,
+  "exactAuthEndpoint": "待步骤诊断确认",
+  "overallSuccessRate": "待完整分片对照",
+  "sourceEvidenceHashesReviewed": true,
+  "ledgerUpdated": true,
+  "temporaryArtifacts": 0
+}

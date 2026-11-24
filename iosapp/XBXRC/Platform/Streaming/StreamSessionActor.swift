@@ -94,6 +94,7 @@ actor StreamSessionActor {
     private var retiringPeerRuntime: (any StreamingPeerRuntime)?
     private var retiringPeerStopTask: Task<Void, Never>?
     private var preparedSignaling: StreamingPreparedSignaling?
+    private var latestStartupProgress: StreamingStartupProgress?
     private var remoteIceApplicationTask: Task<Void, Never>?
     private var credentialUpdateTask: Task<Void, Never>?
     private var localIceFlushTask: Task<Void, Error>?
@@ -133,6 +134,7 @@ actor StreamSessionActor {
     private var microphoneTask: Task<Void, Error>?
     private var microphoneRequested = false
     private var resumedAtMilliseconds: Double?
+    private var pendingResumeValidation: (revision: UInt64, peerEpoch: UInt64)?
     private var supervisionTask: Task<Void, Never>?
     private var firstFrameGuardTask: Task<Void, Never>?
     private var supervisionConnectedAtMs: UInt64 = 0
@@ -237,6 +239,7 @@ actor StreamSessionActor {
         localIceState.reset()
         reconnectInFlight = false
         selectedTerminalReason = nil
+        latestStartupProgress = nil
         pendingLocalCandidates.removeAll(keepingCapacity: true)
         interactionEventCounts.removeAll(keepingCapacity: true)
         dataChannelProfilesPendingTrace = false
@@ -253,7 +256,14 @@ actor StreamSessionActor {
         audioTrackReady = false
 
         await publish(.creatingSession, generation: request.sessionGeneration)
-        trace("sessionCreateStarted", dimension: .lifecycle)
+        trace(
+            "sessionCreateStarted",
+            payload: [
+                "powerOnRequested": .bool(request.settings.powerOn),
+                "target": .string(request.target.rawValue),
+            ],
+            dimension: .lifecycle
+        )
         do {
             let control = try await controlFactory.createSession(request: request)
             do {
@@ -263,12 +273,15 @@ actor StreamSessionActor {
                 throw error
             }
             controlSession = control
+            trace("controlSessionCreated", dimension: .lifecycle)
             startCredentialUpdates(
                 control: control, generation: request.sessionGeneration, sink: authSink)
+            trace("signalingPreparationStarted", dimension: .lifecycle)
             let prepared = try await prepareSignaling(
                 control: control, generation: request.sessionGeneration, startupSink: startupSink)
             preparedSignaling = prepared
             try ensureCurrent(request.sessionGeneration)
+            trace("signalingPreparationSucceeded", dimension: .lifecycle)
             trace("sessionReady", dimension: .lifecycle)
 
             await publish(.negotiating, generation: request.sessionGeneration)
@@ -346,12 +359,26 @@ actor StreamSessionActor {
                 guard let self, await self.isCurrent(generation) else { return }
                 let progress = await control.startupProgress()
                 guard !Task.isCancelled, await self.isCurrent(generation) else { return }
+                await self.recordStartupProgress(progress, generation: generation)
                 await startupSink(generation, progress)
                 do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
             }
         }
         defer { progressTask.cancel() }
         return try await control.prepareSignaling()
+    }
+
+    private func recordStartupProgress(
+        _ progress: StreamingStartupProgress?, generation: UInt64
+    ) {
+        guard isCurrent(generation), let progress, progress != latestStartupProgress else { return }
+        latestStartupProgress = progress
+        trace(
+            "startupProgressChanged",
+            payload: StreamingStartupDiagnostics.progressPayload(progress),
+            dimension: .lifecycle,
+            importance: .key
+        )
     }
 
     func stop(
@@ -450,7 +477,7 @@ actor StreamSessionActor {
     }
 
     func setVisible(_ value: Bool, generation: UInt64) async {
-        guard isCurrent(generation) else { return }
+        guard isCurrent(generation), visible != value else { return }
         visibilityRevision &+= 1
         let revision = visibilityRevision
         visible = value
@@ -462,13 +489,17 @@ actor StreamSessionActor {
         firstFrameGuardTask?.cancel()
         firstFrameGuardTask = nil
         recoveryProbe = nil
+        pendingResumeValidation = nil
         if !value {
+            resumedAtMilliseconds = nil
+            playbackReadiness.remove(.framePresented)
             microphoneRevision &+= 1
             microphoneTask?.cancel()
-            await peerRuntime?.stopMicrophoneCapture()
             microphonePeerEpoch = 0
+            await peerRuntime?.stopMicrophoneCapture()
+            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
             await microphoneSink?(generation, false, microphoneRequested)
-            playbackReadiness.remove(.framePresented)
+            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
             trace(
                 "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
                 dimension: .lifecycle)
@@ -476,25 +507,46 @@ actor StreamSessionActor {
             return
         }
         guard let control = controlSession, let peer = peerRuntime else { return }
+        let peerEpoch = activePeerEpoch
         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+        pendingResumeValidation = (revision, peerEpoch)
+        await publish(.waitingForFirstFrame, generation: generation)
+        guard isCurrent(generation), visible, revision == visibilityRevision,
+            peerEpoch == activePeerEpoch
+        else { return }
         do {
             try await control.validateResume()
             try ensureCurrent(generation)
-            guard visible, revision == visibilityRevision else { return }
+            guard visible, revision == visibilityRevision, peerEpoch == activePeerEpoch else {
+                return
+            }
             let snapshot = await peer.debugSnapshot()
+            guard isCurrent(generation), visible, revision == visibilityRevision,
+                peerEpoch == activePeerEpoch
+            else { return }
+            pendingResumeValidation = nil
             trace("sessionResumeValidated", dimension: .lifecycle)
             lastVideoActivityAtMs = Self.nowMs
-            armFirstFrameGuard(generation: generation, peerEpoch: activePeerEpoch)
             if snapshot.iceConnectionState == "connected"
                 || snapshot.iceConnectionState == "completed"
             {
-                await publish(.waitingForFirstFrame, generation: generation)
+                if resumedAtMilliseconds != nil {
+                    armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
+                }
+                // 验证期间已保存的新上屏事实，直接决定恢复后的可见状态。
+                await publish(
+                    playbackReady ? .playing : .waitingForFirstFrame, generation: generation)
             } else {
-                await recoverDisconnectedPeer(generation: generation, peerEpoch: activePeerEpoch)
+                await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
             }
+            guard isCurrent(generation), visible, revision == visibilityRevision,
+                peerEpoch == activePeerEpoch
+            else { return }
             if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
         } catch {
-            guard isCurrent(generation), visible, revision == visibilityRevision else { return }
+            guard isCurrent(generation), visible, revision == visibilityRevision,
+                peerEpoch == activePeerEpoch
+            else { return }
             await fail(reason: .sessionFailed, generation: generation, error: error)
         }
     }
@@ -779,7 +831,9 @@ actor StreamSessionActor {
                 stats.frameSupplyDelta.map({ $0 > 0 }) == true
             {
                 playbackReadiness.mark(.steadyMedia)
-                trace("steadyMediaObserved", dimension: .mediaSupply)
+                trace(
+                    "steadyMediaObserved", payload: ["presentationActive": .bool(visible)],
+                    dimension: .mediaSupply)
             }
         case .dataChannelEvent(let label, let event):
             await traceDataChannelEvent(label: label, event: event)
@@ -1924,11 +1978,29 @@ actor StreamSessionActor {
         generation: UInt64,
         error: Error
     ) async {
-        guard isCurrent(generation), selectTerminal(reason, generation: generation) else { return }
+        let retryable = StreamingStartupDiagnostics.isRetryable(error, fallback: reason.retryable)
+        guard isCurrent(generation),
+            selectTerminal(reason, generation: generation, retryable: retryable)
+        else { return }
+        var failure = StreamingStartupDiagnostics.errorPayload(error)
+        failure["reason"] = .string(reason.code)
+        failure["hasControlSession"] = .bool(controlSession != nil)
+        failure["hasPreparedSignaling"] = .bool(preparedSignaling != nil)
+        failure["hasPeerRuntime"] = .bool(peerRuntime != nil)
+        if let latestStartupProgress {
+            failure["startupProgress"] = .object(
+                StreamingStartupDiagnostics.progressPayload(latestStartupProgress))
+        }
+        trace(
+            "sessionFailure",
+            payload: failure,
+            dimension: .lifecycle,
+            importance: .essential
+        )
         let message: String
         switch reason {
         case .sessionFailed, .runtimeFailure:
-            message = (error as? StreamingRuntimeError)?.localizedDescription ?? reason.userMessage
+            message = StreamingStartupDiagnostics.userMessage(error, fallback: reason.userMessage)
         default:
             message = reason.userMessage
         }
@@ -1937,8 +2009,7 @@ actor StreamSessionActor {
             publishIdle: false,
             terminalState: .failed(
                 message: message,
-                retryable: reason.retryable
-                    && (error as? StreamingRuntimeError) != .microphonePermissionDenied
+                retryable: retryable
             )
         )
     }
@@ -1986,6 +2057,7 @@ actor StreamSessionActor {
         visible = true
         visibilityRevision &+= 1
         resumedAtMilliseconds = nil
+        pendingResumeValidation = nil
         let localIceTask = localIceFlushTask
         let peer = peerRuntime
         let retiringPeer = retiringPeerRuntime
@@ -2099,7 +2171,8 @@ actor StreamSessionActor {
     @discardableResult
     private func selectTerminal(
         _ reason: StreamingTerminalReason,
-        generation: UInt64
+        generation: UInt64,
+        retryable: Bool? = nil
     ) -> Bool {
         guard isCurrent(generation), selectedTerminalReason == nil else { return false }
         selectedTerminalReason = reason
@@ -2113,7 +2186,7 @@ actor StreamSessionActor {
             "terminalSelected",
             payload: [
                 "reason": .string(reason.code),
-                "retryable": .bool(reason.retryable),
+                "retryable": .bool(retryable ?? reason.retryable),
             ],
             dimension: .lifecycle,
             importance: .essential
@@ -2350,7 +2423,10 @@ actor StreamSessionActor {
     }
 
     private var playbackReady: Bool {
-        playbackReadiness.isPlaybackReady
+        guard playbackReadiness.isPlaybackReady else { return false }
+        guard let pendingResumeValidation else { return true }
+        return pendingResumeValidation.revision != visibilityRevision
+            || pendingResumeValidation.peerEpoch != activePeerEpoch
     }
 
     private var connectionStateAfterNegotiation: StreamingFeatureState {

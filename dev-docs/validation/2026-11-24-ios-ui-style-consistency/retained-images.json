@@ -1,0 +1,47 @@
+[
+  {
+    "name": "calibration-cloud-search-results",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/calibration-cloud-search-results.png",
+    "test": "PCPageInteractionTests/testCloudBrowseCapsulesKeepSearchAndFiltersBound()"
+  },
+  {
+    "name": "calibration-cloud-tool-capsules",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/calibration-cloud-tool-capsules.png",
+    "test": "PCPageInteractionTests/testCloudBrowseCapsulesKeepSearchAndFiltersBound()"
+  },
+  {
+    "name": "streaming-diagnostics-upper-right",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/streaming-diagnostics-upper-right.png",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()"
+  },
+  {
+    "name": "styles-tablet-light",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/styles-tablet-light.png",
+    "test": "CapabilityMigrationTests/testScopedUIStyleSmoke()"
+  },
+  {
+    "name": "styles-narrow-accessibility",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/styles-narrow-accessibility.png",
+    "test": "CapabilityMigrationTests/testScopedUIStyleSmoke()"
+  },
+  {
+    "name": "styles-phone-light",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/styles-phone-light.png",
+    "test": "CapabilityMigrationTests/testScopedUIStyleSmoke()"
+  },
+  {
+    "name": "styles-phone-dark",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/styles-phone-dark.png",
+    "test": "CapabilityMigrationTests/testScopedUIStyleSmoke()"
+  },
+  {
+    "name": "priority-game-album-empty",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/priority-game-album-empty.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()"
+  },
+  {
+    "name": "priority-game-overview",
+    "path": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-ui-style-consistency/priority-game-overview.png",
+    "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()"
+  }
+]

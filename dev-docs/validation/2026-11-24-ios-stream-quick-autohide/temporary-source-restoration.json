@@ -1,0 +1,7 @@
+{
+  "source": "iosapp/XBXRCTests/StreamingControlsStateTests.swift",
+  "temporary_probe_removed": true,
+  "retained_change": "既有状态用例补充快捷显隐与详情保持断言",
+  "unrelated_source_matches_resume_baseline": true,
+  "restored_source_sha256": "1c21c2bf42da4b78ae67eeacbd1d0ab4e5f32cf6e0c41272beba906d1f125e64"
+}

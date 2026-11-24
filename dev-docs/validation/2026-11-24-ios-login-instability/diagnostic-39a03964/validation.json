@@ -1,0 +1,43 @@
+{
+  "taskId": "2026-11-24-ios-login-instability-trace",
+  "result": "PASS",
+  "verificationScope": "诊断数据一致性与当前源码静态核对；不代表登录功能或实机网络验收通过。",
+  "checks": {
+    "inputHashAndScope": "PASS",
+    "completeJsonlRows": 37,
+    "sessionSequence": "PASS:1..37",
+    "attemptAnchorComparisons": 7,
+    "beginLoginFailureCounts": {"network": 5, "timeout": 2},
+    "matchedOuterSignInTerminals": 6,
+    "missingOuterTerminalStartSeqs": [36],
+    "sourceFilesUnchanged": 9,
+    "sourceOrderTimeoutAndRetryStaticChecks": "PASS",
+    "gatesRerun": {
+      "all": {"result": "FAIL", "exitCode": 2, "coverageViolations": 3},
+      "startup": {"result": "PASS", "exitCode": 0, "coverageViolations": 0}
+    },
+    "schemaViolations": 0,
+    "privacyViolations": 0,
+    "sequenceViolations": 0,
+    "budgetViolationsInProvidedEvidence": 0
+  },
+  "remainingEvidenceGaps": [
+    "初始登录的deviceToken/sisuAuthenticate请求阶段与networkErrorKind未覆盖，不能指认具体接口或DNS/TCP/TLS根因。",
+    "第7次外层signIn终态没有被导出；内层网络失败已经记录。",
+    "运行包未记录源码commit，未核验与当前工作树的二进制一致性。",
+    "未执行移动设备网络对照、业务构建或原始轮转目录审计。"
+  ],
+  "cleanup": {
+    "allAnalysisCommandsCompleted": true,
+    "backgroundProcessesStarted": 0,
+    "temporaryArtifactsCreated": [],
+    "temporaryArtifactsDeleted": [],
+    "temporaryBytesReleased": 0,
+    "userInputRetained": true,
+    "userInputSha256": "e065ed89f0f32df2463c8f9bcfb632c23d6742108c504bbccff9c77e65180457",
+    "unrelatedTaskArtifactsPreserved": true,
+    "scratchVolumeAvailableKiBBefore": 49865692,
+    "scratchVolumeAvailableKiBAfterChecks": 49773240,
+    "diskObservation": "df -k实际观测；本轮没有删除产物，不将整机空间变动归因于本任务。"
+  }
+}

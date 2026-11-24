@@ -1,0 +1,825 @@
+--- a/docs/project-task.md
++++ b/docs/project-task.md
+@@ task row @@
++| 2026-11-24-ios-refresh-stream-detail | 精简下拉刷新反馈与串流快捷入口，修正安装游戏详情语言和播放动作 | Done | 2026-11-24 | simple；原生下拉统一反馈、正文spinner 3→0→3，左上44pt快捷图标并排8pt、12%背景覆盖率；商品资料沿目录市场/语言缓存，标题右侧圆形串流入口。原生1项及UI2项冒烟、定向Swift格式/diff通过，5张最终截图归档；探针精确恢复，清理约601.19MiB。[证据](../dev-docs/validation/2026-11-24-ios-refresh-stream-detail/README.md)。 |
+
+--- a/iosapp/DESIGN.md
++++ b/iosapp/DESIGN.md
+@@ -50,7 +50,7 @@
+ 
+ 普通深色卡片使用 `#ABD0B8` 8% 至 `#91B3A3` 4% 的渐变、白色 11% 细边框与轻阴影；浅色卡片使用白色 96% 至 92% 的渐变和黑色 6% 细边框。卡片具有可辨边界，同时保留页面背景的连续性。
+ 
+-串流菜单入口、快捷栏和诊断详情共用 `appSurface(prominent: true, forceDark: true)` 公共突出浮层背景，采用 `regularMaterial` 与深绿色罩层，降低透明度时采用 `#415D4E` 实色面板；快捷栏保持 52pt 窄栏，菜单与诊断层叠在虚拟手柄和指标上方。媒体上的突出浮层沿同一表面规则。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
++串流展开后的快捷栏和诊断详情共用 `appSurface(prominent: true, forceDark: true)` 公共突出浮层背景，采用 `regularMaterial` 与深绿色罩层，降低透明度时采用 `#415D4E` 实色面板；快捷栏保持 52pt 窄栏，菜单与诊断层叠在虚拟手柄和指标上方。媒体上的突出浮层沿同一表面规则。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
+ 
+ 媒体背景高度为 380pt，上端画布覆盖率为深色 36%、浅色 52%，45% 高度处为 52% / 70%，下端融入完整画布。头像背景适度模糊，游戏背景保留主体辨识度；头像、游戏和主机背景沿相同透出与渐隐规则绘制。页面与导航头部共用 `AppPageBackdrop`，按完整窗口宽度绘制并裁切所属区域；远程背景复用图片缓存，身份来源切换时更新图片状态。
+ 
+@@ -132,9 +132,9 @@
+ 
+ ## 请求状态与反馈
+ 
+-首次载入在对应内容槽位反馈。刷新由当前页动作或分区呈现忙碌状态；成功快照继续承载正文。缓存、接口、分页实现细节归诊断记录，用户页面保留能支持判断和操作的说明。
++首次载入在对应内容槽位反馈。原生下拉刷新统一承担这一轮等待反馈，分区、刷新按钮和分页共用页面刷新范围，骨架保持静态；独立按钮刷新和重试在对应动作反馈，成功快照继续承载正文。缓存、接口、分页实现细节归诊断记录，用户页面保留能支持判断和操作的说明。
+ 
+-支持下拉的内容页统一使用原生下拉刷新；“我的”及其子页、个人游戏详情和云目录的刷新沿各页来源执行。来源失败继续提供局部重试，独立媒体预览通过链接更新动作恢复到期资源。
++支持下拉的内容页统一使用原生下拉刷新；“我的”及其子页、个人游戏详情和云目录的刷新沿各页来源执行。安装游戏的名称、简介和商品图片复用目录市场/语言请求与对应缓存，成就和游玩事实沿个人记录取值；圆形主机串流入口位于游戏标题同行右侧。来源失败继续提供局部重试，独立媒体预览通过链接更新动作恢复到期资源。
+ 
+ 失败提示位于受影响分区，采用标题、短原因和重试动作的层级；整行具备至少 44pt 点击区域。上次内容的时间在更新失败时解释快照来源；分页失败留在列表末尾并保留已有内容。账户级重新登录入口在页面统一呈现。
+ 
+@@ -161,4 +161,4 @@
+ - PC 颜色与表面来源：`src/styles/_theme-foundation.scss`、`src/styles/_theme-semantic.scss`、`src/components/layout/AppShellLayout.vue`；主机、资料与设置沿现有 PC 页面语义。
+ - [Fluent 图标来源与 MIT 许可](XBXRC/Resources/ThirdParty/FluentSystemIcons/README.md)；一级导航和 Xbox 品牌图形复用仓库现有矢量资源。
+ 
+-手机串流菜单通过左上常驻按钮或双指向内滑动唤出，左右两条窄栏分别承载串流操作和指标/诊断工具。按钮采用 44pt 点击区域与公共突出浮层背景，菜单收起后恢复显示，并独立于触屏手柄的启用状态。运行指标、诊断录制、导出、音频、麦克风、画面比例及文字发送在一级完成；画面设置从底部上滑，诊断四组详情直接位于右上局部浮层。录制沿用现有诊断 Trace，结束与关机采用原生确认。登录空态由根视图独立展示中部 132pt XBXRC 标志（沿用 LaunchIcon 品牌资源）与页面下部的全宽登录按钮，按钮距底部安全区 32pt；登录后显示顶部品牌与底部导航。
++手机串流菜单通过左上常驻按钮或双指向内滑动唤出，左右两条窄栏分别承载串流操作和指标/诊断工具。常驻菜单与快捷布局入口在左上并排，两个图标各保留44pt点击区域与8pt间距，背景采用12%黑色覆盖率，降低透明度时为82%；菜单收起后恢复显示，并独立于触屏手柄的启用状态。运行指标、诊断录制、导出、音频、麦克风、画面比例及文字发送在一级完成；画面设置从底部上滑，诊断四组详情直接位于右上局部浮层。录制沿用现有诊断 Trace，结束与关机采用原生确认。登录空态由根视图独立展示中部 132pt XBXRC 标志（沿用 LaunchIcon 品牌资源）与页面下部的全宽登录按钮，按钮距底部安全区 32pt；登录后显示顶部品牌与底部导航。
+
+--- a/iosapp/XBXRC/App/PCPageUITestFixtures.swift
++++ b/iosapp/XBXRC/App/PCPageUITestFixtures.swift
+@@ -290,7 +290,7 @@
+                 ?? PCPageFixtures.cloudGames()[0]
+             return CloudProductDetails(
+                 productID: productID, name: game.name, publisherName: game.publisherName,
+-                description: "完整云游戏商品资料",
++        description: game.description ?? "完整云游戏商品资料",
+                 tileURL: nil, posterURL: nil, heroURL: nil, categories: game.categories,
+                 developer: "Xbox Game Studios",
+                 releaseDate: "2025-01-01", rating: "12+", attributes: ["单人游戏", "在线多人"],
+
+--- a/iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift
++++ b/iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift
+@@ -117,7 +117,7 @@
+       guard isActive else { return }
+       await load()
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+     .onChange(of: auth.ownerGeneration) { _, _ in
+       selected = nil
+       revealed = []
+
+--- a/iosapp/XBXRC/Features/Achievements/AchievementsView.swift
++++ b/iosapp/XBXRC/Features/Achievements/AchievementsView.swift
+@@ -101,7 +101,7 @@
+         .padding(.bottom, 24)
+         .frame(maxWidth: 960).frame(maxWidth: .infinity)
+       }
+-      .refreshable {
++      .appRefreshable {
+         await dataStore.refreshLibrary()
+       }
+     }
+@@ -112,7 +112,7 @@
+     switch dataStore.libraryPhase {
+     case .idle, .loading:
+       refreshableLibraryEmptyState {
+-        ProgressView("正在载入成就列表")
++        libraryRequestState
+       }
+     case .failed:
+       refreshableLibraryEmptyState { libraryRequestState.padding(AppLayoutPolicy.pageInset) }
+@@ -144,7 +144,7 @@
+         content()
+           .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+       }
+-      .refreshable { await dataStore.refreshLibrary() }
++      .appRefreshable { await dataStore.refreshLibrary() }
+     }
+   }
+ }
+
+--- a/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift
++++ b/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift
+@@ -6,6 +6,7 @@
+     @EnvironmentObject private var data: XboxDataStore
+     @EnvironmentObject private var settings: AppSettingsStore
+     @EnvironmentObject private var streaming: StreamingFeatureStore
++    @EnvironmentObject private var cloud: CloudLibraryStore
+     @Environment(\.appPageIsActive) private var isActive
+     @Environment(\.locale) private var locale
+     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+@@ -105,7 +106,7 @@
+         .onChange(of: storageDevices.map(\.id)) { _, devices in
+             if storageID != "all", !devices.contains(storageID) { storageID = "all" }
+         }
+-        .refreshable { await load(refresh: true) }
++        .appRefreshable { await load(refresh: true) }
+         .navigationDestination(item: $selectedGame) { game in
+             if let titleID = game.titleID {
+                 PersonalGameDetailView(
+@@ -118,9 +119,26 @@
+                             productID: game.productID),
+                     installedGame: game, host: host)
+             } else {
++                let detailState =
++                    game.productID.map { cloud.productDetailState($0) }
++                    ?? XboxSingleDataState()
++                let detail = detailState.value
+                 AppInformationPage {
+                     Section {
+-                        Text(game.name).appFont(.title, weight: .bold)
++                        HStack(alignment: .center, spacing: 12) {
++                            Text(detail?.name ?? game.name).appFont(.title, weight: .bold)
++                                .frame(maxWidth: .infinity, alignment: .leading)
++                            HostStreamButton(host: host, size: 44, action: startHost)
++                                .accessibilityIdentifier("personal-game-start-stream")
++                        }
++                        if let productID = game.productID {
++                            AppSectionRequestState(
++                                title: "游戏资料", status: detailState.requestStatus,
++                                identifier: "installed-game-catalog"
++                            ) {
++                                await cloud.loadProductDetail(productID: productID, refresh: true)
++                            }
++                        }
+                         LabeledContent("大小", value: bytes(game.sizeBytes))
+                         if let date = game.installedAt {
+                             LabeledContent(
+@@ -136,16 +154,27 @@
+                                     Date.FormatStyle(date: .abbreviated, time: .omitted).locale(
+                                         locale)))
+                         }
+-                    }
+-                    Section {
+-                        Button("串流此主机", systemImage: "play.fill") {
+-                            startHost()
+-                        }.disabled(!host.canStartRemotePlay)
+                     } footer: {
+                         Text("连接后进入主机界面，选择此游戏开始游玩。")
+                     }
++                    if let description = detail?.description, !description.isEmpty {
++                        Section("游戏简介") {
++                            Text(description).appFont(.body)
++                        }
++                    }
+                 }
+                 .appPageToolbar("游戏详情")
++                .task(id: "\(auth.ownerGeneration):\(cloud.productScopeID):\(game.productID ?? "")")
++                {
++                    if let productID = game.productID {
++                        await cloud.loadProductDetail(productID: productID)
++                    }
++                }
++                .appRefreshable {
++                    if let productID = game.productID {
++                        await cloud.loadProductDetail(productID: productID, refresh: true)
++                    }
++                }
+             }
+         }
+     }
+@@ -219,18 +248,7 @@
+     }
+ 
+     private var startButton: some View {
+-        Button {
+-            startHost()
+-        } label: {
+-            Image(systemName: "play.fill").appFont(.section, weight: .semibold)
+-                .offset(x: 2).frame(width: 56, height: 56)
+-                .foregroundStyle(.white)
+-                .background(AppThemePalette.brand, in: Circle())
+-                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
+-        }
+-        .buttonStyle(.plain).disabled(!host.canStartRemotePlay)
+-        .opacity(host.canStartRemotePlay ? 1 : 0.45)
+-        .accessibilityLabel("串流此主机")
++        HostStreamButton(host: host, action: startHost)
+         .accessibilityIdentifier("installed-start-stream")
+     }
+ 
+@@ -403,3 +421,24 @@
+         }
+     }
+ }
++
++/// 主机概览与游戏标题共用圆形串流入口和可用状态。
++struct HostStreamButton: View {
++    let host: XboxHostSummary
++    var size: CGFloat = 56
++    let action: () -> Void
++
++    var body: some View {
++        Button(action: action) {
++            Image(systemName: "play.fill")
++                .font(.system(size: size >= 56 ? 20 : 16, weight: .semibold))
++                .offset(x: 1.5).frame(width: size, height: size)
++                .foregroundStyle(.white)
++                .background(AppThemePalette.brand, in: Circle())
++        }
++        .buttonStyle(.plain).disabled(!host.canStartRemotePlay)
++        .opacity(host.canStartRemotePlay ? 1 : 0.45)
++        .accessibilityLabel("串流此主机")
++        .accessibilityHint("连接后进入主机界面，选择此游戏开始游玩。")
++    }
++}
+
+--- a/iosapp/XBXRC/Features/Hosts/HostListView.swift
++++ b/iosapp/XBXRC/Features/Hosts/HostListView.swift
+@@ -130,7 +130,7 @@
+             }
+             .accessibilityIdentifier("host-overview-scroll")
+             .scrollIndicators(.hidden)
+-            .refreshable { await dataStore.refreshHosts() }
++            .appRefreshable { await dataStore.refreshHosts() }
+         }
+     }
+ 
+@@ -248,7 +248,7 @@
+         switch dataStore.hostPhase {
+         case .idle, .loading:
+             HostListLoadingView()
+-                .refreshable { await dataStore.refreshHosts() }
++                .appRefreshable { await dataStore.refreshHosts() }
+         case .failed:
+             refreshableEmptyState { hostRequestState.padding(AppLayoutPolicy.pageInset) }
+         case .loaded:
+@@ -289,7 +289,7 @@
+                 content()
+                     .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+             }
+-            .refreshable { await dataStore.refreshHosts() }
++            .appRefreshable { await dataStore.refreshHosts() }
+         }
+     }
+ }
+
+--- a/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
++++ b/iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift
+@@ -241,7 +241,7 @@
+     }
+     .onChange(of: category) { _, _ in persistFilters() }
+     .onChange(of: sort) { _, _ in persistFilters() }
+-    .refreshable { await refresh() }
++    .appRefreshable { await refresh() }
+   }
+ 
+   private var filters: some View {
+
+--- a/iosapp/XBXRC/Features/Library/GameDetailView.swift
++++ b/iosapp/XBXRC/Features/Library/GameDetailView.swift
+@@ -128,7 +128,7 @@
+       guard isActive, authStore.isSignedIn else { return }
+       await load(refresh: false)
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+     .sheet(item: $selectedScreenshot) { screenshot in
+       NavigationStack { CloudScreenshotPreview(url: screenshot.url) }
+         .presentationDragIndicator(.visible)
+
+--- a/iosapp/XBXRC/Features/Library/GameLibraryView.swift
++++ b/iosapp/XBXRC/Features/Library/GameLibraryView.swift
+@@ -136,7 +136,7 @@
+       }
+       .background(.clear)
+       .accessibilityIdentifier("cloud-library-scroll")
+-      .refreshable {
++      .appRefreshable {
+         await refreshCloudLibrary(reason: .pullToRefresh)
+       }
+     }
+@@ -159,7 +159,7 @@
+     switch cloudStore.phase {
+     case .idle, .loading:
+       GameLibraryLoadingView()
+-        .refreshable {
++        .appRefreshable {
+           await refreshCloudLibrary(reason: .pullToRefresh)
+         }
+     case .failed:
+@@ -185,7 +185,7 @@
+         content()
+           .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+       }
+-      .refreshable {
++      .appRefreshable {
+         await refreshCloudLibrary(reason: .pullToRefresh)
+       }
+     }
+
+--- a/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
++++ b/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
+@@ -115,7 +115,7 @@
+       sort = statistics ? .playtime : .recent
+       await load(refresh: false)
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+   }
+ 
+   private func load(refresh: Bool) async {
+@@ -274,6 +274,7 @@
+   @EnvironmentObject private var auth: AuthStore
+   @EnvironmentObject private var data: XboxDataStore
+   @EnvironmentObject private var streaming: StreamingFeatureStore
++  @EnvironmentObject private var cloud: CloudLibraryStore
+   @EnvironmentObject private var settings: AppSettingsStore
+   @Environment(\.appPageIsActive) private var isActive
+   @Environment(\.dynamicTypeSize) private var textSize
+@@ -298,10 +299,29 @@
+   private var timeState: XboxSingleDataState<Int> {
+     data.playerPlaytimeStates[key] ?? XboxSingleDataState()
+   }
+-  private var game: GameSummary {
++  private var record: GameSummary {
+     detailState.value ?? data.historyState(targetID: targetID).items.first {
+       $0.titleID == initialGame.titleID
+     } ?? initialGame
++  }
++  private var productID: String? {
++    installedGame?.productID ?? initialGame.productID ?? record.productID
++  }
++  private var productState: XboxSingleDataState<CloudProductDetails> {
++    productID.map { cloud.productDetailState($0) } ?? XboxSingleDataState()
++  }
++  private var game: GameSummary {
++    guard let detail = productState.value else { return record }
++    // 商品文案与图片按目录配置取值，个人记录继续提供成就和游玩事实。
++    return GameSummary(
++      id: record.id, titleID: record.titleID,
++      name: detail.name.isEmpty ? record.name : detail.name,
++      artworkURL: detail.tileURL ?? detail.posterURL ?? record.artworkURL,
++      heroURL: detail.heroURL ?? record.heroURL,
++      lastPlayedAt: record.lastPlayedAt, playtimeMinutes: record.playtimeMinutes,
++      achievementProgress: record.achievementProgress,
++      description: detail.description.isEmpty ? record.description : detail.description,
++      productID: productID, scid: record.scid)
+   }
+   private var coverURL: URL? {
+     game.artworkURL ?? initialGame.artworkURL ?? installedGame?.artworkURL
+@@ -338,7 +358,9 @@
+       game.name, artwork: .game(backdropURL)
+     )
+     .appInformationTypography()
+-    .task(id: "\(auth.ownerGeneration):\(key):\(isActive)") {
++    .task(
++      id: "\(auth.ownerGeneration):\(key):\(cloud.productScopeID):\(productID ?? ""):\(isActive)"
++    ) {
+       guard isActive else { return }
+       await load(refresh: false)
+     }
+@@ -348,10 +370,23 @@
+     HStack(alignment: .bottom, spacing: 16) {
+       PersonalArtwork(url: coverURL, size: compact ? 56 : 96)
+       VStack(alignment: .leading, spacing: compact ? 4 : 8) {
+-        Text(game.name).appFont(.hero, weight: .semibold)
+-          .fixedSize(horizontal: false, vertical: true)
+-          .accessibilityAddTraits(.isHeader)
+-          .accessibilityIdentifier("personal-game-name")
++        HStack(alignment: .center, spacing: 12) {
++          Text(game.name).appFont(.hero, weight: .semibold)
++            .fixedSize(horizontal: false, vertical: true)
++            .frame(maxWidth: .infinity, alignment: .leading)
++            .accessibilityAddTraits(.isHeader)
++            .accessibilityIdentifier("personal-game-name")
++          if let host {
++            HostStreamButton(host: host, size: 44) {
++              if let target = host.streamTargetID {
++                streaming.startHome(targetID: target) { startup in
++                  try await auth.prepareHomeAccess(startup: startup)
++                }
++              }
++            }
++            .accessibilityIdentifier("personal-game-start-stream")
++          }
++        }
+         if let progress = game.achievementProgress {
+           Text(
+             appLocalizedFormat(
+@@ -379,8 +414,16 @@
+   private var overview: some View {
+     AppInformationPage {
+       Section {
++        if let productID {
++          AppSectionRequestState(
++            title: "游戏资料", status: productState.requestStatus,
++            identifier: "personal-game-catalog"
++          ) {
++            await cloud.loadProductDetail(productID: productID, refresh: true)
++          }
++        }
+         AppSectionRequestState(
+-          title: "游戏资料", status: detailState.requestStatus, identifier: "personal-game"
++          title: "游戏记录", status: detailState.requestStatus, identifier: "personal-game"
+         ) {
+           await data.loadLibraryGame(
+             titleID: initialGame.titleID, targetID: targetID, refresh: true)
+@@ -413,7 +456,7 @@
+         }
+       }
+       if let installedGame {
+-        Section("安装信息") {
++        Section {
+           AppMetricGrid {
+             if let host { AppMetric(title: "主机", value: host.name) }
+             AppMetric(
+@@ -440,23 +483,16 @@
+                     locale)))
+             }
+           }
+-        }
+-      }
+-      if let host {
+-        Section {
+-          Button("串流此主机", systemImage: "play.fill") {
+-                        if let target = host.streamTargetID {
+-                            streaming.startHome(targetID: target) { startup in
+-                                try await auth.prepareHomeAccess(startup: startup)
+-                            }
+-            }
+-          }.disabled(!host.canStartRemotePlay)
++        } header: {
++          Text("安装信息")
+         } footer: {
+-          Text("连接后进入主机界面，选择此游戏开始游玩。")
+-        }
+-      }
+-    }
+-    .refreshable { await load(refresh: true) }
++          if host != nil {
++            Text("连接后进入主机界面，选择此游戏开始游玩。")
++          }
++        }
++      }
++    }
++    .appRefreshable { await load(refresh: true) }
+   }
+ 
+   private var statistics: some View {
+@@ -508,7 +544,7 @@
+         AppInlineHint("时长来自 Xbox，部分游戏受隐私与服务覆盖范围影响。", identifier: "playtime-source")
+       }
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+   }
+ 
+   private func load(refresh: Bool) async {
+@@ -516,6 +552,12 @@
+       titleID: initialGame.titleID, targetID: targetID, refresh: refresh)
+     async let time: Void = data.loadPlayerPlaytime(
+       titleID: initialGame.titleID, targetID: targetID, refresh: refresh)
+-    _ = await (detail, time)
+-  }
+-}
++    async let product: Void = loadProduct(refresh: refresh)
++    _ = await (detail, time, product)
++  }
++
++  private func loadProduct(refresh: Bool) async {
++    guard let productID else { return }
++    await cloud.loadProductDetail(productID: productID, refresh: refresh)
++  }
++}
+
+--- a/iosapp/XBXRC/Features/Profile/PersonalPages.swift
++++ b/iosapp/XBXRC/Features/Profile/PersonalPages.swift
+@@ -71,7 +71,7 @@
+       guard isActive else { return }
+       await data.loadFriends()
+     }
+-    .refreshable { await data.loadFriends(refresh: true) }
++    .appRefreshable { await data.loadFriends(refresh: true) }
+   }
+ }
+ 
+@@ -210,7 +210,7 @@
+       guard isActive else { return }
+       await load(refresh: false)
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+   }
+ 
+   private func load(refresh: Bool) async {
+
+--- a/iosapp/XBXRC/Features/Profile/ProfileView.swift
++++ b/iosapp/XBXRC/Features/Profile/ProfileView.swift
+@@ -88,7 +88,7 @@
+                     }.sharedBackgroundVisibility(.hidden)
+                 }
+             }
+-            .refreshable { await refresh() }
++            .appRefreshable { await refresh() }
+             .navigationDestination(for: MyRoute.self) { route in
+                 routeContent(route)
+                     .appPageToolbar(route.title)
+
+--- a/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift
++++ b/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift
+@@ -65,7 +65,7 @@
+       guard isActive else { return }
+       await load()
+     }
+-    .refreshable { await load(refresh: true) }
++    .appRefreshable { await load(refresh: true) }
+     .onChange(of: auth.ownerGeneration) { _, _ in
+       selectedMedia = nil
+       gameFilter = "all"
+
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+@@ -30,17 +30,17 @@
+         ZStack {
+             if controls.surface == .hidden {
+                 VStack {
+-                    HStack {
++                    HStack(spacing: 8) {
+                         dockButton(
+                             systemName: "line.3.horizontal", label: "打开串流菜单",
+                             identifier: "stream-controls-open"
+                         ) {
+                             reveal(source: .button)
+                         }
+-                        .appSurface(radius: 14, prominent: true, forceDark: true)
+-                        Spacer(minLength: 8)
++                        .streamingQuickControlSurface()
+                         StreamingTouchQuickSwitch(
+                             controller: store.touchLayout, session: store.input)
++                        Spacer(minLength: 0)
+                     }
+                     Spacer()
+                 }
+
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
+@@ -32,23 +32,20 @@
+           selection, library: library, preferences: settings.mobile)
+       }
+     } label: {
+-      HStack(spacing: 6) {
+-        Group {
+-          if controller.pendingSelection != nil {
+-            ProgressView().controlSize(.small)
+-          } else {
+-            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+-              .font(.system(size: 16))
+-          }
++      Group {
++        if controller.pendingSelection != nil {
++          ProgressView().controlSize(.small).tint(.white)
++        } else {
++          Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
++            .font(.system(size: 19, weight: .medium))
+         }
+-        .frame(width: 20, height: 20).accessibilityHidden(true)
+-        Text(LocalizedStringKey(isStandard ? "标准" : "最近"))
+-          .appFont(.caption, weight: .semibold).lineLimit(1)
+       }
+-      .foregroundStyle(.white).padding(.horizontal, 10).frame(minWidth: 44, minHeight: 44)
++      .foregroundStyle(.white)
++      .shadow(color: .black.opacity(0.6), radius: 1)
++      .frame(width: 44, height: 44).contentShape(Rectangle())
+     }
+     .buttonStyle(.plain)
+-    .padding(4).appSurface(radius: 14, prominent: true, forceDark: true)
++    .streamingQuickControlSurface()
+     .disabled(nextSelection == nil)
+     .accessibilityLabel(
+       Text(LocalizedStringKey(nextSelection == .standard ? "切换标准布局" : "切换最近自定义布局"))
+@@ -64,3 +61,27 @@
+     }
+   }
+ }
++
++/// 常驻入口透出游戏画面，辅助功能降低透明度时提供清晰底色。
++private struct StreamingQuickControlSurface: ViewModifier {
++  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
++
++  func body(content: Content) -> some View {
++    content
++      .background(
++        .black.opacity(reduceTransparency ? 0.82 : 0.12),
++        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
++      )
++      .overlay {
++        RoundedRectangle(cornerRadius: 12, style: .continuous)
++          .strokeBorder(.white.opacity(reduceTransparency ? 0.25 : 0.12), lineWidth: 0.5)
++          .allowsHitTesting(false)
++      }
++  }
++}
++
++extension View {
++  func streamingQuickControlSurface() -> some View {
++    modifier(StreamingQuickControlSurface())
++  }
++}
+
+--- a/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
++++ b/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
+@@ -240,6 +240,7 @@
+ }
+ 
+ struct AppRefreshButton: View {
++  @Environment(\.appIsPullRefreshing) private var isPullRefreshing
+   let title: String
+   var isRefreshing: Bool
+   let action: @MainActor () async -> Void
+@@ -253,7 +254,7 @@
+ 
+   var body: some View {
+     Button {
+-      guard !running && !isRefreshing else { return }
++      guard !running && !isRefreshing && !isPullRefreshing else { return }
+       running = true
+       Task {
+         await action()
+@@ -261,14 +262,14 @@
+       }
+     } label: {
+       Group {
+-        if running || isRefreshing {
++        if (running || isRefreshing) && !isPullRefreshing {
+           ProgressView()
+         } else {
+           AppIconView(.refresh, size: 22)
+         }
+       }.frame(width: 44, height: 44)
+     }
+-    .buttonStyle(.plain).disabled(running || isRefreshing)
++    .buttonStyle(.plain).disabled(running || isRefreshing || isPullRefreshing)
+     .foregroundStyle(AppThemePalette.textPrimary)
+     .accessibilityLabel(Text(LocalizedStringKey(title)))
+   }
+@@ -527,6 +528,34 @@
+   }
+ }
+ 
++extension EnvironmentValues {
++  @Entry var appIsPullRefreshing = false
++}
++
++/// 原生下拉负责这一轮刷新反馈，分区、重试和分页共享当前页面的刷新范围。
++private struct AppRefreshableModifier: ViewModifier {
++  @Environment(\.appIsPullRefreshing) private var parentIsRefreshing
++  @State private var isRefreshing = false
++  let action: @MainActor () async -> Void
++
++  func body(content: Content) -> some View {
++    content
++      .environment(\.appIsPullRefreshing, parentIsRefreshing || isRefreshing)
++      .refreshable {
++        guard !isRefreshing else { return }
++        isRefreshing = true
++        defer { isRefreshing = false }
++        await action()
++      }
++  }
++}
++
++extension View {
++  func appRefreshable(action: @escaping @MainActor () async -> Void) -> some View {
++    modifier(AppRefreshableModifier(action: action))
++  }
++}
++
+ /// 搜索位于局部工具区，展开后的输入表面随实际字段宽度呈现。
+ struct AppContentSearch: View {
+   @Binding var text: String
+@@ -706,6 +735,7 @@
+ 
+ /// 分页作为列表末尾动作居中，真实等待沿同一个按钮反馈。
+ struct AppLoadMoreButton: View {
++  @Environment(\.appIsPullRefreshing) private var isPullRefreshing
+   var title = "载入更多"
+   let isLoading: Bool
+   let action: @MainActor () async -> Void
+@@ -713,7 +743,7 @@
+ 
+   var body: some View {
+     Button {
+-      guard !running && !isLoading else { return }
++      guard !running && !isLoading && !isPullRefreshing else { return }
+       running = true
+       Task {
+         await action()
+@@ -721,14 +751,14 @@
+       }
+     } label: {
+       HStack(spacing: 8) {
+-        if isLoading || running { ProgressView().controlSize(.small) }
+-        Text(LocalizedStringKey(isLoading || running ? "正在载入…" : title))
++        if (isLoading || running) && !isPullRefreshing { ProgressView().controlSize(.small) }
++        Text(LocalizedStringKey((isLoading || running) && !isPullRefreshing ? "正在载入…" : title))
+       }
+       .appFont(.bodySmall, weight: .semibold).foregroundStyle(AppThemePalette.brand)
+       .padding(.horizontal, 16).frame(minHeight: 44)
+       .appCapsuleSurface(verticalInset: 6).contentShape(Rectangle())
+     }
+-    .buttonStyle(.plain).disabled(isLoading || running)
++    .buttonStyle(.plain).disabled(isLoading || running || isPullRefreshing)
+     .accessibilityIdentifier("content-load-more")
+     .frame(maxWidth: .infinity)
+   }
+
+--- a/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
++++ b/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
+@@ -3,6 +3,7 @@
+ /// 无背景的分区提示，整个文字行可点按恢复。
+ struct AppSectionRequestState: View {
+     @Environment(\.locale) private var locale
++    @Environment(\.appIsPullRefreshing) private var isPullRefreshing
+     let title: String
+     let status: SectionRequestStatus
+     var identifier: String = "data"
+@@ -16,7 +17,7 @@
+             if let failure = status.failure, failure.kind != .authentication {
+                 if let action {
+                     Button {
+-                        guard !running && !status.isBusy else { return }
++                        guard !running && !status.isBusy && !isPullRefreshing else { return }
+                         running = true
+                         retryTask = Task {
+                             await action()
+@@ -25,13 +26,15 @@
+                     } label: {
+                         notice(failure)
+                     }
+-                    .buttonStyle(.plain).disabled(running || status.isBusy || coolingDown(failure))
++                    .buttonStyle(.plain).disabled(
++                        running || status.isBusy || isPullRefreshing || coolingDown(failure)
++                    )
+                     .accessibilityIdentifier("section-retry-\(identifier)")
+                     .accessibilityHint(Text(LocalizedStringKey(retryTitle(failure))))
+                 } else {
+                     notice(failure)
+                 }
+-            } else if status.isBusy && status.failure == nil {
++            } else if status.isBusy && status.failure == nil && !isPullRefreshing {
+                 HStack(spacing: 8) {
+                     ProgressView().controlSize(.small)
+                     Text(LocalizedStringKey(status.hasSnapshot ? "正在更新…" : "正在载入…"))
+@@ -62,7 +65,7 @@
+                 locale: locale, appLocalizedString(title, locale: locale)),
+             reason: failure.message, detail: snapshotDescription,
+             actionTitle: running || status.isBusy ? "正在重试…" : retryTitle(failure),
+-            showsAction: action != nil, isBusy: running || status.isBusy
++            showsAction: action != nil, isBusy: (running || status.isBusy) && !isPullRefreshing
+         )
+         .accessibilityIdentifier("section-error-\(identifier)")
+     }
+
+--- a/iosapp/XBXRCUITests/PCPageInteractionTests.swift
++++ b/iosapp/XBXRCUITests/PCPageInteractionTests.swift
+@@ -451,6 +451,13 @@
+     waitForPage(app, "Forza Horizon 5")
+     let name = app.staticTexts["personal-game-name"].firstMatch
+     XCTAssertTrue(name.waitForExistence(timeout: 5))
++    let stream = app.buttons["personal-game-start-stream"]
++    XCTAssertTrue(stream.isHittable)
++    XCTAssertEqual(stream.frame.width, 44, accuracy: 1)
++    XCTAssertEqual(stream.frame.height, 44, accuracy: 1)
++    XCTAssertEqual(stream.frame.midY, name.frame.midY, accuracy: 1)
++    XCTAssertGreaterThan(stream.frame.minX, name.frame.maxX)
++    XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "串流此主机")).count, 1)
+     let sections = app.scrollViews["personal-game-sections"]
+     let identityFrame = name.frame
+     let tabsFrame = sections.frame
+
+--- a/iosapp/XBXRC/Shared/Components/SkeletonPulse.swift
++++ b/iosapp/XBXRC/Shared/Components/SkeletonPulse.swift
+@@ -2,17 +2,18 @@
+ 
+ private struct SkeletonPulseModifier: ViewModifier {
+     @Environment(\.accessibilityReduceMotion) private var reduceMotion
++    @Environment(\.appIsPullRefreshing) private var isPullRefreshing
+     @State private var isHighlighted = false
+ 
+     let accessibilityLabel: String
+ 
+     func body(content: Content) -> some View {
+         content
+-            .opacity(reduceMotion ? 0.62 : (isHighlighted ? 0.74 : 0.44))
++            .opacity(reduceMotion || isPullRefreshing ? 0.62 : (isHighlighted ? 0.74 : 0.44))
+             .accessibilityElement(children: .ignore)
+             .accessibilityLabel(accessibilityLabel)
+-            .task {
+-                guard !reduceMotion else {
++            .task(id: reduceMotion || isPullRefreshing) {
++                guard !reduceMotion && !isPullRefreshing else {
+                     return
+                 }
+ 
+
+--- a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -352,11 +352,18 @@
+             waitForOrientation(app, landscape: true)
+             let region = streamingSafeRegion(app)
+             assertInsideSafeRegion(reveal, region: region)
++            let quickSwitch = app.buttons["stream-touch-quick-switch"]
++            assertInsideSafeRegion(quickSwitch, region: region)
++            XCTAssertEqual(quickSwitch.frame.width, 44, accuracy: 1)
++            XCTAssertEqual(quickSwitch.frame.height, 44, accuracy: 1)
++            XCTAssertEqual(quickSwitch.frame.midY, reveal.frame.midY, accuracy: 1)
++            XCTAssertEqual(quickSwitch.frame.minX - reveal.frame.maxX, 8, accuracy: 1)
+             let controls = app.buttons.matching(
+                 NSPredicate(format: "identifier BEGINSWITH %@", "touch-control-"))
+             XCTAssertGreaterThan(controls.count, 10)
+             for control in controls.allElementsBoundByIndex {
+                 assertInsideSafeRegion(control, region: region)
++                XCTAssertFalse(control.frame.intersects(quickSwitch.frame), control.identifier)
+             }
+             save(app, "streaming-safe-touch-\(name)")
+             reveal.tap()

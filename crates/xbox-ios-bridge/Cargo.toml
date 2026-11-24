@@ -26,9 +26,11 @@ xbox-cloud-catalog-flow = { path = "../xbox-cloud-catalog-flow" }
 xbox-streaming-protocol = { path = "../xbox-streaming-protocol" }
 xbox-streaming = { path = "../xbox-streaming" }
 xbox-webapi = { path = "../xbox-webapi" }
+xbox-touch-layouts = { path = "../xbox-touch-layouts" }
 
 [dev-dependencies]
 uniffi = { version = "0.32.0", features = ["cli"] }
+zip = { version = "4.6.1", default-features = false }
 
 [[example]]
 name = "uniffi-bindgen"

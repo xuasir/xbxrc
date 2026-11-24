@@ -1,0 +1,314 @@
+[
+  {
+    "name": "testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState()",
+    "nodeIdentifier": "StreamingControlsStateTests/testStandardTouchLayoutSharesCatalogAndReleasesMultiPointerState()",
+    "result": "Passed",
+    "duration": "0.011s"
+  },
+  {
+    "name": "testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas()",
+    "nodeIdentifier": "StreamingControlsStateTests/testStreamingTouchSurfacePassesEmptySpaceAndKeepsControlHitAreas()",
+    "result": "Passed",
+    "duration": "0.074s"
+  },
+  {
+    "name": "testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession()",
+    "result": "Passed",
+    "duration": "0.052s"
+  },
+  {
+    "name": "testBackgroundPipelineReadinessReplaysOncePerVisibleInterval()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testBackgroundPipelineReadinessReplaysOncePerVisibleInterval()",
+    "result": "Passed",
+    "duration": "0.18s"
+  },
+  {
+    "name": "testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testCompletionTimingSeparatesQueueAndWorkAndSurvivesRedaction()",
+    "result": "Passed",
+    "duration": "0.00062s"
+  },
+  {
+    "name": "testDifferentNativeTracksWithSameIdentifierRequireReattachment()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testDifferentNativeTracksWithSameIdentifierRequireReattachment()",
+    "result": "Passed",
+    "duration": "0.0012s"
+  },
+  {
+    "name": "testFailedCompletionRetriesFrameAndPrefersNewerCandidate()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testFailedCompletionRetriesFrameAndPrefersNewerCandidate()",
+    "result": "Passed",
+    "duration": "0.00061s"
+  },
+  {
+    "name": "testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying()",
+    "result": "Passed",
+    "duration": "0.014s"
+  },
+  {
+    "name": "testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testGpuCompletionReleasesSlotBeforeMainActorAccountingAndKeepsNewBusyFact()",
+    "result": "Passed",
+    "duration": "0.00098s"
+  },
+  {
+    "name": "testHealthBurstPreservesLatestCountersAndFlushesTailOnce()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testHealthBurstPreservesLatestCountersAndFlushesTailOnce()",
+    "result": "Passed",
+    "duration": "0.028s"
+  },
+  {
+    "name": "testHealthContextChangeAndResetDiscardOldPendingSnapshot()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testHealthContextChangeAndResetDiscardOldPendingSnapshot()",
+    "result": "Passed",
+    "duration": "0.00065s"
+  },
+  {
+    "name": "testIngressAndDrawPreparationTimingSurviveRedaction()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressAndDrawPreparationTimingSurviveRedaction()",
+    "result": "Passed",
+    "duration": "0.0011s"
+  },
+  {
+    "name": "testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames()",
+    "result": "Passed",
+    "duration": "0.004s"
+  },
+  {
+    "name": "testIngressDrainKeepsLatestReplacementCountsAndResetBoundary()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressDrainKeepsLatestReplacementCountsAndResetBoundary()",
+    "result": "Passed",
+    "duration": "0.00051s"
+  },
+  {
+    "name": "testIngressReplacementKeepsOriginalDrainScheduleTime()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressReplacementKeepsOriginalDrainScheduleTime()",
+    "result": "Passed",
+    "duration": "0.00059s"
+  },
+  {
+    "name": "testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount()",
+    "result": "Passed",
+    "duration": "0.00043s"
+  },
+  {
+    "name": "testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket()",
+    "result": "Passed",
+    "duration": "0.00087s"
+  },
+  {
+    "name": "testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testLateAndDuplicateCompletionKeepResetFrameOwnedByNewSubmission()",
+    "result": "Passed",
+    "duration": "0.00047s"
+  },
+  {
+    "name": "testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended()",
+    "result": "Passed",
+    "duration": "0.014s"
+  },
+  {
+    "name": "testLateResumeValidationKeepsNewVisibilityRevisionSuspended()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testLateResumeValidationKeepsNewVisibilityRevisionSuspended()",
+    "result": "Passed",
+    "duration": "0.014s"
+  },
+  {
+    "name": "testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext()",
+    "result": "Passed",
+    "duration": "0.22s"
+  },
+  {
+    "name": "testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery()",
+    "result": "Passed",
+    "duration": "0.0045s"
+  },
+  {
+    "name": "testResumeKeepsFreshPresentUntilValidationCompletes()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testResumeKeepsFreshPresentUntilValidationCompletes()",
+    "result": "Passed",
+    "duration": "0.013s"
+  },
+  {
+    "name": "testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters()",
+    "result": "Passed",
+    "duration": "0.00062s"
+  },
+  {
+    "name": "testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression()",
+    "result": "Passed",
+    "duration": "0.16s"
+  },
+  {
+    "name": "testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility()",
+    "nodeIdentifier": "StreamingDisplayCallbackTests/testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility()",
+    "result": "Passed",
+    "duration": "0.0096s"
+  },
+  {
+    "name": "testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testClarityPreferenceRestoresLegacyAndReachesSessionSnapshot()",
+    "result": "Passed",
+    "duration": "0.012s"
+  },
+  {
+    "name": "testMetadataRequiresMatchingDecodeAndCompletedRendering()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testMetadataRequiresMatchingDecodeAndCompletedRendering()",
+    "result": "Passed",
+    "duration": "0.0061s"
+  },
+  {
+    "name": "testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testMetadataWakesIdleInputAndObeysBackpressureAndReleaseGate()",
+    "result": "Passed",
+    "duration": "0.00052s"
+  },
+  {
+    "name": "testNativeH264DecoderForwardsFirstFrameFromBackgroundQueue()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testNativeH264DecoderForwardsFirstFrameFromBackgroundQueue()",
+    "result": "Passed",
+    "duration": "0.51s"
+  },
+  {
+    "name": "testNormalAndResolutionHoldModesSendMetadataAndKeepRawObservations()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testNormalAndResolutionHoldModesSendMetadataAndKeepRawObservations()",
+    "result": "Passed",
+    "duration": "0.00057s"
+  },
+  {
+    "name": "testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testOldPeerCallbacksAndInvalidClocksStayOutsideNewSession()",
+    "result": "Passed",
+    "duration": "0.0004s"
+  },
+  {
+    "name": "testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testQueuesKeepRecentFramesWithinCapacityAndExpireStaleObservations()",
+    "result": "Passed",
+    "duration": "0.001s"
+  },
+  {
+    "name": "testWrapperForwardsOriginalDecoderFramesAndLifecycle()",
+    "nodeIdentifier": "StreamingFrameFeedbackTests/testWrapperForwardsOriginalDecoderFramesAndLifecycle()",
+    "result": "Passed",
+    "duration": "0.0092s"
+  },
+  {
+    "name": "testCounterWindowsPreserveZeroSupplyAndResetOnGenerationOrRegression()",
+    "nodeIdentifier": "TraceReliabilityTests/testCounterWindowsPreserveZeroSupplyAndResetOnGenerationOrRegression()",
+    "result": "Passed",
+    "duration": "0.0006s"
+  },
+  {
+    "name": "testFlushIncludesRemainingDropsWithinNoticeInterval()",
+    "nodeIdentifier": "TraceReliabilityTests/testFlushIncludesRemainingDropsWithinNoticeInterval()",
+    "result": "Passed",
+    "duration": "0.3s"
+  },
+  {
+    "name": "testGpuAndDrawableLatencyHaveIndependentSourcesAndBoundedWindows()",
+    "nodeIdentifier": "TraceReliabilityTests/testGpuAndDrawableLatencyHaveIndependentSourcesAndBoundedWindows()",
+    "result": "Passed",
+    "duration": "0.013s"
+  },
+  {
+    "name": "testLightweightKeepsHealthAndSamplesPerFrameEvidence()",
+    "nodeIdentifier": "TraceReliabilityTests/testLightweightKeepsHealthAndSamplesPerFrameEvidence()",
+    "result": "Passed",
+    "duration": "0.0073s"
+  },
+  {
+    "name": "testOversizedRowIsCountedAndSubsequentEvidencePersists()",
+    "nodeIdentifier": "TraceReliabilityTests/testOversizedRowIsCountedAndSubsequentEvidencePersists()",
+    "result": "Passed",
+    "duration": "0.009s"
+  },
+  {
+    "name": "testPacketStatisticsUseVideoScopeAndPreserveMissingObservations()",
+    "nodeIdentifier": "TraceReliabilityTests/testPacketStatisticsUseVideoScopeAndPreserveMissingObservations()",
+    "result": "Passed",
+    "duration": "0.00076s"
+  },
+  {
+    "name": "testProfileDisableFlushesAcceptedEvidenceAndDropSummary()",
+    "nodeIdentifier": "TraceReliabilityTests/testProfileDisableFlushesAcceptedEvidenceAndDropSummary()",
+    "result": "Passed",
+    "duration": "0.16s"
+  },
+  {
+    "name": "testQueueHasHardCapacityReservedAnchorsAndExactDropSummary()",
+    "nodeIdentifier": "TraceReliabilityTests/testQueueHasHardCapacityReservedAnchorsAndExactDropSummary()",
+    "result": "Passed",
+    "duration": "0.46s"
+  },
+  {
+    "name": "testTimestampUsesEventSourceWhileQueueDelayIsSeparate()",
+    "nodeIdentifier": "TraceReliabilityTests/testTimestampUsesEventSourceWhileQueueDelayIsSeparate()",
+    "result": "Passed",
+    "duration": "0.068s"
+  },
+  {
+    "name": "testUnavailableStorageHasBoundedMemoryExplicitExportErrorAndRecovery()",
+    "nodeIdentifier": "TraceReliabilityTests/testUnavailableStorageHasBoundedMemoryExplicitExportErrorAndRecovery()",
+    "result": "Passed",
+    "duration": "0.0099s"
+  },
+  {
+    "name": "testWriteFailureCountsLostTailAndRecoversWithoutRepeatingPrefix()",
+    "nodeIdentifier": "TraceReliabilityTests/testWriteFailureCountsLostTailAndRecoversWithoutRepeatingPrefix()",
+    "result": "Passed",
+    "duration": "0.012s"
+  },
+  {
+    "name": "testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+    "nodeIdentifier": "XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+    "result": "Passed",
+    "duration": "0.92s"
+  },
+  {
+    "name": "testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession()",
+    "nodeIdentifier": "XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession()",
+    "result": "Passed",
+    "duration": "0.029s"
+  },
+  {
+    "name": "testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()",
+    "nodeIdentifier": "XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()",
+    "result": "Passed",
+    "duration": "0.069s"
+  },
+  {
+    "name": "testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine()",
+    "nodeIdentifier": "XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine()",
+    "result": "Passed",
+    "duration": "0.22s"
+  },
+  {
+    "name": "testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession()",
+    "nodeIdentifier": "XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession()",
+    "result": "Passed",
+    "duration": "0.16s"
+  },
+  {
+    "name": "testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame()",
+    "nodeIdentifier": "XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame()",
+    "result": "Passed",
+    "duration": "0.045s"
+  },
+  {
+    "name": "testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules()",
+    "nodeIdentifier": "XBXRCTests/testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules()",
+    "result": "Passed",
+    "duration": "0.0083s"
+  }
+]

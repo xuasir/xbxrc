@@ -1,0 +1,371 @@
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift
+@@ -3,30 +3,39 @@
+ 
+ enum StreamingControlsRevealSource: String, Sendable {
+     case button
++    case blankTap
+     case twoFingerInward
+     case accessibility
+ }
+ 
+-/// 手势覆盖串流宿主，触点落在虚拟手柄上也能唤出菜单。
++/// 空白单击显示快捷入口，双指向内手势覆盖串流宿主并唤出菜单。
+ struct StreamingControlsGestureLayer: UIViewRepresentable {
++    var onBlankTap: (@MainActor () -> Void)? = nil
+     let onReveal: @MainActor () -> Void
+ 
+     func makeUIView(context: Context) -> GestureView {
+         let view = GestureView()
+         view.isUserInteractionEnabled = false
+         view.onReveal = onReveal
++        view.onBlankTap = onBlankTap
+         return view
+     }
+ 
+-    func updateUIView(_ view: GestureView, context: Context) { view.onReveal = onReveal }
++    func updateUIView(_ view: GestureView, context: Context) {
++        view.onReveal = onReveal
++        view.onBlankTap = onBlankTap
++    }
+ 
+     static func dismantleUIView(_ view: GestureView, coordinator: ()) { view.detach() }
+ 
+     final class GestureView: UIView, UIGestureRecognizerDelegate {
+         var onReveal: (@MainActor () -> Void)?
++        var onBlankTap: (@MainActor () -> Void)?
+         private weak var gestureWindow: UIWindow?
+         private lazy var gesture = StreamingInwardGestureRecognizer(
+             target: self, action: #selector(reveal))
++        private lazy var blankTap = UITapGestureRecognizer(
++            target: self, action: #selector(revealQuickControls))
+ 
+         override func didMoveToWindow() {
+             super.didMoveToWindow()
+@@ -35,14 +44,39 @@
+             gesture.cancelsTouchesInView = false
+             gesture.delegate = self
+             window.addGestureRecognizer(gesture)
++            blankTap.cancelsTouchesInView = false
++            blankTap.delaysTouchesBegan = false
++            blankTap.delaysTouchesEnded = false
++            blankTap.delegate = self
++            window.addGestureRecognizer(blankTap)
+             gestureWindow = window
+         }
+ 
+         func detach() {
+             gestureWindow?.removeGestureRecognizer(gesture)
++            gestureWindow?.removeGestureRecognizer(blankTap)
+             gestureWindow = nil
+         }
+         @objc private func reveal() { if gesture.state == .recognized { onReveal?() } }
++        @objc private func revealQuickControls() {
++            if blankTap.state == .recognized { onBlankTap?() }
++        }
++
++        func gestureRecognizer(
++            _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
++        ) -> Bool {
++            guard gestureRecognizer === blankTap else { return true }
++            guard onBlankTap != nil, bounds.contains(touch.location(in: self)) else {
++                return false
++            }
++            // Surface 已按真实控件命中透传空白，命中它的触点继续交给虚拟手柄。
++            var target = touch.view
++            while let view = target {
++                if view is TouchLayoutSurfaceView || view is UIControl { return false }
++                target = view.superview
++            }
++            return true
++        }
+         func gestureRecognizer(
+             _ gestureRecognizer: UIGestureRecognizer,
+             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift
+@@ -108,14 +108,16 @@
+ 
+ struct StreamingControlsState: Equatable, Sendable {
+     private(set) var surface: StreamingControlsSurface = .hidden
++    private var showsQuickControls = true
+ 
+     var dockVisible: Bool { surface == .dock }
++    var quickControlsVisible: Bool { surface == .hidden && showsQuickControls }
+     var suspendsAutoHide: Bool { surface != .hidden && surface != .dock }
+ 
+     mutating func reveal() { surface = .dock }
+ 
+     mutating func toggleDock() {
+-        surface = surface == .hidden ? .dock : .hidden
++        if surface == .hidden { reveal() } else { hide() }
+     }
+ 
+     mutating func present(_ next: StreamingControlsSurface) {
+@@ -126,7 +128,20 @@
+         surface = .dock
+     }
+ 
+-    mutating func hide() { surface = .hidden }
++    mutating func revealQuickControls() {
++        guard surface == .hidden else { return }
++        showsQuickControls = true
++    }
++
++    mutating func hide() {
++        surface = .hidden
++        showsQuickControls = true
++    }
++
++    mutating func hideAutomatically() {
++        surface = .hidden
++        showsQuickControls = false
++    }
+ }
+ 
+ struct StreamingInwardGestureSample: Equatable, Sendable {
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+@@ -21,6 +21,7 @@
+     @State private var confirmPowerOff = false
+     @State private var capturing = false
+     @State private var exporting = false
++    @State private var switchingLayout = false
+     @State private var sharedTrace: StreamingTraceShareItem?
+     @State private var exportError: String?
+     @State private var autoHideTask: Task<Void, Never>?
+@@ -28,7 +29,7 @@
+ 
+     var body: some View {
+         ZStack {
+-            if controls.surface == .hidden {
++            if controls.quickControlsVisible {
+                 VStack {
+                     HStack(spacing: 8) {
+                         dockButton(
+@@ -87,7 +88,16 @@
+         .accessibilityAction(named: "打开串流控制") { reveal(source: .accessibility) }
+         .onChange(of: revealToken) { _, _ in
+             guard controls.surface == .hidden || controls.dockVisible else { return }
++            if revealSource == .blankTap {
++                revealQuickControls()
++                return
++            }
+             controls.dockVisible ? hideDock() : reveal(source: revealSource)
++        }
++        .onReceive(store.touchLayout.$pendingSelection.map { $0 != nil }.removeDuplicates()) {
++            pending in
++            switchingLayout = pending
++            scheduleAutoHide()
+         }
+         .onReceive(store.$audioMuted.removeDuplicates()) { audioMuted = $0 }
+         .onReceive(store.$microphoneEnabled.removeDuplicates()) { microphoneEnabled = $0 }
+@@ -152,6 +162,7 @@
+                 try? await Task.sleep(for: .seconds(1))
+             }
+         }
++        .onAppear { scheduleAutoHide() }
+         .onDisappear {
+             cancelAutoHide()
+             messageTask?.cancel()
+@@ -309,6 +320,17 @@
+             importance: .debug)
+     }
+ 
++    private func revealQuickControls() {
++        guard controls.surface == .hidden else { return }
++        controls.revealQuickControls()
++        scheduleAutoHide()
++        IOSRuntimeTrace.state(
++            domain: "ios-streaming", event: "streamQuickControlsVisibilityChanged",
++            payload: ["visible": .bool(true), "source": .string("blankTap")],
++            dimension: .input,
++            importance: .debug)
++    }
++
+     private func resumeDock() {
+         controls.reveal()
+         scheduleAutoHide()
+@@ -320,6 +342,7 @@
+     private func hideDock() {
+         cancelAutoHide()
+         controls.hide()
++        scheduleAutoHide()
+     }
+ 
+     private func performExport(_ operation: @escaping @MainActor () async throws -> URL?) {
+@@ -346,11 +369,13 @@
+ 
+     private func scheduleAutoHide() {
+         cancelAutoHide()
+-        guard controls.dockVisible, !exporting, let autoHideAfter else { return }
++        guard controls.dockVisible || controls.quickControlsVisible,
++            !exporting, !switchingLayout, let autoHideAfter
++        else { return }
+         autoHideTask = Task { @MainActor in
+             try? await Task.sleep(for: autoHideAfter)
+-            guard !Task.isCancelled else { return }
+-            controls.hide()
++            guard !Task.isCancelled, !controls.suspendsAutoHide, !switchingLayout else { return }
++            controls.hideAutomatically()
+             IOSRuntimeTrace.state(
+                 domain: "ios-streaming", event: "streamControlsVisibilityChanged",
+                 payload: ["visible": .bool(false), "source": .string("autoHide")],
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+@@ -112,7 +112,9 @@
+             }
+         }
+         .background {
+-            StreamingControlsGestureLayer { revealControls(.twoFingerInward) }
++            StreamingControlsGestureLayer(onBlankTap: { revealControls(.blankTap) }) {
++                revealControls(.twoFingerInward)
++            }
+         }
+         .statusBarHidden(true)
+         .onReceive(store.input.$menuRevealToken.dropFirst()) { _ in revealControls(.accessibility) }
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+@@ -227,6 +227,7 @@
+         @EnvironmentObject private var settings: AppSettingsStore
+         @EnvironmentObject private var store: StreamingFeatureStore
+         @State private var revealToken = 0
++        @State private var revealSource: StreamingControlsRevealSource = .twoFingerInward
+ 
+         var body: some View {
+             ZStack(alignment: .top) {
+@@ -249,8 +250,9 @@
+                     .padding(.horizontal, 64)
+                 }
+                 StreamingControlsOverlay(
+-                    store: store, revealToken: revealToken, revealSource: .twoFingerInward,
+-                    autoHideAfter: nil
++                    store: store, revealToken: revealToken, revealSource: revealSource,
++                    autoHideAfter: ProcessInfo.processInfo.arguments.contains(
++                        "--streaming-quick-autohide-ui-test") ? .seconds(5) : nil
+                 )
+                 .zIndex(1)
+             }
+@@ -258,7 +260,13 @@
+             .statusBarHidden(true)
+             .onAppear { store.prepareControlsUITestPreview() }
+             .background {
+-                StreamingControlsGestureLayer { revealToken += 1 }
++                StreamingControlsGestureLayer(onBlankTap: {
++                    revealSource = .blankTap
++                    revealToken += 1
++                }) {
++                    revealSource = .twoFingerInward
++                    revealToken += 1
++                }
+             }
+         }
+     }
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift
+@@ -62,7 +62,7 @@
+   }
+ }
+ 
+-/// 常驻入口透出游戏画面，辅助功能降低透明度时提供清晰底色。
++/// 快捷入口透出游戏画面，辅助功能降低透明度时提供清晰底色。
+ private struct StreamingQuickControlSurface: ViewModifier {
+   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+ 
+--- a/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -466,22 +466,61 @@
+         XCTAssertTrue(app.buttons["stream-controls-close"].exists)
+     }
+ 
+-    func testTwoFingerGestureRevealsControlsAndSingleTapKeepsHidden() throws {
++    func testQuickControlsAutoHideAndBlankTapPreservesGamepadAndMenuGesture() throws {
+         continueAfterFailure = false
+         XCUIDevice.shared.orientation = .landscapeLeft
+         defer { XCUIDevice.shared.orientation = .portrait }
+         let app = XCUIApplication()
+-        app.launchArguments = ["--settings-ui-test", "--streaming-panels-ui-test"]
+-        app.launch()
+-        XCTAssertTrue(app.buttons["stream-controls-open"].waitForExistence(timeout: 10))
++        app.launchArguments = [
++            "--settings-ui-test", "--streaming-panels-ui-test",
++            "--streaming-quick-autohide-ui-test", "--official-touch-layouts-ui-test",
++            "--seed-saved-touch-layouts", "-AppleLanguages", "(zh-Hans)",
++        ]
++        app.launch()
++        let menu = app.buttons["stream-controls-open"]
++        let quickSwitch = app.buttons["stream-touch-quick-switch"]
++        XCTAssertTrue(menu.waitForExistence(timeout: 10))
++        XCTAssertTrue(quickSwitch.exists)
++        XCTAssertTrue(menu.waitForNonExistence(timeout: 8))
++        XCTAssertFalse(quickSwitch.exists)
++        save(app, "streaming-quick-buttons-hidden")
++
++        let a = app.buttons["touch-control-right/inner/1"]
++        XCTAssertTrue(a.exists)
++        a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.3)
++        let pressed = XCTNSPredicateExpectation(
++            predicate: NSPredicate(format: "label == %@", "16"),
++            object: app.staticTexts["stream-touch-last-buttons"])
++        XCTAssertEqual(XCTWaiter.wait(for: [pressed], timeout: 3), .completed)
++        XCTAssertFalse(menu.exists)
++        XCTAssertFalse(quickSwitch.exists)
++
+         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
++        XCTAssertTrue(menu.waitForExistence(timeout: 3))
++        XCTAssertTrue(quickSwitch.isHittable)
+         XCTAssertFalse(app.buttons["stream-diagnostics-menu"].exists)
++        XCTAssertEqual(quickSwitch.frame.minX - menu.frame.maxX, 8, accuracy: 1)
++        save(app, "streaming-quick-buttons-revealed")
++
+         let size = app.windows.firstMatch.frame.size
+         try XCTSkipIf(
+-            max(size.width, size.height) > 1_000, "手机水平双指手势使用 iPhone 验收；iPad 覆盖双栏布局和局部面板。")
++            max(size.width, size.height) > 1_000,
++            "手机双指手势使用 iPhone 验收；iPad 覆盖双栏布局和局部面板。")
+         app.windows.firstMatch.pinch(withScale: 0.2, velocity: -4)
+         XCTAssertTrue(app.buttons["stream-diagnostics-menu"].waitForExistence(timeout: 3))
+-        save(app, "streaming-two-finger-gesture")
++        app.buttons["stream-controls-close"].tap()
++        XCTAssertTrue(menu.waitForExistence(timeout: 3))
++        XCTAssertTrue(quickSwitch.exists)
++        XCTAssertTrue(menu.waitForNonExistence(timeout: 8))
++        XCTAssertFalse(quickSwitch.exists)
++
++        XCUIDevice.shared.orientation = .portrait
++        waitForOrientation(app, landscape: false)
++        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
++        XCTAssertTrue(menu.waitForExistence(timeout: 3))
++        XCTAssertTrue(quickSwitch.isHittable)
++        XCTAssertFalse(app.buttons["stream-diagnostics-menu"].exists)
++        save(app, "streaming-quick-buttons-revealed-portrait")
+     }
+ 
+     func testSignedOutXBXRCLogoAndBottomLoginButton() {
+--- a/iosapp/XBXRCTests/StreamingControlsStateTests.swift
++++ b/iosapp/XBXRCTests/StreamingControlsStateTests.swift
+@@ -105,14 +105,24 @@
+ 
+     func testControlsStateReturnsToDockAfterSheet() {
+         var state = StreamingControlsState()
++        XCTAssertTrue(state.quickControlsVisible)
++        state.hideAutomatically()
++        XCTAssertEqual(state.surface, .hidden)
++        XCTAssertFalse(state.quickControlsVisible)
++        state.revealQuickControls()
++        XCTAssertTrue(state.quickControlsVisible)
+         state.reveal()
+         XCTAssertEqual(state.surface, .dock)
++        XCTAssertFalse(state.quickControlsVisible)
+         state.present(.debugSheet)
+         XCTAssertTrue(state.suspendsAutoHide)
++        state.revealQuickControls()
++        XCTAssertEqual(state.surface, .debugSheet)
+         state.dismissPresentedSurface()
+         XCTAssertEqual(state.surface, .dock)
+         state.hide()
+         XCTAssertEqual(state.surface, .hidden)
++        XCTAssertTrue(state.quickControlsVisible)
+     }
+ 
+     func testConnectionSummaryKeepsRawMetricsOutOfUserState() {

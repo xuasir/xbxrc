@@ -4,7 +4,7 @@ extension XboxDataStore {
     func loadFriends(refresh: Bool = false) async {
         let key = "friends"
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
-            refresh || friendsState.phase == .idle
+            refresh || friendsState.needsActivation
         else { return }
         let request = UUID()
         nativeRequestIDs[key] = request
@@ -37,7 +37,7 @@ extension XboxDataStore {
         var state = albumStates[kind] ?? XboxNativeDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
         if nextPage && state.continuation == nil { return }
-        if !refresh && !nextPage && state.phase != .idle { return }
+        if !refresh && !nextPage && !state.needsActivation { return }
         let continuation = nextPage ? state.continuation : nil
         let request = UUID()
         nativeRequestIDs[key] = request
@@ -123,7 +123,7 @@ extension XboxDataStore {
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
         var section =
             installedLibraryStates[consoleID]?.sections[source] ?? XboxSingleDataState<Bool>()
-        guard refresh || section.phase == .idle else { return }
+        guard refresh || section.needsActivation else { return }
         let request = UUID()
         nativeRequestIDs[key] = request
         section.beginRequest()

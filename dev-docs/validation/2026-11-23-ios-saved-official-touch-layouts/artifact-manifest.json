@@ -1,0 +1,12 @@
+{
+  "retainedImages": 15,
+  "temporaryRoots": [
+    "/private/tmp/xbxrc-ios-saved-official-touch-layouts-20261124"
+  ],
+  "sharedCachesToPreserve": [
+    "target/ios",
+    "target/ios-webrtc",
+    "Cargo registry and compiler caches"
+  ],
+  "userSavedLayoutResources": "应用本机布局库持续保留"
+}

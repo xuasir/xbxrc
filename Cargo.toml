@@ -3,6 +3,7 @@ members = [
   "crates/xbox-streaming-protocol",
   "crates/xbox-auth-flow",
   "crates/xbox-cloud-catalog-flow",
+  "crates/xbox-touch-layouts",
   "crates/xbox-ios-bridge",
   "crates/xbox-streaming",
   "crates/xbox-webapi",

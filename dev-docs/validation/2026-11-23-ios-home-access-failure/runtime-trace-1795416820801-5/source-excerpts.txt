@@ -1,0 +1,426 @@
+crates/xbox-webapi/src/transport.rs:9
+9: const DEFAULT_TIMEOUT_SECS: u64 = 12;
+10: const MAX_RETRY_ATTEMPTS: usize = 3;
+11: const BASE_RETRY_DELAY_MS: u64 = 250;
+12: const MAX_RETRY_DELAY_MS: u64 = 1500;
+13: const QUERY_TOTAL_TIMEOUT_SECS: u64 = 18;
+14: const QUERY_MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
+
+crates/xbox-webapi/src/transport.rs:103
+103: 
+104:     /// 非串流 API 的重试、响应体与总时长共用一份有限预算。
+105:     pub fn for_queries() -> Self {
+106:         Self {
+107:             client: Client::builder()
+108:                 .connect_timeout(Duration::from_secs(5))
+109:                 .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+110:                 .build()
+111:                 .map_err(WebApiError::from_reqwest_safe),
+112:             retry_mode: RetryMode::SafeOnly,
+113:             policy: Some(RequestPolicy {
+114:                 total_timeout: Duration::from_secs(QUERY_TOTAL_TIMEOUT_SECS),
+115:                 max_body_bytes: QUERY_MAX_BODY_BYTES,
+116:             }),
+117:             bearer_recovery: None,
+118:         }
+119:     }
+120: 
+121:     pub fn for_commands() -> Self {
+122:         let mut transport = Self::for_queries();
+123:         transport.retry_mode = RetryMode::Never;
+124:         transport
+125:     }
+126: 
+
+crates/xbox-webapi/src/transport.rs:583
+583: fn should_retry(
+584:     method: &Method,
+585:     error: &WebApiError,
+586:     attempt: usize,
+587:     retry_mode: RetryMode,
+588: ) -> bool {
+589:     if attempt >= MAX_RETRY_ATTEMPTS {
+590:         return false;
+591:     }
+592: 
+593:     match retry_mode {
+594:         RetryMode::Never => false,
+595:         RetryMode::Always => error.is_retriable(),
+596:         RetryMode::SafeOnly => {
+597:             if *method == Method::GET {
+598:                 error.is_retriable()
+599:             } else {
+600:                 false
+601:             }
+602:         }
+603:     }
+604: }
+
+crates/xbox-webapi/src/auth_api.rs:112
+112: pub type TitleTokenResponse = TokenDetails<TitleClaims>;
+113: 
+114: pub struct AuthApi {
+115:     transport: HttpTransport,
+116: }
+117: 
+118: impl AuthApi {
+119:     pub fn new() -> Self {
+120:         Self {
+121:             transport: HttpTransport::for_commands(),
+122:         }
+123:     }
+124: 
+125:     pub fn with_transport(transport: HttpTransport) -> Self {
+126:         Self { transport }
+127:     }
+128: 
+
+crates/xbox-auth-flow/src/flow.rs:132
+132:     pub async fn refresh_and_finalize(
+133:         &self,
+134:         input: RefreshAndFinalizeInput,
+135:     ) -> Result<RefreshAndFinalizeOutput, AuthFlowError> {
+136:         let refreshed_user_token = self.refresh_user_token(&input.refresh_token).await?;
+137:         let auth_bundle = self
+138:             .finalize_login(
+139:                 &refreshed_user_token,
+140:                 &input.seed.private_jwk,
+141:                 &input.force_region_ip,
+142:                 if input.include_streaming_tokens {
+143:                     DownstreamTokenScope::All
+144:                 } else {
+145:                     DownstreamTokenScope::Web
+146:                 },
+147:             )
+148:             .await?;
+149: 
+150:         Ok(RefreshAndFinalizeOutput {
+151:             auth_bundle,
+152:             refreshed_user_token,
+153:         })
+154:     }
+155: 
+
+crates/xbox-auth-flow/src/flow.rs:180
+180:     }
+181: 
+182:     /// 核心续期结果单独返回，宿主可以先保存轮换凭据，再继续下游协议。
+183:     pub async fn refresh_user_token(
+184:         &self,
+185:         refresh_token: &str,
+186:     ) -> Result<xbox_webapi::OAuthTokenResponse, AuthFlowError> {
+187:         let token = self
+188:             .auth_api
+189:             .refresh_user_token(refresh_token)
+190:             .await
+191:             .map_err(AuthFlowError::RefreshGrant)?;
+
+crates/xbox-auth-flow/src/flow.rs:224
+224:         &self,
+225:         user_token: &xbox_webapi::OAuthTokenResponse,
+226:         private_jwk: &Value,
+227:         force_region_ip: &str,
+228:         scope: DownstreamTokenScope,
+229:     ) -> Result<AuthBundle, AuthFlowError> {
+230:         let device_uuid = uuid::Uuid::new_v4().to_string();
+231:         let serial_number = uuid::Uuid::new_v4().to_string();
+232:         let device_token = self
+233:             .auth_api
+234:             .get_device_token(
+235:                 XAL_TITLE_ID,
+236:                 &device_uuid,
+237:                 &serial_number,
+238:                 XAL_DEVICE_VERSION,
+239:                 private_jwk,
+240:             )
+241:             .await?
+242:             .Token;
+243: 
+244:         let sisu_auth_res = self
+245:             .auth_api
+246:             .sisu_authorize(&user_token.access_token, &device_token, private_jwk)
+247:             .await?;
+248: 
+249:         let title_token = sisu_auth_res
+
+crates/xbox-auth-flow/src/flow.rs:283
+283:             AuthFlowError::Protocol("Sisu response missing user token string".to_string())
+284:         })?;
+285: 
+286:         let web_token_resp = self
+287:             .auth_api
+288:             .xsts_authorize(user_token_str, "http://xboxlive.com", private_jwk)
+289:             .await?;
+290:         let token_update_time = now_ms();
+291:         let stream_tokens = if scope != DownstreamTokenScope::Web {
+292:             self.build_stream_tokens(user_token_str, private_jwk, force_region_ip, scope)
+293:                 .await?
+294:         } else {
+295:             Map::new()
+296:         };
+297: 
+298:         Ok(AuthBundle {
+299:             user_token: user_token.clone(),
+300:             sisu_token,
+
+crates/xbox-auth-flow/src/flow.rs:314
+314:     async fn build_stream_tokens(
+315:         &self,
+316:         user_token_str: &str,
+317:         private_jwk: &Value,
+318:         force_region_ip: &str,
+319:         scope: DownstreamTokenScope,
+320:     ) -> Result<Map<String, Value>, AuthFlowError> {
+321:         let gssv_token = self
+322:             .auth_api
+323:             .xsts_authorize(user_token_str, "http://gssv.xboxlive.com/", private_jwk)
+324:             .await?
+325:             .Token;
+326: 
+327:         let mut stream_tokens = Map::new();
+328:         if scope.includes_home() {
+329:             let xhome_token = self
+330:                 .auth_api
+331:                 .get_streaming_token(&gssv_token, "xhome", force_region_ip)
+332:                 .await?;
+333:             stream_tokens.insert(
+334:                 "xHomeToken".to_string(),
+335:                 json!({
+336:                     "_objectCreateTime": xhome_token.object_create_time,
+337:                     "data": xhome_token.data,
+338:                 }),
+339:             );
+340:         }
+341:         if !scope.includes_cloud() {
+342:             return Ok(stream_tokens);
+343:         }
+344: 
+345:         let xgpuweb_result = self
+346:             .auth_api
+
+crates/xbox-auth-flow/src/flow.rs:379
+379:                     Err(xgpuwebf2p_error) => {
+380:                         let xgpuwebf2p_diagnostics =
+381:                             streaming_token_error_diagnostics(&xgpuwebf2p_error);
+382:                         log::warn!(
+383:                             "Auth: xCloud token unavailable, xgpuweb={}, xgpuwebf2p={}",
+384:                             xgpuweb_diagnostics,
+385:                             xgpuwebf2p_diagnostics
+386:                         );
+387:                         let force_region_ip = force_region_ip.trim();
+388:                         stream_tokens.insert(
+389:                             "_diagnostics".to_string(),
+390:                             json!({
+391:                                 "xCloudToken": {
+392:                                     "xgpuweb": xgpuweb_diagnostics,
+393:                                     "xgpuwebf2p": xgpuwebf2p_diagnostics,
+394:                                     "forceRegionApplied": !force_region_ip.is_empty(),
+395:                                 },
+396:                             }),
+397:                         );
+398:                     }
+399:                 }
+400:             }
+401:         }
+402: 
+403:         Ok(stream_tokens)
+
+crates/xbox-auth-flow/src/error.rs:26
+26:     #[error("Protocol error: {0}")]
+27:     Protocol(String),
+28: 
+29:     #[error("OAuth refresh grant failed: {0}")]
+30:     RefreshGrant(#[source] xbox_webapi::WebApiError),
+31: 
+32:     #[error(transparent)]
+33:     Upstream(#[from] xbox_webapi::WebApiError),
+34: }
+35: 
+36: impl AuthFlowError {
+
+crates/xbox-ios-bridge/src/cloud_access.rs:127
+127: pub async fn prepare_cloud_access(
+128:     refresh_token: String,
+129:     seed_json: String,
+130:     force_region_ip: String,
+131: ) -> Result<CloudAccessResult, XboxBridgeError> {
+132:     let seed: AuthFlowSeed = deserialize(&seed_json)?;
+133:     let force_region_ip = normalize_force_region_ip(force_region_ip);
+134:     let output = AuthFlow::new()
+135:         .refresh_and_finalize(RefreshAndFinalizeInput {
+136:             refresh_token,
+137:             seed: seed.clone(),
+138:             force_region_ip: force_region_ip.clone(),
+139:             include_streaming_tokens: true,
+140:         })
+141:         .await
+142:         .map_err(crate::authentication_error)?;
+143: 
+144:     let created_at_ms = now_ms();
+145:     let expires_at_ms = cap_expiry_with_web_token(
+
+crates/xbox-ios-bridge/src/cloud_access.rs:288
+288: fn resolve_cloud_access_context(
+289:     stream_tokens: &Value,
+290:     web_token: &Value,
+291: ) -> Result<StreamingAccessContext, XboxBridgeError> {
+292:     let token = stream_tokens
+293:         .get("xCloudToken")
+294:         .or_else(|| stream_tokens.get("xcloudToken"))
+295:         .ok_or_else(|| {
+296:             XboxBridgeError::Authentication(cloud_token_unavailable_message(stream_tokens))
+297:         })?;
+298:     let data = token.get("data").unwrap_or(token);
+299:     let session_access = parse_session_access_context(token)
+
+crates/xbox-ios-bridge/src/lib.rs:178
+178: fn authentication_error(error: AuthFlowError) -> XboxBridgeError {
+179:     if error.is_retriable() {
+180:         XboxBridgeError::RetryableAuthentication(error.to_string())
+181:     } else {
+182:         XboxBridgeError::Authentication(error.to_string())
+183:     }
+184: }
+
+src-tauri/src/mods/auth/service.rs:170
+170:             let force_core_refresh = core_refresh_required(
+171:                 rejected_token, scope, cached_token.as_ref(), cached_stream_tokens.as_ref(), &self.runtime,
+172:             );
+173:             let has_valid_credentials = rejected_token.is_none() && !force_core_refresh && self.accepted_session_snapshot_for(scope)?.is_some();
+174:             trace.stage("credentialScopeChecked", json!({ "scope": scope.as_str(), "hasValidCredentials": has_valid_credentials }));
+175:             if !has_valid_credentials {
+176:                 if let Some(error) = self.runtime.cached_refresh_failure(scope, Instant::now()) {
+
+src-tauri/src/mods/auth/service.rs:222
+222:         &self,
+223:         previous_state: AuthState,
+224:         trace: &AuthOperationTrace,
+225:         generation: u64,
+226:         force_core_refresh: bool,
+227:         scope: AuthTokenScope,
+228:     ) -> AppResult<CheckAuthResponse> {
+229:         trace.stage("sessionSnapshotReadStarted", json!({}));
+230:         if let Some(snapshot) = self
+231:             .accepted_session_snapshot_for(scope)?
+232:             .filter(|_| !force_core_refresh)
+233:         {
+234:             trace.stage(
+235:                 "sessionSnapshotAccepted",
+236:                 json!({ "appLevel": snapshot.app_level }),
+237:             );
+238:             log::info!("Auth: 发现有效的会话快照, 直接完成认证");
+239:             return self.runtime.finish_check_from_snapshot(&snapshot);
+240:         }
+
+src-tauri/src/mods/auth/token_refresh.rs:6
+6:     pub(super) async fn start_silent_flow_impl(
+7:         &self,
+8:         trace: &AuthOperationTrace,
+9:         generation: u64,
+10:         force_core_refresh: bool,
+11:         scope: AuthTokenScope,
+12:     ) -> AppResult<()> {
+13:         let reuse_sisu = !force_core_refresh && self.persistence.can_reuse_sisu_user_token()?;
+14:         trace.stage(
+15:             "refreshPolicy",
+16:             json!({ "scope": scope.as_str(), "skipCoreRefresh": reuse_sisu }),
+17:         );
+18:         if reuse_sisu {
+19:             let user_token = self
+20:                 .persistence
+21:                 .get_user_token()?
+22:                 .ok_or_else(|| AppError::Auth("登录续期凭据暂不可用，请选择重新登录".into()))?;
+
+src-tauri/src/mods/auth/token_refresh.rs:32
+32:             );
+33:             let result = AuthFlow::new()
+34:                 .build_downstream_tokens_for(input, scope.flow_scope())
+35:                 .await;
+36:             match result {
+37:                 Ok(output) if !cloud_unauthorized(&output.auth_bundle, scope) => {
+38:                     return self.persist_renewed_bundle(
+39:                         output.auth_bundle,
+40:                         scope,
+
+iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift:106
+106:     func prepareAccess(
+107:         refreshToken: String,
+108:         seedJSON: String,
+109:         forceRegionIP: String
+110:     ) async throws -> PreparedCloudAccess {
+111:         let operationID = UUID().uuidString
+112:         let startedAt = Date()
+113:         IOSRuntimeTrace.event(
+114:             domain: "auth",
+115:             event: "cloudAccessUniFFIBoundaryStarted",
+116:             payload: [:],
+117:             dimension: .network,
+118:             importance: .key,
+119:             operationID: operationID
+120:         )
+121:         do {
+122:             let result = try await prepareCloudAccess(
+123:                 refreshToken: refreshToken,
+124:                 seedJson: seedJSON,
+125:                 forceRegionIp: forceRegionIP
+
+iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift:150
+150:         } catch {
+151:             IOSRuntimeTrace.event(
+152:                 domain: "auth",
+153:                 event: "cloudAccessUniFFIBoundaryFailed",
+154:                 payload: CloudLibraryDiagnostics.errorPayload(
+155:                     error,
+156:                     extra: [
+157:                         "elapsedMs": .integer(
+158:                             Int64(CloudLibraryDiagnostics.elapsedMilliseconds(since: startedAt)))
+159:                     ]
+160:                 ),
+161:                 dimension: .network,
+162:                 importance: .essential,
+163:                 operationID: operationID
+164:             )
+165:             throw error
+
+iosapp/XBXRC/Features/Authentication/AuthStore.swift:451
+451:     func prepareCloudAccess() async throws -> PreparedCloudAccess {
+452:         guard session != nil, !isSigningOut else {
+453:             IOSRuntimeTrace.decision(
+454:                 domain: "auth",
+455:                 event: "cloudAccessBoundaryFailed",
+456:                 payload: ["errorKind": "signedOut"],
+457:                 dimension: .network,
+458:                 importance: .essential
+459:             )
+460:             throw AuthStoreError.signedOut
+461:         }
+462:         let requestOwnerGeneration = ownerGeneration
+
+iosapp/XBXRC/Features/Authentication/AuthStore.swift:475
+475:                 ownerGeneration: requestOwnerGeneration,
+476:                 prepare: { [cloudClient, settings] currentSession in
+477:                     try await cloudClient.prepareAccess(
+478:                         refreshToken: currentSession.refreshToken,
+479:                         seedJSON: currentSession.seedJSON,
+480:                         forceRegionIP: settings.cloudRegionPreset.forceRegionIP
+481:                     )
+482:                 },
+483:                 refreshedSession: { result, _ in
+484:                     StoredAuthSession(
+485:                         bridgeSession: result.authSession,
+486:                         cloudAccountID: result.accountID,
+487:                         cloudRegionHost: result.regionHost
+488:                     )
+
+iosapp/XBXRC/Features/Settings/SettingsView.swift:215
+215: 
+216:                 AppSettingsActionButton("导出当前 Trace", systemImage: "square.and.arrow.up") {
+217:                     prepareTraceExport(allFiles: false)
+218:                 }
+219:                 .disabled(isPreparingTraceExport)
+220: 
+221:                 AppSettingsActionButton("导出全部 Trace", systemImage: "archivebox") {
+222:                     prepareTraceExport(allFiles: true)
+223:                 }
+224:                 .disabled(isPreparingTraceExport)
+225: 

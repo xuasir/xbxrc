@@ -1,0 +1,38 @@
+{
+  "createdAt": "2026-11-23T10:42:59.008985+08:00",
+  "task": "iOS display lifecycle new-trace validation",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-trace-1795401150207",
+  "roundDirectory": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1",
+  "source": {
+    "path": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+    "repositoryCopy": "runtime-logs/ios/runtime-trace-ios-1795401150207-1.jsonl",
+    "bytes": 16504239,
+    "rows": 26163,
+    "sha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d"
+  },
+  "outputs": [
+    "base-analysis.json",
+    "core-analysis.json",
+    "health-summary.json",
+    "evidence-anchors.json",
+    "steady-windows.csv",
+    "cleanup.json"
+  ],
+  "retained": [
+    "Downloads source trace",
+    "runtime-logs/ios repository copy",
+    "prior validation evidence",
+    "shared Rust and WebRTC caches"
+  ],
+  "finalEvidenceDirectory": "dev-docs/validation/2026-11-23-ios-display-lifecycle-fresh-trace",
+  "temporaryOutputInventory": [
+    "analysis-input.json",
+    "base-analysis.json",
+    "comparison.json",
+    "core-analysis.json",
+    "evidence-anchors.json",
+    "health-summary.json",
+    "steady-windows.csv",
+    "work-manifest.json"
+  ]
+}

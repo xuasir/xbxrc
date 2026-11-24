@@ -1,0 +1,318 @@
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+764: struct StreamingLatestIngressDelivery<Value>: @unchecked Sendable {
+765:     let value: Value
+766:     let replacedCount: Int64
+767: }
+768:
+769: final class StreamingLatestIngressSlot<Value>: @unchecked Sendable {
+770:     private let lock = NSLock()
+771:     private var pendingValue: Value?
+772:     private var deliveryScheduled = false
+773:     private var replacedCount: Int64 = 0
+774:
+775:     func submit(_ value: Value) -> Bool {
+776:         lock.lock()
+777:         if pendingValue != nil { replacedCount += 1 }
+778:         pendingValue = value
+779:         let shouldSchedule = !deliveryScheduled
+780:         deliveryScheduled = true
+781:         lock.unlock()
+782:         return shouldSchedule
+783:     }
+784:
+785:     func take() -> StreamingLatestIngressDelivery<Value>? {
+786:         lock.lock()
+787:         defer { lock.unlock() }
+788:         guard let pendingValue else { return nil }
+789:         let delivery = StreamingLatestIngressDelivery(
+790:             value: pendingValue,
+791:             replacedCount: replacedCount
+792:         )
+793:         self.pendingValue = nil
+794:         replacedCount = 0
+795:         return delivery
+796:     }
+797:
+798:     func finishDelivery() -> Bool {
+799:         lock.lock()
+800:         defer { lock.unlock() }
+801:         guard pendingValue == nil else { return true }
+802:         deliveryScheduled = false
+803:         return false
+804:     }
+805:
+806:     func drain(consume: (StreamingLatestIngressDelivery<Value>) -> Void) -> Bool {
+807:         // 同次处理接续最多两帧，减少补送排队并保留 UI 的执行机会。
+808:         for _ in 0..<2 {
+809:             guard let delivery = take() else { break }
+810:             consume(delivery)
+811:         }
+812:         return finishDelivery()
+813:     }
+814:
+815:     func reset() {
+816:         lock.lock()
+817:         pendingValue = nil
+818:         deliveryScheduled = false
+819:         replacedCount = 0
+820:         lock.unlock()
+821:     }
+822: }
+823:
+824: private struct StreamingQueuedVideoFrame: @unchecked Sendable {
+825:     let frame: RTCVideoFrame
+826:     let receivedAtMs: Double
+827: }
+828:
+829: private final class StreamingVideoFrameIngress: NSObject, RTCVideoRenderer, @unchecked Sendable {
+830:     private let frameSlot = StreamingLatestIngressSlot<StreamingQueuedVideoFrame>()
+831:     @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64, Double) -> Void)?
+832:     @MainActor var sizeSink: (@MainActor (CGSize) -> Void)?
+833:
+834:     func setSize(_ size: CGSize) {
+835:         guard size.width > 0, size.height > 0 else { return }
+836:         Task { @MainActor [weak self] in
+837:             self?.sizeSink?(size)
+838:         }
+839:     }
+840:
+841:     func renderFrame(_ frame: RTCVideoFrame?) {
+842:         guard let frame else { return }
+843:         let queued = StreamingQueuedVideoFrame(
+844:             frame: frame, receivedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
+845:         if frameSlot.submit(queued) { scheduleDrain() }
+846:     }
+847:
+848:     func reset() {
+849:         frameSlot.reset()
+850:     }
+851:
+852:     private func scheduleDrain() {
+853:         Task { @MainActor [weak self] in
+854:             self?.drainLatestFrame()
+855:         }
+856:     }
+857:
+858:     @MainActor
+859:     private func drainLatestFrame() {
+860:         let hasPending = frameSlot.drain { delivery in
+861:             frameSink?(
+862:                 delivery.value.frame, delivery.replacedCount, delivery.value.receivedAtMs)
+863:         }
+864:         if hasPending { scheduleDrain() }
+865:     }
+866: }
+867:
+868: final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked Sendable {
+869:     @MainActor var presentationEventSink:
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+1314:             let completedSuccessfully = completedCommandBuffer.status == .completed
+1315:             let renderedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
+1316:             // GPU 已完成后立即释放帧槽；唯一 frameId 隔离 reset 后的迟到回调。
+1317:             if completedSuccessfully {
+1318:                 _ = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
+1319:             }
+1320:             let slotReleasedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+1321:             Task { @MainActor in
+1322:                 self?.handleCompletedCommandBuffer(
+1323:                     completedSuccessfully: completedSuccessfully,
+1324:                     frame: frame,
+1325:                     context: traceContext,
+1326:                     revision: revision,
+1327:                     renderedAtMilliseconds: renderedAtMilliseconds,
+1328:                     slotReleasedAtMs: slotReleasedAtMs
+1329:                 )
+1330:             }
+1331:         }
+1332:         #if !targetEnvironment(simulator)
+1333:             // 真机分别观测系统 drawable 呈现与 GPU 完成，模拟器沿用 GPU 完成观测。
+1334:             drawable.addPresentedHandler { [weak self] presentedDrawable in
+1335:                 let presentedAt = presentedDrawable.presentedTime * 1_000
+1336:                 guard presentedAt > 0 else { return }
+1337:                 Task { @MainActor in
+1338:                     guard let self, self.presentationActive,
+1339:                         self.presentationRevision == revision,
+1340:                         self.currentTraceContext() == traceContext
+1341:                     else { return }
+1342:                     let snapshot = self.telemetry.recordDrawablePresent(
+1343:                         submittedAt: submitTimestamp, presentedAt: presentedAt)
+1344:                     self.emitPresentationEvent(.displayHealth(traceContext, snapshot))
+1345:                 }
+1346:             }
+1347:         #endif
+1348:         commandBuffer.present(drawable)
+1349:         commandBuffer.commit()
+1350:     }
+1351:
+1352:     private func handleCompletedCommandBuffer(
+1353:         completedSuccessfully: Bool,
+1354:         frame: StreamingDecodedFrameRef,
+1355:         context: StreamingPresentationTraceContext,
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+454:         guard isCurrent(generation), visible != value else { return }
+455:         visibilityRevision &+= 1
+456:         let revision = visibilityRevision
+457:         visible = value
+458:         latestPeerStats = nil
+459:         rtcTraceWindow = StreamingTraceCounterWindow()
+460:         displayTraceWindow = StreamingTraceCounterWindow()
+461:         latestDisplayHealthSnapshot = nil
+462:         supervisionEligibleSinceMs = Self.nowMs
+463:         firstFrameGuardTask?.cancel()
+464:         firstFrameGuardTask = nil
+465:         recoveryProbe = nil
+466:         pendingResumeValidation = nil
+467:         if !value {
+468:             resumedAtMilliseconds = nil
+469:             playbackReadiness.remove(.framePresented)
+470:             microphoneRevision &+= 1
+471:             microphoneTask?.cancel()
+472:             microphonePeerEpoch = 0
+473:             await peerRuntime?.stopMicrophoneCapture()
+474:             guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+475:             await microphoneSink?(generation, false, microphoneRequested)
+476:             guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+477:             trace(
+478:                 "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
+479:                 dimension: .lifecycle)
+480:             await publish(.suspending, generation: generation)
+481:             return
+482:         }
+483:         guard let control = controlSession, let peer = peerRuntime else { return }
+484:         let peerEpoch = activePeerEpoch
+485:         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+486:         pendingResumeValidation = (revision, peerEpoch)
+487:         await publish(.waitingForFirstFrame, generation: generation)
+488:         guard isCurrent(generation), visible, revision == visibilityRevision,
+489:             peerEpoch == activePeerEpoch
+490:         else { return }
+491:         do {
+492:             try await control.validateResume()
+493:             try ensureCurrent(generation)
+494:             guard visible, revision == visibilityRevision, peerEpoch == activePeerEpoch else {
+495:                 return
+496:             }
+497:             let snapshot = await peer.debugSnapshot()
+498:             guard isCurrent(generation), visible, revision == visibilityRevision,
+499:                 peerEpoch == activePeerEpoch
+500:             else { return }
+501:             pendingResumeValidation = nil
+502:             trace("sessionResumeValidated", dimension: .lifecycle)
+503:             lastVideoActivityAtMs = Self.nowMs
+504:             if snapshot.iceConnectionState == "connected"
+505:                 || snapshot.iceConnectionState == "completed"
+506:             {
+507:                 if resumedAtMilliseconds != nil {
+508:                     armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
+509:                 }
+510:                 // 验证期间已保存的新上屏事实，直接决定恢复后的可见状态。
+511:                 await publish(
+512:                     playbackReady ? .playing : .waitingForFirstFrame, generation: generation)
+513:             } else {
+514:                 await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
+515:             }
+516:             guard isCurrent(generation), visible, revision == visibilityRevision,
+517:                 peerEpoch == activePeerEpoch
+518:             else { return }
+519:             if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
+520:         } catch {
+521:             guard isCurrent(generation), visible, revision == visibilityRevision,
+522:                 peerEpoch == activePeerEpoch
+523:             else { return }
+524:             await fail(reason: .sessionFailed, generation: generation, error: error)
+525:         }
+526:     }
+527:
+528:     func sendText(_ text: String, generation: UInt64) async throws -> Bool {
+529:         guard isCurrent(generation), let controlSession else {
+530:             throw StreamingRuntimeError.superseded
+
+iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+204:         weak var view: StreamingMetalVideoSurfaceView?
+205:         var contentMode: StreamingVideoContentMode?
+206:         var picture: MobilePicturePreferences?
+207:         private var currentTrack: RTCVideoTrack?
+208:         private var videoGeneration: UInt64?
+209:
+210:         func update(track handle: StreamingVideoTrackHandle?) {
+211:             let nextTrack = handle?.rawValue
+212:             let traceContext = handle?.traceContext
+213:             view?.updateTraceContext(traceContext)
+214:             view?.updateFrameFeedbackSession(handle?.frameFeedback)
+215:             guard
+216:                 !streamingVideoTracksMatch(currentTrack, nextTrack)
+217:                     || videoGeneration != traceContext?.videoGeneration
+218:             else {
+219:                 return
+220:             }
+221:             videoGeneration = traceContext?.videoGeneration
+222:             if let currentTrack, let view {
+223:                 currentTrack.remove(view.renderer)
+224:             }
+225:             currentTrack = nextTrack
+226:             if let nextTrack, let view {
+227:                 nextTrack.add(view.renderer)
+228:                 IOSRuntimeTrace.state(
+229:                     domain: "ios-streaming",
+230:                     event: "videoSurfaceAttached",
+231:                     payload: streamingPresentationTracePayload(
+232:                         ["renderer": .string(view.rendererName)],
+233:                         context: traceContext
+234:                     ),
+235:                     dimension: .presentation,
+236:                     importance: .key,
+237:                     operationID: traceContext?.attemptID
+238:                 )
+239:             }
+240:         }
+241:
+
+iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift
+360:             hasPreviousImage: renderedImage != nil
+361:         )
+362:
+363:         for (candidateIndex, url) in candidates.enumerated() {
+364:             guard !Task.isCancelled else { return }
+365:             IOSRuntimeTrace.event(
+366:                 domain: "image",
+367:                 event: "imageCandidateStarted",
+368:                 payload: [
+369:                     "candidateIndex": .integer(Int64(candidateIndex)),
+370:                     "candidateCount": .integer(Int64(candidates.count)),
+371:                     "scheme": .string(url.scheme ?? "unknown"),
+372:                 ],
+373:                 dimension: .presentation,
+374:                 importance: .debug,
+375:                 operationID: operationID
+376:             )
+377:             do {
+378:                 let result = try await RemoteImageLoader.shared.image(for: url)
+379:                 guard !Task.isCancelled else { return }
+380:                 renderedImage = result.image
+381:                 isLoading = false
+382:                 tracePhase(
+383:                     "success",
+384:                     operationID: operationID,
+385:                     candidateIndex: candidateIndex,
+386:                     source: result.source.rawValue
+387:                 )
+388:                 IOSRuntimeTrace.event(
+389:                     domain: "image",
+390:                     event: "imageCandidateSucceeded",
+391:                     payload: [
+392:                         "candidateIndex": .integer(Int64(candidateIndex)),
+393:                         "candidateCount": .integer(Int64(candidates.count)),
+394:                         "scheme": .string(url.scheme ?? "unknown"),
+395:                         "source": .string(result.source.rawValue),
+396:                     ],
+397:                     dimension: .presentation,
+398:                     importance: .debug,
+399:                     operationID: operationID
+400:                 )
+401:                 onSuccess?(url)
+402:                 return
+403:             } catch {
+404:                 IOSRuntimeTrace.event(
+405:                     domain: "image",

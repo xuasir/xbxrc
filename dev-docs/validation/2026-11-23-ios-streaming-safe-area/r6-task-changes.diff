@@ -1,0 +1,99 @@
+--- before/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
++++ after/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+@@ -9,7 +9,6 @@
+     let revealSource: StreamingControlsRevealSource
+     var autoHideAfter: Duration? = .seconds(5)
+     @EnvironmentObject private var settings: AppSettingsStore
+-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+     @State private var controls = StreamingControlsState()
+     @State private var audioMuted = false
+     @State private var microphoneEnabled = false
+@@ -38,10 +37,7 @@
+                         ) {
+                             reveal(source: .button)
+                         }
+-                        .background(
+-                            .black.opacity(reduceTransparency ? 1 : 0.98),
+-                            in: RoundedRectangle(cornerRadius: 14)
+-                        )
++                        .appSurface(radius: 14, prominent: true, forceDark: true)
+                         Spacer()
+                     }
+                     Spacer()
+@@ -267,10 +263,8 @@
+         }
+         .scrollIndicators(.hidden)
+         .frame(width: 52, height: max(44, height))
+-        // 深色静态底色保障覆盖触屏控件时的可读性，并保持视频合成轻量。
+-        .background(
+-            .black.opacity(reduceTransparency ? 1 : 0.98), in: RoundedRectangle(cornerRadius: 14)
+-        )
++        // 菜单与诊断共用公共突出浮层的背景和降低透明度回退。
++        .appSurface(radius: 14, prominent: true, forceDark: true)
+     }
+ 
+     private func dockButton(
+--- before/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
++++ after/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+@@ -176,7 +176,6 @@
+ struct StreamingDiagnosticsFloatingPanel: View {
+     let store: StreamingFeatureStore
+     let onClose: () -> Void
+-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+ 
+     var body: some View {
+         GeometryReader { geometry in
+@@ -192,10 +191,7 @@
+             .foregroundStyle(.white)
+             .environment(\.colorScheme, .dark)
+             .frame(width: size.width, height: size.height)
+-            .background(
+-                .black.opacity(reduceTransparency ? 1 : 0.98),
+-                in: RoundedRectangle(cornerRadius: 12)
+-            )
++            .appSurface(radius: 12, prominent: true, forceDark: true)
+             .clipShape(RoundedRectangle(cornerRadius: 12))
+             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+             .accessibilityElement(children: .contain)
+--- before/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
++++ after/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift
+@@ -306,9 +306,11 @@
+             ("会话", "connectedElapsed"),
+         ] {
+             groups.buttons[title].tap()
+-            XCTAssertTrue(
+-                app.otherElements["stream-diagnostic-\(key)"].exists
+-                    || app.staticTexts["stream-diagnostic-\(key)"].exists)
++            XCTAssertTrue(groups.buttons[title].isSelected, title)
++            let row = app.descendants(matching: .any).matching(
++                identifier: "stream-diagnostic-\(key)"
++            ).firstMatch
++            XCTAssertTrue(row.waitForExistence(timeout: 5), title)
+         }
+         app.scrollViews["stream-diagnostic-rows"].swipeUp()
+         app.buttons["stream-diagnostic-copy"].tap()
+--- before/iosapp/DESIGN.md
++++ after/iosapp/DESIGN.md
+@@ -1,6 +1,6 @@
+ # XBXRC iOS / iPad 设计规范
+ 
+-版本：2026-11-20。覆盖五个根页、信息与设置子页、媒体详情、控制器工具及串流操作层。本文统一本轮图片批注与既有视觉合同，后续页面和公共组件按此规范验收。
++版本：2026-11-23。覆盖五个根页、信息与设置子页、媒体详情、控制器工具及串流操作层。本文统一本轮图片批注与既有视觉合同，后续页面和公共组件按此规范验收。
+ 
+ iPhone 与 iPad 共用 SwiftUI 页面壳层、原生 NavigationStack、主题令牌和交互组件。窗口宽度、系统字号与内容语义共同决定布局；认证、Xbox 数据、会话和信令继续消费现有 Rust 领域合同。
+ 
+@@ -48,7 +48,7 @@
+ 
+ 普通深色卡片使用 `#ABD0B8` 8% 至 `#91B3A3` 4% 的渐变、白色 11% 细边框与轻阴影；浅色卡片使用白色 96% 至 92% 的渐变和黑色 6% 细边框。卡片具有可辨边界，同时保留页面背景的连续性。
+ 
+-串流菜单入口、快捷栏和诊断详情共用 98% 黑色静态底色，降低透明度时采用完全实色；快捷栏保持 52pt 窄栏，菜单与诊断层叠在虚拟手柄和指标上方。其他媒体上的突出浮层使用 `regularMaterial` 与深色透明罩层；降低透明度时深色表面采用 `#415D4E`。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
++串流菜单入口、快捷栏和诊断详情共用 `appSurface(prominent: true, forceDark: true)` 公共突出浮层背景，采用 `regularMaterial` 与深绿色罩层，降低透明度时采用 `#415D4E` 实色面板；快捷栏保持 52pt 窄栏，菜单与诊断层叠在虚拟手柄和指标上方。媒体上的突出浮层沿同一表面规则。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
+ 
+ 媒体背景高度为 380pt，上端画布覆盖率为深色 36%、浅色 68%，中段为 52% / 78%，下端融入完整画布。头像背景适度模糊，游戏背景保留主体辨识度；装饰背景参与无障碍隔离，图片失败时使用既有回退图形。
+ 
+@@ -154,4 +154,4 @@
+ - PC 颜色与表面来源：`src/styles/_theme-foundation.scss`、`src/styles/_theme-semantic.scss`、`src/components/layout/AppShellLayout.vue`；主机、资料与设置沿现有 PC 页面语义。
+ - [Fluent 图标来源与 MIT 许可](XBXRC/Resources/ThirdParty/FluentSystemIcons/README.md)；一级导航和 Xbox 品牌图形复用仓库现有矢量资源。
+ 
+-手机串流菜单通过左上常驻按钮或双指向内滑动唤出，左右两条窄栏分别承载串流操作和指标/诊断工具。按钮采用 44pt 点击区域与静态透明底色，菜单收起后恢复显示，并独立于触屏手柄的启用状态。运行指标、诊断录制、导出、音频、麦克风、画面比例及文字发送在一级完成；画面设置从底部上滑，诊断四组详情直接位于右上局部浮层。录制沿用现有诊断 Trace，结束与关机采用原生确认。登录空态由根视图独立展示中部 132pt XBXRC 标志（沿用 LaunchIcon 品牌资源）与页面下部的全宽登录按钮，按钮距底部安全区 32pt；登录后显示顶部品牌与底部导航。
++手机串流菜单通过左上常驻按钮或双指向内滑动唤出，左右两条窄栏分别承载串流操作和指标/诊断工具。按钮采用 44pt 点击区域与公共突出浮层背景，菜单收起后恢复显示，并独立于触屏手柄的启用状态。运行指标、诊断录制、导出、音频、麦克风、画面比例及文字发送在一级完成；画面设置从底部上滑，诊断四组详情直接位于右上局部浮层。录制沿用现有诊断 Trace，结束与关机采用原生确认。登录空态由根视图独立展示中部 132pt XBXRC 标志（沿用 LaunchIcon 品牌资源）与页面下部的全宽登录按钮，按钮距底部安全区 32pt；登录后显示顶部品牌与底部导航。

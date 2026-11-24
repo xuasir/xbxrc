@@ -1,0 +1,16 @@
+{
+  "result": "Passed",
+  "total_tests": 2,
+  "passed_tests": 2,
+  "failed_tests": 0,
+  "native_summary": "native-final-test-summary.json",
+  "ui_summary": "ui-final-test-summary.json",
+  "minimum_acceptance": [
+    "五页原生导航背景起点及底边、首行绘制",
+    "正式入口五页切换、返回、品牌标题和底栏几何"
+  ],
+  "verification_policy": "最终两项定向冒烟通过后收尾",
+  "temporary_probe_restored": true,
+  "swift_format_passed": true,
+  "diff_check_passed": true
+}

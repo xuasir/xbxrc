@@ -1,0 +1,56 @@
+[
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+    "ranges": [
+      [
+        497,
+        497
+      ],
+      [
+        506,
+        506
+      ],
+      [
+        632,
+        632
+      ],
+      [
+        641,
+        641
+      ],
+      [
+        650,
+        650
+      ],
+      [
+        660,
+        664
+      ],
+      [
+        679,
+        682
+      ],
+      [
+        687,
+        693
+      ],
+      [
+        701,
+        705
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "ranges": [
+      [
+        880,
+        1087
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

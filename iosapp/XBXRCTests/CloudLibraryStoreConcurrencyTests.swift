@@ -105,17 +105,17 @@ private actor DelayedSaveCloudClient: XboxCloudDataClient {
     }
 
     func prepareAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedCloudAccess {
         throw CancellationError()
     }
 
     func prepareHomeAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedHomeAccess {
         throw CancellationError()
     }

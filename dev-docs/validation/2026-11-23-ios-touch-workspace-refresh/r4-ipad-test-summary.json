@@ -1,0 +1,52 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "modelName" : "iPad Pro 13-inch (M5)",
+        "osBuildNumber" : "24A434",
+        "osVersion" : "27.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 3,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.0",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1795413047.229,
+  "passedTests" : 3,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795412876.565,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 4,
+      "testIdentifierString" : "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft",
+      "testName" : "testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 4
+}

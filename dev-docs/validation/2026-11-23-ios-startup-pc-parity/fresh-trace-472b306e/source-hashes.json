@@ -1,0 +1,66 @@
+{
+  "crates/xbox-auth-flow/src/flow.rs": {
+    "sha256": "420a7f0db5c73627f35aec76c2b7479b2a83cfc9cf0d49c19af6578bab8486cc",
+    "bytes": 18351
+  },
+  "crates/xbox-auth-flow/src/telemetry.rs": {
+    "sha256": "b326a83065811e60fd1f9e43bdac8f2edba432616d490a671a9f0cb23fed479e",
+    "bytes": 1551
+  },
+  "crates/xbox-ios-bridge/src/auth_session.rs": {
+    "sha256": "31d4883e9666844f44118483fd6e1dbc6129674f144899debaf998fb0aca7fc8",
+    "bytes": 13225
+  },
+  "crates/xbox-ios-bridge/src/auth_session.test.rs": {
+    "sha256": "4311806718e773e68f69f654e44501d4f4db3f29f75a9baf5a12c806029b17a9",
+    "bytes": 14775
+  },
+  "crates/xbox-ios-bridge/src/query_failure.rs": {
+    "sha256": "39c6e6d779dc4b1c7bfcfe07fbbad0e41af1ed8ff79839d800fb971f55bf2db5",
+    "bytes": 4682
+  },
+  "crates/xbox-ios-bridge/src/streaming.rs": {
+    "sha256": "55f639521810e9ce2e69fac181dadc2b47079116639c3f1558b4608ceba739f8",
+    "bytes": 90103
+  },
+  "crates/xbox-webapi/src/auth_api.rs": {
+    "sha256": "4e2b3e4cd45c9ffbc2f2657fded9e66836038454b2dc9c96cf27f8923831af06",
+    "bytes": 20172
+  },
+  "crates/xbox-webapi/src/error.rs": {
+    "sha256": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957",
+    "bytes": 13787
+  },
+  "crates/xbox-webapi/src/transport.rs": {
+    "sha256": "96474edff0fe0a748cd49927f4b423c600a8f572cf41e14d60269c4aadfcfa73",
+    "bytes": 22264
+  },
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": {
+    "sha256": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+    "bytes": 146
+  },
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": {
+    "sha256": "60069e2af20f80cb9193037e798e07e218ac0345c6473a98e1ee5ef890a72c8c",
+    "bytes": 272244
+  },
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": {
+    "sha256": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+    "bytes": 59817
+  },
+  "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift": {
+    "sha256": "2ca38c3941b9633e8992909ec74586e28aacec6acb777392b622033f40657d77",
+    "bytes": 7683
+  },
+  "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift": {
+    "sha256": "d25cbe553c068919fe8347079665961a8de32a526fc2eeaf66e294aa6ac4f54f",
+    "bytes": 5943
+  },
+  "iosapp/XBXRCTests/XBXRCTests.swift": {
+    "sha256": "fba6d8fdd94575cbda178f1cfdb7e4bdcaf8c756950b30c524d660232be58b9b",
+    "bytes": 210097
+  },
+  "src-tauri/src/mods/auth/token_refresh.rs": {
+    "sha256": "4c66553b3ba6a814083729dbd8a1ee1e5a3ce42a0e9a77cc909fd7d911d876bf",
+    "bytes": 3646
+  }
+}

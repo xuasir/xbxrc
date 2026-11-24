@@ -1,0 +1,29 @@
+{
+  "rust": {
+    "bridge": 112,
+    "webapi": 77,
+    "catalog_flow": 11,
+    "total": 200,
+    "result": "passed"
+  },
+  "swift": {
+    "initial": 39,
+    "cancellation": 7,
+    "recovery": 3,
+    "unique_scenarios": 42,
+    "result": "passed"
+  },
+  "iphoneos_build": "passed",
+  "binding_swift6_typecheck": "passed",
+  "binding_reproduction": "passed",
+  "binding_patch_idempotence": "passed",
+  "rust_fmt": "passed",
+  "streaming_session_boundary": "passed",
+  "staged_unchanged": true,
+  "manual_validation": "pending: real-device host, Cloud 401, album service responses and streaming",
+  "download_budget": {
+    "total_seconds": 300,
+    "maximum_bytes": 2147483648,
+    "connect_timeout": "URLSession platform policy; PC dedicated 5-second connect budget remains different"
+  }
+}

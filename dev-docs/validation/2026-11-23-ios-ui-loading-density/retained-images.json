@@ -1,0 +1,275 @@
+[
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "cloud-global-failures",
+    "exportedFileName": "4F337EE5-7909-40E4-B416-139B925E69A1.png",
+    "retained": true,
+    "archiveFile": "cloud-global-failures.png",
+    "sha256": "702eade729702bf3872e6b8afb9e24175825f8858d7a1c953e080151ed9aac79",
+    "bytes": 1455316
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "cloud-source-updates",
+    "exportedFileName": "F84FF075-1C22-4BCB-BB6C-FA319B8C415D.png",
+    "retained": true,
+    "archiveFile": "cloud-source-updates.png",
+    "sha256": "0af1416519baaa516b1cac3b91fe8c8842ece548d172af6ddeea7b4b6df8feb7",
+    "bytes": 1421531
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "touch-capsule-narrow-accessibility",
+    "exportedFileName": "24CB6CF2-766F-4998-9A21-50E28528ACEC.png",
+    "retained": true,
+    "archiveFile": "touch-capsule-narrow-accessibility.png",
+    "sha256": "a81bffbed6d20e6bad56929a0cf890bb547a0f48b3766bd2b45a7bd5136cb145",
+    "bytes": 666309
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "touch-capsule-window-dark",
+    "exportedFileName": "66D78E34-19DC-4194-875C-EAA831757E21.png",
+    "retained": true,
+    "archiveFile": "touch-capsule-window-dark.png",
+    "sha256": "609bc397b0a4c60ab53059ec0bf8e4e31221ca72b3b06572474923bf80255642",
+    "bytes": 1036364
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "touch-capsule-phone-dark",
+    "exportedFileName": "3589BD95-CF57-4FE0-A695-20B6C752DDAC.png",
+    "retained": true,
+    "archiveFile": "touch-capsule-phone-dark.png",
+    "sha256": "56dbdefd63872985d7f18d48f5988e9eaf199748da6d8158412acb344c03f408",
+    "bytes": 787021
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-refresh-snapshot",
+    "exportedFileName": "48B688D3-0A17-4A4A-9E03-A2E56A01C7E0.png",
+    "retained": true,
+    "archiveFile": "my-refresh-snapshot.png",
+    "sha256": "91beb9d9b22b8f26db3f44b84a819bd0b6a40e22e74ee0c2cd6a8b92e6648254",
+    "bytes": 974220
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-loaded",
+    "exportedFileName": "68B497E0-CBB4-4E6F-B51A-F7A325A1976F.png",
+    "retained": true,
+    "archiveFile": "my-loaded.png",
+    "sha256": "d84a3707f4a389d57338917dedc512f05388665e2f94fca112a1955e55816dc4",
+    "bytes": 966676
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-initial-failure",
+    "exportedFileName": "D207DCDC-319A-426B-994E-A7587BF5AC0A.png",
+    "retained": true,
+    "archiveFile": "my-initial-failure.png",
+    "sha256": "43dce2f0b6d338353829285fbf7f9e1638e1f10bde018dc5f39e644f19fe45f3",
+    "bytes": 953383
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-partial",
+    "exportedFileName": "6923E9B4-3172-4DDC-BAC7-53982FA253AD.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-partial.png",
+    "sha256": "054696fe308aa0365196eef2880114dcb4f9c79e8bd4bc9ec2e29ba0908ee92e",
+    "bytes": 928170
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-tablet-light",
+    "exportedFileName": "DD90C6C5-8A29-4042-A5B3-B481F0CC0A87.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-tablet-light.png",
+    "sha256": "fad00a5cd9c41a4b3e6f3425818b8926f04e96d4b3d4143faf1c45571aaf3c47",
+    "bytes": 1897147
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-window-dark",
+    "exportedFileName": "E8074927-0D1F-4700-B269-549D5193B35D.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-window-dark.png",
+    "sha256": "ae332c286b8611e977e964d15cdf309188446d2ba5b915858848f1e1f54e0461",
+    "bytes": 1439467
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-narrow-accessibility",
+    "exportedFileName": "3E993279-3E92-4A55-9BB6-EE204805F0B4.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-narrow-accessibility.png",
+    "sha256": "466393321e61401f1ef6630b964e436040e695a1f1b005a57de338b0f3203f97",
+    "bytes": 749226
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-phone-light",
+    "exportedFileName": "50A55626-4062-4E86-A137-67A41BC56FB5.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-phone-light.png",
+    "sha256": "b8715d06deb825526a68c2bf80e61a2f2b54e8825213584713ffe4c38d06c74d",
+    "bytes": 839924
+  },
+  {
+    "test": {
+      "testIdentifier": "CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedLoadingCapsulesAndCloudDensity"
+    },
+    "name": "my-skeleton-phone-dark",
+    "exportedFileName": "182AA213-E2A3-4E3B-ADE3-AF6E1D1F2CDE.png",
+    "retained": true,
+    "archiveFile": "my-skeleton-phone-dark.png",
+    "sha256": "5aa50558bae53b87a67acda29224c9f94942f627820b39177dd9187f93bd39a5",
+    "bytes": 927696
+  },
+  {
+    "test": {
+      "testIdentifier": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally"
+    },
+    "name": "section-errors-cloud-recovered",
+    "exportedFileName": "2A582530-0C01-4E81-82ED-576B3A1B34A1.png",
+    "retained": true,
+    "archiveFile": "section-errors-cloud-recovered.png",
+    "sha256": "5736736fcd0a726e83952cb1fd1faa825263031dacccafb34fd9c1c723cfeaef",
+    "bytes": 2993798
+  },
+  {
+    "test": {
+      "testIdentifier": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally"
+    },
+    "name": "section-errors-cloud-source",
+    "exportedFileName": "5D965445-86D3-4A20-AA87-F015E05584C7.png",
+    "retained": true,
+    "archiveFile": "section-errors-cloud-source.png",
+    "sha256": "f588137c7e67160e9d875974557428c7ba10fea390a71d3998e9f00d2a2f652f",
+    "bytes": 3009822
+  },
+  {
+    "test": {
+      "testIdentifier": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation"
+    },
+    "name": "annotations-my-subpages-return",
+    "exportedFileName": "E5A3EC1F-6E57-4583-8355-B2D471A9A1CB.png",
+    "retained": false
+  },
+  {
+    "test": {
+      "testIdentifier": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation"
+    },
+    "name": "annotations-my-sign-out-confirmation",
+    "exportedFileName": "A42C38B7-6DC2-4941-A399-D1BB2E583E9D.png",
+    "retained": false
+  },
+  {
+    "test": {
+      "testIdentifier": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation"
+    },
+    "name": "annotations-my-overview",
+    "exportedFileName": "BA848BC0-B46F-4BB1-ACE4-5B8F55BAC561.png",
+    "retained": true,
+    "archiveFile": "annotations-my-overview.png",
+    "sha256": "97bfa57077a5949c7ea3e9788d9b3bce39f8435ba459cad8febb3fcc0565c332",
+    "bytes": 2564112
+  },
+  {
+    "test": {
+      "testIdentifier": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments"
+    },
+    "name": "touch-template-restored-after-relaunch",
+    "exportedFileName": "EA660898-A036-49B8-9F1D-B28469E9949F.png",
+    "retained": false
+  },
+  {
+    "test": {
+      "testIdentifier": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments"
+    },
+    "name": "touch-template-adjusted-preview",
+    "exportedFileName": "79BBB441-1CD3-4A4B-A58C-65A895226588.png",
+    "retained": true,
+    "archiveFile": "touch-template-adjusted-preview.png",
+    "sha256": "32fa4c7a96d22994c926d69d9c92a17833c18c68369602d3b0ada80ca14b0391",
+    "bytes": 2510451
+  },
+  {
+    "test": {
+      "testIdentifier": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments"
+    },
+    "name": "touch-template-dragged",
+    "exportedFileName": "028177DC-5F5E-48DE-88FA-5463C18541C2.png",
+    "retained": false
+  },
+  {
+    "test": {
+      "testIdentifier": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments"
+    },
+    "name": "touch-template-settings",
+    "exportedFileName": "AA6CFB00-C0E9-43E2-B81A-2D27C11D6264.png",
+    "retained": false
+  },
+  {
+    "test": {
+      "testIdentifier": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+      "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft"
+    },
+    "name": "touch-template-portrait-lower-half",
+    "exportedFileName": "2EA957EB-703A-4613-A1B5-5AD1CF6C810B.png",
+    "retained": true,
+    "archiveFile": "touch-template-portrait-lower-half.png",
+    "sha256": "1522d0f72411039ffbf38dfb20c022ffbe989caf744d37ec900b1bf1e28f20d2",
+    "bytes": 1651658
+  }
+]

@@ -1,0 +1,447 @@
+--- a/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
++++ b/iosapp/XBXRC/Shared/Components/AppInformationPage.swift
+@@ -39,11 +39,51 @@
+   }
+ }
+ 
+-enum AppPageArtwork: Equatable {
++enum AppPageArtwork: Hashable {
+   case avatar(URL?)
+   case game(URL?)
+   case cloudGame([URL])
+   case console(String)
++}
++
++enum AppArtworkBackdropStyle {
++  static let height: CGFloat = 380
++
++  static func overlayStops(for colorScheme: ColorScheme) -> [Gradient.Stop] {
++    [
++      .init(
++        color: AppThemePalette.canvas.opacity(colorScheme == .dark ? 0.36 : 0.52), location: 0),
++      .init(
++        color: AppThemePalette.canvas.opacity(colorScheme == .dark ? 0.52 : 0.70), location: 0.45),
++      .init(color: AppThemePalette.canvas, location: 1),
++    ]
++  }
++}
++
++/// 页面和标题栏共用完整窗口的图片坐标，局部区域直接裁切同一张通顶背景。
++struct AppPageBackdrop: View {
++  @Environment(\.appCanvasBounds) private var canvasBounds
++  let artwork: AppPageArtwork?
++  var canvasRegion: CGRect? = nil
++  var onArtworkSuccess: ((URL) -> Void)? = nil
++
++  var body: some View {
++    GeometryReader { geometry in
++      let region = canvasRegion ?? geometry.frame(in: .global)
++      let bounds = canvasBounds ?? region
++      ZStack(alignment: .topLeading) {
++        AppThemeBackground(canvasRegion: region)
++        if let artwork {
++          AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
++            .frame(width: bounds.width, height: AppArtworkBackdropStyle.height)
++            .offset(x: bounds.minX - region.minX, y: bounds.minY - region.minY)
++        }
++      }
++      .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
++    }
++    .ignoresSafeArea()
++    .allowsHitTesting(false).accessibilityHidden(true)
++  }
+ }
+ 
+ /// 图片与主题画布渐变融合，延伸至安全区；背景专门表达身份。
+@@ -51,7 +91,7 @@
+   @Environment(\.colorScheme) private var colorScheme
+   let artwork: AppPageArtwork
+   var onSuccess: ((URL) -> Void)? = nil
+-  var height: CGFloat = 380
++  var height: CGFloat = AppArtworkBackdropStyle.height
+   var body: some View {
+     GeometryReader { geometry in
+       ZStack {
+@@ -65,9 +105,9 @@
+               .frame(height: min(300, geometry.size.height), alignment: .bottom)
+               .frame(maxHeight: .infinity, alignment: .bottom)
+           case .avatar(let url), .game(let url):
+-            AsyncImage(url: url) { image in
++            SharedRemoteImage(url: url, onSuccess: onSuccess) { image in
+               image.resizable().scaledToFill()
+-            } placeholder: {
++            } placeholder: { _ in
+               Image(
+                 systemName: isAvatar
+                   ? "person.crop.circle.fill" : "gamecontroller.fill"
+@@ -81,18 +121,12 @@
+               candidates: candidates, contentMode: .fill, onSuccess: onSuccess)
+           }
+         }
++        .id(artwork)
+         .frame(width: geometry.size.width, height: geometry.size.height)
+         .clipped()
+         LinearGradient(
+-          stops: [
+-            .init(
+-              color: AppThemePalette.canvas.opacity(
+-                colorScheme == .dark ? 0.36 : 0.68), location: 0),
+-            .init(
+-              color: AppThemePalette.canvas.opacity(
+-                colorScheme == .dark ? 0.52 : 0.78), location: 0.45),
+-            .init(color: AppThemePalette.canvas, location: 1),
+-          ], startPoint: .top, endPoint: .bottom)
++          stops: AppArtworkBackdropStyle.overlayStops(for: colorScheme),
++          startPoint: .top, endPoint: .bottom)
+       }
+     }
+     .frame(height: height)
+--- a/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
++++ b/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift
+@@ -494,13 +494,7 @@
+       .environment(\.appInformationIsEmbedded, false)
+       .containerBackground(for: .navigation) {
+         // 画布装配在原生导航容器中，状态栏与标题区使用同一张完整背景。
+-        AppThemeBackground()
+-          .overlay(alignment: .top) {
+-            if let artwork = backgroundArtwork {
+-              AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
+-            }
+-          }
+-          .ignoresSafeArea()
++        AppPageBackdrop(artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess)
+       }
+       .onGeometryChange(for: CGFloat.self) {
+         $0.size.width
+@@ -509,7 +503,7 @@
+       }
+       .background {
+         AppNavigationBackdrop(
+-          artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess
++          artwork: backgroundArtwork, onArtworkSuccess: onArtworkSuccess, isActive: isActive
+         )
+         .frame(width: 0, height: 0)
+         if !showsBrand && showsBack {
+@@ -635,6 +629,7 @@
+   @Environment(\.colorScheme) private var colorScheme
+   let artwork: AppPageArtwork?
+   let onArtworkSuccess: ((URL) -> Void)?
++  let isActive: Bool
+ 
+   func makeUIViewController(context: Context) -> BackdropController { BackdropController() }
+ 
+@@ -643,6 +638,7 @@
+     controller.artwork = artwork
+     controller.onArtworkSuccess = onArtworkSuccess
+     controller.colorScheme = colorScheme
++    controller.isActive = isActive
+     controller.updateBackdrop()
+   }
+ 
+@@ -651,6 +647,7 @@
+     var artwork: AppPageArtwork?
+     var onArtworkSuccess: ((URL) -> Void)?
+     var colorScheme: ColorScheme = .light
++    var isActive = true
+     private let hosting = UIHostingController(rootView: AnyView(EmptyView()))
+ 
+     override func loadView() {
+@@ -663,6 +660,11 @@
+       updateBackdrop()
+     }
+ 
++    override func viewDidAppear(_ animated: Bool) {
++      super.viewDidAppear(animated)
++      updateBackdrop()
++    }
++
+     override func viewDidLayoutSubviews() {
+       super.viewDidLayoutSubviews()
+       updateBackdrop()
+@@ -674,10 +676,21 @@
+     }
+ 
+     func updateBackdrop() {
++      guard isActive else {
++        hosting.view.removeFromSuperview()
++        return
++      }
+       guard let window = view.window,
+         let root = window.rootViewController,
+         let navigation = appNavigationController(containing: view, in: root)
+       else { return }
++      // 当前返回栈的页面拥有标题背景，后台资料更新沿自身页面保存。
++      guard let page = navigation.topViewController?.viewIfLoaded,
++        view.isDescendant(of: page)
++      else {
++        hosting.view.removeFromSuperview()
++        return
++      }
+       let bar = navigation.navigationBar
+       let bounds = canvasBounds ?? window.bounds
+       let top = max(0, bar.convert(.zero, to: window).y - bounds.minY)
+@@ -685,20 +698,11 @@
+         x: 0, y: -top, width: bar.bounds.width, height: bar.bounds.height + top)
+       let region = bar.convert(localRegion, to: window)
+       hosting.rootView = AnyView(
+-        ZStack(alignment: .topLeading) {
+-          AppThemeBackground(canvasRegion: bounds)
+-            .environment(\.appCanvasBounds, bounds)
+-            .frame(width: bounds.width, height: bounds.height)
+-            .overlay(alignment: .top) {
+-              if let artwork {
+-                AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
+-              }
+-            }
+-            .offset(x: bounds.minX - region.minX, y: bounds.minY - region.minY)
+-        }
+-        .frame(width: region.width, height: region.height, alignment: .topLeading)
+-        .clipped()
+-        .environment(\.colorScheme, colorScheme)
++        AppPageBackdrop(artwork: artwork, canvasRegion: region, onArtworkSuccess: onArtworkSuccess)
++          .environment(\.appCanvasBounds, bounds)
++          .frame(width: region.width, height: region.height, alignment: .topLeading)
++          .clipped()
++          .environment(\.colorScheme, colorScheme)
+       )
+       hosting.view.backgroundColor = .clear
+       hosting.view.isUserInteractionEnabled = false
+--- a/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
++++ b/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
+@@ -276,6 +276,7 @@
+   @EnvironmentObject private var streaming: StreamingFeatureStore
+   @EnvironmentObject private var settings: AppSettingsStore
+   @Environment(\.appPageIsActive) private var isActive
++  @Environment(\.dynamicTypeSize) private var textSize
+   @State private var section: PersonalGameSection
+   @State private var descriptionExpanded = false
+ 
+@@ -302,27 +303,39 @@
+       $0.titleID == initialGame.titleID
+     } ?? initialGame
+   }
+-
+-  var body: some View {
+-    VStack(spacing: 0) {
+-      AppTextTabs(
+-        selection: $section, values: PersonalGameSection.allCases, title: { $0.title },
+-        identifier: "personal-game-sections", buttonPrefix: "personal-game-section"
+-      )
+-      .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
+-      Group {
+-        switch section {
+-        case .overview: overview
+-        case .achievements: AchievementComparisonView(game: game, targetID: targetID)
+-        case .album: XboxAlbumView(fixedTitleID: game.titleID)
+-        case .statistics: statistics
+-        }
++  private var coverURL: URL? {
++    game.artworkURL ?? initialGame.artworkURL ?? installedGame?.artworkURL
++  }
++  private var backdropURL: URL? {
++    game.heroURL ?? initialGame.heroURL ?? coverURL
++  }
++
++  var body: some View {
++    GeometryReader { geometry in
++      VStack(spacing: 0) {
++        // 游戏身份区在所有内容分类上方保持稳定，短窗和辅助字号收起额外留白。
++        header(compact: geometry.size.height < 520 || textSize.isAccessibilitySize)
++          .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
++        AppTextTabs(
++          selection: $section, values: PersonalGameSection.allCases, title: { $0.title },
++          identifier: "personal-game-sections", buttonPrefix: "personal-game-section"
++        )
++        .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth)
++        Group {
++          switch section {
++          case .overview: overview
++          case .achievements: AchievementComparisonView(game: game, targetID: targetID)
++          case .album: XboxAlbumView(fixedTitleID: game.titleID)
++          case .statistics: statistics
++          }
++        }
++        .frame(maxWidth: .infinity, maxHeight: .infinity)
++        .appPageTransition(value: section)
+       }
+       .frame(maxWidth: .infinity, maxHeight: .infinity)
+-      .appPageTransition(value: section)
+     }
+     .appThemeCanvas().appPageToolbar(
+-      game.name, artwork: .game(game.artworkURL ?? installedGame?.artworkURL)
++      game.name, artwork: .game(backdropURL)
+     )
+     .appInformationTypography()
+     .task(id: "\(auth.ownerGeneration):\(key):\(isActive)") {
+@@ -331,29 +344,41 @@
+     }
+   }
+ 
++  private func header(compact: Bool) -> some View {
++    HStack(alignment: .bottom, spacing: 16) {
++      PersonalArtwork(url: coverURL, size: compact ? 56 : 96)
++      VStack(alignment: .leading, spacing: compact ? 4 : 8) {
++        Text(game.name).appFont(.hero, weight: .semibold)
++          .fixedSize(horizontal: false, vertical: true)
++          .accessibilityAddTraits(.isHeader)
++          .accessibilityIdentifier("personal-game-name")
++        if let progress = game.achievementProgress {
++          Text(
++            appLocalizedFormat(
++              "%lld%% 成就进度", locale: locale, progress.percentage)
++          ).appFont(.bodySmall)
++            .foregroundStyle(AppThemePalette.textSecondary)
++        }
++        Text(
++          XboxPresentation.playtime(
++            timeState.hasSnapshot && timeState.failure == nil
++              ? timeState.value : game.playtimeMinutes, locale: locale)
++        )
++        .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++      }
++      .frame(maxWidth: .infinity, alignment: .leading)
++    }
++    .frame(maxWidth: .infinity, minHeight: compact ? 0 : 160, alignment: .bottomLeading)
++    .padding(.horizontal, AppLayoutPolicy.pageInset)
++    .padding(.top, compact ? AppLayoutPolicy.groupSpacing : AppLayoutPolicy.pageInset)
++    .padding(.bottom, AppLayoutPolicy.groupSpacing)
++    .accessibilityElement(children: .contain)
++    .accessibilityIdentifier("personal-game-header")
++  }
++
+   private var overview: some View {
+     AppInformationPage {
+       Section {
+-        HStack(spacing: 16) {
+-          PersonalArtwork(url: game.artworkURL ?? installedGame?.artworkURL, size: 96)
+-          VStack(alignment: .leading, spacing: 8) {
+-            Text(game.name).appFont(.hero, weight: .semibold)
+-            if let progress = game.achievementProgress {
+-              Text(
+-                appLocalizedFormat(
+-                  "%lld%% 成就进度", locale: locale, progress.percentage)
+-              ).appFont(.bodySmall)
+-                .foregroundStyle(AppThemePalette.textSecondary)
+-            }
+-            Text(
+-              XboxPresentation.playtime(
+-                timeState.hasSnapshot && timeState.failure == nil
+-                  ? timeState.value : game.playtimeMinutes, locale: locale)
+-            )
+-            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+-          }
+-        }.frame(minHeight: 160, alignment: .bottomLeading).padding(
+-          .bottom, AppLayoutPolicy.itemSpacing)
+         AppSectionRequestState(
+           title: "游戏资料", status: detailState.requestStatus, identifier: "personal-game"
+         ) {
+--- a/iosapp/XBXRC/Features/Library/GameDetailView.swift
++++ b/iosapp/XBXRC/Features/Library/GameDetailView.swift
+@@ -31,10 +31,13 @@
+   }
+   private var detail: CloudProductDetails? { detailState.value }
+   private var artworkCandidates: [URL] {
+-    [
+-      detail?.heroURL, game.heroURL, detail?.posterURL, game.posterURL,
++    var seen = Set<URL>()
++    return [
++      detail?.heroURL, game.heroURL, initialGame.heroURL,
++      detail?.posterURL, game.posterURL, initialGame.posterURL,
+       detail?.tileURL, game.tileURL, game.artworkURL,
+-    ].compactMap { $0 }
++      initialGame.tileURL, initialGame.artworkURL,
++    ].compactMap { $0 }.filter { seen.insert($0).inserted }
+   }
+   private var coverCandidates: [URL] {
+     [detail?.tileURL, game.tileURL, game.artworkURL, detail?.posterURL, game.posterURL]
+@@ -51,7 +54,8 @@
+     return GameSummary(
+       id: titleID, titleID: titleID, name: detail?.name ?? game.name,
+       artworkURL: detail?.tileURL ?? game.tileURL ?? game.artworkURL,
+-      heroURL: detail?.heroURL ?? game.heroURL, lastPlayedAt: personalLastPlayed,
++      heroURL: detail?.heroURL ?? game.heroURL ?? initialGame.heroURL,
++      lastPlayedAt: personalLastPlayed,
+       playtimeMinutes: personalPlaytime, achievementProgress: personalProgress,
+       description: detail?.description ?? game.description, productID: game.productID)
+   }
+--- a/iosapp/XBXRCUITests/PCPageInteractionTests.swift
++++ b/iosapp/XBXRCUITests/PCPageInteractionTests.swift
+@@ -425,7 +425,7 @@
+     save(app, "pc-installed-filter")
+   }
+ 
+-  func testGameOverviewUsesTabsAndCentersEmptyAlbum() {
++  func testGameOverviewUsesTabsAndCentersEmptyAlbum() throws {
+     let app = launch()
+     let installed = app.buttons.matching(identifier: "host-open-installed").firstMatch
+     reveal(installed, in: app)
+@@ -434,6 +434,15 @@
+     reveal(game, in: app)
+     game.tap()
+     waitForPage(app, "Forza Horizon 5")
++    let name = app.staticTexts["personal-game-name"].firstMatch
++    XCTAssertTrue(name.waitForExistence(timeout: 5))
++    let sections = app.scrollViews["personal-game-sections"]
++    let identityFrame = name.frame
++    let tabsFrame = sections.frame
++    XCTAssertGreaterThan(identityFrame.minY, app.navigationBars.firstMatch.frame.maxY)
++    XCTAssertLessThan(identityFrame.maxY, tabsFrame.minY)
++    let background = try toolbarBackgroundPixels(
++      app: app, navigation: app.navigationBars.firstMatch)
+     let description = app.buttons["game-description-toggle"]
+     XCTAssertTrue(description.waitForExistence(timeout: 5))
+     XCTAssertEqual(description.label, "展开简介")
+@@ -447,11 +456,23 @@
+     XCTAssertFalse(app.buttons["查看我的游戏相册"].exists)
+     XCTAssertFalse(app.buttons["查看游玩统计"].exists)
+     save(app, "priority-game-overview")
++    for (section, content) in [("statistics", "游玩统计"), ("achievements", "游戏成就")] {
++      app.buttons["personal-game-section-\(section)"].tap()
++      XCTAssertTrue(app.staticTexts[content].firstMatch.waitForExistence(timeout: 5))
++      XCTAssertEqual(name.frame.minY, identityFrame.minY, accuracy: 1)
++      XCTAssertEqual(name.frame.maxY, identityFrame.maxY, accuracy: 1)
++      XCTAssertEqual(sections.frame.minY, tabsFrame.minY, accuracy: 1)
++    }
+     app.buttons["personal-game-section-album"].tap()
+     let empty = app.descendants(matching: .any)["album-empty-state"].firstMatch
+     XCTAssertTrue(empty.waitForExistence(timeout: 5))
+     let types = app.descendants(matching: .any)["album-media-types"].firstMatch
+     let scroll = app.scrollViews["app-information-scroll"].firstMatch
++    XCTAssertEqual(name.frame.minY, identityFrame.minY, accuracy: 1)
++    XCTAssertEqual(name.frame.maxY, identityFrame.maxY, accuracy: 1)
++    XCTAssertEqual(sections.frame.minY, tabsFrame.minY, accuracy: 1)
++    XCTAssertEqual(
++      try toolbarBackgroundPixels(app: app, navigation: app.navigationBars.firstMatch), background)
+     XCTAssertEqual(empty.frame.midX, scroll.frame.midX, accuracy: 2)
+     let contentBottom = min(scroll.frame.maxY, app.buttons["primary-navigation-hosts"].frame.minY)
+     XCTAssertEqual(empty.frame.midY, (types.frame.maxY + contentBottom) / 2, accuracy: 24)
+--- a/iosapp/DESIGN.md
++++ b/iosapp/DESIGN.md
+@@ -12,7 +12,7 @@
+ | P02 语义可辨 | 标题通过字号与字重建立层级，事实采用标签和值，操作通过动词、边界或方向指示表达用途。选中状态同时具有表面变化和 VoiceOver 标记。 | `appFont`、`AppMetric`、`AppFactGroup`、`AppNavigationRow` |
+ | P03 工具成组 | 搜索占满一行；少量互斥条件直接横向切换；筛选、排序与重置组成同一工具行。工具表面采用满圆角胶囊，视觉尺寸与触屏尺寸分别确定。 | `AppContentSearch`、`AppSegmentedFilter`、`AppInformationPicker`、`AppContentToolbar` |
+ | P04 信息成组 | 同一主题的事实和指标共用一张卡片；独立主题具有独立标题与表面。图片表达身份，文本表达内容，主动作具有明确视觉权重。 | `AppMetricGrid`、`AppFactGroup`、`appSurface` |
+-| P05 连续画布 | 页面背景、状态栏、标题区和侧栏共用窗口画布。媒体背景渐变透出；滚动视口在标题区下方完整裁切，顶部保持稳定遮盖。 | `AppThemeBackground`、`AppArtworkBackdrop`、`appPageToolbar`、`AppPageScroll` |
++| P05 连续画布 | 页面背景、状态栏、标题区和侧栏共用窗口画布。媒体背景按完整窗口坐标渐变透出，标题栏裁切相同区域；滚动视口在标题区下方完整裁切，顶部保持稳定遮盖。 | `AppPageBackdrop`、`AppThemeBackground`、`AppArtworkBackdrop`、`appPageToolbar`、`AppPageScroll` |
+ | P06 密度有序 | 空间按信息重要程度分配。正文和事实按自然高度布局，相关说明紧贴控件，分页动作在列表末尾居中。 | `AppLayoutPolicy`、`AppInlineHint`、`AppLoadMoreButton` |
+ | P07 自适应可操作 | 内容字体保留完整 Dynamic Type 缩放；长文真实换行，横向选项可滚动，辅助字号下事实与指标改为单列。交互区域至少 44pt。 | `appResponsiveTypography`、`AppWrappingLayout`、原生控件与无障碍状态 |
+ 
+@@ -52,7 +52,9 @@
+ 
+ 串流菜单入口、快捷栏和诊断详情共用 `appSurface(prominent: true, forceDark: true)` 公共突出浮层背景，采用 `regularMaterial` 与深绿色罩层，降低透明度时采用 `#415D4E` 实色面板；快捷栏保持 52pt 窄栏，菜单与诊断层叠在虚拟手柄和指标上方。媒体上的突出浮层沿同一表面规则。页面环境光沿窗口统一计算，深色采用 16% / 9% / 6% 补光，浅色采用 10% / 5.5% 补光。
+ 
+-媒体背景高度为 380pt，上端画布覆盖率为深色 36%、浅色 68%，中段为 52% / 78%，下端融入完整画布。头像背景适度模糊，游戏背景保留主体辨识度；装饰背景参与无障碍隔离，图片失败时使用既有回退图形。
++媒体背景高度为 380pt，上端画布覆盖率为深色 36%、浅色 52%，45% 高度处为 52% / 70%，下端融入完整画布。头像背景适度模糊，游戏背景保留主体辨识度；头像、游戏和主机背景沿相同透出与渐隐规则绘制。页面与导航头部共用 `AppPageBackdrop`，按完整窗口宽度绘制并裁切所属区域；远程背景复用图片缓存，身份来源切换时更新图片状态。
++
++通顶背景归当前活动返回栈的顶部页面所有，后台页面的资料更新保存到自身页面；进入、返回、根页切换和旋转沿同一窗口坐标重新裁切。游戏优先使用宽幅 hero 图片，资料刷新时沿已知 hero 与封面回退顺序保持背景来源稳定。装饰背景参与无障碍隔离，图片失败时使用既有回退图形。
+ 
+ ## 间距、卡片与密度
+ 
+@@ -119,6 +121,7 @@
+ | 主机 | 主机原图表达当前设备，名称、型号、运行状态与空间表达实际事实。单台机器身份区居中，多台机器在身份区下方使用横向切换；游玩、电源和安装库动作随当前选择更新 |
+ | 云游戏 | 栏目以方形封面和名称组织内容；浏览子页共用全宽搜索与同行工具胶囊。首页以各栏目内容、更新和失败状态组织信息，浏览结果数量归对应列表 |
+ | 云游戏详情 | 身份区使用 80pt 圆角方形封面、游戏名、发行商及输入能力；简介展开操作附着同组标题。个人游戏入口具有标题、说明和方向指示；发行信息与游戏特性分别成卡；底部游玩动作与真实等待、访问要求相邻 |
++| 个人游戏详情 | 公共身份区包含 96pt 游戏封面、名称、成就进度与时长，概览 / 成就 / 相册 / 统计 Tab 位于身份区下方。内容切换保持身份区和通顶背景稳定，仅正文淡入；短窗与辅助字号使用 56pt 封面并收起额外留白，正文保持滚动可达 |
+ | 我的与玩家 | 我的使用 72pt 身份头像与成就点数 / 好友 / 关注 / 粉丝的一排指标。好友、成就、游玩统计与相册通过独立子页进入；好友条目使用 40pt 头像、姓名、状态、活动及紧凑成就点数 |
+ | 成就与游玩记录 | 成就摘要保留全成就游戏数量、成就点数两项。集合汇总沿当前数据列表计算，VoiceOver 说明标明范围；完整账户点数归属身份区。统计页增加核心时长事实，进度与解锁状态直接横条切换 |
+ | 安装库 | 主机身份、串流动作与存储摘要位于上半区，搜索、排序与设备筛选位于下半区。有效数量与容量表达内容，更新时间用于失败后解释上次快照 |

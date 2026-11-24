@@ -1,0 +1,9 @@
+{
+  "processInventoryAvailable": true,
+  "activeRelatedProcesses": [],
+  "rootAliasesChecked": [
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1",
+    "/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1"
+  ],
+  "scope": "本轮隔离目录相关的构建、编译、测试和结果导出进程"
+}

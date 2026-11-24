@@ -33,6 +33,7 @@ fn exported_async_futures_stay_within_stack_budget() {
                     seed_json: String::new(),
                     web_token_json: String::new(),
                     app_level: 0,
+                    token_cache_json: None,
                 },
             )
         }),
@@ -111,7 +112,7 @@ fn credential_operations_preserve_stack_headroom() {
             s.credentials.access("home", None, None)
         }),
         future_size("credential_renewal", |s| {
-            crate::cloud_access::renew_bound_stream_access(&s.access)
+            crate::cloud_access::renew_bound_stream_access(&s.access, None)
         }),
         scoped_future_size("scoped_credential_access", |s, scope| {
             scope.run(
@@ -159,6 +160,7 @@ fn home_and_cloud_provider_credentials_poll_on_device_stack() {
                     let credentials = Arc::new(SessionCredentials::new(handle.clone(), access));
                     let weak = Arc::downgrade(&credentials);
                     let provider = IosSessionFlowProvider {
+                        console_ready_cache: Arc::new(Mutex::new(None)),
                         credentials,
                         target,
                         projection: Arc::new(StdMutex::new(SessionFlowProjection::default())),
@@ -192,6 +194,71 @@ fn home_and_cloud_provider_credentials_poll_on_device_stack() {
             });
         }
     }
+}
+
+struct StackAuthObserver;
+#[async_trait]
+impl crate::XboxAuthObserver for StackAuthObserver {
+    async fn checkpoint(&self, _: crate::XboxAuthCheckpoint) -> Result<(), crate::XboxBridgeError> {
+        Ok(())
+    }
+    fn on_stage(&self, _: crate::XboxAuthStage) {}
+}
+
+#[test]
+fn authorization_and_context_exports_preserve_stack_headroom() {
+    fn measured<F: Future>(name: &'static str, _: impl FnOnce() -> F) -> (&'static str, usize) {
+        (name, std::mem::size_of::<F>())
+    }
+    let auth = || crate::AuthSession {
+        refresh_token: String::new(),
+        seed_json: String::new(),
+        web_token_json: String::new(),
+        app_level: 0,
+        token_cache_json: None,
+    };
+    let sizes = [
+        measured("refresh_login", || {
+            crate::refresh_login(
+                auth(),
+                String::new(),
+                crate::XboxAuthScope::Web,
+                false,
+                None,
+                Arc::new(StackAuthObserver),
+            )
+        }),
+        measured("prepare_cloud_access", || {
+            crate::prepare_cloud_access(
+                auth(),
+                String::new(),
+                Arc::new(StackAuthObserver),
+                None,
+                None,
+            )
+        }),
+        measured("prepare_home_access", || {
+            crate::prepare_home_access(
+                auth(),
+                String::new(),
+                Arc::new(StackAuthObserver),
+                None,
+                None,
+            )
+        }),
+        measured("resolve_cloud_game", || {
+            crate::resolve_cloud_game(String::new(), String::new(), String::new(), None)
+        }),
+    ];
+    for (name, size) in sizes {
+        eprintln!("auth_context_future_size {name}={size}");
+    }
+    assert!(
+        sizes
+            .iter()
+            .all(|(_, size)| *size <= EXPORTED_FUTURE_BUDGET),
+        "auth/context future stack budget: {sizes:?}"
+    );
 }
 
 type PollSenders = std::collections::HashMap<u64, mpsc::Sender<RustFuturePoll>>;
@@ -340,6 +407,7 @@ fn fixture_session(target: Target) -> Arc<XboxStreamSession> {
         super::tests::test_access_for_account(target, &uuid::Uuid::new_v4().to_string()),
         "1234abcd".into(),
         XboxStreamSettings::default(),
+        None,
     )
     .unwrap()
 }
@@ -354,7 +422,9 @@ fn ffi_start_returns_credential_error_and_frees_on_device_stack() {
             future.wait_ready();
             assert!(matches!(
                 future.complete(),
-                StartOutcome::Error(XboxStreamingError::Http(401, _))
+                StartOutcome::Error(XboxStreamingError::Startup { failure })
+                    if failure.kind == XboxStartupFailureKind::Auth && !failure.retryable
+                        && failure.status_code == Some(401)
             ));
             assert_eq!(
                 session.state.try_lock().unwrap().phase,
@@ -564,7 +634,8 @@ fn ffi_cloud_start_drives_real_session_flow_on_device_stack() {
             ..Default::default()
         };
         let session =
-            build_stream_session(handle.clone(), access, "1234abcd".into(), settings).unwrap();
+            build_stream_session(handle.clone(), access, "1234abcd".into(), settings, None)
+                .unwrap();
         let weak = Arc::downgrade(&session);
         let future = StartFuture::new(Arc::clone(&session));
         future.wait_ready();
@@ -664,7 +735,8 @@ fn ffi_home_start_drives_real_session_flow_on_device_stack() {
             ..Default::default()
         };
         let session =
-            build_stream_session(handle.clone(), access, "1234abcd".into(), settings).unwrap();
+            build_stream_session(handle.clone(), access, "1234abcd".into(), settings, None)
+                .unwrap();
         let weak = Arc::downgrade(&session);
         let future = StartFuture::new(Arc::clone(&session));
         future.wait_ready();
@@ -708,6 +780,7 @@ fn ffi_home_start_drives_real_session_flow_on_device_stack() {
                 access,
                 "1234abcd".into(),
                 XboxStreamSettings::default(),
+                None,
             )
             .unwrap();
             let weak = Arc::downgrade(&session);
@@ -715,7 +788,8 @@ fn ffi_home_start_drives_real_session_flow_on_device_stack() {
             future.wait_ready();
             assert!(matches!(
                 future.complete(),
-                StartOutcome::Error(XboxStreamingError::Http(503, _))
+                StartOutcome::Error(XboxStreamingError::Startup { failure })
+                    if failure.kind == super::XboxStartupFailureKind::Network && failure.retryable
             ));
             assert_eq!(
                 session.state.try_lock().unwrap().phase,

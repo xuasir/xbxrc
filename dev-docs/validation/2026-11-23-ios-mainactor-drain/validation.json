@@ -1,0 +1,65 @@
+{
+  "validatedAt": "2026-11-23T11:53:37.599369+08:00",
+  "implementation": "PASS",
+  "simulator": {
+    "passed": 52,
+    "failed": 0,
+    "addedTests": 4,
+    "device": "iPhone 17e",
+    "os": "iOS 27.0",
+    "rawBundleSummary": "simulator-summary.json",
+    "tests": "simulator-tests.json",
+    "fullLogHashVerified": true
+  },
+  "deviceBuild": {
+    "result": "BUILD SUCCEEDED",
+    "codeSigningAllowed": false,
+    "artifact": "device-build-summary.json",
+    "fullLogHashVerified": true
+  },
+  "checks": {
+    "swiftParseFiles": 6,
+    "swiftFormat": "PASS；renderer/tests/overlay全文件，Player与两项兼容修复按范围",
+    "sessionBoundary": "PASS",
+    "frontendLintFix": "PASS",
+    "sourceAndBuildFingerprints": "PASS",
+    "originalIndex": "PASS"
+  },
+  "compileRepairs": [
+    "orientationPicker添加MainActor隔离",
+    "新宿主测试补齐SwiftUI导入",
+    "截图fixture用disablesAnimations替代只读环境赋值"
+  ],
+  "sourceSnapshots": {
+    "count": 6,
+    "allHashesMatch": true
+  },
+  "traceOriginalAndProjectCopyUnchanged": true,
+  "runtimeWarnings": "runtime-warning-comparison.json；前轮与本轮同源同消息",
+  "manualValidation": {
+    "status": "Validation Pending",
+    "target": "当前构建固定原1440p场景、连续前台至少60秒，后台启动和多次恢复；覆盖网络、恢复、media supply、steady supply、submit/present长尾和帧供给delta",
+    "queueFacts": [
+      "ingressDrainQueueMs",
+      "ingressDrainWorkBeforeFrameMs",
+      "ingressQueueMs",
+      "gpuToMainActorMs"
+    ],
+    "comparisonBaseline": "730帧ingressCoalesced、663.881ms MainActor等待、95.24秒对齐窗口drawable52.48FPS"
+  },
+  "cleanup": {
+    "result": "PASS",
+    "removedAllocatedMiB": 865.59,
+    "freeSpaceAfterGiB": 46.54,
+    "temporaryRootAbsent": true,
+    "systemTemporaryTaskPaths": []
+  },
+  "currentSourceAudit": {
+    "retainedFiles": 5,
+    "allRetainedHashesMatch": true,
+    "historicalProbeSnapshot": "post-validation-concurrent-cleanup.json",
+    "temporaryProbePrefixMatchesCurrent": true,
+    "selectedTestsUnaffected": true,
+    "currentProbeFileSwiftParse": "PASS"
+  }
+}

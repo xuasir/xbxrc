@@ -1,0 +1,2788 @@
+--- baseline/crates/xbox-ios-bridge/src/catalog_sources.rs
++++ current/crates/xbox-ios-bridge/src/catalog_sources.rs
+@@ -1,6 +1,6 @@
+ use crate::{cloud_access::load_scoped_stream_access, query_failure::query_error, XboxBridgeError};
+ use xbox_streaming::Target;
+-use xbox_webapi::{GamePassApi, WebApiError, XcloudApi};
++use xbox_webapi::{GamePassApi, WebApiError};
+ 
+ #[uniffi::export(async_runtime = "tokio")]
+ pub async fn fetch_catalog_source(
+@@ -11,7 +11,7 @@
+ ) -> Result<Vec<String>, XboxBridgeError> {
+     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
+     if source == "recent" {
+-        let value = XcloudApi::new(access.host, access.bearer_token)
++        let value = crate::cloud_access::query_xcloud_api(&access_handle, &access, None)?
+             .get_recent_titles(xbox_cloud_catalog_flow::DEFAULT_RECENT_TITLE_LIMIT)
+             .await
+             .map_err(query_error)?;
+--- baseline/crates/xbox-ios-bridge/src/cloud_access.rs
++++ current/crates/xbox-ios-bridge/src/cloud_access.rs
+@@ -743,7 +743,10 @@
+                 scope,
+                 force_core_refresh,
+                 if persist_checkpoint {
+-                    context.auth_observer.clone().unwrap_or_else(|| Arc::new(InMemoryAuthObserver))
++                    context
++                        .auth_observer
++                        .clone()
++                        .unwrap_or_else(|| Arc::new(InMemoryAuthObserver))
+                 } else {
+                     Arc::new(InMemoryAuthObserver)
+                 },
+@@ -875,7 +878,7 @@
+     use super::*;
+     use serde_json::json;
+ 
+-    fn fixture_context(account_id: &str, target: Target) -> StreamingAccessContext {
++    pub(super) fn fixture_context(account_id: &str, target: Target) -> StreamingAccessContext {
+         StreamingAccessContext {
+             host: "stream.example.com".to_string(),
+             bearer_token: "gs-token".to_string(),
+--- baseline/crates/xbox-ios-bridge/src/cloud_access/query_recovery.rs
++++ current/crates/xbox-ios-bridge/src/cloud_access/query_recovery.rs
+@@ -1,7 +1,9 @@
+ use super::*;
+ use crate::query_failure::credential_error;
+ use std::future::Future;
+-use xbox_webapi::{BearerRecoveryFuture, BearerTokenRecovery, HttpTransport, WebApiError, XcloudApi};
++use xbox_webapi::{
++    BearerRecoveryFuture, BearerTokenRecovery, HttpTransport, WebApiError, XcloudApi,
++};
+ 
+ #[derive(Debug, Default)]
+ pub(super) struct QueryRecoveryState {
+@@ -16,7 +18,8 @@
+ 
+ impl std::fmt::Debug for QueryCredentialRecovery {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+-        f.debug_struct("QueryCredentialRecovery").finish_non_exhaustive()
++        f.debug_struct("QueryCredentialRecovery")
++            .finish_non_exhaustive()
+     }
+ }
+ 
+@@ -39,17 +42,28 @@
+         let registry = stream_access_registry()?;
+         registry.validate_bound(handle.trim(), bound)?;
+         if bound.target != Target::Cloud {
+-            return Err(XboxBridgeError::InvalidData("streamAccessTargetMismatch".into()));
++            return Err(XboxBridgeError::InvalidData(
++                "streamAccessTargetMismatch".into(),
++            ));
+         }
+         let state = Arc::clone(&registry.leases[handle.trim()].query_recovery);
+-        Ok(Self { handle: handle.trim().into(), bound: bound.clone(), state })
++        Ok(Self {
++            handle: handle.trim().into(),
++            bound: bound.clone(),
++            state,
++        })
+     }
+ 
+     fn current_access(&self) -> Result<StreamingAccessContext, XboxBridgeError> {
+         let registry = stream_access_registry()?;
+-        registry.validate_bound(&self.handle, &self.bound).map_err(|_| XboxBridgeError::Cancelled)?;
++        registry
++            .validate_bound(&self.handle, &self.bound)
++            .map_err(|_| XboxBridgeError::Cancelled)?;
+         // 已经发出的读取可以在短租约到期后完成，退出/替换仍由 bound 校验阻止。
+-        Ok(registry.leases[&self.handle].context.clone().unwrap_or_else(|| self.bound.clone()))
++        Ok(registry.leases[&self.handle]
++            .context
++            .clone()
++            .unwrap_or_else(|| self.bound.clone()))
+     }
+ 
+     async fn recover_with<F, Fut>(&self, rejected: String, renew: F) -> Result<String, WebApiError>
+@@ -76,18 +90,25 @@
+             }
+         };
+         let mut registry = stream_access_registry().map_err(credential_error)?;
+-        registry.validate_bound(&self.handle, &previous)
++        registry
++            .validate_bound(&self.handle, &previous)
+             .map_err(|_| credential_error(XboxBridgeError::Cancelled))?;
+-        if renewed.account_id != previous.account_id || renewed.target != previous.target
++        if renewed.account_id != previous.account_id
++            || renewed.target != previous.target
+             || renewed.owner_generation != previous.owner_generation
+         {
+             return Err(credential_error(XboxBridgeError::Cancelled));
+         }
+         let token = renewed.bearer_token.clone();
+         if token.trim().is_empty() {
+-            return Err(WebApiError::parse("credential renewal returned an empty token"));
+-        }
+-        let lease = registry.leases.get_mut(&self.handle).expect("validated lease");
++            return Err(WebApiError::parse(
++                "credential renewal returned an empty token",
++            ));
++        }
++        let lease = registry
++            .leases
++            .get_mut(&self.handle)
++            .expect("validated lease");
+         lease.metadata.created_at_ms = renewed.created_at_ms;
+         lease.metadata.expires_at_ms = renewed.expires_at_ms;
+         lease.metadata.terminal = None;
+@@ -100,13 +121,18 @@
+ impl BearerTokenRecovery for QueryCredentialRecovery {
+     fn recover(&self, rejected_token: &str) -> BearerRecoveryFuture {
+         let recovery = Self {
+-            handle: self.handle.clone(), bound: self.bound.clone(), state: Arc::clone(&self.state),
++            handle: self.handle.clone(),
++            bound: self.bound.clone(),
++            state: Arc::clone(&self.state),
+         };
+         let rejected = rejected_token.to_owned();
+         Box::pin(async move {
+-            recovery.recover_with(rejected, |access, rejected| async move {
+-                renew_bound_access(&access, DownstreamTokenScope::Cloud, Some(rejected), true).await
+-            }).await
++            recovery
++                .recover_with(rejected, |access, rejected| async move {
++                    renew_bound_access(&access, DownstreamTokenScope::Cloud, Some(rejected), true)
++                        .await
++                })
++                .await
+         })
+     }
+ }
+@@ -117,7 +143,8 @@
+     use std::sync::atomic::AtomicUsize;
+ 
+     fn fixture() -> (String, StreamingAccessContext, QueryCredentialRecovery) {
+-        let context = super::super::tests::fixture_context(&uuid::Uuid::new_v4().to_string(), Target::Cloud);
++        let context =
++            super::super::tests::fixture_context(&uuid::Uuid::new_v4().to_string(), Target::Cloud);
+         let (handle, access) = register_test_stream_access(context);
+         let recovery = QueryCredentialRecovery::new(&handle, &access).unwrap();
+         (handle, access, recovery)
+@@ -125,8 +152,13 @@
+ 
+     fn renewed(mut access: StreamingAccessContext) -> (StreamingAccessContext, AuthSession) {
+         access.bearer_token = "new-token".into();
+-        let auth = AuthSession { refresh_token: "fixture".into(), seed_json: "{}".into(),
+-            web_token_json: "{}".into(), app_level: 0, token_cache_json: None };
++        let auth = AuthSession {
++            refresh_token: "fixture".into(),
++            seed_json: "{}".into(),
++            web_token_json: "{}".into(),
++            app_level: 0,
++            token_cache_json: None,
++        };
+         (access, auth)
+     }
+ 
+@@ -134,7 +166,8 @@
+     async fn concurrent_rejections_share_renewal_and_publish_latest_bound_access() {
+         let (handle, access, recovery) = fixture();
+         let calls = AtomicUsize::new(0);
+-        let renew = |current, rejected: String| async {
++        let calls = &calls;
++        let renew = |current, rejected: String| async move {
+             assert_eq!(rejected, "gs-token");
+             calls.fetch_add(1, Ordering::SeqCst);
+             tokio::task::yield_now().await;
+@@ -147,39 +180,65 @@
+         assert_eq!(first.unwrap(), "new-token");
+         assert_eq!(second.unwrap(), "new-token");
+         assert_eq!(calls.load(Ordering::SeqCst), 1);
+-        assert_eq!(load_scoped_stream_access(&handle, Target::Cloud, None, None).unwrap().bearer_token, "new-token");
++        assert_eq!(
++            load_scoped_stream_access(&handle, Target::Cloud, None, None)
++                .unwrap()
++                .bearer_token,
++            "new-token"
++        );
+         release_stream_access(handle).unwrap();
+     }
+ 
+     #[tokio::test]
+     async fn temporary_failure_keeps_access_and_does_not_repeat_recovery() {
+         let (handle, access, recovery) = fixture();
+-        let first = recovery.recover_with(access.bearer_token.clone(), |_, _| async {
+-            Err(XboxBridgeError::RetryableAuthentication("fixture".into()))
+-        }).await.unwrap_err();
++        let first = recovery
++            .recover_with(access.bearer_token.clone(), |_, _| async {
++                Err(XboxBridgeError::RetryableAuthentication("fixture".into()))
++            })
++            .await
++            .unwrap_err();
+         assert_eq!(first.to_status_code(), Some(503));
+-        let second = recovery.recover_with(access.bearer_token.clone(), |_, _| async {
+-            panic!("temporary failure cooldown must merge concurrent rejection")
+-        }).await.unwrap_err();
++        let second = recovery
++            .recover_with(access.bearer_token.clone(), |_, _| async {
++                panic!("temporary failure cooldown must merge concurrent rejection")
++            })
++            .await
++            .unwrap_err();
+         assert_eq!(second.to_status_code(), Some(503));
+-        assert_eq!(recovery.current_access().unwrap().bearer_token, access.bearer_token);
++        assert_eq!(
++            recovery.current_access().unwrap().bearer_token,
++            access.bearer_token
++        );
+         release_stream_access(handle).unwrap();
+     }
+ 
+     #[tokio::test]
+     async fn revoked_and_changed_owners_reject_late_renewal() {
+         let (handle, access, recovery) = fixture();
+-        let result = recovery.recover_with(access.bearer_token, |current, _| async {
+-            release_stream_access(handle.clone()).unwrap();
+-            Ok(renewed(current))
+-        }).await.unwrap_err();
+-        assert!(matches!(crate::query_failure::query_error(result), XboxBridgeError::Cancelled));
+-        let (handle, access, recovery) = fixture();
+-        let result = recovery.recover_with(access.bearer_token, |mut current, _| async {
+-            current.account_id = "other-owner".into();
+-            Ok(renewed(current))
+-        }).await.unwrap_err();
+-        assert!(matches!(crate::query_failure::query_error(result), XboxBridgeError::Cancelled));
++        let result = recovery
++            .recover_with(access.bearer_token, |current, _| async {
++                release_stream_access(handle.clone()).unwrap();
++                Ok(renewed(current))
++            })
++            .await
++            .unwrap_err();
++        assert!(matches!(
++            crate::query_failure::query_error(result),
++            XboxBridgeError::Cancelled
++        ));
++        let (handle, access, recovery) = fixture();
++        let result = recovery
++            .recover_with(access.bearer_token, |mut current, _| async {
++                current.account_id = "other-owner".into();
++                Ok(renewed(current))
++            })
++            .await
++            .unwrap_err();
++        assert!(matches!(
++            crate::query_failure::query_error(result),
++            XboxBridgeError::Cancelled
++        ));
+         assert_eq!(recovery.current_access().unwrap().bearer_token, "gs-token");
+         release_stream_access(handle).unwrap();
+     }
+@@ -187,11 +246,22 @@
+     #[tokio::test]
+     async fn cancelled_renewal_does_not_commit_and_releases_merge_lock() {
+         let (handle, access, recovery) = fixture();
+-        let result = tokio::time::timeout(std::time::Duration::from_millis(1),
+-            recovery.recover_with(access.bearer_token.clone(), |_, _| std::future::pending())).await;
++        let result = tokio::time::timeout(
++            std::time::Duration::from_millis(1),
++            recovery.recover_with(access.bearer_token.clone(), |_, _| std::future::pending()),
++        )
++        .await;
+         assert!(result.is_err());
+         assert_eq!(recovery.current_access().unwrap().bearer_token, "gs-token");
+-        assert_eq!(recovery.recover_with(access.bearer_token, |current, _| async { Ok(renewed(current)) }).await.unwrap(), "new-token");
+-        release_stream_access(handle).unwrap();
+-    }
+-}
++        assert_eq!(
++            recovery
++                .recover_with(access.bearer_token, |current, _| async {
++                    Ok(renewed(current))
++                })
++                .await
++                .unwrap(),
++            "new-token"
++        );
++        release_stream_access(handle).unwrap();
++    }
++}
+--- baseline/crates/xbox-ios-bridge/src/cloud_catalog.rs
++++ current/crates/xbox-ios-bridge/src/cloud_catalog.rs
+@@ -69,7 +69,11 @@
+         market: market.clone(),
+         language: language.clone(),
+     };
+-    let flow = XboxCloudCatalogFlow::new(context.host.clone(), context.bearer_token);
++    let flow = XboxCloudCatalogFlow::with_xcloud_api(crate::cloud_access::query_xcloud_api(
++        &access_handle,
++        &context,
++        None,
++    )?);
+     let (overlay, popular, leaving) = tokio::join!(
+         flow.load_overlay(&scope),
+         discovery_ranks("e7590b22-e299-44db-ae22-25c61405454c", &scope),
+@@ -212,7 +216,11 @@
+         market: normalize_locale_part(&market, "US"),
+         language: normalize_locale_part(&language, "en-US"),
+     };
+-    let flow = XboxCloudCatalogFlow::new(context.host, context.bearer_token);
++    let flow = XboxCloudCatalogFlow::with_xcloud_api(crate::cloud_access::query_xcloud_api(
++        &access_handle,
++        &context,
++        None,
++    )?);
+     let hydration = flow.hydrate_products(&scope, &product_ids).await;
+     if hydration.failed_chunk_count > 0 {
+         return Err(XboxBridgeError::Data(
+--- baseline/crates/xbox-ios-bridge/src/cloud_queries.rs
++++ current/crates/xbox-ios-bridge/src/cloud_queries.rs
+@@ -3,7 +3,7 @@
+ use serde_json::json;
+ use xbox_cloud_catalog_flow::extract_product_detail;
+ use xbox_streaming::{Config, Target};
+-use xbox_webapi::{GamePassApi, XcloudApi};
++use xbox_webapi::GamePassApi;
+ 
+ #[derive(Debug, Clone, uniffi::Record)]
+ pub struct XboxCloudLanguageSupport {
+@@ -98,17 +98,18 @@
+         config.session.preferred_region_name = Some(preferred.into());
+     }
+     if !access.force_region_ip.is_empty() {
+-        config.session.force_region_ip = Some(access.force_region_ip);
++        config.session.force_region_ip = Some(access.force_region_ip.clone());
+     }
+     let region = xbox_streaming::policy::session::compiler::pick_region(
+         &access.session_access.regions,
+         &config,
+     )
+     .map_err(|error| XboxBridgeError::InvalidData(error.to_string()))?;
+-    let response = XcloudApi::new(region.base_uri.clone(), access.bearer_token)
+-        .get_waiting_time(&stream_title_id)
+-        .await
+-        .map_err(|error| crate::query_failure::query_error(error))?;
++    let response =
++        crate::cloud_access::query_xcloud_api(&access_handle, &access, Some(&region.base_uri))?
++            .get_waiting_time(&stream_title_id)
++            .await
++            .map_err(|error| crate::query_failure::query_error(error))?;
+     Ok(response
+         .get("estimatedAllocationTimeInSeconds")
+         .and_then(serde_json::Value::as_u64))
+@@ -139,7 +140,7 @@
+         config.session.preferred_region_name = Some(server_region);
+     }
+     if !access.force_region_ip.is_empty() {
+-        config.session.force_region_ip = Some(access.force_region_ip);
++        config.session.force_region_ip = Some(access.force_region_ip.clone());
+     }
+     let region = xbox_streaming::policy::session::compiler::pick_region(
+         &access.session_access.regions,
+@@ -155,10 +156,11 @@
+             "invalid product identity".into(),
+         ));
+     }
+-    let response = XcloudApi::new(region.base_uri.clone(), access.bearer_token)
+-        .get_titles_by_ids(std::slice::from_ref(&product_id), "productId")
+-        .await
+-        .map_err(|error| crate::query_failure::query_error(error))?;
++    let response =
++        crate::cloud_access::query_xcloud_api(&access_handle, &access, Some(&region.base_uri))?
++            .get_titles_by_ids(std::slice::from_ref(&product_id), "productId")
++            .await
++            .map_err(|error| crate::query_failure::query_error(error))?;
+     let overlay = xbox_cloud_catalog_flow::build_overlay_load(
+         &response,
+         &json!({"results":[]}),
+--- baseline/crates/xbox-ios-bridge/src/data.rs
++++ current/crates/xbox-ios-bridge/src/data.rs
+@@ -331,7 +331,10 @@
+ }
+ 
+ fn extract_hosts(response: &Value) -> Result<Vec<XboxHost>, xbox_webapi::WebApiError> {
+-    Ok(validated_host_values(response)?.into_iter().filter_map(map_host).collect())
++    Ok(validated_host_values(response)?
++        .into_iter()
++        .filter_map(map_host)
++        .collect())
+ }
+ 
+ fn find_host_values(value: &Value, depth: usize) -> Option<Vec<&Value>> {
+@@ -359,7 +362,9 @@
+     None
+ }
+ 
+-pub(crate) fn extract_home_host_facts(response: &Value) -> Result<Vec<HomeHostFacts>, xbox_webapi::WebApiError> {
++pub(crate) fn extract_home_host_facts(
++    response: &Value,
++) -> Result<Vec<HomeHostFacts>, xbox_webapi::WebApiError> {
+     Ok(validated_host_values(response)?
+         .into_iter()
+         .filter_map(|raw| {
+@@ -889,7 +894,8 @@
+                     "totalSpaceBytes": 1000
+                 }]
+             }]}
+-        })).expect("valid hosts");
++        }))
++        .expect("valid hosts");
+ 
+         assert_eq!(hosts.len(), 1);
+         assert_eq!(hosts[0].server_id.as_deref(), Some("stream-target-id"));
+@@ -914,7 +920,8 @@
+                     ]
+                 }
+             }]}
+-        })).expect("valid facts");
++        }))
++        .expect("valid facts");
+ 
+         assert_eq!(facts.len(), 1);
+         assert_eq!(facts[0].canonical_target_id(), Some("server-id"));
+@@ -934,8 +941,13 @@
+         let mixed = json!({"body": {"consoles": [null, {}, {"serverId": "valid"}]}});
+         assert_eq!(extract_hosts(&mixed).unwrap().len(), 1);
+         assert_eq!(extract_home_host_facts(&mixed).unwrap().len(), 1);
+-        for response in [json!(null), json!({}), json!({"unknown": []}),
+-            json!({"results": [null, {}, {"serverId": " "}]}), json!({"results": "broken"})] {
++        for response in [
++            json!(null),
++            json!({}),
++            json!({"unknown": []}),
++            json!({"results": [null, {}, {"serverId": " "}]}),
++            json!({"results": "broken"}),
++        ] {
+             assert!(extract_hosts(&response).is_err());
+             assert!(extract_home_host_facts(&response).is_err());
+         }
+--- baseline/crates/xbox-ios-bridge/src/query_failure.rs
++++ current/crates/xbox-ios-bridge/src/query_failure.rs
+@@ -67,18 +67,37 @@
+             retry_after_seconds: None,
+             network_error_kind: value["networkErrorKind"]
+                 .as_str()
+-                .filter(|kind| ["dns", "connect", "tls", "timeout", "body", "request", "unknown"].contains(kind))
++                .filter(|kind| {
++                    [
++                        "dns", "connect", "tls", "timeout", "body", "request", "unknown",
++                    ]
++                    .contains(kind)
++                })
+                 .map(str::to_owned),
+-            service_code: value["serviceCode"].as_str().and_then(xbox_webapi::sanitize_service_code),
++            service_code: value["serviceCode"]
++                .as_str()
++                .and_then(xbox_webapi::sanitize_service_code),
+             protocol_error_code: value["protocolErrorCode"]
+                 .as_str()
+-                .filter(|code| [
+-                    "missingTitles", "missingPeople", "missingAchievements", "missingMedia",
+-                    "missingConsoleResults", "invalidConsoleList", "invalidConsoleServiceStatus",
+-                    "consoleServiceRejected", "invalidConsoleStatus", "invalidConsoleStorage",
+-                    "invalidConsoleStorageIdentity", "missingConsoleStorage", "invalidStatistics",
+-                    "invalidProfile",
+-                ].contains(code))
++                .filter(|code| {
++                    [
++                        "missingTitles",
++                        "missingPeople",
++                        "missingAchievements",
++                        "missingMedia",
++                        "missingConsoleResults",
++                        "invalidConsoleList",
++                        "invalidConsoleServiceStatus",
++                        "consoleServiceRejected",
++                        "invalidConsoleStatus",
++                        "invalidConsoleStorage",
++                        "invalidConsoleStorageIdentity",
++                        "missingConsoleStorage",
++                        "invalidStatistics",
++                        "invalidProfile",
++                    ]
++                    .contains(code)
++                })
+                 .map(str::to_owned),
+         }
+     }
+@@ -90,7 +109,8 @@
+ }
+ 
+ pub fn query_error(error: WebApiError) -> XboxBridgeError {
+-    if matches!(&error, WebApiError::Parse { message } if message.starts_with("operationCancelled:")) {
++    if matches!(&error, WebApiError::Parse { message } if message.starts_with("operationCancelled:"))
++    {
+         return XboxBridgeError::Cancelled;
+     }
+     XboxBridgeError::Query {
+@@ -117,14 +137,22 @@
+                 WebApiError::network_kind(kind)
+             }
+             _ if failure.status_code.is_some() => WebApiError::Http {
+-                status: failure.status_code.unwrap(), code: failure.service_code,
+-                message: "streaming credential renewal unavailable".into(), retriable: failure.retriable,
++                status: failure.status_code.unwrap(),
++                code: failure.service_code,
++                message: "streaming credential renewal unavailable".into(),
++                retriable: failure.retriable,
+             },
+-            XboxQueryFailureKind::Authentication => WebApiError::http(401, "streaming credential renewal rejected"),
++            XboxQueryFailureKind::Authentication => {
++                WebApiError::http(401, "streaming credential renewal rejected")
++            }
+             _ => WebApiError::parse("streaming credential response unavailable"),
+         },
+-        XboxBridgeError::RetryableAuthentication(_) => WebApiError::http(503, "streaming credential renewal temporarily unavailable"),
+-        XboxBridgeError::Authentication(_) => WebApiError::http(401, "streaming credential renewal rejected"),
++        XboxBridgeError::RetryableAuthentication(_) => {
++            WebApiError::http(503, "streaming credential renewal temporarily unavailable")
++        }
++        XboxBridgeError::Authentication(_) => {
++            WebApiError::http(401, "streaming credential renewal rejected")
++        }
+         XboxBridgeError::Cancelled => WebApiError::parse("operationCancelled:stage=authRenewal"),
+         _ => WebApiError::parse("streaming credential response unavailable"),
+     }
+@@ -162,16 +190,33 @@
+ 
+     #[test]
+     fn preserves_all_network_subtypes_and_only_allowlisted_codes() {
+-        for kind in [NetworkErrorKind::Dns, NetworkErrorKind::Connect, NetworkErrorKind::Tls,
+-            NetworkErrorKind::Timeout, NetworkErrorKind::Body, NetworkErrorKind::Request,
+-            NetworkErrorKind::Unknown] {
++        for kind in [
++            NetworkErrorKind::Dns,
++            NetworkErrorKind::Connect,
++            NetworkErrorKind::Tls,
++            NetworkErrorKind::Timeout,
++            NetworkErrorKind::Body,
++            NetworkErrorKind::Request,
++            NetworkErrorKind::Unknown,
++        ] {
+             let failure = XboxQueryFailure::from_web_api(&WebApiError::network_kind(kind));
+             assert_eq!(failure.network_error_kind.as_deref(), Some(kind.as_str()));
+         }
+-        let failure = XboxQueryFailure::from_web_api(&WebApiError::parse("invalid console list response"));
+-        assert_eq!(failure.protocol_error_code.as_deref(), Some("invalidConsoleList"));
+-        let failure = XboxQueryFailure::from_web_api(&WebApiError::http_with_code(503, "ServerNeverRegistered", "secret"));
+-        assert_eq!(failure.service_code.as_deref(), Some("ServerNeverRegistered"));
++        let failure =
++            XboxQueryFailure::from_web_api(&WebApiError::parse("invalid console list response"));
++        assert_eq!(
++            failure.protocol_error_code.as_deref(),
++            Some("invalidConsoleList")
++        );
++        let failure = XboxQueryFailure::from_web_api(&WebApiError::http_with_code(
++            503,
++            "ServerNeverRegistered",
++            "secret",
++        ));
++        assert_eq!(
++            failure.service_code.as_deref(),
++            Some("ServerNeverRegistered")
++        );
+         let failure = XboxQueryFailure::from_safe_summary(&serde_json::json!({
+             "networkErrorKind": "https://secret.invalid", "serviceCode": "Bearer private",
+             "protocolErrorCode": "account-private", "body": "secret"
+--- baseline/crates/xbox-ios-bridge/src/streaming.rs
++++ current/crates/xbox-ios-bridge/src/streaming.rs
+@@ -1762,6 +1762,7 @@
+             auth_seed: None,
+             auth_session: None,
+             auth_provider: None,
++            auth_observer: None,
+             target,
+             session_access: SessionAccessContext {
+                 gs_token: Some("gs-token".to_string()),
+--- baseline/crates/xbox-ios-bridge/src/streaming/credentials.rs
++++ current/crates/xbox-ios-bridge/src/streaming/credentials.rs
+@@ -65,6 +65,7 @@
+             auth_seed: None,
+             auth_session: None,
+             auth_provider: None,
++            auth_observer: None,
+             target: Target::Cloud,
+             session_access: SessionAccessContext::default(),
+             force_region_ip: String::new(),
+--- baseline/crates/xbox-ios-bridge/src/touch_layouts/mod.rs
++++ current/crates/xbox-ios-bridge/src/touch_layouts/mod.rs
+@@ -147,7 +147,7 @@
+     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
+     let title_id = normalize_title(&xbox_title_id)?;
+     let product_id = normalize_product(&product_id)?;
+-    let api = XcloudApi::new(access.host.clone(), access.bearer_token.clone());
++    let api = crate::cloud_access::query_xcloud_api(&access_handle, &access, None)?;
+     let bundles = cloud_title_bundles(&api, &product_id, &title_id).await?;
+     load_scoped_stream_access(
+         &access_handle,
+@@ -179,7 +179,7 @@
+     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
+     let title_id = normalize_title(&xbox_title_id)?;
+     let product_id = normalize_product(&product_id)?;
+-    let api = XcloudApi::new(access.host.clone(), access.bearer_token.clone());
++    let api = crate::cloud_access::query_xcloud_api(&access_handle, &access, None)?;
+     let bundles = cloud_title_bundles(&api, &product_id, &title_id).await?;
+     if !bundles.iter().any(|bundle| bundle.id == bundle_id) {
+         return Err(invalid("此官方布局包未关联当前游戏或版本等待支持"));
+--- baseline/crates/xbox-webapi/src/error.rs
++++ current/crates/xbox-webapi/src/error.rs
+@@ -304,6 +304,7 @@
+         "TooManyRequests",
+         "InternalServerError",
+         "ServiceUnavailable",
++        "ServerNeverRegistered",
+         "UnsupportedCountry",
+         "UnsupportedRegion",
+         "BlockedRegion",
+--- baseline/docs/project-task.md
++++ current/docs/project-task.md
+@@ -8,7 +8,7 @@
+ 
+ | ID | Task | Status | Started On | Notes |
+ | --- | --- | --- | --- | --- |
+-| 2026-11-24-ios-media-half-panels | 相册保存进度、原生小窗视频与串流局部浮层 | In Progress | 2026-11-24 | simple；紧凑下载浮窗与右上取消、原生视频小窗/全屏、贴底半屏画面调节和2/3高诊断；串流窄栏与布局选择半屏上限，单窗口执行与最小冒烟。 |
++| 2026-11-24-ios-media-half-panels | 相册保存进度、原生小窗视频与串流局部浮层 | Done | 2026-11-24 | simple；1/3屏下载浮窗、右上取消与手势保护，视频左右贴边/原生全屏及底栏避让；画面调节贴底半屏，诊断2/3屏，窄栏与布局选择半屏上限。相册/串流各1项定向UI冒烟、语法/格式/diff通过；8张最终截图与1张失败诊断归档，4处临时源码恢复，清理1333.97MiB。[证据](../dev-docs/validation/2026-11-24-ios-media-half-panels/README.md)。 |
+ | 2026-11-24-ios-pc-http-behavior-parity | 以 PC 为蓝本对齐 iOS 接口调用、返回与异常处理 P0–P2 | In Progress | 2026-11-24 | complex；用户明确实施授权，排除系统代理/HTTP库工作；对齐主机不可用语义与动作、Query事实、主机响应/预算、Cloud目标401单次恢复、失败激活/详情缓存/取消/相册下载。原工作区和暂存区基线保留。[RFC](rfcs/2026-11-24-ios-pc-http-behavior-parity.md)。 |
+ | 2026-11-24-ios-stream-quick-autohide | 串流快捷按钮自动隐藏与空白单击唤回 | Done | 2026-11-24 | simple；两个44pt快捷入口沿5秒计时共同隐藏，横竖屏空白单击共同唤回，虚拟手柄触点分流与双指菜单沿用，布局加载暂停计时。Simulator构建、状态/原生命中/UI三项定向冒烟及格式/diff通过，3张最终截图归档；临时探针恢复，清理572.39MiB。[证据](../dev-docs/validation/2026-11-24-ios-stream-quick-autohide/README.md)。 |
+ | 2026-11-24-ios-refresh-stream-detail | 精简下拉刷新反馈与串流快捷入口，修正安装游戏详情语言和播放动作 | Done | 2026-11-24 | simple；原生下拉统一反馈、正文spinner 3→0→3，左上44pt快捷图标并排8pt、12%背景覆盖率；商品资料沿目录市场/语言缓存，标题右侧圆形串流入口。原生1项及UI2项冒烟、定向Swift格式/diff通过，5张最终截图归档；探针精确恢复，清理约601.19MiB。[证据](../dev-docs/validation/2026-11-24-ios-refresh-stream-detail/README.md)。 |
+--- baseline/docs/reports/2026-11-24-ios-pc-http-behavior-parity.md
++++ current/docs/reports/2026-11-24-ios-pc-http-behavior-parity.md
+@@ -0,0 +1,33 @@
++# iOS 接口与错误行为对齐 PC（P0–P2）实施报告
++
++代码改造和自动验证已完成，实机验收待用户。依据 [RFC](../rfcs/2026-11-24-ios-pc-http-behavior-parity.md) 的既有实施授权，主窗口单独执行，沿用当前 SwiftUI、UniFFI 和公共 Rust 的职责边界。
++
++## 交付
++
++- **P0**：主机远程游玩不可用、尚未注册保持独立提示与重试动作；Query 保留 DNS/connect/TLS/body/timeout、安全服务码和协议码。UI 和 trace 使用同一类型化错误事实。
++- **P1**：主机查询沿公共预算；合法空列表与无效响应分别处理。Cloud 等待、目录、来源和官方触屏资源提交被拒目标 token，由对应 Rust 凭据 owner 恢复一次；Swift 接收最终结果。
++- **P2**：失败后经过 15 秒冷却可重新激活，取消后释放初刷标记，成功内容继续显示。详情按产品、市场、语言持久缓存，24 小时新鲜、7 天 stale，30 槽、两路并发；同键合并，最后一个等待者取消时终止底层读取。
++- **取消与下载**：UniFFI 生成修补覆盖可抛错 future 的取消与一次释放，清理入口完成原有 teardown。相册每次下载前续址，保留 HTTP 状态及 Retry-After，区分过期、权限、限流、服务失败、网络、空文件、大小和格式；校验成功后发布导出文件，失败与取消清理临时文件。
++
++## 验证
++
++| 验证 | 结果 |
++| --- | --- |
++| Rust：xbox-ios-bridge / xbox-webapi / xbox-cloud-catalog-flow | 112 + 77 + 11 = 200 项通过，包括本地 HTTP 和 FFI 小栈取消回归。 |
++| Swift 首轮定向测试 | xcresult 摘要 39 项通过，覆盖 PC 数据行为、启动诊断及新缓存/下载测试。 |
++| Swift 取消/激活定向验收 | 7 项通过，其中 2 项为新增目录恢复场景。 |
++| Swift 最终恢复边界验收 | 3 项通过，其中 1 项为新增单次恢复消费者场景。三轮合计覆盖 42 项唯一测试。 |
++| iPhoneOS 编译 | 最终源码 build succeeded，关闭签名，复用现有 WebRTC 依赖。 |
++| UniFFI | 生成 Swift 经修补后与保存版本精确一致；修补幂等、Swift 6 类型检查通过。 |
++| 静态冒烟 | cargo fmt、session boundary、工程格式及 diff 空白检查通过。 |
++
++首次 Rust 编译暴露前轮新增字段和测试可见性遗漏，已修复；安全码白名单补充 `ServerNeverRegistered`。本地 HTTP 监听最初受沙箱限制，在自动审批通过后按原范围执行回归。Swift 首次工程接线及新增夹具签名失败已修复并归档，最终测试全部通过。
++
++## 边界与后续验收
++
++- 下载资源总期限为 300 秒、最大 2 GiB。原生 URLSession 公开配置与 PC 的连接专用 5 秒预算存在平台差异；等待配置采用 300 秒，避免对整个媒体读取施加 5 秒空闲截断。
++- 自动测试采用无凭据本地夹具。真实 Cloud 401、签名媒体服务响应、主机等待/再次连接以及手机串流长测由用户手动验收，登录现场根因仍需运行证据。
++- 公开商品资料按市场和语言缓存。访问 token、认证结果与签名下载地址继续由既有 owner 管理。
++- 续接期间三个其他任务文件发生变化，已记录并保留；原暂存区 SHA-256 与续接基线一致。
++
++证据与本轮独立差异见 [验收目录](../../dev-docs/validation/2026-11-24-ios-pc-http-behavior-parity/README.md)。本轮临时目录、构建与 xcresult 清理结果见同目录 `cleanup.json`；共享 Rust/WebRTC 缓存继续保留。接下来在手机上验证主机再次连接、Cloud 凭据拒绝恢复和相册下载。
+--- baseline/docs/rfcs/2026-11-24-ios-pc-http-behavior-parity.md
++++ current/docs/rfcs/2026-11-24-ios-pc-http-behavior-parity.md
+@@ -2,8 +2,8 @@
+ 
+ ## Status
+ 
+-- Completion: 未完成
+-- Current State: in-progress
++- Completion: 代码与自动验证完成；实机验收待用户
++- Current State: validation-pending
+ - Owner: 主窗口，单窗口直接执行
+ - Last Updated: 2026-11-24
+ - 执行授权：用户明确要求“系统代理、HTTP 库不是关注点……以 PC 为蓝本去对齐，实施 P0-2”；本 RFC 将既有审计建议按这一边界收敛为可执行合同，不重新开展代理调查。
+@@ -45,14 +45,15 @@
+ 
+ ## Validation
+ 
+-- [ ] 主机不可用、明确注册失败、真正预算耗尽、网络/认证/运行时错误保持不同类别；UI 不因 5xx 覆盖主机禁止立即重试规则。
+-- [ ] 主机合法空列表成功、嵌套有效容器成功、未知/损坏容器失败；公共请求预算不被 8 秒截断。
+-- [ ] DNS/connect/TLS/body/timeout、安全服务/协议码保留；正文、凭据、身份及完整 URL 不进入 Query/trace。
+-- [ ] Cloud 第一次 401 恢复对应被拒 token，成功后只重读一次；二次拒绝、临时失败、取消和换账户不无限重试或错误清空登录。
+-- [ ] 初次失败冷却后重进可恢复，成功快照保留，同键请求合并；缓存新鲜/stale/过期、市场语言与并发隔离。
+-- [ ] 取消不误报失败、不写入迟到结果；Rust future/HTTP 在途生命周期与绑定生成可复现。
+-- [ ] 下载续址与 403/429/5xx/timeout/空文件/格式/大小/取消可区分，旧导出保留，临时文件清理。
+-- [ ] Rust、Swift、绑定与设备编译证据归档，原暂存内容及无关改动保留，本轮临时产物清理。
++- [x] 主机不可用、注册失败、预算耗尽、网络/认证/运行时错误的类型与动作回归。
++- [x] 主机合法空列表、嵌套容器、无效容器与公共请求预算回归。
++- [x] Query 网络细分、安全服务/协议码与敏感正文过滤回归。
++- [x] Cloud rejected-token 单次恢复、二次拒绝、临时失败、取消与 owner 隔离回归；Swift 三个消费者共用 Rust 恢复边界。
++- [x] 15 秒失败冷却、取消后重新激活、成功快照保留、详情新鲜/stale/过期、市场语言隔离、合并与容量回归。
++- [x] UniFFI 取消传递、Rust future 释放回归、Swift 6 编译及绑定复现。
++- [x] 相册续址接线、HTTP/空文件/大小/格式分类、取消和校验后导出保证；300 秒资源总预算。URLSession 的连接专用预算保留平台差异，见执行说明。
++- [x] Rust、Swift、绑定与设备编译证据归档，暂存区指纹保留，本轮临时产物清理。
++- [ ] 用户实机验收主机再次连接、真实 Cloud 401、相册服务响应及长测。
+ 
+ 自动测试采用无凭据的本地 fixture，不发起真实认证请求。真实手机上的主机等待/再次连接、Cloud 401、相册服务回包与长测由用户手动验收；未完成时明确记录，不宣称根因已验证。
+ 
+@@ -66,10 +67,16 @@
+ ## Progress
+ 
+ - [x] PC 基准、历史约束、当前基线与执行授权核对。
+-- [ ] P0/P1 实施与回归。
+-- [ ] P2 实施与回归。
+-- [ ] 验证、归档与清理。
++- [x] P0/P1 实施与回归。
++- [x] P2 实施与回归。
++- [x] 自动验证、归档与清理。
++- [ ] 实机验收。
+ 
+ ## Execution Notes
+ 
+ - 2026-11-24：登记独立实施任务。基线 265 文件 / 4,746,863 字节，存于 `$PI_SCRATCH_DIR/ios-pc-http-behavior-parity-r1/baseline`；branch main，HEAD b6ac29c0599b7651ff9db84395bbbb6fdc7da748，保留全部原 staged/unstaged 变更。
++- 2026-11-24 续接：P0/P1 和 P2 代码改造已收齐。Rust 三包 200 项通过；Swift 三次定向验收覆盖 42 项唯一测试，最终新增的三个恢复场景全部通过；iPhoneOS 编译、Swift 6 绑定类型检查、生成复现、fmt 与 session boundary 通过。
++- Cloud 等待、目录、来源与官方触屏资源使用同一 owner-bound Rust 恢复入口；Swift 目录/来源/资源层直接消费最终拒绝事实。页面取消继续传至内层 Rust future。
++- 详情公开资料缓存采用 24 小时新鲜、7 天 stale、30 槽、两路请求，取消等待者按引用计数结束在途任务。相册每次导出前续址，2 GiB 上限及真实文件签名校验通过后发布文件，HTTPS 重定向保持受控。
++- URLSession 资源总期限和等待配置使用 300 秒；其公开 API 对连接阶段的独立预算支持有限，PC 的 5 秒 connect timeout 保留为平台差异，避免把 5 秒误用于整个响应读取的空闲期限。
++- 本轮续接差异、失败诊断、测试摘要与清理记录归档至 [证据](../../dev-docs/validation/2026-11-24-ios-pc-http-behavior-parity/README.md)，实施报告见 [Report](../reports/2026-11-24-ios-pc-http-behavior-parity.md)。历史 startup 实机验收保持原任务状态。
+--- baseline/iosapp/XBXRC.xcodeproj/project.pbxproj
++++ current/iosapp/XBXRC.xcodeproj/project.pbxproj
+@@ -138,6 +138,9 @@
+ 		A60000000000000000000620 /* TouchLayoutTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000620 /* TouchLayoutTemplate.swift */; };
+ 		A60000000000000000000621 /* TouchLayoutSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000621 /* TouchLayoutSettingsViews.swift */; };
+ 		A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */; };
++		182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */; };
++		956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */; };
++		B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */; };
+ /* End PBXBuildFile section */
+ 
+ /* Begin PBXContainerItemProxy section */
+@@ -288,6 +291,9 @@
+ 		B60000000000000000000620 /* TouchLayoutTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutTemplate.swift; sourceTree = "<group>"; };
+ 		B60000000000000000000621 /* TouchLayoutSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutSettingsViews.swift; sourceTree = "<group>"; };
+ 		B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutCustomizationTests.swift; sourceTree = "<group>"; };
++		5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProductDetailRepository.swift; sourceTree = "<group>"; };
++		1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumFileDownload.swift; sourceTree = "<group>"; };
++		DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPBehaviorParityTests.swift; sourceTree = "<group>"; };
+ /* End PBXFileReference section */
+ 
+ /* Begin PBXFrameworksBuildPhase section */
+@@ -406,6 +412,7 @@
+ 		C00000000000000000000007 /* Profile */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */,
+ 				B40000000000000000000004 /* XboxAlbumView.swift */,
+ 				B40000000000000000000003 /* PersonalGameViews.swift */,
+ 				B9235FFFFA1375C8BD4E415D /* PersonalPages.swift */,
+@@ -550,6 +557,7 @@
+ 		C00000000000000000000015 /* State */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */,
+ 				0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */,
+ 				B40000000000000000000008 /* XboxPlayerData.swift */,
+ 				B40000000000000000000007 /* CloudFavoritesStore.swift */,
+@@ -590,6 +598,7 @@
+ 		C0000000000000000000000D /* XBXRCTests */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */,
+ 				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
+ 				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
+ 				B6000000000000000000060A /* TouchLayoutTests.swift */,
+@@ -804,6 +813,8 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */,
++				182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */,
+ 				BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */,
+ 				3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */,
+ 				C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */,
+@@ -919,6 +930,7 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */,
+ 				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
+ 				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,
+ 				A6000000000000000000060A /* TouchLayoutTests.swift in Sources */,
+--- baseline/iosapp/XBXRC/Features/Authentication/AuthStore.swift
++++ current/iosapp/XBXRC/Features/Authentication/AuthStore.swift
+@@ -292,7 +292,9 @@
+             phase = .signedOut
+             return
+         }
+-        guard profileInitialRefreshGeneration != ownerGeneration else {
++        guard profileInitialRefreshGeneration != ownerGeneration
++            || profileSectionStates.values.contains(where: { $0.failure?.allowsActivation() ?? false })
++        else {
+             IOSRuntimeTrace.decision(
+                 domain: "auth",
+                 event: "profileActivationSkipped",
+@@ -341,8 +343,9 @@
+         }
+         profileRefreshTask = task
+         profileRefreshTaskID = taskID
+-        await task.value
++        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+         if profileRefreshTaskID == taskID {
++            if task.isCancelled { profileInitialRefreshGeneration = nil }
+             profileRefreshTask = nil
+             profileRefreshTaskID = nil
+         }
+--- baseline/iosapp/XBXRC/Features/Profile/AlbumFileDownload.swift
++++ current/iosapp/XBXRC/Features/Profile/AlbumFileDownload.swift
+@@ -0,0 +1,183 @@
++import Foundation
++
++enum AlbumDownloadFailure: Error, Sendable {
++  case expired, tooLarge, empty, invalidFormat, storage
++  case http(status: Int, retryAfter: TimeInterval?)
++}
++
++enum AlbumDownloadPolicy {
++  static let maximumBytes: Int64 = 2 * 1024 * 1024 * 1024
++
++  static func fileExtension(kind: XboxAlbumKind, prefix: Data) throws -> String {
++    let bytes = [UInt8](prefix)
++    let ftyp = bytes.count >= 12 && Data(bytes[4..<8]) == Data("ftyp".utf8)
++    let brand = bytes.count >= 12 ? String(decoding: bytes[8..<12], as: UTF8.self) : ""
++    let imageBrand = ["avif", "avis", "heic", "heix", "mif1"].contains(brand)
++    if kind == .clip {
++      guard ftyp && !imageBrand else { throw AlbumDownloadFailure.invalidFormat }
++      return "mp4"
++    }
++    if prefix.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) { return "png" }
++    if prefix.starts(with: [0xff, 0xd8, 0xff]) { return "jpg" }
++    if prefix.starts(with: Data("GIF87a".utf8)) || prefix.starts(with: Data("GIF89a".utf8)) {
++      return "gif"
++    }
++    if prefix.starts(with: Data("RIFF".utf8)), bytes.count >= 12,
++      Data(bytes[8..<12]) == Data("WEBP".utf8)
++    {
++      return "webp"
++    }
++    if ftyp && imageBrand { return brand.hasPrefix("avi") ? "avif" : "heic" }
++    throw AlbumDownloadFailure.invalidFormat
++  }
++
++  static func validate(response: HTTPURLResponse, size: Int64, kind: XboxAlbumKind, prefix: Data)
++    throws -> String
++  {
++    guard (200..<300).contains(response.statusCode) else {
++      let raw = response.value(forHTTPHeaderField: "Retry-After")
++      let seconds = raw.flatMap(TimeInterval.init).flatMap {
++        $0.isFinite && $0 >= 0 ? min($0, 86_400) : nil
++      }
++      throw AlbumDownloadFailure.http(status: response.statusCode, retryAfter: seconds)
++    }
++    guard size > 0 else { throw AlbumDownloadFailure.empty }
++    guard size <= maximumBytes, response.expectedContentLength <= maximumBytes else {
++      throw AlbumDownloadFailure.tooLarge
++    }
++    if let mime = response.mimeType, mime != "application/octet-stream",
++      !(kind == .clip ? mime.hasPrefix("video/") : mime.hasPrefix("image/"))
++    {
++      throw AlbumDownloadFailure.invalidFormat
++    }
++    return try fileExtension(kind: kind, prefix: prefix)
++  }
++}
++
++/// 原生下载只在校验成功后发布文件；失败和取消统一结束 session 并清理留存文件。
++final class AlbumFileDownload: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
++  private let lock = NSLock()
++  private let kind: XboxAlbumKind
++  private let onProgress: @MainActor @Sendable (Int64, Int64) -> Void
++  private var continuation: CheckedContinuation<(URL, String), any Error>?
++  private var task: URLSessionDownloadTask?
++  private var session: URLSession?
++  private var failure: (any Error)?
++
++  init(kind: XboxAlbumKind, onProgress: @escaping @MainActor @Sendable (Int64, Int64) -> Void) {
++    self.kind = kind
++    self.onProgress = onProgress
++  }
++
++  func download(from url: URL) async throws -> (URL, String) {
++    guard url.scheme?.lowercased() == "https", url.host != nil,
++      url.user == nil, url.password == nil
++    else { throw AlbumDownloadFailure.expired }
++    try Task.checkCancellation()
++    return try await withTaskCancellationHandler {
++      try await withCheckedThrowingContinuation { continuation in
++        lock.lock()
++        if Task.isCancelled {
++          lock.unlock()
++          continuation.resume(throwing: CancellationError())
++          return
++        }
++        let config = URLSessionConfiguration.ephemeral
++        config.timeoutIntervalForRequest = 300
++        config.timeoutIntervalForResource = 300
++        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
++        let task = session.downloadTask(with: url)
++        self.continuation = continuation
++        self.session = session
++        self.task = task
++        lock.unlock()
++        task.resume()
++      }
++    } onCancel: {
++      self.cancel(CancellationError())
++    }
++  }
++
++  private func cancel(_ error: any Error) {
++    lock.lock()
++    if failure == nil { failure = error }
++    let task = task
++    lock.unlock()
++    task?.cancel()
++  }
++
++  func urlSession(
++    _ session: URLSession, downloadTask: URLSessionDownloadTask,
++    didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
++  ) {
++    if totalBytesWritten > AlbumDownloadPolicy.maximumBytes
++      || totalBytesExpectedToWrite > AlbumDownloadPolicy.maximumBytes
++    {
++      cancel(AlbumDownloadFailure.tooLarge)
++    }
++    Task { @MainActor in onProgress(totalBytesWritten, totalBytesExpectedToWrite) }
++  }
++
++  func urlSession(
++    _ session: URLSession, downloadTask: URLSessionDownloadTask,
++    didFinishDownloadingTo location: URL
++  ) {
++    do {
++      guard let response = downloadTask.response as? HTTPURLResponse else {
++        throw AlbumDownloadFailure.invalidFormat
++      }
++      let attributes = try FileManager.default.attributesOfItem(atPath: location.path)
++      let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
++      let handle = try FileHandle(forReadingFrom: location)
++      defer { try? handle.close() }
++      let suffix = try AlbumDownloadPolicy.validate(
++        response: response, size: size, kind: kind, prefix: try handle.read(upToCount: 32) ?? Data()
++      )
++      let retained = FileManager.default.temporaryDirectory.appendingPathComponent(
++        "xbxrc-media-\(UUID().uuidString).\(suffix)")
++      try FileManager.default.moveItem(at: location, to: retained)
++      finish(.success((retained, suffix)))
++    } catch { finish(.failure(error)) }
++  }
++
++  func urlSession(
++    _ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?
++  ) {
++    if let error { finish(.failure(error)) }
++  }
++
++  func urlSession(
++    _ session: URLSession, task: URLSessionTask,
++    willPerformHTTPRedirection response: HTTPURLResponse,
++    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void
++  ) {
++    guard let url = request.url, url.scheme?.lowercased() == "https",
++      url.host != nil, url.user == nil, url.password == nil
++    else {
++      cancel(AlbumDownloadFailure.expired)
++      completionHandler(nil)
++      return
++    }
++    completionHandler(request)
++  }
++
++  private func finish(_ result: Result<(URL, String), any Error>) {
++    lock.lock()
++    let continuation = continuation
++    self.continuation = nil
++    let session = session
++    self.session = nil
++    task = nil
++    let failure = failure
++    lock.unlock()
++    session?.finishTasksAndInvalidate()
++    if continuation == nil || failure != nil, case .success(let output) = result {
++      try? FileManager.default.removeItem(at: output.0)
++    }
++    if let failure {
++      continuation?.resume(throwing: failure)
++    } else {
++      continuation?.resume(with: result)
++    }
++  }
++}
+--- baseline/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift
++++ current/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift
+@@ -217,6 +217,7 @@
+ private struct AlbumMediaDetailView: View {
+   @EnvironmentObject private var auth: AuthStore
+   @EnvironmentObject private var data: XboxDataStore
++  @Environment(\.appFloatingNavigationInset) private var navigationInset
+   @State private var item: XboxAlbumMedia
+   @State private var failure: SectionRequestFailure?
+   @State private var busy = false
+@@ -238,6 +239,7 @@
+       }
+       if busy { ProgressView("正在处理媒体").padding(.bottom, AppLayoutPolicy.pageInset) }
+     }
++    .padding(.bottom, navigationInset)
+     .appThemeCanvas().appPageToolbar(item.titleName.isEmpty ? item.kind.title : item.titleName)
+     .toolbar {
+       ToolbarItem(placement: .topBarTrailing) {
+@@ -406,29 +408,24 @@
+     let owner = auth.ownerGeneration
+     defer { busy = false }
+     do {
+-      if item.isExpired { item = try await data.renewAlbumMedia(item) }
++      item = try await data.renewAlbumMedia(item)
+       guard !Task.isCancelled, owner == auth.ownerGeneration else { return }
+-      guard let url = item.url, !item.isExpired else { throw XboxNativeQueryError.unavailable }
++      guard let url = item.url, !item.isExpired else { throw AlbumDownloadFailure.expired }
+       let downloadAttempt = attempt
+-      let downloader = AlbumFileDownload { received, expected in
++      let downloader = AlbumFileDownload(kind: item.kind) { received, expected in
+         guard busy, attempt == downloadAttempt else { return }
+         receivedBytes = received
+         expectedBytes = expected
+       }
+-      let (download, response) = try await downloader.download(from: url)
+-      defer { try? FileManager.default.removeItem(at: download) }
+-      guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
+-      else {
+-        throw XboxNativeQueryError.unavailable
+-      }
+-      guard !Task.isCancelled, owner == auth.ownerGeneration else { return }
++      let (download, _) = try await downloader.download(from: url)
++      var published = false
++      defer { if !published { try? FileManager.default.removeItem(at: download) } }
++      try Task.checkCancellation()
++      guard owner == auth.ownerGeneration else { return }
+       cleanExport()
+-      let suffix = item.kind == .clip ? "mp4" : http.mimeType == "image/png" ? "png" : "jpg"
+-      let destination = FileManager.default.temporaryDirectory.appendingPathComponent(
+-        "xbxrc-media-\(UUID().uuidString).\(suffix)")
+-      try FileManager.default.moveItem(at: download, to: destination)
+-      exportedURL = destination
+-      export = AlbumExport(url: destination)
++      exportedURL = download
++      export = AlbumExport(url: download)
++      published = true
+     } catch {
+       if !SectionRequestFailure.isCancellation(error), owner == auth.ownerGeneration {
+         failure = SectionRequestFailure(error: error)
+@@ -439,54 +436,6 @@
+   private func cleanExport() {
+     if let exportedURL { try? FileManager.default.removeItem(at: exportedURL) }
+     exportedURL = nil
+-  }
+-}
+-
+-@MainActor
+-private final class AlbumFileDownload {
+-  let onProgress: @MainActor (Int64, Int64) -> Void
+-  private var task: URLSessionDownloadTask?
+-  private var observation: NSKeyValueObservation?
+-
+-  init(onProgress: @escaping @MainActor (Int64, Int64) -> Void) {
+-    self.onProgress = onProgress
+-  }
+-
+-  func download(from url: URL) async throws -> (URL, URLResponse) {
+-    defer {
+-      observation?.invalidate()
+-      observation = nil
+-      task = nil
+-    }
+-    return try await withTaskCancellationHandler {
+-      try await withCheckedThrowingContinuation { continuation in
+-        let download = URLSession.shared.downloadTask(with: url) { location, response, error in
+-          do {
+-            if let error { throw error }
+-            guard let location, let response else { throw XboxNativeQueryError.unavailable }
+-            // 系统下载文件只保证在回调期间有效，先保留再交给异步保存流程。
+-            let retained = FileManager.default.temporaryDirectory.appendingPathComponent(
+-              "xbxrc-download-\(UUID().uuidString)")
+-            try FileManager.default.moveItem(at: location, to: retained)
+-            continuation.resume(returning: (retained, response))
+-          } catch {
+-            continuation.resume(throwing: error)
+-          }
+-        }
+-        task = download
+-        // 完成回调模式直接观察原生下载任务字节，进度和取消共用同一个任务。
+-        observation = download.observe(\.countOfBytesReceived, options: [.initial, .new]) {
+-          task, _ in
+-          let received = task.countOfBytesReceived
+-          let expected = task.countOfBytesExpectedToReceive
+-          Task { @MainActor in self.onProgress(received, expected) }
+-        }
+-        download.resume()
+-        if Task.isCancelled { download.cancel() }
+-      }
+-    } onCancel: {
+-      Task { @MainActor in self.task?.cancel() }
+-    }
+   }
+ }
+ 
+@@ -506,14 +455,12 @@
+   @State private var aspectRatio: CGFloat = 16 / 9
+   var body: some View {
+     GeometryReader { geometry in
+-      let width = min(760, geometry.size.width, geometry.size.height * aspectRatio)
++      let width = min(geometry.size.width, geometry.size.height * aspectRatio)
+       AlbumNativeVideoPlayer(player: player)
+         .frame(width: width, height: width / aspectRatio)
+-        .clipShape(RoundedRectangle(cornerRadius: 8))
+         .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+         .accessibilityIdentifier("album-video-player")
+     }
+-    .padding(.horizontal, AppLayoutPolicy.pageInset)
+     .task(id: url) {
+       player?.pause()
+       let activePlayer = AVPlayer(url: url)
+@@ -532,10 +479,6 @@
+       }
+     }
+     .onChange(of: scenePhase) { _, phase in if phase != .active { player?.pause() } }
+-    .onDisappear {
+-      player?.pause()
+-      player = nil
+-    }
+   }
+ }
+ 
+@@ -555,4 +498,9 @@
+   func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+     if controller.player !== player { controller.player = player }
+   }
+-}
++
++  static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
++    controller.player?.pause()
++    controller.player = nil
++  }
++}
+--- baseline/iosapp/XBXRC/Platform/RustBridge/CloudProductDataClient.swift
++++ current/iosapp/XBXRC/Platform/RustBridge/CloudProductDataClient.swift
+@@ -1,6 +1,6 @@
+ import Foundation
+ 
+-struct CloudLanguageSupport: Hashable, Identifiable, Sendable {
++struct CloudLanguageSupport: Codable, Hashable, Identifiable, Sendable {
+     let locale: String
+     let interface: UInt64?
+     let audio: UInt64?
+@@ -8,7 +8,7 @@
+     var id: String { locale }
+ }
+ 
+-struct CloudProductDetails: Hashable, Sendable {
++struct CloudProductDetails: Codable, Hashable, Sendable {
+     let productID: String
+     let name: String
+     let publisherName: String
+--- baseline/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift
++++ current/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift
+@@ -726,6 +726,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -996,6 +997,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxTouchLayoutSnapshot_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1170,6 +1172,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: nil
+ 
+@@ -1187,6 +1190,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
+             liftFunc: FfiConverterUInt64.lift,
+             errorHandler: nil
+ 
+@@ -1204,6 +1208,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1223,6 +1228,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterString.lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1239,6 +1245,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterString.lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1255,6 +1262,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1271,6 +1279,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxRemoteIceBatch_lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1287,6 +1296,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterOptionTypeXboxStreamingAuthUpdate.lift,
+             errorHandler: nil
+ 
+@@ -1304,6 +1314,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_i8,
+             liftFunc: FfiConverterBool.lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1320,6 +1331,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_i8,
+             liftFunc: FfiConverterBool.lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1336,6 +1348,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxPreparedSignaling_lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1361,6 +1374,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1377,6 +1391,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterString.lift,
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1393,6 +1408,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1409,6 +1425,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxStreamingError_lift
+         )
+@@ -1661,6 +1678,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeAuthSession_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1907,6 +1925,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1923,6 +1942,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxTouchLayoutSnapshot_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1939,6 +1959,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+             liftFunc: { $0 },
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1955,6 +1976,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -1971,6 +1993,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7470,38 +7493,65 @@
+ 
+ fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+ 
++// XBXRC: Swift cancellation owns the Rust future lifecycle.
++fileprivate final class UniffiRustFutureCancellation: @unchecked Sendable {
++    private let lock = NSLock()
++    private var handle: UInt64?
++    private let cancelFunc: @Sendable (UInt64) -> Void
++    init(handle: UInt64, cancelFunc: @escaping @Sendable (UInt64) -> Void) {
++        self.handle = handle
++        self.cancelFunc = cancelFunc
++    }
++    func cancel() {
++        lock.lock()
++        defer { lock.unlock() }
++        if let handle { cancelFunc(handle) }
++    }
++    func finish(_ free: (UInt64) -> Void) {
++        lock.lock()
++        defer { lock.unlock() }
++        if let handle {
++            self.handle = nil
++            free(handle)
++        }
++    }
++}
++
+ fileprivate func uniffiRustCallAsync<F, T>(
+     rustFutureFunc: () -> UInt64,
+     pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
+     completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
+     freeFunc: (UInt64) -> (),
++    cancelFunc: @escaping @Sendable (UInt64) -> Void,
+     liftFunc: (F) throws -> T,
+     errorHandler: ((RustBuffer) throws -> Swift.Error)?
+ ) async throws -> T {
+-    // Make sure to call the ensure init function since future creation doesn't have a
+-    // RustCallStatus param, so doesn't use makeRustCall()
+     uniffiEnsureXboxIosBridgeInitialized()
++    // 只有可抛错读取消费 Swift 取消；不可抛错的 teardown 继续完成清理。
++    let cancellable = errorHandler != nil
++    if cancellable { try Task.checkCancellation() }
+     let rustFuture = rustFutureFunc()
+-    defer {
+-        freeFunc(rustFuture)
+-    }
+-    var pollResult: Int8;
+-    repeat {
+-        pollResult = await withUnsafeContinuation {
+-            pollFunc(
+-                rustFuture,
+-                { handle, pollResult in
+-                    uniffiFutureContinuationCallback(handle: handle, pollResult: pollResult)
+-                },
+-                uniffiContinuationHandleMap.insert(obj: $0)
+-            )
+-        }
+-    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+-
+-    return try liftFunc(makeRustCall(
+-        { completeFunc(rustFuture, $0) },
+-        errorHandler: errorHandler
+-    ))
++    let cancellation = UniffiRustFutureCancellation(handle: rustFuture, cancelFunc: cancelFunc)
++    defer { cancellation.finish(freeFunc) }
++    return try await withTaskCancellationHandler {
++        if cancellable { try Task.checkCancellation() }
++        var pollResult: Int8
++        repeat {
++            pollResult = await withUnsafeContinuation {
++                pollFunc(rustFuture, { handle, result in
++                    uniffiFutureContinuationCallback(handle: handle, pollResult: result)
++                }, uniffiContinuationHandleMap.insert(obj: $0))
++            }
++            if cancellable { try Task.checkCancellation() }
++        } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
++        let result = try liftFunc(makeRustCall(
++            { completeFunc(rustFuture, $0) }, errorHandler: errorHandler
++        ))
++        if cancellable { try Task.checkCancellation() }
++        return result
++    } onCancel: {
++        if cancellable { cancellation.cancel() }
++    }
+ }
+ 
+ // Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+@@ -7613,6 +7663,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeAuthSession_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7627,6 +7678,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxProfile_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7641,6 +7693,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeAuthSession_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7655,6 +7708,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeLoginStartResult_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7669,6 +7723,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceString.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7683,6 +7738,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeCloudAccessResult_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7697,6 +7753,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeHomeAccessResult_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7726,6 +7783,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxCloudCatalogSnapshot_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7740,6 +7798,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxCloudCatalogMetadata.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7754,6 +7813,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxCloudProductDetail_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7768,6 +7828,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterOptionUInt64.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7782,6 +7843,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterOptionTypeXboxCloudGame.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7796,6 +7858,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxAchievement.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7810,6 +7873,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxGame.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7824,6 +7888,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxHost.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7838,6 +7903,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxPlaytime.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7852,6 +7918,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7866,6 +7933,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7880,6 +7948,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxInstalledSection_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7894,6 +7963,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxFriend.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7908,6 +7978,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxInstalledLibrary_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7922,6 +7993,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxMediaPage_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7936,6 +8008,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxAchievementPage_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7950,6 +8023,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxGameHistoryPage_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7964,6 +8038,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterOptionTypeXboxLibraryGame.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7978,6 +8053,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxPlayerPlaytimes_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -7992,6 +8068,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxFriend_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -8009,6 +8086,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterTypeXboxProfile_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -8128,6 +8206,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
+             liftFunc: FfiConverterTypeXboxOfficialTouchBundle_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -8142,6 +8221,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxOfficialTouchBundleChoice.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -8156,6 +8236,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
+             liftFunc: FfiConverterTypeXboxOfficialTouchBundle_lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+@@ -8170,6 +8251,7 @@
+             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
++            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+             liftFunc: FfiConverterSequenceTypeXboxOfficialTouchBundleChoice.lift,
+             errorHandler: FfiConverterTypeXboxBridgeError_lift
+         )
+--- baseline/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift
++++ current/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift
+@@ -6,6 +6,7 @@
+     enum Kind: String, Sendable {
+         case network, timeout, authentication, accessRestricted, rateLimited, serviceUnavailable
+         case invalidResponse, repeatedContinuation, unknown
++        case mediaExpired, mediaTooLarge, mediaEmpty, mediaInvalidFormat, storage
+     }
+     let kind: Kind
+     var retryAt: Date? = nil
+@@ -38,8 +39,34 @@
+         protocolErrorCode = failure.protocolErrorCode
+     }
+     init(error: any Error) {
++        defer {
++            if kind != .authentication && kind != .accessRestricted {
++                retryAt = max(retryAt ?? .distantPast, Date().addingTimeInterval(15))
++            }
++        }
+         if let failure = error as? SectionRequestFailure {
+             self = failure
++            return
++        }
++        if let media = error as? AlbumDownloadFailure {
++            switch media {
++            case .expired: self.init(kind: .mediaExpired)
++            case .tooLarge: self.init(kind: .mediaTooLarge)
++            case .empty: self.init(kind: .mediaEmpty)
++            case .invalidFormat: self.init(kind: .mediaInvalidFormat)
++            case .storage: self.init(kind: .storage)
++            case .http(let status, let retryAfter):
++                switch status {
++                case 401, 404, 410: self.init(kind: .mediaExpired)
++                case 403: self.init(kind: .accessRestricted)
++                case 408, 504: self.init(kind: .timeout)
++                case 429: self.init(kind: .rateLimited)
++                case 500...599: self.init(kind: .serviceUnavailable)
++                default: self.init(kind: .invalidResponse)
++                }
++                statusCode = UInt16(exactly: status)
++                retryAt = retryAfter.map { Date().addingTimeInterval($0) }
++            }
+             return
+         }
+         if let bridge = error as? XboxBridgeError, case .Query(let failure) = bridge {
+@@ -61,8 +88,18 @@
+         }
+         if let url = error as? URLError {
+             self.init(kind: url.code == .timedOut ? .timeout : .network)
+-            return
+-        }
++            switch url.code {
++            case .timedOut: networkErrorKind = "timeout"
++            case .cannotFindHost, .dnsLookupFailed: networkErrorKind = "dns"
++            case .cannotConnectToHost, .notConnectedToInternet: networkErrorKind = "connect"
++            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
++                .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid: networkErrorKind = "tls"
++            case .networkConnectionLost: networkErrorKind = "body"
++            default: networkErrorKind = "unknown"
++            }
++            return
++        }
++        if (error as NSError).domain == NSCocoaErrorDomain { self.init(kind: .storage); return }
+         self.init(kind: .unknown)
+     }
+     static func isCancellation(_ error: any Error) -> Bool {
+@@ -79,6 +116,11 @@
+         case .serviceUnavailable: "Xbox 服务暂时无法提供这部分资料，请稍后重试。"
+         case .invalidResponse, .unknown: "这部分资料暂时无法载入，请稍后重试。"
+         case .repeatedContinuation: "这份列表暂时无法继续加载，请刷新列表后重试。"
++        case .mediaExpired: "媒体链接已失效，请重试以更新下载地址。"
++        case .mediaTooLarge: "媒体超过 2 GB 保存上限。"
++        case .mediaEmpty: "媒体文件为空，请更新下载地址后重试。"
++        case .mediaInvalidFormat: "下载内容的媒体格式无效，请稍后重试。"
++        case .storage: "媒体保存失败，请检查可用存储空间后重试。"
+         }
+     }
+     var actionTitle: String {
+@@ -88,6 +130,10 @@
+         case .repeatedContinuation: "刷新列表"
+         default: "重试"
+         }
++    }
++    func allowsActivation(at now: Date = .now) -> Bool {
++        kind != .authentication && kind != .accessRestricted
++            && (retryAt.map { now >= $0 } ?? true)
+     }
+ }
+ 
+@@ -101,6 +147,9 @@
+ }
+ 
+ extension XboxNativeDataState {
++    var needsActivation: Bool {
++        phase == .idle || (failure?.allowsActivation() ?? false)
++    }
+     var hasSnapshot: Bool { updatedAt != nil || phase == .loaded || !items.isEmpty }
+     var requestStatus: SectionRequestStatus {
+         SectionRequestStatus(
+@@ -126,6 +175,9 @@
+ }
+ 
+ extension XboxSingleDataState {
++    var needsActivation: Bool {
++        phase == .idle || (failure?.allowsActivation() ?? false)
++    }
+     var hasSnapshot: Bool { updatedAt != nil || phase == .loaded || value != nil }
+     var requestStatus: SectionRequestStatus {
+         SectionRequestStatus(
+--- baseline/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift
++++ current/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift
+@@ -34,6 +34,7 @@
+     private let client: any XboxCloudDataClient
+     private let settingsProvider: AppSettingsStore?
+     private let repository: any CloudCatalogSnapshotStoring
++    private let detailRepository: CloudProductDetailRepository
+     private let persistenceCoordinator: CloudCatalogPersistenceCoordinator
+     private var activeScope: CloudCatalogScope?
+     private var activeAccess: PreparedCloudAccess?
+@@ -51,11 +52,13 @@
+     init(
+         client: any XboxCloudDataClient = RustXboxCloudDataClient(),
+         repository: any CloudCatalogSnapshotStoring = CloudCatalogSnapshotRepository(),
+-        settingsProvider: AppSettingsStore? = nil
++        settingsProvider: AppSettingsStore? = nil,
++        detailRepository: CloudProductDetailRepository = .shared
+     ) {
+         self.client = client
+         self.settingsProvider = settingsProvider
+         self.repository = repository
++        self.detailRepository = detailRepository
+         persistenceCoordinator = CloudCatalogPersistenceCoordinator(repository: repository)
+     }
+ 
+@@ -251,7 +254,7 @@
+             )
+             return
+         }
+-        guard !didRunInitialRefresh else {
++        guard !didRunInitialRefresh || (catalogFailure?.allowsActivation() ?? false) else {
+             IOSRuntimeTrace.decision(
+                 domain: "cloud-library",
+                 event: "catalogActivationSkipped",
+@@ -313,7 +316,7 @@
+         }
+         refreshTask = task
+         refreshTaskID = taskID
+-        await task.value
++        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+         if refreshTaskID == taskID {
+             refreshTask = nil
+             refreshTaskID = nil
+@@ -363,34 +366,9 @@
+             } else {
+                 access = try await prepareAccess()
+             }
+-            do {
+-                let snapshot = try await client.loadCatalog(
+-                    accessHandle: access.handle,
+-                    market: market,
+-                    language: language
+-                )
+-                return RemoteLoadResult(access: access, snapshot: snapshot)
+-            } catch {
+-                guard SectionRequestFailure(error: error).kind == .authentication else {
+-                    throw error
+-                }
+-                IOSRuntimeTrace.decision(
+-                    domain: "cloud-library",
+-                    event: "catalogAccessRenewRequired",
+-                    payload: ["reason": "catalogRequestFailed"],
+-                    dimension: .recovery,
+-                    importance: .key,
+-                    operationID: operationID
+-                )
+-                await client.releaseAccess(handle: access.handle)
+-                let renewedAccess = try await prepareAccess()
+-                let snapshot = try await client.loadCatalog(
+-                    accessHandle: renewedAccess.handle,
+-                    market: market,
+-                    language: language
+-                )
+-                return RemoteLoadResult(access: renewedAccess, snapshot: snapshot)
+-            }
++            let snapshot = try await client.loadCatalog(
++                accessHandle: access.handle, market: market, language: language)
++            return RemoteLoadResult(access: access, snapshot: snapshot)
+         }
+         inFlight = task
+         inFlightOperationID = operationID
+@@ -406,7 +384,7 @@
+         }
+ 
+         do {
+-            let result = try await task.value
++            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+             guard isCurrent(requestRevision),
+                 !Task.isCancelled,
+                 requestRevision.scope == nil || requestRevision.scope == result.snapshot.scope
+@@ -810,6 +788,10 @@
+         inFlight = nil
+         inFlightOperationID = nil
+         isRefreshing = false
++        if phase == .loading {
++            phase = games.isEmpty ? .idle : .loaded
++            if games.isEmpty { didRunInitialRefresh = false }
++        }
+         for source in sourceStates.keys {
+             if sourceStates[source]?.isRefreshing == true {
+                 sourceStates[source]?.failRequest(CancellationError())
+@@ -1187,8 +1169,8 @@
+         var state = productDetails[identity] ?? XboxSingleDataState()
+         guard productRequestIDs[identity] == nil,
+             refresh
+-                || (state.updatedAt.map({ Date().timeIntervalSince($0) > 600 })
+-                    ?? (state.phase == .idle))
++                || state.needsActivation
++                || (state.updatedAt.map({ Date().timeIntervalSince($0) >= CloudProductDetailRepository.freshDuration }) ?? false)
+         else { return }
+         let scopeID = productScopeID
+         let request = UUID()
+@@ -1202,15 +1184,22 @@
+         state.beginRequest()
+         productDetails[identity] = state
+         do {
+-            let detail = try await client.loadProductDetail(
+-                productID: productID, market: market, language: language)
++            let market = market
++            let language = language
++            let cached = try await detailRepository.load(
++                productID: productID, market: market, language: language, force: refresh
++            ) { [client] in
++                try await client.loadProductDetail(productID: productID, market: market, language: language)
++            }
++            try Task.checkCancellation()
++            let detail = cached.detail
+             guard productScopeID == scopeID, productRequestIDs[identity] == request else { return }
+             guard detail.productID.caseInsensitiveCompare(productID) == .orderedSame else {
+                 throw XboxNativeQueryError.unavailable
+             }
+             state.value = detail
+             state.phase = .loaded
+-            state.updatedAt = .now
++            state.updatedAt = cached.updatedAt
+         } catch {
+             guard productScopeID == scopeID, productRequestIDs[identity] == request else { return }
+             state.failRequest(error)
+@@ -1235,7 +1224,7 @@
+                 scopeID == productScopeID
+             else { throw CancellationError() }
+         }
+-        var access: PreparedCloudAccess
++        let access: PreparedCloudAccess
+         if let saved = activeAccess,
+             saved.expiresAtMs > UInt64(Date().timeIntervalSince1970 * 1000) + 30_000,
+             authentication == nil || authentication?.session?.cloudAccountID == saved.accountID
+@@ -1246,20 +1235,10 @@
+         }
+         try checkCurrent()
+         activeAccess = access
+-        do {
+-            let result = try await operation(access)
+-            try checkCurrent()
+-            return result
+-        } catch {
+-            try checkCurrent()
+-            guard SectionRequestFailure(error: error).kind == .authentication else { throw error }
+-            access = try await prepareAccess()
+-            try checkCurrent()
+-            activeAccess = access
+-            let result = try await operation(access)
+-            try checkCurrent()
+-            return result
+-        }
++        // Cloud 目标拒绝已由 Rust owner 恢复一次，此层只提交当前结果。
++        let result = try await operation(access)
++        try checkCurrent()
++        return result
+     }
+ 
+     func loadWaitTime(
+@@ -1271,6 +1250,7 @@
+         var state = waitTimes[key] ?? XboxSingleDataState()
+         guard productRequestIDs[key] == nil,
+             refresh
++                || state.needsActivation
+                 || (state.updatedAt.map({ Date().timeIntervalSince($0) > 60 })
+                     ?? (state.phase == .idle))
+         else { return }
+@@ -1332,7 +1312,7 @@
+         sourceStates[source] = state
+         defer { if productRequestIDs[key] == request { productRequestIDs[key] = nil } }
+         do {
+-            var access: PreparedCloudAccess
++            let access: PreparedCloudAccess
+             if let saved = activeAccess,
+                 saved.expiresAtMs > UInt64(Date().timeIntervalSince1970 * 1000)
+             {
+@@ -1340,18 +1320,8 @@
+             } else {
+                 access = try await prepareAccess()
+             }
+-            let ids: [String]
+-            do {
+-                ids = try await client.loadCatalogSource(
+-                    accessHandle: access.handle, source: source, market: market, language: language)
+-            } catch {
+-                guard SectionRequestFailure(error: error).kind == .authentication else {
+-                    throw error
+-                }
+-                access = try await prepareAccess()
+-                ids = try await client.loadCatalogSource(
+-                    accessHandle: access.handle, source: source, market: market, language: language)
+-            }
++            let ids = try await client.loadCatalogSource(
++                accessHandle: access.handle, source: source, market: market, language: language)
+             try Task.checkCancellation()
+             guard generation == revision, activeScope == scope, productRequestIDs[key] == request
+             else {
+--- baseline/iosapp/XBXRC/Shared/State/CloudProductDetailRepository.swift
++++ current/iosapp/XBXRC/Shared/State/CloudProductDetailRepository.swift
+@@ -0,0 +1,213 @@
++import Foundation
++
++struct CachedCloudProductDetail: Sendable {
++  let detail: CloudProductDetails
++  let updatedAt: Date
++  let stale: Bool
++}
++
++/// 公开商品资料按市场/语言隔离；最后一个等待者取消时终止底层读取。
++actor CloudProductDetailRepository {
++  static let shared = CloudProductDetailRepository()
++  static let freshDuration: TimeInterval = 24 * 60 * 60
++  static let staleDuration: TimeInterval = 7 * 24 * 60 * 60
++  private let root: URL
++  private let capacity: Int
++  private let now: @Sendable () -> Date
++  private var memory: [String: DiskEntry] = [:]
++  private var accesses: [String: Date] = [:]
++  private var requests: [String: Request] = [:]
++  private var queue: [String] = []
++  private var active = 0
++
++  private struct DiskEntry: Codable, Sendable {
++    let schema: Int
++    let key: String
++    let detail: CloudProductDetails
++    let updatedAt: Date
++  }
++  private struct Request {
++    let id: UUID
++    let productID: String
++    let cached: DiskEntry?
++    let fetch: @Sendable () async throws -> CloudProductDetails
++    var waiters: [UUID: CheckedContinuation<CachedCloudProductDetail, any Error>]
++    var task: Task<Void, Never>?
++  }
++
++  init(root: URL? = nil, capacity: Int = 30, now: @escaping @Sendable () -> Date = { .now }) {
++    self.root =
++      root
++      ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
++      .appendingPathComponent("XBXRC/CloudProductDetails", isDirectory: true)
++    self.capacity = max(1, capacity)
++    self.now = now
++  }
++
++  func load(
++    productID: String, market: String, language: String, force: Bool = false,
++    fetch: @escaping @Sendable () async throws -> CloudProductDetails
++  ) async throws -> CachedCloudProductDetail {
++    try Task.checkCancellation()
++    let id = productID.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
++    let market = market.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
++    let language = language.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
++    guard !id.isEmpty, id.count <= 32,
++      id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) }),
++      !market.isEmpty, market.count <= 35, !language.isEmpty, language.count <= 35
++    else { throw SectionRequestFailure(kind: .invalidResponse) }
++    let key = CloudCatalogScope.fingerprint([id, market, language].joined(separator: "\u{1F}"))
++    let waiter = UUID()
++    return try await withTaskCancellationHandler {
++      try await withCheckedThrowingContinuation { continuation in
++        guard !Task.isCancelled else {
++          continuation.resume(throwing: CancellationError())
++          return
++        }
++        if var pending = requests[key] {
++          pending.waiters[waiter] = continuation
++          requests[key] = pending
++          return
++        }
++        let cached = read(key: key, productID: id)
++        if !force, let cached, now().timeIntervalSince(cached.updatedAt) < Self.freshDuration {
++          continuation.resume(returning: value(cached, stale: false))
++          return
++        }
++        guard requests.count < capacity else {
++          continuation.resume(throwing: SectionRequestFailure(kind: .serviceUnavailable))
++          return
++        }
++        requests[key] = Request(
++          id: UUID(), productID: id, cached: cached, fetch: fetch, waiters: [waiter: continuation])
++        queue.append(key)
++        drain()
++      }
++    } onCancel: {
++      Task { await self.cancel(key: key, waiter: waiter) }
++    }
++  }
++
++  private func drain() {
++    while active < 2, !queue.isEmpty {
++      let key = queue.removeFirst()
++      guard var request = requests[key], request.task == nil else { continue }
++      active += 1
++      let id = request.id
++      let fetch = request.fetch
++      request.task = Task {
++        let result: Result<CloudProductDetails, any Error>
++        do { result = .success(try await fetch()) } catch { result = .failure(error) }
++        finish(key: key, id: id, result: result)
++      }
++      requests[key] = request
++    }
++  }
++
++  private func finish(key: String, id: UUID, result: Result<CloudProductDetails, any Error>) {
++    active -= 1
++    defer { drain() }
++    guard let request = requests[key], request.id == id else { return }
++    requests[key] = nil
++    let delivered: Result<CachedCloudProductDetail, any Error>
++    switch result {
++    case .success(let detail):
++      if detail.productID.caseInsensitiveCompare(request.productID) != .orderedSame {
++        delivered = .failure(SectionRequestFailure(kind: .invalidResponse))
++      } else {
++        let entry = DiskEntry(schema: 1, key: key, detail: detail, updatedAt: now())
++        save(entry)
++        delivered = .success(value(entry, stale: false))
++      }
++    case .failure(let error):
++      if !SectionRequestFailure.isCancellation(error), let cached = request.cached,
++        now().timeIntervalSince(cached.updatedAt) <= Self.staleDuration
++      {
++        delivered = .success(value(cached, stale: true))
++      } else {
++        delivered = .failure(error)
++      }
++    }
++    for continuation in request.waiters.values { continuation.resume(with: delivered) }
++  }
++
++  private func cancel(key: String, waiter: UUID) {
++    guard var request = requests[key],
++      let continuation = request.waiters.removeValue(forKey: waiter)
++    else { return }
++    continuation.resume(throwing: CancellationError())
++    if request.waiters.isEmpty {
++      requests[key] = nil
++      queue.removeAll { $0 == key }
++      request.task?.cancel()
++    } else {
++      requests[key] = request
++    }
++  }
++
++  private func value(_ entry: DiskEntry, stale: Bool) -> CachedCloudProductDetail {
++    CachedCloudProductDetail(detail: entry.detail, updatedAt: entry.updatedAt, stale: stale)
++  }
++
++  private func read(key: String, productID: String) -> DiskEntry? {
++    let url = root.appendingPathComponent(key + ".json")
++    let cached: DiskEntry?
++    if let entry = memory[key] {
++      cached = entry
++    } else if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
++      size <= 4 * 1024 * 1024,
++      let data = try? Data(contentsOf: url),
++      let entry = try? JSONDecoder().decode(DiskEntry.self, from: data)
++    {
++      cached = entry
++    } else {
++      cached = nil
++    }
++    guard let cached, cached.schema == 1, cached.key == key,
++      cached.detail.productID.caseInsensitiveCompare(productID) == .orderedSame,
++      cached.updatedAt <= now().addingTimeInterval(300),
++      now().timeIntervalSince(cached.updatedAt) <= Self.staleDuration
++    else {
++      memory[key] = nil
++      accesses[key] = nil
++      try? FileManager.default.removeItem(at: url)
++      return nil
++    }
++    remember(cached)
++    return cached
++  }
++
++  private func remember(_ entry: DiskEntry) {
++    memory[entry.key] = entry
++    accesses[entry.key] = now()
++    while memory.count > capacity, let oldest = accesses.min(by: { $0.value < $1.value })?.key {
++      memory[oldest] = nil
++      accesses[oldest] = nil
++    }
++  }
++
++  private func save(_ entry: DiskEntry) {
++    remember(entry)
++    do {
++      let data = try JSONEncoder().encode(entry)
++      guard data.count <= 4 * 1024 * 1024 else { return }
++      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
++      try data.write(to: root.appendingPathComponent(entry.key + ".json"), options: .atomic)
++      let files = try FileManager.default.contentsOfDirectory(
++        at: root, includingPropertiesForKeys: [.contentModificationDateKey]
++      )
++      .filter { $0.pathExtension == "json" }.sorted {
++        let first =
++          (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
++          ?? .distantPast
++        let second =
++          (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
++          ?? .distantPast
++        return first > second
++      }
++      for file in files.dropFirst(capacity) { try FileManager.default.removeItem(at: file) }
++    } catch {
++      // 磁盘缓存尽力写入，已成功取得的公开资料仍正常返回。
++    }
++  }
++}
+--- baseline/iosapp/XBXRC/Shared/State/XboxDataStore.swift
++++ current/iosapp/XBXRC/Shared/State/XboxDataStore.swift
+@@ -113,6 +113,7 @@
+     private var boundOwnerGeneration: UInt64?
+     private var fallbackOwnerKey: String?
+     private var initialActivations: Set<XboxDataSurface> = []
++    private var activationFailures: [XboxDataSurface: Date] = [:]
+     private var hostRefreshTask: Task<Void, Never>?
+     private var hostRefreshTaskID: UUID?
+     private var libraryRefreshTask: Task<Void, Never>?
+@@ -214,7 +215,7 @@
+         }
+         hostRefreshTask = task
+         hostRefreshTaskID = taskID
+-        await task.value
++        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+         if hostRefreshTaskID == taskID {
+             hostRefreshTask = nil
+             hostRefreshTaskID = nil
+@@ -363,7 +364,7 @@
+         }
+         libraryRefreshTask = task
+         libraryRefreshTaskID = taskID
+-        await task.value
++        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+         if libraryRefreshTaskID == taskID {
+             libraryRefreshTask = nil
+             libraryRefreshTaskID = nil
+@@ -595,7 +596,7 @@
+             )
+         }
+         achievementRefreshes[key] = AchievementRefreshHandle(id: taskID, task: task)
+-        await task.value
++        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+         clearAchievementTask(for: key, matching: taskID)
+     }
+ 
+@@ -926,6 +927,7 @@
+         achievementRefreshes.values.forEach { $0.task.cancel() }
+         achievementRefreshes = [:]
+         initialActivations = []
++        activationFailures = [:]
+         hostRefreshOperationID = nil
+         hostPowerOperationID = nil
+         hosts = []
+@@ -953,7 +955,8 @@
+         guard webTokenJSON != nil else {
+             return
+         }
+-        guard initialActivations.insert(surface).inserted else {
++        let retry = activationFailures[surface].map { Date().timeIntervalSince($0) >= 15 } ?? false
++        guard initialActivations.insert(surface).inserted || retry else {
+             IOSRuntimeTrace.decision(
+                 domain: "xbox-data",
+                 event: "surfaceActivationSkipped",
+@@ -963,7 +966,17 @@
+             )
+             return
+         }
++        let owner = nativeQueryContext()
+         await operation()
++        guard let owner, ownsNativeQuery(owner) else { return }
++        let phase: DataLoadPhase
++        switch surface {
++        case .hosts: phase = hostPhase
++        case .library: phase = libraryPhase
++        case .achievements(let key): phase = achievementStates[key]?.phase ?? .idle
++        }
++        if phase == .idle { initialActivations.remove(surface) }
++        activationFailures[surface] = phase == .failed ? .now : nil
+     }
+ 
+     func nativeQueryContext() -> XboxDataRequestContext? {
+--- baseline/iosapp/XBXRC/Shared/State/XboxPersonalData.swift
++++ current/iosapp/XBXRC/Shared/State/XboxPersonalData.swift
+@@ -4,7 +4,7 @@
+     func loadFriends(refresh: Bool = false) async {
+         let key = "friends"
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
+-            refresh || friendsState.phase == .idle
++            refresh || friendsState.needsActivation
+         else { return }
+         let request = UUID()
+         nativeRequestIDs[key] = request
+@@ -37,7 +37,7 @@
+         var state = albumStates[kind] ?? XboxNativeDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
+         if nextPage && state.continuation == nil { return }
+-        if !refresh && !nextPage && state.phase != .idle { return }
++        if !refresh && !nextPage && !state.needsActivation { return }
+         let continuation = nextPage ? state.continuation : nil
+         let request = UUID()
+         nativeRequestIDs[key] = request
+@@ -123,7 +123,7 @@
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
+         var section =
+             installedLibraryStates[consoleID]?.sections[source] ?? XboxSingleDataState<Bool>()
+-        guard refresh || section.phase == .idle else { return }
++        guard refresh || section.needsActivation else { return }
+         let request = UUID()
+         nativeRequestIDs[key] = request
+         section.beginRequest()
+--- baseline/iosapp/XBXRC/Shared/State/XboxPlayerData.swift
++++ current/iosapp/XBXRC/Shared/State/XboxPlayerData.swift
+@@ -13,7 +13,7 @@
+         let key = "profile-\(targetID)"
+         var state = playerProfiles[targetID] ?? XboxSingleDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
+-            refresh || state.phase == .idle
++            refresh || state.needsActivation
+         else { return }
+         let request = UUID()
+         nativeRequestIDs[key] = request
+@@ -53,7 +53,7 @@
+         var state = playerHistoryStates[targetID] ?? XboxNativeDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
+         if nextPage && state.continuation == nil { return }
+-        if !refresh && !nextPage && state.phase != .idle { return }
++        if !refresh && !nextPage && !state.needsActivation { return }
+         let continuation = nextPage ? state.continuation : nil
+         let request = UUID()
+         if !nextPage { invalidateHistoryPlaytimes(owner: targetID) }
+@@ -193,7 +193,7 @@
+         let key = "game-\(identity)"
+         var state = libraryGameStates[identity] ?? XboxSingleDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
+-            refresh || state.phase == .idle
++            refresh || state.needsActivation
+         else { return }
+         let request = UUID()
+         nativeRequestIDs[key] = request
+@@ -223,7 +223,7 @@
+         let key = "time-\(identity)"
+         var state = playerPlaytimeStates[identity] ?? XboxSingleDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
+-            refresh || state.phase == .idle
++            refresh || state.needsActivation
+         else { return }
+         let request = UUID()
+         nativeRequestIDs[key] = request
+@@ -263,7 +263,7 @@
+         var state = playerAchievementStates[identity] ?? XboxNativeDataState()
+         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
+         if nextPage && state.continuation == nil { return }
+-        if !refresh && !nextPage && state.phase != .idle { return }
++        if !refresh && !nextPage && !state.needsActivation { return }
+         let continuation = nextPage ? state.continuation : nil
+         let request = UUID()
+         nativeRequestIDs[key] = request
+--- baseline/iosapp/XBXRCTests/HTTPBehaviorParityTests.swift
++++ current/iosapp/XBXRCTests/HTTPBehaviorParityTests.swift
+@@ -0,0 +1,176 @@
++import Foundation
++import XCTest
++
++@testable import XBXRC
++
++final class HTTPBehaviorParityTests: XCTestCase {
++  func testHostTerminalAndNetworkFactsHaveDistinctActions() {
++    for kind in [XboxStartupFailureKind.hostRemotePlayUnavailable, .hostRegistrationRetryExhausted]
++    {
++      let error = XboxStreamingError.Startup(
++        failure: XboxStartupFailure(
++          kind: kind, phase: "creatingSession", retryable: true, statusCode: 503,
++          failureCode: nil, networkErrorKind: nil))
++      XCTAssertFalse(StreamingStartupDiagnostics.isRetryable(error, fallback: true))
++      XCTAssertEqual(StreamingStartupDiagnostics.errorPayload(error)["retryable"], .bool(false))
++    }
++    let query = XboxQueryFailure(
++      kind: .network, statusCode: nil, retriable: true,
++      retryAfterSeconds: nil, networkErrorKind: "tls", serviceCode: nil, protocolErrorCode: nil)
++    let failure = SectionRequestFailure(error: XboxBridgeError.Query(failure: query))
++    XCTAssertEqual(failure.networkErrorKind, "tls")
++    XCTAssertFalse(failure.allowsActivation())
++    XCTAssertTrue(failure.allowsActivation(at: Date().addingTimeInterval(16)))
++    XCTAssertFalse(SectionRequestFailure(kind: .authentication).allowsActivation())
++  }
++
++  func testMediaStatusSizeAndSignatureRemainDistinct() throws {
++    let png = Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
++    func response(_ status: Int, mime: String = "image/png", retry: String = "30")
++      -> HTTPURLResponse
++    {
++      HTTPURLResponse(
++        url: URL(string: "https://fixture.invalid/media")!, statusCode: status,
++        httpVersion: nil, headerFields: ["Content-Type": mime, "Retry-After": retry])!
++    }
++    XCTAssertEqual(
++      try AlbumDownloadPolicy.validate(
++        response: response(200), size: 8, kind: .screenshot, prefix: png), "png")
++    for (status, kind) in [
++      (403, SectionRequestFailure.Kind.accessRestricted), (429, .rateLimited),
++      (503, .serviceUnavailable), (401, .mediaExpired),
++    ] {
++      do {
++        _ = try AlbumDownloadPolicy.validate(
++          response: response(status), size: 8, kind: .screenshot, prefix: png)
++        XCTFail("HTTP error must retain its category")
++      } catch {
++        let failure = SectionRequestFailure(error: error)
++        XCTAssertEqual(failure.kind, kind)
++        XCTAssertEqual(failure.statusCode, UInt16(status))
++        if status == 429 { XCTAssertGreaterThan(failure.retryAt!.timeIntervalSinceNow, 29) }
++      }
++    }
++    for (size, prefix, kind) in [
++      (Int64(0), png, SectionRequestFailure.Kind.mediaEmpty),
++      (AlbumDownloadPolicy.maximumBytes + 1, png, .mediaTooLarge),
++      (Int64(8), Data("<html>".utf8), .mediaInvalidFormat),
++    ] {
++      do {
++        _ = try AlbumDownloadPolicy.validate(
++          response: response(200), size: size, kind: .screenshot, prefix: prefix)
++        XCTFail("Invalid media must fail")
++      } catch { XCTAssertEqual(SectionRequestFailure(error: error).kind, kind) }
++    }
++    XCTAssertThrowsError(try AlbumDownloadPolicy.fileExtension(kind: .clip, prefix: png))
++    XCTAssertTrue(SectionRequestFailure.isCancellation(URLError(.cancelled)))
++  }
++
++  func testDetailPersistsAcrossRestartAndHonorsFreshStaleAndExpiry() async throws {
++    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++    defer { try? FileManager.default.removeItem(at: root) }
++    let clock = ParityClock()
++    let repository = CloudProductDetailRepository(root: root, now: { clock.date })
++    let first = try await repository.load(productID: "GAME1", market: "US", language: "en-US") {
++      Self.detail("GAME1")
++    }
++    let restarted = CloudProductDetailRepository(root: root, now: { clock.date })
++    let fresh = try await restarted.load(productID: "game1", market: "us", language: "EN-us") {
++      throw URLError(.cannotConnectToHost)
++    }
++    XCTAssertEqual(fresh.detail, first.detail)
++    XCTAssertFalse(fresh.stale)
++    clock.advance(25 * 60 * 60)
++    let stale = try await restarted.load(productID: "GAME1", market: "US", language: "en-US") {
++      throw URLError(.timedOut)
++    }
++    XCTAssertTrue(stale.stale)
++    XCTAssertEqual(stale.updatedAt, first.updatedAt)
++    clock.advance(7 * 24 * 60 * 60)
++    do {
++      _ = try await restarted.load(productID: "GAME1", market: "US", language: "en-US") {
++        throw URLError(.timedOut)
++      }
++      XCTFail("Expired details must fail")
++    } catch { XCTAssertEqual(SectionRequestFailure(error: error).kind, .timeout) }
++  }
++
++  func testDetailMergesInFlightAndBoundsDiskAcrossMarketsAndLanguages() async throws {
++    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++    defer { try? FileManager.default.removeItem(at: root) }
++    let repository = CloudProductDetailRepository(root: root, capacity: 2)
++    let calls = ParityCounter()
++    let fetch: @Sendable () async throws -> CloudProductDetails = {
++      await calls.increment()
++      try await Task.sleep(for: .milliseconds(30))
++      return Self.detail("GAME1")
++    }
++    async let first = repository.load(
++      productID: "GAME1", market: "US", language: "en-US", fetch: fetch)
++    async let second = repository.load(
++      productID: "GAME1", market: "US", language: "en-US", fetch: fetch)
++    _ = try await (first, second)
++    let count = await calls.value
++    XCTAssertEqual(count, 1)
++    _ = try await repository.load(productID: "GAME1", market: "JP", language: "en-US", fetch: fetch)
++    _ = try await repository.load(productID: "GAME1", market: "JP", language: "ja-JP", fetch: fetch)
++    let scopedCount = await calls.value
++    XCTAssertEqual(scopedCount, 3)
++    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path).count, 2)
++  }
++
++  func testDetailCancellationDropsLateResultAndAllowsNextAttempt() async throws {
++    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++    defer { try? FileManager.default.removeItem(at: root) }
++    let repository = CloudProductDetailRepository(root: root)
++    let gate = ParityGate()
++    let task = Task {
++      try await repository.load(productID: "GAME1", market: "US", language: "en-US") {
++        await gate.started()
++        try await Task.sleep(for: .seconds(30))
++        return Self.detail("GAME1")
++      }
++    }
++    await gate.wait()
++    task.cancel()
++    do {
++      _ = try await task.value
++      XCTFail("Cancelled waiter must exit")
++    } catch { XCTAssertTrue(SectionRequestFailure.isCancellation(error)) }
++    let result = try await repository.load(productID: "GAME1", market: "US", language: "en-US") {
++      Self.detail("GAME1")
++    }
++    XCTAssertFalse(result.stale)
++  }
++
++  private static func detail(_ id: String) -> CloudProductDetails {
++    CloudProductDetails(
++      productID: id, name: "Fixture", publisherName: "", description: "",
++      tileURL: nil, posterURL: nil, heroURL: nil, categories: [], developer: "", releaseDate: "",
++      rating: "", attributes: [], screenshots: [], platforms: [], languages: [], accessibility: [])
++  }
++}
++
++private final class ParityClock: @unchecked Sendable {
++  private let lock = NSLock()
++  private var value = Date()
++  var date: Date { lock.withLock { value } }
++  func advance(_ seconds: TimeInterval) { lock.withLock { value.addTimeInterval(seconds) } }
++}
++private actor ParityCounter {
++  private(set) var value = 0
++  func increment() { value += 1 }
++}
++private actor ParityGate {
++  private var ready = false
++  private var continuation: CheckedContinuation<Void, Never>?
++  func started() {
++    ready = true
++    continuation?.resume()
++    continuation = nil
++  }
++  func wait() async {
++    if ready { return }
++    await withCheckedContinuation { continuation = $0 }
++  }
++}
+--- baseline/iosapp/XBXRCTests/PCDataParityTests.swift
++++ current/iosapp/XBXRCTests/PCDataParityTests.swift
+@@ -265,7 +265,10 @@
+             return try await PCPageCloudClient().loadProductDetail(
+                 productID: product, market: market, language: language)
+         }
+-        let store = CloudLibraryStore(client: client, settingsProvider: settings)
++        let detailRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++        defer { try? FileManager.default.removeItem(at: detailRoot) }
++        let store = CloudLibraryStore(client: client, settingsProvider: settings,
++            detailRepository: CloudProductDetailRepository(root: detailRoot))
+         let productID = PCPageFixtures.cloudGames()[0].productID
+         let english = Task { await store.loadProductDetail(productID: productID) }
+         try await waitFor { await delayed.wasRequested }
+@@ -280,6 +283,97 @@
+         XCTAssertFalse(store.productDetailState(productID).isRefreshing)
+         settings.mobile.catalogLanguage = "en-US"
+         XCTAssertEqual(store.productDetailState(productID).phase, .idle)
++    }
++
++    @MainActor
++    func testCancelledCatalogActivationAllowsNextEntry() async throws {
++        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++        defer { try? FileManager.default.removeItem(at: root) }
++        let calls = PCRequestLog()
++        var client = ScriptedPCCloudClient()
++        client.catalog = { market, language in
++            await calls.record("started")
++            if await calls.values.count == 1 { try await Task.sleep(for: .seconds(30)) }
++            return try await PCPageCloudClient().loadCatalog(accessHandle: "fixture", market: market, language: language)
++        }
++        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
++        let access: @MainActor () async throws -> PreparedCloudAccess = {
++            try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
++                checkpoint: { _ in }, authProvider: nil, startup: nil)
++        }
++        let activation = Task { await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access) }
++        try await waitFor { await calls.values.count == 1 }
++        activation.cancel()
++        await activation.value
++        XCTAssertEqual(store.phase, .idle)
++        XCTAssertNil(store.catalogFailure)
++        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
++        XCTAssertEqual(store.phase, .loaded)
++        let count = await calls.values.count
++        XCTAssertEqual(count, 2)
++    }
++
++    @MainActor
++    func testFailedCatalogActivationWaitsForCooldownAndReenters() async throws {
++        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++        defer { try? FileManager.default.removeItem(at: root) }
++        let calls = PCRequestLog()
++        var client = ScriptedPCCloudClient()
++        client.catalog = { market, language in
++            await calls.record("started")
++            if await calls.values.count == 1 { throw URLError(.timedOut) }
++            return try await PCPageCloudClient().loadCatalog(accessHandle: "fixture", market: market, language: language)
++        }
++        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
++        let access: @MainActor () async throws -> PreparedCloudAccess = {
++            try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
++                checkpoint: { _ in }, authProvider: nil, startup: nil)
++        }
++        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
++        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
++        let before = await calls.values.count
++        XCTAssertEqual(before, 1)
++        store.catalogFailure?.retryAt = .distantPast
++        await store.activateOnce(session: PCPageFixtures.session, prepareAccess: access)
++        let after = await calls.values.count
++        XCTAssertEqual(after, 2)
++        XCTAssertEqual(store.phase, .loaded)
++    }
++
++    @MainActor
++    func testCloudConsumersKeepOneRecoveryBoundary() async throws {
++        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++        defer { try? FileManager.default.removeItem(at: root) }
++        let calls = PCRequestLog()
++        var client = ScriptedPCCloudClient()
++        client.catalog = { _, _ in
++            await calls.record("catalog")
++            throw SectionRequestFailure(kind: .authentication)
++        }
++        client.source = { _ in
++            await calls.record("source")
++            throw SectionRequestFailure(kind: .authentication)
++        }
++        let store = CloudLibraryStore(client: client, repository: CloudCatalogSnapshotRepository(rootDirectory: root))
++        let access: @MainActor () async throws -> PreparedCloudAccess = {
++            await calls.record("prepare")
++            return try await PCPageCloudClient().prepareAccess(session: PCPageFixtures.session, forceRegionIP: "",
++                checkpoint: { _ in }, authProvider: nil, startup: nil)
++        }
++        await store.refresh(reason: .initialActivation, prepareAccess: access)
++        await store.retrySource("recent", prepareAccess: access)
++        do {
++            let _: Bool = try await store.withCloudAccess(prepareAccess: access) { _ in
++                await calls.record("resource")
++                throw SectionRequestFailure(kind: .authentication)
++            }
++            XCTFail("Completed target recovery must retain rejection")
++        } catch { XCTAssertEqual(SectionRequestFailure(error: error).kind, .authentication) }
++        let recorded = await calls.values
++        for consumer in ["catalog", "source", "resource"] {
++            XCTAssertEqual(recorded.filter { $0 == consumer }.count, 1)
++        }
++        XCTAssertEqual(recorded.filter { $0 == "prepare" }.count, 3)
+     }
+ 
+     @MainActor
+--- baseline/iosapp/scripts/patch-uniffi-swift-concurrency.py
++++ current/iosapp/scripts/patch-uniffi-swift-concurrency.py
+@@ -76,12 +76,89 @@
+     return source
+ 
+ 
++def patch_rust_future_cancellation(source: str) -> str:
++    marker = "// XBXRC: Swift cancellation owns the Rust future lifecycle."
++    if marker in source:
++        return source
++    pattern = re.compile(r"(\s+)freeFunc: (ffi_\w+_rust_future_)free_(\w+),")
++    source, count = pattern.subn(
++        r"\1freeFunc: \2free_\3,\1cancelFunc: \2cancel_\3,", source
++    )
++    if count == 0:
++        raise ValueError("UniFFI Rust future call sites changed")
++    start = source.index("fileprivate func uniffiRustCallAsync<F, T>(")
++    end = source.index("// Callback handlers for an async calls.", start)
++    source = source[:start] + '''// XBXRC: Swift cancellation owns the Rust future lifecycle.
++fileprivate final class UniffiRustFutureCancellation: @unchecked Sendable {
++    private let lock = NSLock()
++    private var handle: UInt64?
++    private let cancelFunc: @Sendable (UInt64) -> Void
++    init(handle: UInt64, cancelFunc: @escaping @Sendable (UInt64) -> Void) {
++        self.handle = handle
++        self.cancelFunc = cancelFunc
++    }
++    func cancel() {
++        lock.lock()
++        defer { lock.unlock() }
++        if let handle { cancelFunc(handle) }
++    }
++    func finish(_ free: (UInt64) -> Void) {
++        lock.lock()
++        defer { lock.unlock() }
++        if let handle {
++            self.handle = nil
++            free(handle)
++        }
++    }
++}
++
++fileprivate func uniffiRustCallAsync<F, T>(
++    rustFutureFunc: () -> UInt64,
++    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
++    completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
++    freeFunc: (UInt64) -> (),
++    cancelFunc: @escaping @Sendable (UInt64) -> Void,
++    liftFunc: (F) throws -> T,
++    errorHandler: ((RustBuffer) throws -> Swift.Error)?
++) async throws -> T {
++    uniffiEnsureXboxIosBridgeInitialized()
++    // 只有可抛错读取消费 Swift 取消；不可抛错的 teardown 继续完成清理。
++    let cancellable = errorHandler != nil
++    if cancellable { try Task.checkCancellation() }
++    let rustFuture = rustFutureFunc()
++    let cancellation = UniffiRustFutureCancellation(handle: rustFuture, cancelFunc: cancelFunc)
++    defer { cancellation.finish(freeFunc) }
++    return try await withTaskCancellationHandler {
++        if cancellable { try Task.checkCancellation() }
++        var pollResult: Int8
++        repeat {
++            pollResult = await withUnsafeContinuation {
++                pollFunc(rustFuture, { handle, result in
++                    uniffiFutureContinuationCallback(handle: handle, pollResult: result)
++                }, uniffiContinuationHandleMap.insert(obj: $0))
++            }
++            if cancellable { try Task.checkCancellation() }
++        } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
++        let result = try liftFunc(makeRustCall(
++            { completeFunc(rustFuture, $0) }, errorHandler: errorHandler
++        ))
++        if cancellable { try Task.checkCancellation() }
++        return result
++    } onCancel: {
++        if cancellable { cancellation.cancel() }
++    }
++}
++
++''' + source[end:]
++    return source
++
++
+ def main() -> None:
+     if len(sys.argv) != 2:
+         raise SystemExit("usage: patch-uniffi-swift-concurrency.py <generated.swift>")
+     path = Path(sys.argv[1])
+     source = path.read_text()
+-    patched = patch_async_callbacks(patch_async_helpers(source))
++    patched = patch_rust_future_cancellation(patch_async_callbacks(patch_async_helpers(source)))
+     if patched != source:
+         path.write_text(patched)
+ 
+--- baseline/docs/project-task.md
++++ current/docs/project-task.md
+@@ -8,8 +8,8 @@
+ 
+ | ID | Task | Status | Started On | Notes |
+ | --- | --- | --- | --- | --- |
+-| 2026-11-24-ios-media-half-panels | 相册保存进度、原生小窗视频与串流局部浮层 | In Progress | 2026-11-24 | simple；紧凑下载浮窗与右上取消、原生视频小窗/全屏、贴底半屏画面调节和2/3高诊断；串流窄栏与布局选择半屏上限，单窗口执行与最小冒烟。 |
+-| 2026-11-24-ios-pc-http-behavior-parity | 以 PC 为蓝本对齐 iOS 接口调用、返回与异常处理 P0–P2 | In Progress | 2026-11-24 | complex；用户明确实施授权，排除系统代理/HTTP库工作；对齐主机不可用语义与动作、Query事实、主机响应/预算、Cloud目标401单次恢复、失败激活/详情缓存/取消/相册下载。原工作区和暂存区基线保留。[RFC](rfcs/2026-11-24-ios-pc-http-behavior-parity.md)。 |
++| 2026-11-24-ios-media-half-panels | 相册保存进度、原生小窗视频与串流局部浮层 | Done | 2026-11-24 | simple；1/3屏下载浮窗、右上取消与手势保护，视频左右贴边/原生全屏及底栏避让；画面调节贴底半屏，诊断2/3屏，窄栏与布局选择半屏上限。相册/串流各1项定向UI冒烟、语法/格式/diff通过；8张最终截图与1张失败诊断归档，4处临时源码恢复，清理1333.97MiB。[证据](../dev-docs/validation/2026-11-24-ios-media-half-panels/README.md)。 |
++| 2026-11-24-ios-pc-http-behavior-parity | 以 PC 为蓝本对齐 iOS 接口调用、返回与异常处理 P0–P2 | Validation Pending | 2026-11-24 | complex；P0/P1/P2代码与自动验收完成：Query事实、主机容器/预算、Cloud目标401单次恢复、15秒冷却/重新激活、24h/7d/30槽详情缓存、取消与相册校验。Rust200、Swift42唯一场景、iPhoneOS/绑定复现通过，暂存指纹保留；实机主机/Cloud401/相册待用户，原生连接预算保留平台差异。[RFC](rfcs/2026-11-24-ios-pc-http-behavior-parity.md) / [Report](reports/2026-11-24-ios-pc-http-behavior-parity.md) / [证据](../dev-docs/validation/2026-11-24-ios-pc-http-behavior-parity/README.md)。 |
+ | 2026-11-24-ios-stream-quick-autohide | 串流快捷按钮自动隐藏与空白单击唤回 | Done | 2026-11-24 | simple；两个44pt快捷入口沿5秒计时共同隐藏，横竖屏空白单击共同唤回，虚拟手柄触点分流与双指菜单沿用，布局加载暂停计时。Simulator构建、状态/原生命中/UI三项定向冒烟及格式/diff通过，3张最终截图归档；临时探针恢复，清理572.39MiB。[证据](../dev-docs/validation/2026-11-24-ios-stream-quick-autohide/README.md)。 |
+ | 2026-11-24-ios-refresh-stream-detail | 精简下拉刷新反馈与串流快捷入口，修正安装游戏详情语言和播放动作 | Done | 2026-11-24 | simple；原生下拉统一反馈、正文spinner 3→0→3，左上44pt快捷图标并排8pt、12%背景覆盖率；商品资料沿目录市场/语言缓存，标题右侧圆形串流入口。原生1项及UI2项冒烟、定向Swift格式/diff通过，5张最终截图归档；探针精确恢复，清理约601.19MiB。[证据](../dev-docs/validation/2026-11-24-ios-refresh-stream-detail/README.md)。 |
+ | 2026-11-24-ios-pc-http-parity-audit | 整理 iOS 全部 HTTP 请求与 PC 的发起、恢复和错误差异 | Done | 2026-11-24 | complex只读审计；UTC07:09:23快照，15provider/55方法/12Swift入口、原18源码断言，两目标4条locked离线依赖解析通过。续接13PASS/3指纹FAIL与快照后变更原样归档，不声称当前源码全量PASS；业务0修改，两个临时目录25文件/约0.95MiB清理。运行包/同网认证根因及业务修复另行确认。[RFC](rfcs/2026-11-24-ios-pc-http-parity-audit.md) / [Report](reports/2026-11-24-ios-pc-http-parity-audit.md) / [证据](../dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/README.md)。 |

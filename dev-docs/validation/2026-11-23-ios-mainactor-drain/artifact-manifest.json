@@ -1,0 +1,255 @@
+{
+  "generatedAt": "2026-11-23T12:14:45.924492+08:00",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 3926,
+      "sha256": "2e41e8de77bfd98ef9a728333d998f97f24d4130ac02ea3edc0ef34520a08bcf"
+    },
+    {
+      "path": "build-and-test-plan.json",
+      "bytes": 4886,
+      "sha256": "148681fd68a9d83c54ce15beceb1e87a551d3fc958e18fa54d758a28940708df"
+    },
+    {
+      "path": "cleanup-plan.json",
+      "bytes": 468,
+      "sha256": "f4ed0fdac4f7329b3056e95dce906fb7fa0bbce978d5dcc61d5ec14afddf279b"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 1291,
+      "sha256": "f843a4e5b2e51c201e2fd7cb24978b219f45ac20ecfd86bbeee9fc81f9c21da0"
+    },
+    {
+      "path": "concurrent-edit-audit.json",
+      "bytes": 16500,
+      "sha256": "2d41d92460210fb1de69c749080b57ab4feff03eb5055b66890d6b9cc7cba511"
+    },
+    {
+      "path": "concurrent-post-validation.diff",
+      "bytes": 8514,
+      "sha256": "db2c889dff017358055ca95acb60551c8aaf1789180997d60eca8dcd4a7baa68"
+    },
+    {
+      "path": "device-build-summary.json",
+      "bytes": 1449,
+      "sha256": "403d2501f0a1b9c9b34e3b32baca55f58917e9fae1dae59f5fed6394ccdcfc6c"
+    },
+    {
+      "path": "device-execution.json",
+      "bytes": 2011,
+      "sha256": "37615ea742d1245c99f7d0f8f8241963919ea2f43fdcfa6281108e6b0b8e8140"
+    },
+    {
+      "path": "device.log.gz",
+      "bytes": 21442,
+      "sha256": "1e619606de686e103b29df4b3ae8a033578f1f993957b6881f271d2731688bf3"
+    },
+    {
+      "path": "final-audit.json",
+      "bytes": 719,
+      "sha256": "ed67d2f9fd6c9a0b2f161e50fb7f45171e13edbb90209dc4254bbc572ea9da8c"
+    },
+    {
+      "path": "format-lint.json",
+      "bytes": 337,
+      "sha256": "a7a0582be64007c3be5ea5119fc52f5be1d607b5aa3df72bd8d6ac951080af99"
+    },
+    {
+      "path": "format-ranges.json",
+      "bytes": 976,
+      "sha256": "1c22247e59a73aa7619900368c7d4a2407fe348759fb49629378e07f9dcb732e"
+    },
+    {
+      "path": "format-results.json",
+      "bytes": 574,
+      "sha256": "f78efd8b70c5241c460ec64cd3328d69ddad23765baf813cdb1fafbbe904c122"
+    },
+    {
+      "path": "frontend-lint-fix.log",
+      "bytes": 19,
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237"
+    },
+    {
+      "path": "implementation-hashes.json",
+      "bytes": 1081,
+      "sha256": "ce83cefae76e53b5fd478808258d22fd97fc737657d8e2bd9aed6fec2c6dc894"
+    },
+    {
+      "path": "implementation-summary.json",
+      "bytes": 1195,
+      "sha256": "390b1ebd74f687b2f37ca5027d94cb1fa5c6223011f97cfe6dc95191c686eb70"
+    },
+    {
+      "path": "post-validation-concurrent-cleanup.json",
+      "bytes": 754,
+      "sha256": "9047805520b4280d38a72e02e34f4cad7f7db97197eeb4db88f7e19afd693610"
+    },
+    {
+      "path": "process-audit.json",
+      "bytes": 419,
+      "sha256": "80c4cda12950c265dce50d20f1c0c2f1628028ec920f6a1970d89ce295eeb06c"
+    },
+    {
+      "path": "related-manifest-updates.json",
+      "bytes": 4401,
+      "sha256": "ea1e46df0509cc2b03041070e6dd5e75acd488c83c61402eab7f1b2a31c2fadb"
+    },
+    {
+      "path": "runtime-warning-comparison.json",
+      "bytes": 1118,
+      "sha256": "216479c43b8bd4a0a9460d54b28b7c2ecdff1d27449c9ab5f1f263d6b5ab4b9c"
+    },
+    {
+      "path": "simulator-attempt1-build-summary.json",
+      "bytes": 2211,
+      "sha256": "9e995fdad1a06625b6ed1a6247819d965e6d2656eccee0fd9fd003418b755433"
+    },
+    {
+      "path": "simulator-attempt1-diagnostic.json",
+      "bytes": 1759,
+      "sha256": "1e87550bc6b6929865c5ed743ae75914832e1999e7fd4dcbae81cc4e7f5dd21e"
+    },
+    {
+      "path": "simulator-attempt1-execution.json",
+      "bytes": 3018,
+      "sha256": "9aad4d7f585f5d177f18cad0af6fe5503cae871a150d40cbed72592181c0d817"
+    },
+    {
+      "path": "simulator-attempt1.log.gz",
+      "bytes": 21788,
+      "sha256": "32ef307fbfceff6c9081df04c56ddb65edae26e29044db5f494b8e5203f61564"
+    },
+    {
+      "path": "simulator-attempt2-build-summary.json",
+      "bytes": 2109,
+      "sha256": "56d8bfdcafb587a63391c68ce987a6292a10b3db733f76ab95df1f264e075f21"
+    },
+    {
+      "path": "simulator-attempt2-diagnostic.json",
+      "bytes": 3122,
+      "sha256": "a3bb4a265c5aedc94f05b75fd3bbbe9e818db6b124b0558fe3e6d56c327243f4"
+    },
+    {
+      "path": "simulator-attempt2-execution.json",
+      "bytes": 3201,
+      "sha256": "2a35c805c132de871da81a0aab21daa8b5b146e2f337c953f78713d656b2d827"
+    },
+    {
+      "path": "simulator-attempt2.log.gz",
+      "bytes": 19427,
+      "sha256": "fd3f01d3b88c33f8cdbc83a3576ae0a1aa0c9bc505147fcdfaeb40fd386d7898"
+    },
+    {
+      "path": "simulator-build-summary.json",
+      "bytes": 2773,
+      "sha256": "ef9c0c54ace484f662f584e17838fe2fd963300fad6cc77b1a8bfca623640946"
+    },
+    {
+      "path": "simulator-execution.json",
+      "bytes": 3362,
+      "sha256": "b88da71f5054e0da30f4d7b135fd387ebf091af1a4f7aae2f0fc006bd83441df"
+    },
+    {
+      "path": "simulator-summary-export-attempt1.log",
+      "bytes": 210,
+      "sha256": "ee702f97d0b0e2d24574f655dd9adfb23286db791e51d77abaac5be00f7dec4d"
+    },
+    {
+      "path": "simulator-summary.json",
+      "bytes": 1556,
+      "sha256": "d7a15ef33894e73781ad52806442273ccab11f877f044cdf4c4fd940d9abd715"
+    },
+    {
+      "path": "simulator-tests.json",
+      "bytes": 35072,
+      "sha256": "7affa1a2bcdceb45de43b6357f60336d02734d304dc41fee1936b3b323fdab0e"
+    },
+    {
+      "path": "simulator.log.gz",
+      "bytes": 43523,
+      "sha256": "9ce707a605239a2ac2ad8fb8c9acc3bba864f8c00370a859e561efa373732f5e"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 2554,
+      "sha256": "2637132ae0457dc381a2e6df82b987f1bb43751ad7b0f277528f60824791d82c"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+      "bytes": 10296,
+      "sha256": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "bytes": 86806,
+      "sha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "bytes": 10259,
+      "sha256": "168dc0909e676938fcc34d237c8195ff389bb84819fe20ce8aaee863a4600a7d"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "bytes": 2789,
+      "sha256": "b5cfa7e254a8472c02d385498a9fd3a8099e3a049747b81abcfe9cab64c15f9a"
+    },
+    {
+      "path": "sources/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "bytes": 51800,
+      "sha256": "05c7c66e0da4247c34d8d0b9c6dd8805fbbc42515c75df556d006176aa7e5842"
+    },
+    {
+      "path": "sources/iosapp/XBXRCTests/XBXRCTests.swift",
+      "bytes": 202429,
+      "sha256": "9d3f227c57114561f7d3b63d818211a8e4d09645639c6cb3f6ed76be6c5bc2b2"
+    },
+    {
+      "path": "static-checks.json",
+      "bytes": 1276,
+      "sha256": "cc56e723270b43bcedcf570f0f065f8937b3b2a3f1d093e03ad600e78319b65c"
+    },
+    {
+      "path": "swift-format.json",
+      "bytes": 2814,
+      "sha256": "30dc2b50f04daa641233ec9a6fdf1e4c07d13206cf452f712dbb4364ef5607cf"
+    },
+    {
+      "path": "task-changes.diff",
+      "bytes": 21030,
+      "sha256": "7b04fdf64221e1c906f8b59fdefe1f3ef4a225bb829f269ab3a1dea475a053a0"
+    },
+    {
+      "path": "task-input.json",
+      "bytes": 4189,
+      "sha256": "7d8142aa83629f6739e052b9d323fee6dd3f2febba5564cb66d305762b62417a"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 2159,
+      "sha256": "ffd9912f71fbd2a1803be9e2c47a3b6ca4560e3430e59595600b0ef626ba407b"
+    },
+    {
+      "path": "verified-test-cases.json",
+      "bytes": 13168,
+      "sha256": "9abe9620b3b740672182931e0b009cf40c421631d6f5dc8f09b4ebbe6023e346"
+    }
+  ],
+  "trackingDocuments": [
+    {
+      "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+      "sha256": "d0008aa9216bf2fd94ccfa85e97b879e90ab0a07ff20f137504ba4c4ccfeab79"
+    },
+    {
+      "path": "docs/reports/2026-11-20-ios-display-callback.md",
+      "sha256": "95b461f39f8204bd7aa3ba54a7f432d1c3119d9580e385822b7c481b5405051f"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436"
+    }
+  ],
+  "manualValidationStatus": "Validation Pending"
+}

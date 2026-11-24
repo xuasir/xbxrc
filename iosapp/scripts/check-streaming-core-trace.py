@@ -538,6 +538,7 @@ def peer_epoch_report(
 
     ordering_violations: list[dict[str, Any]] = []
     tolerated_reorders: list[dict[str, Any]] = []
+    background_supply_before_first_present: list[dict[str, Any]] = []
     if answers and local_started:
         record_causal_order(
             answers[0],
@@ -628,13 +629,26 @@ def peer_epoch_report(
             tolerated_reorders,
         )
     if display_first_present and steady_media:
-        record_causal_order(
-            display_first_present[0],
-            steady_media[0],
-            "displayFirstPresent < steadyMediaObserved",
-            ordering_violations,
-            tolerated_reorders,
-        )
+        if (
+            payload_for(steady_media[0]).get("presentationActive") is False
+            and row_seq(steady_media[0]) < row_seq(display_first_present[0])
+        ):
+            # 后台接收供给独立推进；首显与 playing 仍由各自完整门槛验收。
+            background_supply_before_first_present.append(
+                {
+                    "steadyMediaObserved": row_reference(steady_media[0]),
+                    "displayFirstPresent": row_reference(display_first_present[0]),
+                    "presentationActive": False,
+                }
+            )
+        else:
+            record_causal_order(
+                display_first_present[0],
+                steady_media[0],
+                "displayFirstPresent < steadyMediaObserved",
+                ordering_violations,
+                tolerated_reorders,
+            )
 
     failed_checks = sorted(name for name, check in checks.items() if not check["passed"])
     return {
@@ -646,6 +660,7 @@ def peer_epoch_report(
         "failedChecks": failed_checks,
         "orderingViolations": ordering_violations,
         "toleratedReorders": tolerated_reorders,
+        "backgroundSupplyBeforeFirstPresent": background_supply_before_first_present,
         "passed": not failed_checks and not ordering_violations,
     }
 

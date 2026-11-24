@@ -1,0 +1,16 @@
+{
+  "result": "Passed",
+  "scope": [
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "iosapp/XBXRCTests/StreamingControlsStateTests.swift",
+    "iosapp/DESIGN.md",
+    "docs/project-task.md"
+  ],
+  "output": ""
+}

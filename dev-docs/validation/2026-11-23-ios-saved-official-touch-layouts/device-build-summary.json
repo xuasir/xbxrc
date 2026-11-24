@@ -1,0 +1,12 @@
+{
+  "result": "Passed",
+  "platform": "iphoneos",
+  "sdk": "iphoneos27.0",
+  "minimumOSVersion": "26.0",
+  "deviceFamilies": [
+    1,
+    2
+  ],
+  "bundleIdentifier": "com.xuasir.xbxrc.ios",
+  "signing": "CODE_SIGNING_ALLOWED=NO"
+}

@@ -1,0 +1,44 @@
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -210,7 +210,7 @@
+     private var saved: XboxSavedTouchLayout? { context.saved(in: library.layouts) }
+     var body: some View {
+         VStack(alignment: .leading, spacing: 8) {
+-            ZStack(alignment: .bottomTrailing) {
++            ZStack(alignment: .trailing) {
+                 Button {
+                     previewContext = context
+                 } label: {
+@@ -225,9 +225,7 @@
+                                 .fixedSize()
+                             }
+                             Spacer(minLength: 8)
+-                            Image(systemName: "chevron.right").font(.caption)
+-                                .foregroundStyle(AppThemePalette.textSecondary)
+-                                .accessibilityIdentifier("game-touch-arrow-\(context.id)")
++
+                         }
+                         VStack(alignment: .leading, spacing: 4) {
+                             GameTouchSourceVersion(
+@@ -245,8 +243,8 @@
+                             .accessibilityIdentifier("game-touch-saved-\(context.id)")
+                         }
+                         .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+-                        .padding(.trailing, saveButtonWidth + 12)
+-                    }
++                    }
++                    .padding(.trailing, saveButtonWidth + 12)
+                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                     .contentShape(Rectangle())
+                 }
+--- a/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+@@ -31,7 +31,7 @@
+     XCTAssertTrue(second.waitForExistence(timeout: 5))
+     XCTAssertGreaterThan(second.frame.minY, previewEntry.frame.minY)
+     let saveButton = app.buttons["game-touch-save-" + prefix + "default"]
+-    XCTAssertGreaterThan(saveButton.frame.midY, previewEntry.frame.midY)
++    XCTAssertEqual(saveButton.frame.midY, previewEntry.frame.midY, accuracy: 1)
+     XCTAssertGreaterThan(saveButton.frame.midX, previewEntry.frame.midX)
+     let card = app.descendants(matching: .any)["game-touch-card-" + prefix + "default"].firstMatch
+     XCTAssertLessThanOrEqual(card.frame.height, 96)

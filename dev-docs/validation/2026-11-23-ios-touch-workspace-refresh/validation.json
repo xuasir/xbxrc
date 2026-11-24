@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-23",
+  "result": "Passed",
+  "passedRuns": {
+    "r3": {
+      "result": "Passed",
+      "passedTests": 1,
+      "failedTests": 0,
+      "summary": "r3-test-summary.json"
+    },
+    "r5-phone": {
+      "result": "Passed",
+      "passedTests": 11,
+      "failedTests": 0,
+      "summary": "r5-phone-test-summary.json"
+    },
+    "r5-ipad": {
+      "result": "Passed",
+      "passedTests": 3,
+      "failedTests": 0,
+      "summary": "r5-ipad-test-summary.json"
+    },
+    "r6-phone": {
+      "result": "Passed",
+      "passedTests": 2,
+      "failedTests": 0,
+      "summary": "r6-phone-test-summary.json"
+    },
+    "r6-ipad": {
+      "result": "Passed",
+      "passedTests": 2,
+      "failedTests": 0,
+      "summary": "r6-ipad-test-summary.json"
+    }
+  },
+  "nativeWindowCasesPerDevice": 8,
+  "nativeWindowCasesTotal": 16,
+  "templateUnitTests": 7,
+  "staticChecks": {
+    "swiftFormat4": "Passed",
+    "swiftFormat2": "Passed",
+    "swiftParse": "Passed",
+    "frontendLintFix": "Passed",
+    "projectPlutil": "Passed",
+    "streamingBoundary": "Passed",
+    "simulatorBuildForTesting": "Passed",
+    "iPhoneOSBuild": "Passed",
+    "scopedDiffCheck": "Passed"
+  },
+  "appSourceHashesMatched": true,
+  "uiTestSourceHashesMatched": true,
+  "temporaryProbeRestored": true,
+  "manualAcceptance": "真机按键大小、拖动手感和本地/云游戏输入体验",
+  "cleanup": "Completed",
+  "retainedArtifactCheck": "Passed",
+  "sharedLedgerTaskRowsCheck": "Passed"
+}

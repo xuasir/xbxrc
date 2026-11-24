@@ -1,0 +1,11 @@
+{
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift": "4d302380996d1a7d7801c73000a0b41c6b8048a9b433b1b5b51a145efe03af15",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": "432d7a3b51385a8b9b8f84173336dae6f5c04068ba3988052bcbde084aea861e",
+  "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "9bca0cdac04b6745924a1ab291e5ee5095e6778c7928d51a4cbdd4c5c6bdb6e8",
+  "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": "1636f41a100bd6fd128161a6c312a1de01bfbe4c291a4c539e13c7729133c4ab",
+  "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift": "85748145a3fd07bdedebbc43193eaf32375cf3eaa4127552753f270f9825720b",
+  "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": "1e1c846c919e24fa8a62f38f6c0febc24312b8a8d775a65222f608d6100993a7",
+  "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "3f94d1a50973b2f56c7db0edf98b48a1ef9078795e71916001f0ab81ebae6fe9",
+  "iosapp/XBXRCTests/StreamingControlsStateTests.swift": "1c21c2bf42da4b78ae67eeacbd1d0ab4e5f32cf6e0c41272beba906d1f125e64",
+  "iosapp/DESIGN.md": "68449d89275ecd80145a6a5205646dbead10a32169a01be8de51ff89afd8adc6"
+}

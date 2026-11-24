@@ -1,0 +1,94 @@
+{
+  "failures": [
+    {
+      "source": "rust-tests.log",
+      "diagnostic_excerpt": [
+        "error[E0603]: function `fixture_context` is private",
+        "error[E0063]: missing field `auth_observer` in initializer of `cloud_access::StreamingAccessContext`",
+        "error[E0063]: missing field `auth_observer` in initializer of `cloud_access::StreamingAccessContext`",
+        "error[E0373]: async block may outlive the current function, but it borrows `rejected`, which is owned by the current function",
+        "error: could not compile `xbox-ios-bridge` (lib test) due to 4 previous errors"
+      ]
+    },
+    {
+      "source": "rust-tests-r2.log",
+      "diagnostic_excerpt": [
+        "thread 'ios-uniffi-small-stack' (13575385) panicked at crates/xbox-ios-bridge/src/streaming/stack_tests.rs:515:57:",
+        "called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: \"Operation not permitted\" }",
+        "thread 'streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack' (13575384) panicked at crates/xbox-ios-bridge/src/streaming/stack_tests.rs:401:10:",
+        "thread 'query_failure::tests::preserves_all_network_subtypes_and_only_allowlisted_codes' (13575313) panicked at crates/xbox-ios-bridge/src/query_failure.rs:216:9:",
+        "  left: None",
+        " right: Some(\"ServerNeverRegistered\")",
+        "thread 'streaming::stack_tests::ffi_home_start_drives_real_session_flow_on_device_stack' (13575329) panicked at crates/xbox-ios-bridge/src/streaming/stack_tests.rs:515:57:",
+        "called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: \"Operation not permitted\" }",
+        "thread 'streaming::stack_tests::ffi_cloud_start_drives_real_session_flow_on_device_stack' (13575328) panicked at crates/xbox-ios-bridge/src/streaming/stack_tests.rs:622:9:",
+        "error: test failed, to rerun pass `-p xbox-ios-bridge --lib`"
+      ]
+    },
+    {
+      "source": "device-build.log",
+      "diagnostic_excerpt": [
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift:37:35: error: cannot find type 'CloudProductDetailRepository' in scope",
+        "     |                                   `- error: cannot find type 'CloudProductDetailRepository' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift:56:27: error: cannot find type 'CloudProductDetailRepository' in scope",
+        "     |                           `- error: cannot find type 'CloudProductDetailRepository' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift:1194:75: error: cannot find 'CloudProductDetailRepository' in scope",
+        "     |                                                                           `- error: cannot find 'CloudProductDetailRepository' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift:51:34: error: cannot find type 'AlbumDownloadFailure' in scope",
+        "    |                                  `- error: cannot find type 'AlbumDownloadFailure' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift:413:62: error: cannot find 'AlbumDownloadFailure' in scope",
+        "    |                                                              `- error: cannot find 'AlbumDownloadFailure' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Profile/XboxAlbumView.swift:415:24: error: cannot find 'AlbumFileDownload' in scope",
+        "    |                        `- error: cannot find 'AlbumFileDownload' in scope",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift:37:35: error: cannot find type 'CloudProductDetailRepository' in scope",
+        "     |                                   `- error: cannot find type 'CloudProductDetailRepository' in scope",
+        "** BUILD FAILED **"
+      ]
+    },
+    {
+      "source": "binding-typecheck.log",
+      "diagnostic_excerpt": [
+        "<unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted",
+        "<unknown>:0: error: unable to load standard library for target 'arm64-apple-macosx27.0.0'"
+      ]
+    },
+    {
+      "source": "binding-typecheck-r2.log",
+      "diagnostic_excerpt": [
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:14:23: error: cannot find type 'RustBuffer' in scope",
+        "     |                       `- error: cannot find type 'RustBuffer' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:38:23: error: cannot find type 'ForeignBytes' in scope",
+        "     |                       `- error: cannot find type 'ForeignBytes' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:65:25: error: cannot find type 'ForeignBytes' in scope",
+        "     |                         `- error: cannot find type 'ForeignBytes' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:67:50: error: cannot find type 'ForeignBytes' in scope",
+        "     |                                                  `- error: cannot find type 'ForeignBytes' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:73:41: error: cannot find type 'ForeignBytes' in scope",
+        "     |                                         `- error: cannot find type 'ForeignBytes' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:77:31: error: cannot find type 'ForeignBytes' in scope",
+        "     |                               `- error: cannot find type 'ForeignBytes' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:63:18: error: type 'FfiConverterByRefBytes' does not conform to protocol 'FfiConverter'",
+        "     |                  |- error: type 'FfiConverterByRefBytes' does not conform to protocol 'FfiConverter'",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:98:22: error: cannot find type 'RustBuffer' in scope",
+        "     |                      `- error: cannot find type 'RustBuffer' in scope",
+        "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift:236:76: error: cannot find type 'RustBuffer' in scope",
+        "     |                                                                            `- error: cannot find type 'RustBuffer' in scope"
+      ]
+    },
+    {
+      "source": "swift-recovery-tests.log",
+      "diagnostic_excerpt": [
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/PCDataParityTests.swift:353:23: error: extra arguments at positions #2, #3 in call",
+        "    |                       `- error: extra arguments at positions #2, #3 in call",
+        "** TEST FAILED **"
+      ]
+    }
+  ],
+  "resolution": [
+    "Completed fixture auth_observer fields and visibility, async ownership, allowlisted ServerNeverRegistered",
+    "Local HTTP tests rerun after approval",
+    "Corrected Xcode group/source references and test closure signature",
+    "Standalone binding typecheck supplied explicit module map and writable module cache"
+  ],
+  "final_failures": 0
+}

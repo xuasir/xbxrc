@@ -1,0 +1,126 @@
+{
+  "task": "2026-11-24-ios-stream-quick-autohide",
+  "result": "Passed",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2444,
+      "sha256": "3f057bff82687f033480accaa3872ab1106b977c35e280b2abe018c888821f15"
+    },
+    {
+      "path": "build-test-excerpts.txt",
+      "bytes": 1559,
+      "sha256": "bf70e0f1b11876b53b3bb4bf5e67c34574390f4a14790f38e731a2c4bc9e8b22"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 1168,
+      "sha256": "0dd9840bbe4cac36f26a936004aa8efee5524c5c09c8e5fe8b85a9181e3b225e"
+    },
+    {
+      "path": "diff-check.json",
+      "bytes": 654,
+      "sha256": "d2b7df9c2b170bd566d421836c8527459f6dd667cf6e5d144ec22321264bd2c5"
+    },
+    {
+      "path": "execution-manifest.json",
+      "bytes": 3561,
+      "sha256": "96552872629cbd17d338d4f30cd67d0a067120b5d0e1fef16b7107d9b1d0db48"
+    },
+    {
+      "path": "failure-diagnostics.json",
+      "bytes": 1164,
+      "sha256": "5ab8e3cd5b09d11cf83043ab6c3a355ffa10a04f15131beee2863b6cf4cf7885"
+    },
+    {
+      "path": "final-swift-format.json",
+      "bytes": 3128,
+      "sha256": "c8852396ddd485bd6c833f2cd5606a37dc008e9facaabf67d698094f54f2b21b"
+    },
+    {
+      "path": "final-test-results.json",
+      "bytes": 3376,
+      "sha256": "05fbadb90c9c98911d01165040a39d93a847a3cfd68b166f50e9aa7557e08c34"
+    },
+    {
+      "path": "final-test-summary.json",
+      "bytes": 945,
+      "sha256": "c0eecbeadfec5ad7f662f7898efe6a0636a1e15b78d37b2151fee5c1f7b0ccb6"
+    },
+    {
+      "path": "hidden-controls-hit-routing.json",
+      "bytes": 1234,
+      "sha256": "2381bdbdb3f027f9325d58eba325e40e43e76888e491a32d8651ed8790b5705d"
+    },
+    {
+      "path": "initial-test-summary.json",
+      "bytes": 1454,
+      "sha256": "ca4e0ba65d9c3380819eab2d88e954a24f5266cc60adebe650a02df96d7b6a5e"
+    },
+    {
+      "path": "native-hit-smoke.swift",
+      "bytes": 3475,
+      "sha256": "0bc5fc7b660bdf175286e50cafa3c6f06364f734df5cf03e7eb9607aaa8e08d4"
+    },
+    {
+      "path": "resume-build-failure-excerpts.txt",
+      "bytes": 880,
+      "sha256": "40f3f86e050c9b366ed2668807293fff5b19efd1e983c3209e65301df95646ba"
+    },
+    {
+      "path": "resume-build-failure-summary.json",
+      "bytes": 409,
+      "sha256": "a89788de6281a5f13b13bf4b999056bebf3cd6d01f476168a97404889a09cfd4"
+    },
+    {
+      "path": "resume-swift-format.json",
+      "bytes": 535,
+      "sha256": "5bd6fe6bd07ba072b588fc39ff36208dfbc5902e60af354e64eb817bf3074ccb"
+    },
+    {
+      "path": "retained-artifacts.json",
+      "bytes": 659,
+      "sha256": "100bbd76235175d38412ca7aaf5dbc6678c465bfeaff929907492bc87e107bc3"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 1165,
+      "sha256": "5a2350c708b13f9b37ed8d40fba804e0221516ec42cf7e9af73adf16b9a7fe11"
+    },
+    {
+      "path": "streaming-quick-buttons-hidden.png",
+      "bytes": 2939563,
+      "sha256": "734f26e2e5118ff3fe0a03fab06d4cd72b9ef64e70adb98137d6f14fd218cd46"
+    },
+    {
+      "path": "streaming-quick-buttons-revealed-portrait.png",
+      "bytes": 2909528,
+      "sha256": "776173f201d7d6d977ed6e4b8157744022b4c7fbb625f7aad645653ce0d0f761"
+    },
+    {
+      "path": "streaming-quick-buttons-revealed.png",
+      "bytes": 2951443,
+      "sha256": "845131fa9bda94aa20c1e78f5cf23fc036c5ec7438c21fba6b23834bb62b19b7"
+    },
+    {
+      "path": "swift-format.json",
+      "bytes": 2445,
+      "sha256": "a7b2925ae2fa98c62e43fc6a87fb1ce1a45b4d5f479a678d33f7b68b7e9b2bc1"
+    },
+    {
+      "path": "task-changes.diff",
+      "bytes": 15847,
+      "sha256": "3b8a3c6212cfb86e302e2484b13367514c2a8c6894518a46e458b6cc0e7b84c9"
+    },
+    {
+      "path": "temporary-source-restoration.json",
+      "bytes": 335,
+      "sha256": "204b45b7a3c64805d61dd678cb3f713a123a0ba908812ea3b04bbf73fc35c5f5"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 1232,
+      "sha256": "031c7c67942e64733fc194db79ef22eadb4c81d9cbdd5264a980612b1b51611a"
+    }
+  ]
+}

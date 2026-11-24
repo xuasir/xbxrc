@@ -1,0 +1,59 @@
+{
+  "task": "2026-11-24-ios-ui-style-consistency",
+  "completed": true,
+  "process_check": {
+    "method": "exec/write_stdin 已返回全部本轮构建、测试和导出操作的完成结果",
+    "completed_xcodebuild_sessions": [
+      {
+        "id": 23111,
+        "exit_code": 65
+      },
+      {
+        "id": 41775,
+        "exit_code": 65
+      },
+      {
+        "id": 46780,
+        "exit_code": 65
+      },
+      {
+        "id": 62454,
+        "exit_code": 0
+      }
+    ],
+    "format_and_export_operations_completed": true,
+    "active_owned_exec_sessions": []
+  },
+  "removed": [
+    {
+      "path": "/private/tmp/xbxrc-ios-ui-style-20261124-pm3_8xx9",
+      "logical_bytes": 717417500,
+      "allocated_bytes": 731185152,
+      "exists_after": false
+    },
+    {
+      "path": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-24-11_11-55-0058.xcresult",
+      "logical_bytes": 2029,
+      "allocated_bytes": 20480,
+      "exists_after": false
+    }
+  ],
+  "removed_logical_bytes": 717419529,
+  "removed_allocated_bytes": 731205632,
+  "available_bytes_before": 49561600000,
+  "available_bytes_after": 50380800000,
+  "available_bytes_change": 819200000,
+  "temporary_test_source_restored": true,
+  "retained": [
+    "9 stable acceptance screenshots",
+    "test and build summaries",
+    "scoped diff and source hashes",
+    "failure diagnoses",
+    "reproducible snapshot probe in evidence directory"
+  ],
+  "shared_caches_retained": [
+    "Xcode SourcePackages WebRTC artifacts",
+    "target/ios Rust build cache",
+    "existing CoreSimulator devices"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "actionTitle" : "Build \"XBXRC\"",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "undefined_arch",
+    "deviceId" : "dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder",
+    "deviceName" : "Any iOS Device",
+    "modelName" : "GenericiOS",
+    "osVersion" : "",
+    "platform" : "iOS"
+  },
+  "endTime" : 1795429411.505,
+  "errorCount" : 0,
+  "errors" : [
+
+  ],
+  "startTime" : 1795429389.657,
+  "status" : "succeeded",
+  "warningCount" : 2,
+  "warnings" : [
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=56&EndingLineNumber=472&StartingColumnNumber=56&StartingLineNumber=472&Timestamp=817122189.666291"
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "DeprecatedDeclaration",
+      "message" : "'+' was deprecated in iOS 26.0: Use string interpolation on `Text` instead: `Text(\"Hello \\(name)\")`",
+      "sourceURL" : "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/Hosts/HostListView.swift#EndingColumnNumber=41&EndingLineNumber=472&StartingColumnNumber=41&StartingLineNumber=472&Timestamp=817122189.666291"
+    }
+  ]
+}

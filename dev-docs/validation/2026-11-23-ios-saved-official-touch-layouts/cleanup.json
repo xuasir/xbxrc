@@ -1,0 +1,27 @@
+{
+  "completedAt": "2026-11-24T12:07:20.759046+08:00",
+  "removedRoots": [
+    "/private/tmp/xbxrc-ios-saved-official-touch-layouts-20261124"
+  ],
+  "removedRounds": [
+    "r1",
+    "r2",
+    "r3"
+  ],
+  "removedFiles": 4909,
+  "removedAllocatedBytes": 2469355520,
+  "removedAllocatedGiB": 2.3,
+  "targetAbsent": true,
+  "relatedBuildTestExportProcesses": [],
+  "freeBytesBefore": 47369687040,
+  "freeBytesAfter": 49795055616,
+  "observedFreeBytesDelta": 2425368576,
+  "retained": [
+    "14 张最终截图",
+    "1 张修改前定位图",
+    "测试摘要与失败诊断",
+    "源指纹与接线差异",
+    "共享 SDK / Rust 缓存",
+    "应用本机布局库与登录"
+  ]
+}

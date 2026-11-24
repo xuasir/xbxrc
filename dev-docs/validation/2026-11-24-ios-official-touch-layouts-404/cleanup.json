@@ -1,0 +1,22 @@
+{
+  "processesEnded": true,
+  "paths": [
+    "/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r1",
+    "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T/ResultBundle_2026-24-11_14-44-0006.xcresult"
+  ],
+  "removedFiles": 11936,
+  "allocatedBytesBeforeCleanup": 1901907968,
+  "freeBytesBefore": 48742400000,
+  "freeBytesAfter": 50790400000,
+  "observedFreeBytesIncrease": 2048000000,
+  "targetsAbsent": true,
+  "temporarySchemeRemoved": true,
+  "temporaryTestProbeRestored": true,
+  "preserved": [
+    "shared Xbox/FFmpeg SDKs",
+    "Rust target caches",
+    "user credentials and application data",
+    "user original clipboard attachment",
+    "final evidence"
+  ]
+}

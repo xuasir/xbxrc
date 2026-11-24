@@ -1,0 +1,262 @@
+[
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+    "ranges": [
+      [
+        68,
+        106
+      ],
+      [
+        212,
+        225
+      ],
+      [
+        916,
+        916
+      ],
+      [
+        918,
+        918
+      ],
+      [
+        1211,
+        1214
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AppInformationPage.swift",
+    "ranges": [
+      [
+        126,
+        126
+      ],
+      [
+        131,
+        132
+      ],
+      [
+        134,
+        134
+      ],
+      [
+        338,
+        356
+      ],
+      [
+        359,
+        360
+      ],
+      [
+        371,
+        371
+      ],
+      [
+        376,
+        376
+      ],
+      [
+        381,
+        382
+      ],
+      [
+        385,
+        387
+      ],
+      [
+        397,
+        397
+      ],
+      [
+        402,
+        402
+      ],
+      [
+        404,
+        406
+      ],
+      [
+        575,
+        575
+      ],
+      [
+        580,
+        582
+      ],
+      [
+        596,
+        597
+      ],
+      [
+        615,
+        615
+      ],
+      [
+        618,
+        620
+      ],
+      [
+        631,
+        631
+      ],
+      [
+        633,
+        639
+      ],
+      [
+        647,
+        647
+      ],
+      [
+        649,
+        662
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift",
+    "ranges": [
+      [
+        134,
+        139
+      ],
+      [
+        141,
+        141
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/App/AppRootView.swift",
+    "ranges": [
+      [
+        88,
+        88
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+    "ranges": [
+      [
+        272,
+        274
+      ],
+      [
+        277,
+        277
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "ranges": [
+      [
+        282,
+        282
+      ],
+      [
+        305,
+        305
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "ranges": [
+      [
+        107,
+        114
+      ],
+      [
+        117,
+        117
+      ],
+      [
+        119,
+        135
+      ],
+      [
+        140,
+        143
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "ranges": [
+      [
+        127,
+        129
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+    "ranges": [
+      [
+        36,
+        42
+      ],
+      [
+        44,
+        44
+      ],
+      [
+        46,
+        46
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "ranges": [
+      [
+        880,
+        966
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "ranges": [
+      [
+        268,
+        268
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "ranges": [
+      [
+        302,
+        302
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

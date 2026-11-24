@@ -1,0 +1,33 @@
+{
+  "completedAt": "2026-11-20T23:34:50.092341+08:00",
+  "removedRoot": "/private/tmp/xbxrc-ios-display-callback-trace-20261120",
+  "removedArtifacts": [
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/analysis-input.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/analysis-summary.log",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/analyze_post_fix.py",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/base-analysis.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/core-analysis.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/evidence-anchors.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/health-summary.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/startup-analysis.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/steady-windows.csv",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/terminal-anchors.json",
+    "/private/tmp/xbxrc-ios-display-callback-trace-20261120/r1/validation.json"
+  ],
+  "removedAllocatedBytes": 6197248,
+  "removedAllocatedMiB": 5.91,
+  "freeBytesBefore": 64307200000,
+  "freeBytesAfter": 64307200000,
+  "freeSpaceDeltaBytes": 0,
+  "processCheck": "本轮所有分析器与核验命令均已返回exitCode；本轮仅执行分析，构建、测试与UI导出进程启动数为0。",
+  "pathVerification": {
+    "temporaryRootAbsent": true,
+    "systemTemporaryRoot": "/private/var/folders/py/9rf6bdds68140y9lkrhkz__40000gn/T",
+    "remainingTaskPaths": []
+  },
+  "retained": [
+    "Downloads原始用户Trace",
+    "runtime-logs/ios逐字节一致副本",
+    "三个gate报告、统计JSON、原始锚点、CSV、分析脚本和源码哈希/片段"
+  ]
+}

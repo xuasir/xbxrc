@@ -118,29 +118,25 @@ struct GameLibraryView: View {
     GeometryReader { geometry in
       AppPageScroll {
         LazyVStack(spacing: 0) {
-          HStack {
-            Text("\(cloudStore.games.count) 款游戏")
-              .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
-            Spacer()
+          if authStore.needsDataSignIn || cloudStore.catalogFailure != nil
+            || cloudStore.metadataState.requestStatus.failure != nil
+          {
+            CloudCatalogStatusView(cloud: cloudStore, showsLoading: false)
+              .padding(.horizontal, AppLayoutPolicy.pageInset)
+              .padding(.bottom, AppLayoutPolicy.pageInset)
           }
-          .padding(.horizontal, AppLayoutPolicy.pageInset)
-          .padding(.vertical, 24)
-
-          CloudCatalogStatusView(cloud: cloudStore)
-            .padding(.horizontal, AppLayoutPolicy.pageInset).padding(
-              .bottom, AppLayoutPolicy.pageInset)
-
           ForEach(collections) { collection in
             LibraryShelf(collection: collection)
               .padding(.bottom, 32)
           }
         }
+        .padding(.top, AppLayoutPolicy.pageInset)
         .padding(.bottom, 24)
         .frame(maxWidth: AppLayoutPolicy.contentMaximumWidth).frame(maxWidth: .infinity)
       }
       .background(.clear)
       .accessibilityIdentifier("cloud-library-scroll")
-      .refreshable {
+      .appRefreshable {
         await refreshCloudLibrary(reason: .pullToRefresh)
       }
     }
@@ -163,7 +159,7 @@ struct GameLibraryView: View {
     switch cloudStore.phase {
     case .idle, .loading:
       GameLibraryLoadingView()
-        .refreshable {
+        .appRefreshable {
           await refreshCloudLibrary(reason: .pullToRefresh)
         }
     case .failed:
@@ -189,7 +185,7 @@ struct GameLibraryView: View {
         content()
           .frame(maxWidth: .infinity, minHeight: geometry.size.height)
       }
-      .refreshable {
+      .appRefreshable {
         await refreshCloudLibrary(reason: .pullToRefresh)
       }
     }

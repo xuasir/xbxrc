@@ -1,0 +1,29 @@
+navigation-anchor-test.log
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination "platform=iOS Simulator,id=C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC" -derivedDataPath /private/tmp/xbxrc-ios-root-top-20261124-nbeq6cio/DerivedData -clonedSourcePackagesDirPath /Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath /private/tmp/xbxrc-ios-root-top-20261124-nbeq6cio/root-navigation-anchor.xcresult "-only-testing:XBXRCTests/CapabilityMigrationTests/testScopedRootViewportGeometry" CODE_SIGNING_ALLOWED=NO
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' passed (4.009 seconds).
+Test Suite 'CapabilityMigrationTests' passed at 2026-11-24 14:35:27.539.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.009 (4.011) seconds
+Test Suite 'XBXRCTests.xctest' passed at 2026-11-24 14:35:27.541.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.009 (4.012) seconds
+Test Suite 'Selected tests' passed at 2026-11-24 14:35:27.541.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.009 (4.014) seconds
+** TEST SUCCEEDED **
+
+ui-acceptance-test.log
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination "platform=iOS Simulator,id=C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC" -derivedDataPath /private/tmp/xbxrc-ios-root-top-20261124-nbeq6cio/DerivedData -clonedSourcePackagesDirPath /Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath /private/tmp/xbxrc-ios-root-top-20261124-nbeq6cio/root-ui-acceptance.xcresult "-only-testing:XBXRCUITests/PCPageInteractionTests/testRootHeadersKeepBrandTitleAndNavigationHeightAligned" CODE_SIGNING_ALLOWED=NO
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' passed (54.630 seconds).
+Test Suite 'PCPageInteractionTests' passed at 2026-11-24 14:39:24.674.
+	 Executed 1 test, with 0 failures (0 unexpected) in 54.630 (54.635) seconds
+Test Suite 'XBXRCUITests.xctest' passed at 2026-11-24 14:39:24.679.
+	 Executed 1 test, with 0 failures (0 unexpected) in 54.630 (54.640) seconds
+Test Suite 'Selected tests' passed at 2026-11-24 14:39:24.682.
+	 Executed 1 test, with 0 failures (0 unexpected) in 54.630 (54.645) seconds
+** TEST SUCCEEDED **

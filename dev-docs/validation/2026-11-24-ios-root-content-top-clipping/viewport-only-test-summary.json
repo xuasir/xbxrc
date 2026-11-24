@@ -1,0 +1,56 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName" : "iPhone 18 Pro",
+        "modelName" : "iPhone 18 Pro",
+        "osBuildNumber" : "24A434",
+        "osVersion" : "27.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 0,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.0",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1795499866.962,
+  "passedTests" : 0,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795499798.535,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 1,
+      "testIdentifierString" : "PCPageInteractionTests/testRootHeadersKeepBrandTitleAndNavigationHeightAligned()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testRootHeadersKeepBrandTitleAndNavigationHeightAligned",
+      "testName" : "testRootHeadersKeepBrandTitleAndNavigationHeightAligned()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+    {
+      "category" : "Common Failures",
+      "impact" : "100% of failures",
+      "text" : "2 runs of 1 test failed with XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")"
+    }
+  ],
+  "totalTestCount" : 1
+}

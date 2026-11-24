@@ -1,0 +1,13 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-mainactor-drain-20261123",
+  "ownedTemporaryPaths": [
+    "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1"
+  ],
+  "cleanupAfter": "所有本轮构建、测试和导出进程完成；按任务清单核验后清理",
+  "retain": [
+    "本轮证据、源码快照与测试/失败诊断",
+    "原始用户Trace及项目副本",
+    "target/ios-webrtc与Rust共享缓存",
+    "其他聊天改动及原暂存状态"
+  ]
+}

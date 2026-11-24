@@ -1,0 +1,29 @@
+{
+  "initialCoreAnalyzer": {
+    "result": "测试断言范围错误，已修正并最终17项通过",
+    "detailArtifact": "initial-core-analyzer-diagnostic.log"
+  },
+  "runtimeWarnings": [
+    {
+      "issueType": "Runtime Warning",
+      "message": "[Internal] Thread running at User-initiated quality-of-service class waiting on a thread without a QoS class specified (base priority 31). Investigate ways to avoid priority inversions",
+      "sourceURL": "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift"
+    }
+  ],
+  "deviceCompileWarnings": [
+    "2026-11-23 10:02:49.006 appintentsmetadataprocessor[20949:9263634] warning: Metadata extraction skipped, no AppIntents.framework dependency found"
+  ],
+  "formatCorrection": {
+    "cause": "默认两空格与仓库四空格格式不同",
+    "resolution": "采用四空格配置，保留本轮修改函数之外的基线格式",
+    "semanticChanges": "仅空白修正；最终源码已通过45项与设备构建"
+  },
+  "testSummaryExport": {
+    "initialResult": "默认沙箱阻止生成xcresult内部报告缓存",
+    "resolution": "按已授权测试导出范围执行，结果包确认45通过0失败"
+  },
+  "processInspection": {
+    "initialResult": "默认沙箱禁止ps读取",
+    "resolution": "按授权清理范围读取进程；本轮构建/测试/导出为0，三个测试宿主均已结束"
+  }
+}

@@ -14,17 +14,22 @@ struct CloudStreamingIdentity: Equatable, Sendable {
 }
 
 protocol CloudGameLaunchResolving: Sendable {
-    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+    func resolve(
+        accessHandle: String, productID: String, serverRegion: String, startup: XboxStreamStartup?
+    ) async throws
         -> CloudStreamingIdentity
 }
 
 struct RustCloudGameLaunchResolver: CloudGameLaunchResolving {
-    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+    func resolve(
+        accessHandle: String, productID: String, serverRegion: String, startup: XboxStreamStartup?
+    ) async throws
         -> CloudStreamingIdentity
     {
         guard
             let game = try await resolveCloudGame(
-                accessHandle: accessHandle, productId: productID, serverRegion: serverRegion),
+                accessHandle: accessHandle, productId: productID, serverRegion: serverRegion,
+                startup: startup),
             let title = game.streamTitleId, !title.isEmpty
         else { throw StreamingRuntimeError.cloudGameUnavailable }
         return CloudStreamingIdentity(
@@ -162,8 +167,18 @@ struct StreamingLaunchRequest: Equatable, Sendable {
     let ownerGeneration: UInt64
     let sessionGeneration: UInt64
     let settings: StreamingSessionSettingsSnapshot
+    let startup: XboxStreamStartup?
 
     var streamTitleID: String { targetID }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.attemptID == rhs.attemptID && lhs.target == rhs.target && lhs.targetID == rhs.targetID
+            && lhs.accessHandle == rhs.accessHandle && lhs.accountID == rhs.accountID
+            && lhs.accountGeneration == rhs.accountGeneration
+            && lhs.ownerGeneration == rhs.ownerGeneration
+            && lhs.sessionGeneration == rhs.sessionGeneration && lhs.settings == rhs.settings
+            && lhs.startup === rhs.startup
+    }
 
     init(
         streamTitleID: String,
@@ -173,7 +188,8 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         settings: StreamingSessionSettingsSnapshot = .standard,
         attemptID: String = UUID().uuidString,
         accountID: String = "",
-        ownerGeneration: UInt64? = nil
+        ownerGeneration: UInt64? = nil,
+        startup: XboxStreamStartup? = nil
     ) {
         self.attemptID = attemptID
         target = .cloud
@@ -184,6 +200,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         self.ownerGeneration = ownerGeneration ?? accountGeneration
         self.sessionGeneration = sessionGeneration
         self.settings = settings
+        self.startup = startup
     }
 
     init(
@@ -195,7 +212,8 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         settings: StreamingSessionSettingsSnapshot = .standard,
         attemptID: String = UUID().uuidString,
         accountID: String = "",
-        ownerGeneration: UInt64? = nil
+        ownerGeneration: UInt64? = nil,
+        startup: XboxStreamStartup? = nil
     ) {
         self.attemptID = attemptID
         self.target = target
@@ -206,6 +224,7 @@ struct StreamingLaunchRequest: Equatable, Sendable {
         self.ownerGeneration = ownerGeneration ?? accountGeneration
         self.sessionGeneration = sessionGeneration
         self.settings = settings
+        self.startup = startup
     }
 }
 
@@ -972,6 +991,7 @@ enum StreamingRuntimeError: LocalizedError, Equatable {
     case invalidStreamTitleID
     case cloudGameUnavailable
     case cloudEntitlementRequired
+    case cloudEntitlementUnconfirmed
     case superseded
     case peerConnectionCreationFailed
     case missingLocalDescription
@@ -988,6 +1008,7 @@ enum StreamingRuntimeError: LocalizedError, Equatable {
         case .invalidStreamTitleID: "串流目标标识无效"
         case .cloudGameUnavailable: "当前云目录暂未提供此游戏的可用启动身份"
         case .cloudEntitlementRequired: "当前账户需要此游戏的云游戏访问权限"
+        case .cloudEntitlementUnconfirmed: "游玩资格待确认，请刷新后重试"
         case .superseded: "串流请求已被新的请求替代"
         case .peerConnectionCreationFailed: "创建 WebRTC 连接失败"
         case .missingLocalDescription: "WebRTC 本地协商描述缺失"

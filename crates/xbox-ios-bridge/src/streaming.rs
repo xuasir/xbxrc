@@ -1,6 +1,6 @@
 use crate::cloud_access::{
-    find_home_host_facts, home_host_facts, load_scoped_stream_access, load_stream_access,
-    replace_home_host_facts, HomeHostFacts, StreamingAccessContext,
+    find_home_host_facts, load_scoped_stream_access, load_stream_access, replace_home_host_facts,
+    HomeHostFacts, StreamingAccessContext,
 };
 use crate::data::extract_home_host_facts;
 use async_trait::async_trait;
@@ -36,12 +36,17 @@ pub use credentials::XboxStreamingAuthUpdate;
 mod startup;
 pub use frame_feedback::{stream_input_frame_feedback_payload, XboxStreamFrameFeedback};
 use startup::IosStartupObserver;
-pub use startup::XboxStartupProgress;
+pub use startup::{
+    create_stream_startup, XboxStartupFailure, XboxStartupFailureKind, XboxStartupProgress,
+    XboxStreamStartup,
+};
 
 const OFFICIAL_XBOX_STUN_URL: &str = "stun:relay.communication.microsoft.com:3478";
 
 #[derive(Debug, Clone, thiserror::Error, uniffi::Error)]
 pub enum XboxStreamingError {
+    #[error("Streaming startup failed: {failure:?}")]
+    Startup { failure: XboxStartupFailure },
     #[error("Invalid streaming argument: {0}")]
     InvalidArgument(String),
     #[error("Streaming session state is invalid: {0}")]
@@ -348,6 +353,7 @@ struct SessionFlowProjection {
     remote_terminal: Option<RemoteSessionTerminal>,
     remote_observation_revision: u64,
     startup_progress: Option<XboxStartupProgress>,
+    startup_phase: Option<xbox_streaming::SessionStartupPhase>,
 }
 
 #[derive(Clone)]
@@ -355,6 +361,14 @@ struct IosSessionFlowProvider {
     credentials: Arc<SessionCredentials>,
     target: Target,
     projection: Arc<StdMutex<SessionFlowProjection>>,
+    console_ready_cache: Arc<
+        Mutex<
+            Option<(
+                std::time::Instant,
+                Vec<xbox_streaming::RemoteConsoleSnapshot>,
+            )>,
+        >,
+    >,
 }
 
 #[async_trait]
@@ -410,11 +424,19 @@ impl SessionFlowProvider for IosSessionFlowProvider {
         let command_id = facts
             .command_id()
             .ok_or_else(|| SessionFlowError::message("homeCommandIdentityMissing"))?;
-        ConsoleApi::new(access.web_uhs, access.web_token)
-            .power_on(command_id)
+        let command_id = command_id.to_owned();
+        self.credentials
+            .run_web_query(|access| {
+                let command_id = command_id.clone();
+                async move {
+                    ConsoleApi::new(access.web_uhs, access.web_token)
+                        .power_on(&command_id)
+                        .await
+                        .map(|response| response.accepted)
+                }
+            })
             .await
-            .map(|response| response.accepted)
-            .map_err(|error| SessionFlowError::message(error.to_string()))
+            .map_err(SessionFlowError::from)
     }
 
     async fn get_remote_consoles(
@@ -423,41 +445,30 @@ impl SessionFlowProvider for IosSessionFlowProvider {
         if self.target != Target::Home {
             return Ok(Vec::new());
         }
-        let access = self
+        let mut cache = self.console_ready_cache.lock().await;
+        if let Some((recorded_at, consoles)) = cache.as_ref() {
+            if recorded_at.elapsed()
+                < xbox_streaming::session::operation::CONSOLE_READY_SMARTGLASS_CACHE_TTL
+            {
+                return Ok(consoles.clone());
+            }
+        }
+        let result = self
             .credentials
-            .access(self.target.as_str(), None, None)
-            .await?;
-        let smartglass = SmartglassApi::new(access.web_uhs.clone(), access.web_token.clone());
-        let refreshed =
-            tokio::time::timeout(Duration::from_secs(8), smartglass.get_consoles_list()).await;
-        let facts = match refreshed {
-            Ok(Ok(response)) => {
-                let facts = extract_home_host_facts(&response);
+            .run_web_query(|access| async move {
+                let response = SmartglassApi::new(access.web_uhs, access.web_token)
+                    .get_consoles_list()
+                    .await?;
+                let facts = extract_home_host_facts(&response)?;
                 replace_home_host_facts(&access.account_id, facts.clone())
-                    .map_err(|error| SessionFlowError::message(error.to_string()))?;
-                facts
-            }
-            Ok(Err(error)) => {
-                let cached = home_host_facts(&access.account_id)
-                    .map_err(|cache_error| SessionFlowError::message(cache_error.to_string()))?;
-                if cached.is_empty() {
-                    return Err(SessionFlowError::message(error.to_string()));
-                }
-                cached
-            }
-            Err(_) => {
-                let cached = home_host_facts(&access.account_id)
-                    .map_err(|error| SessionFlowError::message(error.to_string()))?;
-                if cached.is_empty() {
-                    return Err(SessionFlowError::message("homeConsoleLookupTimeout"));
-                }
-                cached
-            }
-        };
-        Ok(facts
-            .into_iter()
-            .map(|facts| facts.remote_console)
-            .collect())
+                    .map_err(|_| xbox_webapi::WebApiError::parse("home facts unavailable"))?;
+                Ok(home_context::smartglass_ready_candidates(facts))
+            })
+            .await;
+        // PC 以本轮 Smartglass 事实判断就绪，查询失败交给公共就绪等待继续处理。
+        let consoles = result.unwrap_or_default();
+        *cache = Some((std::time::Instant::now(), consoles.clone()));
+        Ok(consoles)
     }
 
     fn on_session_created(
@@ -583,6 +594,7 @@ pub struct XboxStreamSession {
     state: Mutex<SessionState>,
     generation: AtomicU64,
     startup_scope: StdMutex<SessionStartupScope>,
+    startup_context: Option<Arc<XboxStreamStartup>>,
 }
 
 #[uniffi::export]
@@ -598,6 +610,7 @@ pub fn create_stream_session(
         access,
         target_id,
         XboxStreamSettings::default(),
+        None,
     )
 }
 
@@ -610,6 +623,7 @@ pub fn create_scoped_stream_session(
     account_id: String,
     owner_generation: u64,
     settings: XboxStreamSettings,
+    startup: Option<Arc<XboxStreamStartup>>,
 ) -> Result<Arc<XboxStreamSession>, XboxStreamingError> {
     let target = parse_target_type(&target_type)?;
     let target_id = normalize_target_id(&target_id)?;
@@ -626,7 +640,21 @@ pub fn create_scoped_stream_session(
         Some(owner_generation),
     )
     .map_err(|error| XboxStreamingError::Authentication(error.to_string()))?;
-    build_stream_session(access_handle, access, target_id, settings)
+    if startup
+        .as_ref()
+        .is_some_and(|startup| startup.target != target)
+    {
+        return Err(XboxStreamingError::InvalidArgument(
+            "startupTargetMismatch".into(),
+        ));
+    }
+    if startup
+        .as_ref()
+        .is_some_and(|startup| startup.scope.is_cancelled())
+    {
+        return Err(XboxStreamingError::Cancelled(owner_generation));
+    }
+    build_stream_session(access_handle, access, target_id, settings, startup)
 }
 
 fn build_stream_session(
@@ -634,6 +662,7 @@ fn build_stream_session(
     access: StreamingAccessContext,
     target_id: String,
     settings: XboxStreamSettings,
+    startup: Option<Arc<XboxStreamStartup>>,
 ) -> Result<Arc<XboxStreamSession>, XboxStreamingError> {
     let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
     let credentials = Arc::new(SessionCredentials::new(
@@ -641,6 +670,7 @@ fn build_stream_session(
         access.clone(),
     ));
     let flow = SessionFlowService::new(IosSessionFlowProvider {
+        console_ready_cache: Arc::new(Mutex::new(None)),
         credentials: Arc::clone(&credentials),
         target: access.target,
         projection: Arc::clone(&projection),
@@ -656,7 +686,13 @@ fn build_stream_session(
         projection,
         state: Mutex::new(SessionState::new()),
         generation: AtomicU64::new(0),
-        startup_scope: StdMutex::new(SessionStartupScope::default()),
+        startup_scope: StdMutex::new(
+            startup
+                .as_ref()
+                .map(|startup| startup.scope.clone())
+                .unwrap_or_default(),
+        ),
+        startup_context: startup,
     }))
 }
 
@@ -697,10 +733,24 @@ impl XboxStreamSession {
             .unwrap_or_else(|poison| poison.into_inner())
             .clone();
         let observer = IosStartupObserver::new(Arc::clone(&self.projection), generation);
+        let context_timeout = match self.startup_context.as_ref() {
+            Some(startup) => startup.context_timeout(),
+            None => Ok(xbox_streaming::session::RESOLVING_CONTEXT_TIMEOUT),
+        };
+        let context_timeout = match context_timeout {
+            Ok(timeout) => timeout,
+            Err(error) => {
+                self.mark_failed(generation).await?;
+                return Err(startup::map_startup_error(
+                    error,
+                    xbox_streaming::SessionStartupPhase::ResolvingContext,
+                ));
+            }
+        };
         // UniFFI 在 Swift 小栈线程上按值包装 future；重型阶段分别放到堆上。
         let plan = match Box::pin(scope.run(
-            "streamContext",
-            Some(Duration::from_secs(90)),
+            "resolvingContext",
+            Some(context_timeout),
             self.prepare_start_plan(&scope),
         ))
         .await
@@ -708,7 +758,10 @@ impl XboxStreamSession {
             Ok(plan) => plan,
             Err(error) => {
                 self.mark_failed(generation).await?;
-                return Err(map_session_flow_error(error));
+                return Err(startup::map_startup_error(
+                    error,
+                    xbox_streaming::SessionStartupPhase::ResolvingContext,
+                ));
             }
         };
         ensure_generation(&self.generation, generation)?;
@@ -727,8 +780,12 @@ impl XboxStreamSession {
         {
             Ok(execution) => execution,
             Err(error) => {
+                let phase = self
+                    .projection_snapshot()
+                    .and_then(|projection| projection.startup_phase)
+                    .unwrap_or(xbox_streaming::SessionStartupPhase::CreatingSession);
                 self.mark_failed(generation).await?;
-                return Err(map_session_flow_error(error));
+                return Err(startup::map_startup_error(error, phase));
             }
         };
         ensure_generation(&self.generation, generation)?;
@@ -1090,7 +1147,7 @@ impl XboxStreamSession {
             .access(self.access.target.as_str(), None, None)
             .await?;
         // 发现 future 的构造和轮询也保留小栈余量，避免压力随包装向下传递。
-        let access = Box::pin(home_context::resolve_home_context(
+        let mut access = Box::pin(home_context::resolve_home_context(
             access,
             &self.credentials,
             &self.target_id,
@@ -1098,6 +1155,9 @@ impl XboxStreamSession {
             scope,
         ))
         .await?;
+        if access.target.is_home() {
+            access.fallback_turn = home_context::resolve_fallback_turn().await;
+        }
         control_plan(&access, &self.target_id, &self.settings)
             .map_err(|error| SessionFlowError::message(error.to_string()))
     }
@@ -1155,6 +1215,7 @@ impl XboxStreamSession {
         }
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         state.generation = generation;
+        let first_start = state.phase == SessionPhase::Idle;
         state.phase = SessionPhase::Creating;
         state.reset_signaling();
         {
@@ -1162,8 +1223,10 @@ impl XboxStreamSession {
                 .startup_scope
                 .lock()
                 .unwrap_or_else(|poison| poison.into_inner());
-            scope.cancel();
-            *scope = SessionStartupScope::default();
+            if !first_start {
+                scope.cancel();
+                *scope = SessionStartupScope::default();
+            }
         }
         if let Ok(mut projection) = self.projection.lock() {
             *projection = SessionFlowProjection {
@@ -1559,6 +1622,12 @@ fn parse_target_type(value: &str) -> Result<Target, XboxStreamingError> {
 }
 
 fn map_session_flow_error(error: SessionFlowError) -> XboxStreamingError {
+    if error.startup_hint.is_some() || error.message.starts_with("operationCancelled:") {
+        return startup::map_startup_error(
+            error,
+            xbox_streaming::SessionStartupPhase::StartingRuntime,
+        );
+    }
     match error.status {
         Some(status) => XboxStreamingError::Http(status, error.message),
         None => XboxStreamingError::Remote(error.message),
@@ -1628,6 +1697,7 @@ mod stack_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cloud_access::home_host_facts;
     use xbox_streaming::policy::session::SessionAccessContext;
     use xbox_streaming::{HostAddr, Region, RemoteConsoleSnapshot, TurnServer, TurnSource};
 
@@ -1643,6 +1713,7 @@ mod tests {
         );
         let generation = access.owner_generation;
         let provider = IosSessionFlowProvider {
+            console_ready_cache: Arc::new(Mutex::new(None)),
             credentials: Arc::new(SessionCredentials::new(handle, access)),
             target: Target::Cloud,
             projection: Arc::new(StdMutex::new(SessionFlowProjection::default())),
@@ -1689,6 +1760,9 @@ mod tests {
             account_id: account_id.to_string(),
             refresh_token: "refresh-token".to_string(),
             auth_seed: None,
+            auth_session: None,
+            auth_provider: None,
+            auth_observer: None,
             target,
             session_access: SessionAccessContext {
                 gs_token: Some("gs-token".to_string()),
@@ -1748,6 +1822,7 @@ mod tests {
             access,
             "1234abcd".to_string(),
             XboxStreamSettings::default(),
+            None,
         )
         .expect("session");
         *session.plan.lock().unwrap() = Some(plan);
@@ -1828,6 +1903,7 @@ mod tests {
     fn monitor_terminal_projection_rejects_stale_session_callbacks() {
         let projection = Arc::new(StdMutex::new(SessionFlowProjection::default()));
         let provider = IosSessionFlowProvider {
+            console_ready_cache: Arc::new(Mutex::new(None)),
             credentials: Arc::new(SessionCredentials::new(
                 "test-handle".into(),
                 test_access(Target::Cloud),

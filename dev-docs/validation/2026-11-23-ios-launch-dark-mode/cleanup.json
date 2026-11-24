@@ -1,0 +1,41 @@
+{
+  "task": "2026-11-23-ios-launch-dark-mode",
+  "buildProcessExited": true,
+  "captureProcessExited": true,
+  "simulatorCleanup": [
+    {
+      "id": "79FF2297-6C93-409D-8E53-59A51F8B62AD",
+      "name": "iPhone 17e",
+      "terminateExitCode": 3,
+      "uninstallExitCode": 0,
+      "probeRemoved": true,
+      "appearanceRestored": "light",
+      "appContainerAbsent": true
+    },
+    {
+      "id": "754F69D9-2451-47ED-95AB-69596D404F2D",
+      "name": "iPad Pro 11-inch (M5)",
+      "terminateExitCode": 3,
+      "uninstallExitCode": 0,
+      "probeRemoved": true,
+      "appearanceRestored": "light",
+      "appContainerAbsent": true
+    }
+  ],
+  "removedTemporaryPaths": [
+    "/private/tmp/xbxrc-ios-launch-dark-20261123.0QDDC6"
+  ],
+  "temporaryBytesRemoved": 52496242,
+  "temporaryMiBRemoved": 50.06,
+  "freeDiskBytesBefore": 50790400000,
+  "retained": [
+    "6张关键启动截图",
+    "验收摘要",
+    "代码diff",
+    "清理记录",
+    "现有共享Rust/Xcode依赖缓存"
+  ],
+  "temporaryRootAbsent": true,
+  "freeDiskBytesAfter": 51200000000,
+  "freeDiskBytesDelta": 409600000
+}

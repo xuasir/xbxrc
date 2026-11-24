@@ -1,0 +1,19 @@
+{
+  "previousRuntimeWarnings": [
+    {
+      "issueType": "Runtime Warning",
+      "message": "[Internal] Thread running at User-initiated quality-of-service class waiting on a thread without a QoS class specified (base priority 31). Investigate ways to avoid priority inversions",
+      "sourceURL": "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift"
+    }
+  ],
+  "currentRuntimeWarnings": [
+    {
+      "issueType": "Runtime Warning",
+      "message": "[Internal] Thread running at User-initiated quality-of-service class waiting on a thread without a QoS class specified (base priority 31). Investigate ways to avoid priority inversions",
+      "sourceURL": "file:///Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/StreamingFrameFeedbackTests.swift"
+    }
+  ],
+  "sameSourceAndMessage": true,
+  "context": "同一帧反馈测试直接调用实际libwebrtc H264解码器；前轮45项与本轮52项结果包均记录该QoS等待诊断，来源和消息一致",
+  "productionTraceStatus": "实际串流等待栈与帧率收益由新Trace和采样验收"
+}

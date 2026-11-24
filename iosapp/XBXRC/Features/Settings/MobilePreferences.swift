@@ -56,6 +56,7 @@ struct MobilePreferences: Codable, Equatable, Sendable {
     var touchLayoutID = "classic"
     var touchScale = 1.0
     var touchLayoutTemplates: [TouchLayoutTemplate] = []
+    var recentCustomTouchLayoutID: String?
     var picture = MobilePicturePreferences()
     var menuShortcut: MobileMenuShortcut = .menuView
     var customMenuButtons: [MobileShortcutButton]?
@@ -101,6 +102,17 @@ struct MobilePreferences: Codable, Equatable, Sendable {
         // 旧测试目录身份继续回到标准布局，本地模板按有效身份恢复。
         if !value.touchLayoutTemplates.contains(where: { $0.id == value.touchLayoutID }) {
             value.touchLayoutID = TouchLayoutTemplate.standardID
+        }
+        if let recent = TouchLayoutSelection.fromPersistentID(recentCustomTouchLayoutID) {
+            if case .template(let id) = recent,
+                !value.touchLayoutTemplates.contains(where: { $0.id == id })
+            {
+                value.recentCustomTouchLayoutID = nil
+            } else {
+                value.recentCustomTouchLayoutID = recent.persistentID
+            }
+        } else {
+            value.recentCustomTouchLayoutID = nil
         }
         value.touchOpacity = clamp(touchOpacity, 0.2...1, fallback: 0.65)
         value.touchScale = clamp(touchScale, 0.75...1.5, fallback: 1)
@@ -158,6 +170,7 @@ extension MobilePreferences {
         compactPerformanceOverlay = value(.compactPerformanceOverlay, compactPerformanceOverlay)
         gamepadBindings = value(.gamepadBindings, gamepadBindings)
         touchLayoutID = value(.touchLayoutID, touchLayoutID)
+        recentCustomTouchLayoutID = value(.recentCustomTouchLayoutID, recentCustomTouchLayoutID)
         touchScale = value(.touchScale, touchScale)
         touchLayoutTemplates =
             (try? c.decode(

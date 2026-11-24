@@ -1,0 +1,224 @@
+{
+  "files": {
+    "README.md": {
+      "sha256": "772c3aed1e9f739c02d6ad571b3a3096d78e8bfc5601e0f0da95faf30dce1f6e",
+      "bytes": 3796
+    },
+    "annotations-my-overview.png": {
+      "sha256": "a6680bdc79a485f759a3325e3d38237a4900060b23cc96adbe88bb33e909b6b3",
+      "bytes": 2563741
+    },
+    "artifact-manifest.json": {
+      "sha256": "98662e9823af814e63d9f637dcc3e7d0346892770a081b117e5395be8162e05d",
+      "bytes": 6159
+    },
+    "cleanup-plan.json": {
+      "sha256": "5251a7b160ef0c5f5ccdae3623e768c3043724f8e78ab226be602093cf864981",
+      "bytes": 518
+    },
+    "cleanup-precheck.json": {
+      "sha256": "70c92268fdd28d3b05fcb52983e3ca1fab16e23595866144cfd07edd31b86866",
+      "bytes": 351
+    },
+    "cleanup.json": {
+      "sha256": "1bc0d4b055d9523d517b0570bd73ccf6ff8cf9d40d674f96913954c3a0b68bc9",
+      "bytes": 826
+    },
+    "cloud-pull-refresh-recovered.png": {
+      "sha256": "26aec18744e06324ef22c67db7dfea6f0bcaa6846689b9370eb076fa2689621c",
+      "bytes": 2835123
+    },
+    "device-build.json": {
+      "sha256": "7e48c8482c5d41dd48139501ec27a8184ca3cfb5f355c54fd5ccb80d221ea81f",
+      "bytes": 1215
+    },
+    "failure-diagnostics.json": {
+      "sha256": "d51f3ee5b01bb776ea6834a070ff282cd52168dca29e3bc8a04da639a69e6f52",
+      "bytes": 3494
+    },
+    "frontend-lint.log": {
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237",
+      "bytes": 19
+    },
+    "ipad-touch-adjustment-narrow-accessibility.png": {
+      "sha256": "b02d6878299aefe09b275f4dfaeee19fd121dc11530dade4998a8ed34e11f577",
+      "bytes": 196403
+    },
+    "ipad-touch-adjustment-tablet-light.png": {
+      "sha256": "6ba924ecd3ef542c690d3f58ac93109c384162c95b086b81bd481ad820527c41",
+      "bytes": 187232
+    },
+    "ipad-touch-editor-narrow-accessibility.png": {
+      "sha256": "1e231286e3b25bc260f428aa2623d01a6fc9168eca79aa20b264aa3dbe108a26",
+      "bytes": 183706
+    },
+    "ipad-touch-editor-tablet-light.png": {
+      "sha256": "54a6ac5f95ccbb498ca9952fcd972942296cd222efecdd7839a7b11a77116b58",
+      "bytes": 185789
+    },
+    "ipad-touch-template-adjusted-full-viewport.png": {
+      "sha256": "99bbe9018a21f7ab761eb584f95fcaa7a72f26e89f4f891b90cc76c9cbf7dc3d",
+      "bytes": 224735
+    },
+    "ipad-touch-template-landscape-full-viewport.png": {
+      "sha256": "2104d8178dedfc8c1b2915acd5b34cb72abbb6d79a8d4db26094fa890de74201",
+      "bytes": 223246
+    },
+    "ipad-touch-template-portrait-lower-half.png": {
+      "sha256": "e727516ef7df12b1996f80bef06d9eb27cfdee6bd740a095341f5b8a19e9f0e2",
+      "bytes": 205765
+    },
+    "ipad-touch-template-restored-after-relaunch.png": {
+      "sha256": "a7f1281038b32d93950f4928a5d954b7de81927da23614b9eae0de9e1b653b8f",
+      "bytes": 378481
+    },
+    "native-render-probe.swift": {
+      "sha256": "08274bbaee13b325e38b4356adbfde311eeba705d655368231fa8dd7dd736570",
+      "bytes": 4066
+    },
+    "project-check.log": {
+      "sha256": "4198fc20f77f03f6d0a504b6b4423fe93ac219a8d23efff298ddd8974b659f6a",
+      "bytes": 43
+    },
+    "r1-test-summary.json": {
+      "sha256": "2440d333b76dc0a8de49cfcccd6a761759b2891542aec341c451ab14362f2745",
+      "bytes": 3989
+    },
+    "r2-test-summary.json": {
+      "sha256": "2d968344069ab8aad0572a4484c56603383dffeda87e8b90f9ac7a661c6418c1",
+      "bytes": 1521
+    },
+    "r3-test-summary.json": {
+      "sha256": "926cd1e8bd02549169adcfc88809f2c4e5949a0dab1d56d213a99d122d3443ac",
+      "bytes": 991
+    },
+    "r4-ipad-test-summary.json": {
+      "sha256": "8e7466477608fc58126d860cc7464c88871e2b6c3883e867b37eda3a10e76962",
+      "bytes": 1600
+    },
+    "r5-ipad-test-summary.json": {
+      "sha256": "90096109fad9d28d233e2aeee8747e1599008aee8f636683ef4ddeed5267dfc3",
+      "bytes": 1007
+    },
+    "r5-ipad-test-tree.json": {
+      "sha256": "c2450bd75d97c0827db001fc38cfe590b68a38b71e808e4b37e60931a2060921",
+      "bytes": 3491
+    },
+    "r5-phone-test-summary.json": {
+      "sha256": "9ccd2e875db8937b3b94b0aba2989aa05fa2e064df648795ce6db852233208a6",
+      "bytes": 994
+    },
+    "r5-phone-test-tree.json": {
+      "sha256": "a426ee7da8e0dc2fdb1b36833c57f43df50ff1f5ccefee2ea60bcca41bbac437",
+      "bytes": 9048
+    },
+    "r6-ipad-test-summary.json": {
+      "sha256": "b24d72fc4151f0b87e1458b64506153b70d8fc7e90b9c2abf55d906c7da35f53",
+      "bytes": 1007
+    },
+    "r6-phone-test-summary.json": {
+      "sha256": "d90a8e509c60f66f36ff888ee06d965c83c45bdab162ce7c237b4ababa641b6a",
+      "bytes": 991
+    },
+    "retained-images.json": {
+      "sha256": "13a56fab86c7738c4faae8c788f59e7f7ebe9a92691b8b427b0ada9628af89eb",
+      "bytes": 8382
+    },
+    "section-errors-cloud-recovered.png": {
+      "sha256": "ffcf621d6f991daa84474fd98bb141c48e85cd243483a681762409106118eb29",
+      "bytes": 2992317
+    },
+    "section-errors-cloud-source.png": {
+      "sha256": "5aa16e72e317b7b3c18b77b3d5f7b0ed1c85e1773de869f41911f073faf62919",
+      "bytes": 3005514
+    },
+    "source-hashes.json": {
+      "sha256": "e5b025d1f49c7e93abe00bbba83b1480679d8a9f19312d9c9a8c0531cb118ef5",
+      "bytes": 5641
+    },
+    "streaming-boundary.log": {
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571",
+      "bytes": 40
+    },
+    "task-changes.diff": {
+      "sha256": "99d46fa7c8a400e3827ebfa1f1c7efc11614ea6da0f51d03e99b655e640cd8d3",
+      "bytes": 51820
+    },
+    "task-input.json": {
+      "sha256": "f2a601af404e6851011387fddd040864399bd7db29af01b557e63255a5fffab6",
+      "bytes": 369
+    },
+    "task-ledger-rows.md": {
+      "sha256": "874244baa9720b2f5197e871dabfa321d9992b31d1f55875e337014df000df17",
+      "bytes": 1008
+    },
+    "temporary-source-restoration.json": {
+      "sha256": "ed04539d1da94ebd268e1b89aeacacedd61a10b8b32c3a58ec589692ef578760",
+      "bytes": 646
+    },
+    "touch-adjustment-landscape-dark.png": {
+      "sha256": "d59218dff03fcadf3f955ef1df0331dea19532ee682e0d766a15eaebff28d282",
+      "bytes": 156209
+    },
+    "touch-adjustment-narrow-accessibility.png": {
+      "sha256": "ea1f34b883da3e4c2a8b6e08cfd336f83b39f448f464b035f77cb79c0195c16f",
+      "bytes": 135946
+    },
+    "touch-adjustment-phone-dark.png": {
+      "sha256": "d76ec7820c547733eb41115258426143e1cf4079495df9db34f4b02cfc156d1f",
+      "bytes": 112135
+    },
+    "touch-adjustment-tablet-light.png": {
+      "sha256": "d96d37ed543937a9e1ccc3de81a5eeb35016a61920da88053254fe415dddb099",
+      "bytes": 172214
+    },
+    "touch-editor-landscape-dark.png": {
+      "sha256": "634b5f754a9ddb6d0facd0c0b6de6cb84cbc0226df2dca8b91e109f131b60ea8",
+      "bytes": 151005
+    },
+    "touch-editor-narrow-accessibility.png": {
+      "sha256": "2bc177aaacde19cc0fbd0d2bdf399870f051b65705d4ee04057acb771b96be02",
+      "bytes": 122627
+    },
+    "touch-editor-phone-dark.png": {
+      "sha256": "183ec4433ca8c93e0c523b8de21b95c3786d1340d22049c45b59f32032550ad3",
+      "bytes": 110576
+    },
+    "touch-editor-tablet-light.png": {
+      "sha256": "af7bf0d7af9f18c7841e443f54552b94202d05002005b911c1fc5d46c837299b",
+      "bytes": 169622
+    },
+    "touch-template-adjusted-full-viewport.png": {
+      "sha256": "6afc9f51f728532e7e5286f4ce9664a12c8e87900c24f783876286bb6cce1c3d",
+      "bytes": 195874
+    },
+    "touch-template-adjusted-preview.png": {
+      "sha256": "46891505aafedfe13de6e3975401099f6b77a5cfac7bbafec61435eafabfc7f8",
+      "bytes": 432851
+    },
+    "touch-template-dragged.png": {
+      "sha256": "aca73dc5db902fcbed4037a28193a28ce5d352f7764053cfe64081dab7f23088",
+      "bytes": 172740
+    },
+    "touch-template-landscape-full-viewport.png": {
+      "sha256": "2d96cba2807168fbb1a4fb02d03a2af7aae7a2c03f5b7b75fbc4aeec5f82281b",
+      "bytes": 219823
+    },
+    "touch-template-portrait-lower-half.png": {
+      "sha256": "5c729b710370d44cabc9b3aa9b9432627e68ea473833f4f76b1da6006a87fae6",
+      "bytes": 171267
+    },
+    "touch-template-restored-after-relaunch.png": {
+      "sha256": "46891505aafedfe13de6e3975401099f6b77a5cfac7bbafec61435eafabfc7f8",
+      "bytes": 432851
+    },
+    "touch-template-settings.png": {
+      "sha256": "cb593ae2f58244cc8735509bb89dbb4cca05582e19cf27a5c0179d91673b3ac9",
+      "bytes": 2905295
+    },
+    "validation.json": {
+      "sha256": "9a99a9bc5226aac077a0ca0e4edd91d765f8ba8b0c0476d8c995ad7b90fcac06",
+      "bytes": 1490
+    }
+  }
+}

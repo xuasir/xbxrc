@@ -1,0 +1,75 @@
+[
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift",
+    "ranges": [
+      [
+        68,
+        106
+      ],
+      [
+        212,
+        225
+      ],
+      [
+        910,
+        911
+      ],
+      [
+        914,
+        914
+      ],
+      [
+        917,
+        917
+      ],
+      [
+        919,
+        919
+      ],
+      [
+        924,
+        924
+      ],
+      [
+        1212,
+        1215
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift",
+    "ranges": [
+      [
+        98,
+        98
+      ],
+      [
+        135,
+        140
+      ],
+      [
+        142,
+        142
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "ranges": [
+      [
+        453,
+        453
+      ],
+      [
+        456,
+        457
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

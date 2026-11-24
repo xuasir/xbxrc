@@ -1,0 +1,301 @@
+{
+  "taskId": "2026-11-24-ios-pc-http-parity-audit",
+  "verifiedAtUtc": "2026-11-24T07:39:34.129850+00:00",
+  "scope": "静态来源、清单、文档链接与离线依赖复核；未构建、未发起认证网络请求。",
+  "checks": [
+    {
+      "name": "initial inventory checksum matches recorded audit",
+      "result": "PASS"
+    },
+    {
+      "name": "final inventory checksum matches recorded audit",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate sets have 146 identical unique paths",
+      "result": "PASS"
+    },
+    {
+      "name": "all 146 current sources match final audit snapshot",
+      "result": "FAIL"
+    },
+    {
+      "name": "eight preserved concurrent changes match recorded paths",
+      "result": "PASS"
+    },
+    {
+      "name": "all 16 supplementary recorded hashes match",
+      "result": "FAIL"
+    },
+    {
+      "name": "original 18 static assertions are all recorded PASS",
+      "result": "PASS"
+    },
+    {
+      "name": "matrix exactly covers 15 providers and 55 methods",
+      "result": "PASS"
+    },
+    {
+      "name": "managed Swift counts remain 8+1+1+1+1",
+      "result": "PASS"
+    },
+    {
+      "name": "all audit document file links and line starts resolve",
+      "result": "PASS"
+    },
+    {
+      "name": "audit markdown diff whitespace checks pass",
+      "result": "PASS"
+    },
+    {
+      "name": "both downloaded upstream archives still match Cargo.lock",
+      "result": "PASS"
+    },
+    {
+      "name": "three upstream source hashes match archived excerpts",
+      "result": "PASS"
+    },
+    {
+      "name": "ios locked offline dependency trees match prior features and include verifier",
+      "result": "PASS"
+    },
+    {
+      "name": "pc locked offline dependency trees match prior features and include verifier",
+      "result": "PASS"
+    },
+    {
+      "name": "all audited sources stay unchanged throughout closure verification",
+      "result": "FAIL"
+    }
+  ],
+  "passed": 13,
+  "failed": 3,
+  "candidateSourceFiles": 146,
+  "sourceChangesSinceSnapshot": [
+    "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "crates/xbox-ios-bridge/src/touch_layouts/mod.rs",
+    "crates/xbox-touch-layouts/src/bundle.rs",
+    "crates/xbox-touch-layouts/src/catalog.rs"
+  ],
+  "preservedConcurrentPaths": [
+    "crates/xbox-webapi/src/xcloud_api.rs",
+    "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+    "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+    "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+    "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift"
+  ],
+  "originalBaselineUnchangedFiles": 138,
+  "supplementaryHashMatches": 14,
+  "original18StaticAssertions": {
+    "passed": 18,
+    "rerunInThisContinuation": false,
+    "carriedForwardByUnchangedSourceAndDependencyHashes": false
+  },
+  "sharedProviders": 15,
+  "publicAsyncMethods": 55,
+  "swiftManagedCallSites": {
+    "AsyncImage": [
+      {
+        "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+        "line": 551
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+        "line": 82
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/PersonalPages.swift",
+        "line": 242
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+        "line": 153
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+        "line": 272
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+        "line": 174
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+        "line": 243
+      },
+      {
+        "path": "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift",
+        "line": 337
+      }
+    ],
+    "URLSessionImage": [
+      {
+        "path": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift",
+        "line": 178
+      }
+    ],
+    "URLSessionDownload": [
+      {
+        "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+        "line": 331
+      }
+    ],
+    "AVPlayer": [
+      {
+        "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+        "line": 378
+      }
+    ],
+    "ASWebAuthenticationSession": [
+      {
+        "path": "iosapp/XBXRC/Features/Authentication/WebAuthenticationPresenter.swift",
+        "line": 49
+      }
+    ]
+  },
+  "documentLinksChecked": 78,
+  "documentLinkErrors": [],
+  "markdownWhitespaceChecks": [
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/README.md",
+      "exitCode": 1,
+      "clean": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/http-diff-matrix.md",
+      "exitCode": 1,
+      "clean": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/upstream-evidence.md",
+      "exitCode": 1,
+      "clean": true
+    },
+    {
+      "path": "docs/rfcs/2026-11-24-ios-pc-http-parity-audit.md",
+      "exitCode": 1,
+      "clean": true
+    }
+  ],
+  "upstreamArchiveChecks": [
+    {
+      "package": "hyper-util",
+      "version": "0.1.20",
+      "sha256": "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0",
+      "checksumMatchesCargoLock": true
+    },
+    {
+      "package": "reqwest",
+      "version": "0.13.2",
+      "sha256": "ab3f43e3283ab1488b624b44b0e988d0acea0b3214e694730a055cb6b2efa801",
+      "checksumMatchesCargoLock": true
+    }
+  ],
+  "cargoTreeChecks": {
+    "ios": {
+      "package": "xbox-ios-bridge",
+      "target": "aarch64-apple-ios",
+      "offline": true,
+      "locked": true,
+      "featureCommand": [
+        "cargo",
+        "tree",
+        "--offline",
+        "--locked",
+        "-p",
+        "xbox-ios-bridge",
+        "-e",
+        "features",
+        "-i",
+        "reqwest@0.13.2",
+        "--target",
+        "aarch64-apple-ios"
+      ],
+      "normalCommand": [
+        "cargo",
+        "tree",
+        "--offline",
+        "--locked",
+        "-p",
+        "xbox-ios-bridge",
+        "-e",
+        "normal",
+        "--target",
+        "aarch64-apple-ios"
+      ],
+      "featureExitCode": 0,
+      "normalExitCode": 0,
+      "reqwestFeatures": [
+        "__rustls",
+        "__rustls-aws-lc-rs",
+        "__tls",
+        "blocking",
+        "charset",
+        "default",
+        "default-tls",
+        "http2",
+        "json",
+        "rustls",
+        "system-proxy"
+      ],
+      "platformVerifierPresent": true,
+      "appleSecurityFrameworkPresent": true
+    },
+    "pc": {
+      "package": "xbxrc",
+      "target": "aarch64-apple-darwin",
+      "offline": true,
+      "locked": true,
+      "featureCommand": [
+        "cargo",
+        "tree",
+        "--offline",
+        "--locked",
+        "-p",
+        "xbxrc",
+        "-e",
+        "features",
+        "-i",
+        "reqwest@0.13.2",
+        "--target",
+        "aarch64-apple-darwin"
+      ],
+      "normalCommand": [
+        "cargo",
+        "tree",
+        "--offline",
+        "--locked",
+        "-p",
+        "xbxrc",
+        "-e",
+        "normal",
+        "--target",
+        "aarch64-apple-darwin"
+      ],
+      "featureExitCode": 0,
+      "normalExitCode": 0,
+      "reqwestFeatures": [
+        "__rustls",
+        "__rustls-aws-lc-rs",
+        "__tls",
+        "blocking",
+        "charset",
+        "default",
+        "default-tls",
+        "http2",
+        "json",
+        "rustls",
+        "rustls-no-provider",
+        "stream",
+        "system-proxy"
+      ],
+      "platformVerifierPresent": true,
+      "appleSecurityFrameworkPresent": true
+    }
+  },
+  "businessCodeEdits": 0,
+  "temporaryDirectory": "/Users/guo.xu/.pi-desktop/scratch/db44e573-f59b-4da7-a803-2bac40c55af0/ios-pc-http-audit-r2"
+}

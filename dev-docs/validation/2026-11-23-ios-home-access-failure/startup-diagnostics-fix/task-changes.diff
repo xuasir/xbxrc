@@ -1,0 +1,461 @@
+--- a/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+@@ -94,6 +94,7 @@
+     private var retiringPeerRuntime: (any StreamingPeerRuntime)?
+     private var retiringPeerStopTask: Task<Void, Never>?
+     private var preparedSignaling: StreamingPreparedSignaling?
++    private var latestStartupProgress: StreamingStartupProgress?
+     private var remoteIceApplicationTask: Task<Void, Never>?
+     private var credentialUpdateTask: Task<Void, Never>?
+     private var localIceFlushTask: Task<Void, Error>?
+@@ -238,6 +239,7 @@
+         localIceState.reset()
+         reconnectInFlight = false
+         selectedTerminalReason = nil
++        latestStartupProgress = nil
+         pendingLocalCandidates.removeAll(keepingCapacity: true)
+         interactionEventCounts.removeAll(keepingCapacity: true)
+         dataChannelProfilesPendingTrace = false
+@@ -254,7 +256,14 @@
+         audioTrackReady = false
+ 
+         await publish(.creatingSession, generation: request.sessionGeneration)
+-        trace("sessionCreateStarted", dimension: .lifecycle)
++        trace(
++            "sessionCreateStarted",
++            payload: [
++                "powerOnRequested": .bool(request.settings.powerOn),
++                "target": .string(request.target.rawValue),
++            ],
++            dimension: .lifecycle
++        )
+         do {
+             let control = try await controlFactory.createSession(request: request)
+             do {
+@@ -264,12 +273,15 @@
+                 throw error
+             }
+             controlSession = control
++            trace("controlSessionCreated", dimension: .lifecycle)
+             startCredentialUpdates(
+                 control: control, generation: request.sessionGeneration, sink: authSink)
++            trace("signalingPreparationStarted", dimension: .lifecycle)
+             let prepared = try await prepareSignaling(
+                 control: control, generation: request.sessionGeneration, startupSink: startupSink)
+             preparedSignaling = prepared
+             try ensureCurrent(request.sessionGeneration)
++            trace("signalingPreparationSucceeded", dimension: .lifecycle)
+             trace("sessionReady", dimension: .lifecycle)
+ 
+             await publish(.negotiating, generation: request.sessionGeneration)
+@@ -347,12 +359,26 @@
+                 guard let self, await self.isCurrent(generation) else { return }
+                 let progress = await control.startupProgress()
+                 guard !Task.isCancelled, await self.isCurrent(generation) else { return }
++                await self.recordStartupProgress(progress, generation: generation)
+                 await startupSink(generation, progress)
+                 do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+             }
+         }
+         defer { progressTask.cancel() }
+         return try await control.prepareSignaling()
++    }
++
++    private func recordStartupProgress(
++        _ progress: StreamingStartupProgress?, generation: UInt64
++    ) {
++        guard isCurrent(generation), let progress, progress != latestStartupProgress else { return }
++        latestStartupProgress = progress
++        trace(
++            "startupProgressChanged",
++            payload: StreamingStartupDiagnostics.progressPayload(progress),
++            dimension: .lifecycle,
++            importance: .key
++        )
+     }
+ 
+     func stop(
+@@ -1953,6 +1979,21 @@
+         error: Error
+     ) async {
+         guard isCurrent(generation), selectTerminal(reason, generation: generation) else { return }
++        var failure = StreamingStartupDiagnostics.errorPayload(error)
++        failure["reason"] = .string(reason.code)
++        failure["hasControlSession"] = .bool(controlSession != nil)
++        failure["hasPreparedSignaling"] = .bool(preparedSignaling != nil)
++        failure["hasPeerRuntime"] = .bool(peerRuntime != nil)
++        if let latestStartupProgress {
++            failure["startupProgress"] = .object(
++                StreamingStartupDiagnostics.progressPayload(latestStartupProgress))
++        }
++        trace(
++            "sessionFailure",
++            payload: failure,
++            dimension: .lifecycle,
++            importance: .essential
++        )
+         let message: String
+         switch reason {
+         case .sessionFailed, .runtimeFailure:
+--- a/iosapp/XBXRC.xcodeproj/project.pbxproj
++++ b/iosapp/XBXRC.xcodeproj/project.pbxproj
+@@ -7,6 +7,8 @@
+ 	objects = {
+ 
+ /* Begin PBXBuildFile section */
++		C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */; };
++		5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */; };
+ 		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
+ 		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
+ 		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
+@@ -137,6 +139,8 @@
+ /* End PBXContainerItemProxy section */
+ 
+ /* Begin PBXFileReference section */
++		384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnostics.swift; sourceTree = "<group>"; };
++		2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnosticsTests.swift; sourceTree = "<group>"; };
+ 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
+ 		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+ 		B00000000000000000000035 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
+@@ -458,6 +462,7 @@
+ 				B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */,
+ 				B00000000000000000000046 /* StreamingControlsOverlay.swift */,
+ 				B0000000000000000000002E /* StreamSessionActor.swift */,
++				384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */,
+ 				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
+ 				B508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift */,
+ 				B00000000000000000000030 /* StreamingPlayerView.swift */,
+@@ -567,6 +572,7 @@
+ 				B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */,
+ 				B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */,
+ 				B00000000000000000000047 /* StreamingControlsStateTests.swift */,
++				2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */,
+ 			);
+ 			path = XBXRCTests;
+ 			sourceTree = "<group>";
+@@ -827,6 +833,7 @@
+ 				A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */,
+ 				A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */,
+ 				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
++				C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */,
+ 				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
+ 				A508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift in Sources */,
+ 				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
+@@ -878,6 +885,7 @@
+ 				A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */,
+ 				A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */,
+ 				A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */,
++				5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */,
+ 			);
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+--- a/docs/project-task.md
++++ b/docs/project-task.md
+@@ -8,9 +8,10 @@
+ 
+ | ID | Task | Status | Started On | Notes |
+ | --- | --- | --- | --- | --- |
++| 2026-11-23-ios-home-startup-diagnostics | 补齐iOS主机连接失败的启动阶段与脱敏错误 | Validation Pending | 2026-11-23 | simple；用户确认Wi-Fi裸连、唤醒开启且PC可连接；实际powerOn、控制会话、Rust启动阶段及错误分类已接线；10项诊断测试、iPhoneOS构建、格式/解析/会话边界/diff通过，证据归档；相同环境的新Trace接续定位连接阻断。[证据](../dev-docs/validation/2026-11-23-ios-home-access-failure/startup-diagnostics-fix/README.md)。 |
+ | 2026-11-23-ios-display-lifecycle-trace | 复验后台恢复与显示帧供给新日志 | Done | 2026-11-23 | simple；26163行、438.47秒；串流core PASS，基础全流程FAIL仅2项图片候选终结配对。后台补送3.087ms与绑定收敛已观测；95.24秒解码59.94、drawable52.48FPS，730入口丢弃与664ms主线程排队定位，网络/恢复/供给/显示六维、原始锚点及CSV归档；原件保留，分析临时产物清理。[证据](../dev-docs/validation/2026-11-23-ios-display-lifecycle-fresh-trace/README.md)。 |
+-| 2026-11-23-ios-touch-full-viewport | 触屏调整与自定义布局按实际窗口全屏呈现 | In Progress | 2026-11-23 | simple；共用正式Surface和串流视口，独立全屏页面与可收起设置面板；胶囊选择请求系统旋转，保存与草稿边界沿用，原生验收接续。 |
+-| 2026-11-23-ios-pull-refresh-entry | 统一页面下拉刷新并精简重复工具栏动作 | In Progress | 2026-11-23 | simple；我的及子页、个人游戏详情与云目录精简重复顶部刷新，各内容原生下拉和来源失败重试沿用；交互验收接续。 |
++| 2026-11-23-ios-touch-full-viewport | 触屏调整与自定义布局按实际窗口全屏呈现 | Done | 2026-11-23 | simple；正式Surface读取实际全屏窗口，设置可收起；手机胶囊请求旋转，iPad随窗口方向，大字号分行。16组原生快照、7项模板单元、两端拖动/持久化/方向/草稿/保存及设备编译通过；27张截图与本轮清理归档。[证据](../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/README.md)。 |
++| 2026-11-23-ios-pull-refresh-entry | 统一页面下拉刷新并精简重复工具栏动作 | Done | 2026-11-23 | simple；我的及子页、个人游戏详情与云目录统一原生下拉，各来源失败重试及媒体链接更新沿用；下拉恢复、资料页返回、栏目独立重试、iPad宽窗/相册与设备编译通过。[证据](../dev-docs/validation/2026-11-23-ios-touch-workspace-refresh/README.md)。 |
+ | 2026-11-23-ios-touch-orientation-capsule | 触屏预览方向切换采用公共胶囊样式 | Done | 2026-11-23 | simple；两个子页采用公共胶囊，方向行表面已移除；14组绘制、4条UI流程及iPhoneOS构建通过，19张截图归档，临时清理929.52MiB。[证据](../dev-docs/validation/2026-11-23-ios-ui-loading-density/README.md)。 |
+ | 2026-11-23-ios-profile-loading-skeleton | 补齐我的页首次加载骨架 | Done | 2026-11-23 | simple；身份和游戏概况按来源反馈首次加载，部分返回、首次失败与刷新保留快照均通过原生绘制；交互及iPhoneOS构建通过，证据归档及清理完成。[证据](../dev-docs/validation/2026-11-23-ios-ui-loading-density/README.md)。 |
+ | 2026-11-23-ios-cloud-home-request-density | 精简云游戏首页顶部信息和更新反馈 | Done | 2026-11-23 | simple；精简首页总数和全局更新行，各栏目继续反馈更新与失败重试；14组绘制、4条UI流程及设备构建通过，截图和诊断归档，临时产物清理。[证据](../dev-docs/validation/2026-11-23-ios-ui-loading-density/README.md)。 |
+--- /dev/null
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift
+@@ -0,0 +1,159 @@
++import Foundation
++
++enum StreamingStartupDiagnostics {
++    static func errorPayload(_ error: any Error) -> [String: IOSRuntimeTraceValue] {
++        var payload: [String: IOSRuntimeTraceValue] = [
++            "errorType": .string(String(describing: type(of: error)))
++        ]
++        if let error = error as? XboxStreamingError {
++            let message: String?
++            var classifiesNetworkMessage = false
++            switch error {
++            case .InvalidArgument:
++                payload["errorKind"] = "invalidArgument"
++                message = nil
++            case .InvalidState:
++                payload["errorKind"] = "invalidState"
++                message = nil
++            case .Cancelled:
++                payload["errorKind"] = "cancelled"
++                message = nil
++            case .Authentication:
++                payload["errorKind"] = "auth"
++                message = nil
++            case .Network(let value):
++                payload["errorKind"] = "network"
++                message = value
++                classifiesNetworkMessage = true
++            case .Http(let status, let value):
++                payload["errorKind"] = "http"
++                payload["statusCode"] = .integer(Int64(status))
++                message = value
++            case .Parse(let value):
++                payload["errorKind"] = "parse"
++                message = value
++            case .Remote(let value):
++                payload["errorKind"] = "remote"
++                message = value
++                classifiesNetworkMessage = true
++            }
++            payload["bridgeErrorKind"] = payload["errorKind"]
++            // 错误正文仅用于固定分类；身份、凭据和完整地址留在错误对象中。
++            if let message {
++                if classifiesNetworkMessage, let kind = networkKind(in: message) {
++                    payload["errorKind"] = "network"
++                    payload["networkErrorKind"] = .string(kind)
++                    payload["timeout"] = .bool(kind == "timeout")
++                }
++                if let code = startupFailureCode(in: message) {
++                    payload["startupFailureCode"] = .string(code)
++                }
++                if message.localizedCaseInsensitiveContains("ServerNeverRegistered") {
++                    payload["serviceErrorCode"] = "ServerNeverRegistered"
++                }
++            }
++        } else if let error = error as? StreamingRuntimeError {
++            payload["errorKind"] = "runtime"
++            payload["runtimeErrorCode"] = .string(runtimeCode(error))
++        } else if error is CancellationError {
++            payload["errorKind"] = "cancelled"
++        } else {
++            let nsError = error as NSError
++            if nsError.domain == NSURLErrorDomain {
++                payload["errorKind"] = "network"
++                let kind: String
++                switch nsError.code {
++                case NSURLErrorTimedOut: kind = "timeout"
++                case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed: kind = "dns"
++                case NSURLErrorCannotConnectToHost: kind = "connect"
++                case NSURLErrorSecureConnectionFailed: kind = "tls"
++                default: kind = "unknown"
++                }
++                payload["networkErrorKind"] = .string(kind)
++                payload["timeout"] = .bool(kind == "timeout")
++            } else {
++                payload["errorKind"] = "unknown"
++            }
++        }
++        return payload
++    }
++
++    static func progressPayload(
++        _ progress: StreamingStartupProgress
++    ) -> [String: IOSRuntimeTraceValue] {
++        let phases = [
++            "checkingGame", "preparingConsole", "resolvingContext", "creatingSession",
++            "waitingSessionReady", "startingRuntime", "ready", "failed",
++        ]
++        let statuses = ["entered", "succeeded", "failed"]
++        let states = [
++            "Queued", "Provisioning", "ReadyToConnect", "Provisioned", "Failed",
++            "WaitingForResources",
++        ]
++        return [
++            "phase": .string(phases.contains(progress.phase) ? progress.phase : "unknown"),
++            "status": .string(statuses.contains(progress.status) ? progress.status : "unknown"),
++            "streamState": progress.streamState.flatMap { states.contains($0) ? .string($0) : nil }
++                ?? .null,
++            "totalWaitSeconds": integer(progress.totalWaitSeconds),
++            "allocationWaitSeconds": integer(progress.allocationWaitSeconds),
++            "provisioningWaitSeconds": integer(progress.provisioningWaitSeconds),
++            "retryCount": .integer(Int64(progress.retryCount)),
++            "retryLimit": .integer(Int64(progress.retryLimit)),
++        ]
++    }
++
++    private static func integer(_ value: UInt64?) -> IOSRuntimeTraceValue {
++        value.map { .integer(Int64(clamping: $0)) } ?? .null
++    }
++
++    private static func networkKind(in message: String) -> String? {
++        let kinds = [
++            ("DNS resolution failed", "dns"),
++            ("TLS connection failed", "tls"),
++            ("request timed out", "timeout"),
++            ("connection failed", "connect"),
++            ("response body interrupted", "body"),
++            ("request initialization failed", "request"),
++            ("network request failed", "unknown"),
++        ]
++        return kinds.first { message.localizedCaseInsensitiveContains($0.0) }?.1
++    }
++
++    private static func startupFailureCode(in message: String) -> String? {
++        let codes = [
++            ("hostRegistrationRetryExhausted", "hostRegistrationRetryExhausted"),
++            ("hostRemotePlayUnavailable", "hostRemotePlayUnavailable"),
++            ("remoteConsoleWakeCircuitOpen", "hostRemotePlayUnavailable"),
++            ("remoteConsoleNotReady", "hostRemotePlayUnavailable"),
++            ("homeConsoleLookupTimeout", "homeConsoleLookupTimeout"),
++            ("homeTargetContextMissing", "homeTargetContextMissing"),
++            ("homeCommandIdentityMissing", "homeCommandIdentityMissing"),
++            ("homeDiscoveryCredentialRegionChanged", "homeDiscoveryCredentialRegionChanged"),
++            ("homeRecreateReusedSession", "homeRecreateReusedSession"),
++            ("streamingStartTimeout", "streamingStartTimeout"),
++            ("主机跨区域查询超时", "homeDiscoveryTimeout"),
++            ("主机区域查询超时", "homeRegionQueryTimeout"),
++            ("主机可用区域暂不可用", "homeRegionsUnavailable"),
++        ]
++        return codes.first { message.localizedCaseInsensitiveContains($0.0) }?.1
++    }
++
++    private static func runtimeCode(_ error: StreamingRuntimeError) -> String {
++        switch error {
++        case .invalidStreamTitleID: "invalidStreamTitleID"
++        case .cloudGameUnavailable: "cloudGameUnavailable"
++        case .cloudEntitlementRequired: "cloudEntitlementRequired"
++        case .superseded: "superseded"
++        case .peerConnectionCreationFailed: "peerConnectionCreationFailed"
++        case .missingLocalDescription: "missingLocalDescription"
++        case .missingRemoteDescription: "missingRemoteDescription"
++        case .remoteDescriptionTimedOut: "remoteDescriptionTimedOut"
++        case .microphonePermissionDenied: "microphonePermissionDenied"
++        case .microphoneUnavailable: "microphoneUnavailable"
++        case .mediaNegotiationBusy: "mediaNegotiationBusy"
++        case .peerConnectionFailed: "peerConnectionFailed"
++        case .peerConnectionClosed: "peerConnectionClosed"
++        }
++    }
++}
+--- /dev/null
++++ b/iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift
+@@ -0,0 +1,130 @@
++import Foundation
++import XCTest
++
++@testable import XBXRC
++
++final class StreamingStartupDiagnosticsTests: XCTestCase {
++    func testRemoteConnectFailureRetainsCategoryAndProtectsPrivateDetails() throws {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Remote(
++                "Network error: connection failed; targetId=private-host; sessionId=private-session; https://private.example/path Bearer private-credential"
++            )
++        )
++        XCTAssertEqual(payload["errorType"], .string("XboxStreamingError"))
++        XCTAssertEqual(payload["errorKind"], .string("network"))
++        XCTAssertEqual(payload["networkErrorKind"], .string("connect"))
++        XCTAssertEqual(payload["timeout"], .bool(false))
++        try assertPrivateDetailsAbsent(payload)
++    }
++
++    func testHTTPRegistrationFailureRetainsStatusAndFixedHint() throws {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Http(
++                503,
++                "ServerNeverRegistered:targetId=private-host; hint=hostRegistrationRetryExhausted"
++            )
++        )
++        XCTAssertEqual(payload["errorKind"], .string("http"))
++        XCTAssertEqual(payload["statusCode"], .integer(503))
++        XCTAssertEqual(payload["startupFailureCode"], .string("hostRegistrationRetryExhausted"))
++        XCTAssertEqual(payload["serviceErrorCode"], .string("ServerNeverRegistered"))
++        try assertPrivateDetailsAbsent(payload)
++    }
++
++    func testWakeFailureRetainsHostReadinessCode() throws {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Remote(
++                "remoteConsoleWakeCircuitOpen:targetId=private-host;powerState=ConnectedStandby"
++            )
++        )
++        XCTAssertEqual(payload["startupFailureCode"], .string("hostRemotePlayUnavailable"))
++        try assertPrivateDetailsAbsent(payload)
++    }
++
++    func testTypedHTTPStatusKeepsAuthorityOverServiceMessage() {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Http(503, "Network error: connection failed")
++        )
++        XCTAssertEqual(payload["errorKind"], .string("http"))
++        XCTAssertEqual(payload["statusCode"], .integer(503))
++        XCTAssertNil(payload["networkErrorKind"])
++    }
++
++    func testDiscoveryTimeoutRetainsItsOwnStageCode() {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Remote("Parse error: 主机跨区域查询超时，请重试")
++        )
++        XCTAssertEqual(payload["errorKind"], .string("remote"))
++        XCTAssertEqual(payload["startupFailureCode"], .string("homeDiscoveryTimeout"))
++    }
++
++    func testUnknownRemoteFailureKeepsOnlySafeClassification() throws {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            XboxStreamingError.Remote("private-session private-host private-credential")
++        )
++        XCTAssertEqual(payload["errorKind"], .string("remote"))
++        XCTAssertNil(payload["error"])
++        XCTAssertNil(payload["startupFailureCode"])
++        try assertPrivateDetailsAbsent(payload)
++    }
++
++    func testNativeNegotiationTimeoutRetainsRuntimeErrorCode() {
++        let payload = StreamingStartupDiagnostics.errorPayload(
++            StreamingRuntimeError.remoteDescriptionTimedOut
++        )
++        XCTAssertEqual(payload["errorKind"], .string("runtime"))
++        XCTAssertEqual(payload["runtimeErrorCode"], .string("remoteDescriptionTimedOut"))
++    }
++
++    func testFoundationTimeoutAndCancellationKeepDistinctCategories() {
++        let timeout = StreamingStartupDiagnostics.errorPayload(
++            NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
++        )
++        XCTAssertEqual(timeout["networkErrorKind"], .string("timeout"))
++        XCTAssertEqual(timeout["timeout"], .bool(true))
++        let cancelled = StreamingStartupDiagnostics.errorPayload(CancellationError())
++        XCTAssertEqual(cancelled["errorKind"], .string("cancelled"))
++    }
++
++    func testStartupProgressRetainsQueueAndRetryFacts() {
++        let payload = StreamingStartupDiagnostics.progressPayload(
++            StreamingStartupProgress(
++                phase: "waitingSessionReady", streamState: "Provisioning",
++                totalWaitSeconds: 60, allocationWaitSeconds: 10,
++                provisioningWaitSeconds: 50, retryCount: 1, retryLimit: 2
++            )
++        )
++        XCTAssertEqual(payload["phase"], .string("waitingSessionReady"))
++        XCTAssertEqual(payload["streamState"], .string("Provisioning"))
++        XCTAssertEqual(payload["totalWaitSeconds"], .integer(60))
++        XCTAssertEqual(payload["retryCount"], .integer(1))
++        XCTAssertEqual(payload["retryLimit"], .integer(2))
++    }
++
++    func testStartupProgressRejectsUnknownTextAndClampsWaitValues() throws {
++        let payload = StreamingStartupDiagnostics.progressPayload(
++            StreamingStartupProgress(
++                phase: "private-host", status: "private-credential", streamState: "private-session",
++                totalWaitSeconds: UInt64.max
++            )
++        )
++        XCTAssertEqual(payload["phase"], .string("unknown"))
++        XCTAssertEqual(payload["status"], .string("unknown"))
++        XCTAssertEqual(payload["streamState"], .null)
++        XCTAssertEqual(payload["totalWaitSeconds"], .integer(Int64.max))
++        try assertPrivateDetailsAbsent(payload)
++    }
++
++    private func assertPrivateDetailsAbsent(
++        _ payload: [String: IOSRuntimeTraceValue],
++        file: StaticString = #filePath,
++        line: UInt = #line
++    ) throws {
++        let text = String(decoding: try JSONEncoder().encode(payload), as: UTF8.self)
++        for value in [
++            "private-host", "private-session", "private-credential", "https://", "Bearer",
++        ] {
++            XCTAssertFalse(text.contains(value), file: file, line: line)
++        }
++    }
++}

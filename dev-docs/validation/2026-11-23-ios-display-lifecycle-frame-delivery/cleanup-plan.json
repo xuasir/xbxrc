@@ -1,0 +1,173 @@
+{
+  "checkedAt": "2026-11-23T10:21:08.315335+08:00",
+  "roundDirectory": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-lifecycle-20261123",
+  "relatedBuildTestExportProcesses": [],
+  "testHostPidsChecked": [
+    13481,
+    19286,
+    20427
+  ],
+  "aliveTestHostPids": [],
+  "inventory": [
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/DerivedDataDevice",
+      "files": 995,
+      "logicalBytes": 403166853,
+      "allocatedBytes": 406134784
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/DerivedDataSimulator",
+      "files": 1350,
+      "logicalBytes": 483173667,
+      "allocatedBytes": 487194624
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/actor-format.log",
+      "files": 1,
+      "logicalBytes": 139,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/base-analyzer-tests.log",
+      "files": 1,
+      "logicalBytes": 101,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/baseline",
+      "files": 10,
+      "logicalBytes": 671744,
+      "allocatedBytes": 696320
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/core-analyzer-tests.log",
+      "files": 1,
+      "logicalBytes": 116,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/device-build.log",
+      "files": 1,
+      "logicalBytes": 166768,
+      "allocatedBytes": 167936
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/device-build.xcresult",
+      "files": 7,
+      "logicalBytes": 41342,
+      "allocatedBytes": 65536
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-device-build.log",
+      "files": 1,
+      "logicalBytes": 78120,
+      "allocatedBytes": 81920
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-device-build.xcresult",
+      "files": 7,
+      "logicalBytes": 20793,
+      "allocatedBytes": 45056
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-simulator-tests.log",
+      "files": 1,
+      "logicalBytes": 575497,
+      "allocatedBytes": 577536
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-simulator.xcresult",
+      "files": 125,
+      "logicalBytes": 367889,
+      "allocatedBytes": 831488
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/format-ranges.json",
+      "files": 1,
+      "logicalBytes": 656,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/initial-core-analyzer-diagnostic.log",
+      "files": 1,
+      "logicalBytes": 804,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/parse-and-diff.log",
+      "files": 1,
+      "logicalBytes": 81,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/session-boundary.log",
+      "files": 1,
+      "logicalBytes": 40,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/simulator-summary.json",
+      "files": 1,
+      "logicalBytes": 1211,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/simulator-tests.log",
+      "files": 1,
+      "logicalBytes": 712901,
+      "allocatedBytes": 716800
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/simulator.xcresult",
+      "files": 126,
+      "logicalBytes": 673041,
+      "allocatedBytes": 1138688
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/swift-format.json",
+      "files": 1,
+      "logicalBytes": 2814,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/swift-format.log",
+      "files": 1,
+      "logicalBytes": 0,
+      "allocatedBytes": 0
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/track-stable-simulator-tests.log",
+      "files": 1,
+      "logicalBytes": 568040,
+      "allocatedBytes": 569344
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/track-stable-simulator.xcresult",
+      "files": 130,
+      "logicalBytes": 640430,
+      "allocatedBytes": 1118208
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/validated-source-hashes.json",
+      "files": 1,
+      "logicalBytes": 1940,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/work-manifest.json",
+      "files": 1,
+      "logicalBytes": 2728,
+      "allocatedBytes": 4096
+    }
+  ],
+  "allocatedMiB": 857.72,
+  "logicalMiB": 849.6,
+  "freeBytesBefore": 58870185984,
+  "retained": [
+    "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery",
+    "dev-docs/validation/2026-11-20-ios-display-callback",
+    "runtime-logs/ios 原始用户Trace",
+    "target/ios 与 target/ios-webrtc 共享Rust/WebRTC缓存"
+  ]
+}

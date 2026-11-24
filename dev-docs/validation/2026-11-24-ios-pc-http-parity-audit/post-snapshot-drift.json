@@ -1,0 +1,55 @@
+{
+  "observedAtUtc": "2026-11-24T07:41:59.017823+00:00",
+  "snapshotCapturedAtUtc": "2026-11-24T07:09:23.909857+00:00",
+  "scope": "快照后工作树来源变化，仅记录，不纳入快照验收或修改业务代码。",
+  "checkedUniqueSourcePaths": 147,
+  "changedSources": [
+    {
+      "path": "iosapp/XBXRC/Features/Library/GameDetailView.swift",
+      "snapshotSha256": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a",
+      "observedSha256": "25d8eb0be4d5bf37b22562e2cbf011b01aca137ed6925070a651df56e3599b60"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+      "snapshotSha256": "5f2c041404f4684dd153344a6878400681eb9d6699b9eaa8fd9921fcca6d125b",
+      "observedSha256": "2c748c877abce26c011e01a0b2e9121b3170f05996f18ecef5bc4568daf7b305"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/lib.rs",
+      "snapshotSha256": "33667d37c707a6d1f6b44ba9c956e47aa6a19aade9b99e927051d2f5b7862326",
+      "observedSha256": "f4bf4c61bde9b0345da6eecfe2cd59a9f5082530b434e8ffa5f89f86d592fa5d"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/mod.rs",
+      "snapshotSha256": "658c036979a3daddd2e32f6893c24f5e8b8e4a12c5995e55dd855fea52f7575e",
+      "observedSha256": "076f0bdd76bfce71018cc80abb1798517a27cc6156ead5ad487680073e17a128"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/storage_repository.rs",
+      "snapshotSha256": "d7030b20b3a0da76b3eb4b32f4abd17df755e187eeabb0e9cdeaf1fbd58287e5",
+      "observedSha256": "70c593fe4e382d43d2f3b730663994268b49b9bbd41e9661e85579bfe317827c"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/bundle.rs",
+      "snapshotSha256": "6fac870d0223699bfc5e7db4d547857050f2c9600ebb8a411184a280ac661c96",
+      "observedSha256": "4e83d8b0b60d4610b92c5545b4b0605567746b4911f60290b616cc041d673e23"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/catalog.rs",
+      "snapshotSha256": "3d0696f96934d9fe8a4058657764014601f243f6543fc1211872d514895756b5",
+      "observedSha256": "91ce58980a4575a1f10a1504de1b38b1cca21ab2180c3cc62a0ecb187580ca63"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/lib.rs",
+      "snapshotSha256": "3e94af6410d73a027d9e6e8950ded1520950b04ec654d4f472c226e917b59cda",
+      "observedSha256": "caab1cd57fd865ed0b157109be09912851112796a9e8164b5dc616a2ccbad195"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift",
+      "snapshotSha256": "78a555686fc5e24645746659f0c2ab7954278ba8eb6675d460a36096fefec9da",
+      "observedSha256": "cc3d73d1a447eed273a817f657839750a813a1bfca7358e9997f1785d2f888f5"
+    }
+  ],
+  "snapshotIsStillAuthoritativeForThisAudit": true,
+  "workingTreeIsNotLocked": true
+}

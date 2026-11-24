@@ -1,0 +1,44 @@
+[
+  {
+    "name": "banner-game-landscape-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "9AF9F99E-843E-4677-A7CB-5CB22BB6E2C7.png",
+    "timestamp": 1795496316.434
+  },
+  {
+    "name": "banner-game-phone-light.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "897E68F4-1105-4667-9A5C-7DF4CEB7366E.png",
+    "timestamp": 1795496315.949
+  },
+  {
+    "name": "banner-console-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "32D6E7DE-A4C3-4775-B05A-E0E8268EAA4E.png",
+    "timestamp": 1795496315.461
+  },
+  {
+    "name": "banner-cloud-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "3FF34876-DAD6-4675-B9B8-F46422438E92.png",
+    "timestamp": 1795496314.8
+  },
+  {
+    "name": "banner-profile-returned-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "099DFEB2-1B8F-484D-BE22-7574DE5DC9E3.png",
+    "timestamp": 1795496313.826
+  },
+  {
+    "name": "banner-game-phone-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "A3385255-5F74-464D-A691-AF8D2D7C6D13.png",
+    "timestamp": 1795496312.54
+  },
+  {
+    "name": "banner-profile-dark.png",
+    "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+    "original": "9D1752CA-B9A5-4E14-A89C-5F6048E08E28.png",
+    "timestamp": 1795496311.638
+  }
+]

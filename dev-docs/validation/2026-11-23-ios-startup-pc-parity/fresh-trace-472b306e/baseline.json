@@ -1,0 +1,80 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay",
+  "fixRoot": "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix",
+  "executionMode": "single-window",
+  "stage": "diagnostic-fix",
+  "scope": "固定网络分类穿过认证 observer，Query诊断直接消费类型化kind/status/retriable；PC请求配置保持共用",
+  "stagedDiffSha256": "edfd61b2f93ee40a782aa1a3c93d133d39272255d0d662dda3cb69ca7ff2e3ab",
+  "sourceSha256": "bc553db229e09b97898a73ecd36d49b91877672936dac0f5045f10161e187565",
+  "baseline": [
+    {
+      "path": "crates/xbox-ios-bridge/src/auth_session.rs",
+      "sha256": "0ab9c73ea42683f5e8a18e77656190b893085fcbf83fd61f5e38d477e72887dc",
+      "bytes": 12703
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/auth_session.test.rs",
+      "sha256": "0a153b5ac0aeeb7df955d76663c31a09c4563364e3d370af943c4527a2795365",
+      "bytes": 12066
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift",
+      "sha256": "16f787d84e509070555fe5648ca3841cfedb97dcd683d967dd22e0d9e9187f3b",
+      "bytes": 5300
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+      "sha256": "9935e94733eaa683bfe4524bec01407e14b4ee81c771427c712f3f84af97a625",
+      "bytes": 7454
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift",
+      "sha256": "c40f917cf49568519b362e589374ec543900eac6551f49fc205b59db4ff6753c",
+      "bytes": 271975
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h",
+      "sha256": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+      "bytes": 59817
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap",
+      "sha256": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+      "bytes": 146
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "f1a3c50e58baa8a1580ff77a04ebccb6842e0b58d40c15872f26baa1d5217bb8",
+      "bytes": 206810
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "6f6e6aa9afa40d629e516d74f7aafc0ce01e0edce0ba1124ea941b23823ebf2f",
+      "bytes": 162199
+    },
+    {
+      "path": "docs/rfcs/2026-11-23-ios-startup-pc-parity.md",
+      "sha256": "90c6e97cdfb797d66e8cda87d003f49f2aca70deb30ad8954fc9dcec9a89668d",
+      "bytes": 7091
+    },
+    {
+      "path": "dev-docs/validation/2026-11-23-ios-startup-pc-parity/README.md",
+      "sha256": "02f45173cd502e5b22e17628d82e5d29fa34541c83e6db0612b7e72c65a29f77",
+      "bytes": 4063
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming.rs",
+      "sha256": "ff53fb151f420128b243b29397fcce2ae851009c0ad2dd14e133b49d38d21868",
+      "bytes": 90057,
+      "reason": "补齐当前测试模块的home_host_facts导入，恢复全量Rust回归编译"
+    }
+  ],
+  "temporaryArtifacts": [
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/simulator-results.xcresult",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/device-results.xcresult",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/DerivedData",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/DerivedDataSimulator",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/DerivedDataDevice"
+  ]
+}

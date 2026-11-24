@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-23",
+  "sourceHashes": {
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "83b953e796ace04fd598b3d67ccd75947fbffd71eabdb93f2606e11286afbb24",
+    "iosapp/XBXRC/Features/Library/GameLibraryView.swift": "21f16921163a0236fd6644e53d016119b7da46c434f85329ed48387d9eccc4c4",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "90ee3232a071d1577e3a3a2a7a9dcae3b415e94a1d701f0ff24de5cf9e77aa31",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "d2aeef52741ba7ff9098811a6ea9637ec3ffc92c8efc3c1b61c034a60bb3c0e7",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": "b481dcc1f375212d00cc8eafb12c6750fdf37d112dd3e05ee82d001141b1e71a"
+  },
+  "sharedSourceHashes": {
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "cf7a5a150ca86f8b2f658e2944185371fc5fba933a06831a5899f329fc068697",
+    "iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift": "7989e78730357a002a41b0678a448c4281a7852f4ccf8ef38bd58a4ebb249ef8",
+    "iosapp/XBXRC/Shared/Components/SkeletonPulse.swift": "17e647756fab5634727020d8846a721c8bed5b343c2e86e828ad1d78ac27d306"
+  },
+  "temporaryProbeHash": "5ba8fdb286ef5c6e7d72696ee4abb882967f8dc93e2e6f1cd6697dde52ec07c4",
+  "temporarySourceRestored": true,
+  "stagingHashBefore": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "stagingHashAfter": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146"
+}

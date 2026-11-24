@@ -1,0 +1,14 @@
+{
+  "xcode": "27.0 (27A266a)",
+  "sdk": "iOS 27.0",
+  "sourcePackages": "target/ios-webrtc/137.7151.04/SourcePackages",
+  "commands": {
+    "simulator": "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination \"platform=iOS Simulator,id=79FF2297-6C93-409D-8E53-59A51F8B62AD\" -derivedDataPath /private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/DerivedDataSimulator -clonedSourcePackagesDirPath /Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath /private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/track-stable-simulator.xcresult \"-only-testing:XBXRCTests/StreamingDisplayCallbackTests\" \"-only-testing:XBXRCTests/StreamingFrameFeedbackTests\" \"-only-testing:XBXRCTests/TraceReliabilityTests\" \"-only-testing:XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue\" \"-only-testing:XBXRCTests/XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession\" \"-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation\" \"-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreReachesPlayingThroughControlAndPeerStateMachine\" \"-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreStaleStopDoesNotCloseRestartedSession\" \"-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreWaitsForControlReadyAfterFirstFrame\" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO test",
+    "device": "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project iosapp/XBXRC.xcodeproj -scheme XBXRC -configuration Debug -destination generic/platform=iOS -derivedDataPath /private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/DerivedDataDevice -clonedSourcePackagesDirPath /Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages -disableAutomaticPackageResolution -skipPackageUpdates -resultBundlePath /private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-device-build.xcresult CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build"
+  },
+  "rawResultBundles": [
+    "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/track-stable-simulator.xcresult",
+    "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/final-device-build.xcresult"
+  ],
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-lifecycle-20261123"
+}

@@ -1,0 +1,236 @@
+[
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-restored-after-relaunch.png",
+    "sha256": "28ea903afcff16a18d15ea4f4a626bab6f45008548eae36b000da669f3499f58",
+    "bytes": 435276
+  },
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-adjusted-full-viewport.png",
+    "sha256": "dcafff1b4b5a0ed3404a73d76c5983ec7850f02ef40bcd18b4604c5ac0e29fd6",
+    "bytes": 198397
+  },
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-adjusted-preview.png",
+    "sha256": "28ea903afcff16a18d15ea4f4a626bab6f45008548eae36b000da669f3499f58",
+    "bytes": 435276
+  },
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-dragged.png",
+    "sha256": "52a8ee935adb2d9ae5a2841c73bd4f750dc3a29d8f98e02773a117883bb7edc0",
+    "bytes": 174861
+  },
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "touch-template-landscape-full-viewport.png",
+    "sha256": "c7047a0529ac821a8b063efb3cf2c17277d85a04d236834b12b6720ac66cd8e9",
+    "bytes": 215184
+  },
+  {
+    "round": "r1",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "touch-template-portrait-lower-half.png",
+    "sha256": "dfc1d81ff49139a5be62e66a9e0b0a1e21cee10da75c0f6839ad93b0594222e5",
+    "bytes": 172881
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/iphone-streaming-diagnostics-portrait.png",
+    "sha256": "693d46216417280b744e68b401a9d815b0d221461002551b57438c2b3b778f13",
+    "bytes": 3096485
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/iphone-streaming-two-rails-portrait.png",
+    "sha256": "96aa995322eb3c005c05caa46a54b87ba458416d33202cceedfc6242b5b1f089",
+    "bytes": 2985114
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/iphone-streaming-safe-region-1.txt",
+    "sha256": "4fd236e7d60f60d628f2a19cf9ec21916eb2392d942a17750c8ce27d844afbf8",
+    "bytes": 79
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-diagnostics-landscape-right.png",
+    "sha256": "c50c188c928b32cfd959fc73b384e952a5204200a523e5f71d2b12735ca2d1ef",
+    "bytes": 3056564
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-menu-landscape-right.png",
+    "sha256": "d14ea5d133065d6224fc3f9ec60a949b8244f82e48d56e9da70ca0ce051219f2",
+    "bytes": 2987649
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-touch-landscape-right.png",
+    "sha256": "ceb3458e9b04f330a798de4e3891dd5a5ae1d9fc90453cfbcf71c5600dab4759",
+    "bytes": 2948538
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-region-4.txt",
+    "sha256": "8fbd92d2accb5933c1554bbd20843a1efdc2aa933e7d188659c06914ca43df81",
+    "bytes": 79
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-diagnostics-landscape-left.png",
+    "sha256": "dc6c3de0a7305c4253c9c44688b63b41a7c561dcd2a24f296732d30ab7033cf4",
+    "bytes": 3058542
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-menu-landscape-left.png",
+    "sha256": "f549cecd38a33d940f0bd767346c2d42c756831183a972b86ce87e1332b3fe0d",
+    "bytes": 2982737
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-touch-landscape-left.png",
+    "sha256": "b1c84e77791b4acacf25b6743c69469224e2fbfaa05b9c31fbb1afcc8854042b",
+    "bytes": 2943914
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/iphone-streaming-safe-region-3.txt",
+    "sha256": "a3a415bd483537ce8a8b45a40392a9945a385c426f961564328a6127e0736b73",
+    "bytes": 79
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/ipad-streaming-diagnostics-portrait.png",
+    "sha256": "74b3baee45af47a5660ca35f67a304424c485b004147fba800929602e4995fd0",
+    "bytes": 5355217
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/ipad-streaming-two-rails-portrait.png",
+    "sha256": "ce3d05535b4776b7ff3f9cf416fd9314cba5cf377de47279708295f7c2c8f01e",
+    "bytes": 5248313
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+    "archiveFile": "final/ipad-streaming-safe-region-1.txt",
+    "sha256": "4d48b61e1fb8e61afcc5145c29900a69d70794625c165acb1c4ce98978dd747f",
+    "bytes": 82
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-diagnostics-landscape-right.png",
+    "sha256": "fdd2ba0936b9b3a0c16a124e9bccf2cab446b0230e49577d2efa403f7f11f5fd",
+    "bytes": 5331837
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-menu-landscape-right.png",
+    "sha256": "31f0ac457f61885b4864a0d88b1da0c927884714a1dd97907cc35ecc88c43722",
+    "bytes": 5217956
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-touch-landscape-right.png",
+    "sha256": "6ed4969ca2489a156384f25e7b6dc0c4940623d5677c7347b4fd156ee43826b6",
+    "bytes": 5179685
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-region-4.txt",
+    "sha256": "d2517f17e8b172f14ed32340d02263a9b1785c3929f618ebad3b800410585a1a",
+    "bytes": 82
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-diagnostics-landscape-left.png",
+    "sha256": "00f64c01dc2c2d4c897d5276b698ed2d528a15e9bde2fdcffea50acafb9b4ce7",
+    "bytes": 5328173
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-menu-landscape-left.png",
+    "sha256": "7e88f82fd937b5cdd04351d270743b7d1f107b50061ac87848e267e532dab33d",
+    "bytes": 5204910
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-touch-landscape-left.png",
+    "sha256": "74f5075a323d71fffebbe241e9195493ab3d47c034b253c9236f551c317643cb",
+    "bytes": 5167502
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+    "archiveFile": "final/ipad-streaming-safe-region-3.txt",
+    "sha256": "a1d8fd57b14da9ff426465f2865f46c28c35bb5432b050e0a442164f8fec1f21",
+    "bytes": 82
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPhone 18 Pro",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "archiveFile": "final/iphone-streaming-diagnostics-upper-right.png",
+    "sha256": "c5e2e507b89478a16d3bcf1a2cc6d01c0249663790c35385b05edb8ac16715bb",
+    "bytes": 3072871
+  },
+  {
+    "round": "r6-popup",
+    "device": "iPad Pro 13-inch (M5)",
+    "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility()",
+    "archiveFile": "final/ipad-streaming-diagnostics-upper-right.png",
+    "sha256": "919b2638cf5316b7dcbeed552af86cde33387074b45a91632fa75eb0f85ab437",
+    "bytes": 5369541
+  }
+]

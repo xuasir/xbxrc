@@ -3,30 +3,39 @@ import UIKit
 
 enum StreamingControlsRevealSource: String, Sendable {
     case button
+    case blankTap
     case twoFingerInward
     case accessibility
 }
 
-/// 手势覆盖串流宿主，触点落在虚拟手柄上也能唤出菜单。
+/// 空白单击显示快捷入口，双指向内手势覆盖串流宿主并唤出菜单。
 struct StreamingControlsGestureLayer: UIViewRepresentable {
+    var onBlankTap: (@MainActor () -> Void)? = nil
     let onReveal: @MainActor () -> Void
 
     func makeUIView(context: Context) -> GestureView {
         let view = GestureView()
         view.isUserInteractionEnabled = false
         view.onReveal = onReveal
+        view.onBlankTap = onBlankTap
         return view
     }
 
-    func updateUIView(_ view: GestureView, context: Context) { view.onReveal = onReveal }
+    func updateUIView(_ view: GestureView, context: Context) {
+        view.onReveal = onReveal
+        view.onBlankTap = onBlankTap
+    }
 
     static func dismantleUIView(_ view: GestureView, coordinator: ()) { view.detach() }
 
     final class GestureView: UIView, UIGestureRecognizerDelegate {
         var onReveal: (@MainActor () -> Void)?
+        var onBlankTap: (@MainActor () -> Void)?
         private weak var gestureWindow: UIWindow?
         private lazy var gesture = StreamingInwardGestureRecognizer(
             target: self, action: #selector(reveal))
+        private lazy var blankTap = UITapGestureRecognizer(
+            target: self, action: #selector(revealQuickControls))
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -35,14 +44,39 @@ struct StreamingControlsGestureLayer: UIViewRepresentable {
             gesture.cancelsTouchesInView = false
             gesture.delegate = self
             window.addGestureRecognizer(gesture)
+            blankTap.cancelsTouchesInView = false
+            blankTap.delaysTouchesBegan = false
+            blankTap.delaysTouchesEnded = false
+            blankTap.delegate = self
+            window.addGestureRecognizer(blankTap)
             gestureWindow = window
         }
 
         func detach() {
             gestureWindow?.removeGestureRecognizer(gesture)
+            gestureWindow?.removeGestureRecognizer(blankTap)
             gestureWindow = nil
         }
         @objc private func reveal() { if gesture.state == .recognized { onReveal?() } }
+        @objc private func revealQuickControls() {
+            if blankTap.state == .recognized { onBlankTap?() }
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch
+        ) -> Bool {
+            guard gestureRecognizer === blankTap else { return true }
+            guard onBlankTap != nil, bounds.contains(touch.location(in: self)) else {
+                return false
+            }
+            // Surface 已按真实控件命中透传空白，命中它的触点继续交给虚拟手柄。
+            var target = touch.view
+            while let view = target {
+                if view is TouchLayoutSurfaceView || view is UIControl { return false }
+                target = view.superview
+            }
+            return true
+        }
         func gestureRecognizer(
             _ gestureRecognizer: UIGestureRecognizer,
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer

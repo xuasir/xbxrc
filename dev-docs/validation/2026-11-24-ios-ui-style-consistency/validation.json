@@ -1,0 +1,90 @@
+{
+  "task": "2026-11-24-ios-ui-style-consistency",
+  "result": "Passed",
+  "platform": {
+    "device": "iPhone 18 Pro",
+    "runtime": "iOS 27.0",
+    "xcode": "27.0 (27A266a)",
+    "architecture": "arm64",
+    "minimum_deployment": "iOS 26.0",
+    "code_signing_allowed": false
+  },
+  "native_snapshots": {
+    "count": 4,
+    "sizes_points": [
+      [
+        390,
+        844
+      ],
+      [
+        390,
+        844
+      ],
+      [
+        320,
+        1000
+      ],
+      [
+        1024,
+        768
+      ]
+    ],
+    "themes": [
+      "dark",
+      "light",
+      "dark",
+      "light"
+    ],
+    "languages": [
+      "zh-Hans",
+      "zh-Hans",
+      "en",
+      "en"
+    ],
+    "dynamic_type": [
+      "large",
+      "large",
+      "accessibility3",
+      "large"
+    ],
+    "tablet_scope": "iPhone Simulator hosted window at tablet width",
+    "result": "Passed"
+  },
+  "unique_acceptance_tests": [
+    {
+      "test": "CapabilityMigrationTests/testScopedUIStyleSmoke",
+      "result": "Passed",
+      "summary": "final-test-summary.json"
+    },
+    {
+      "test": "PCPageInteractionTests/testCloudBrowseCapsulesKeepSearchAndFiltersBound",
+      "result": "Passed",
+      "summary": "initial-test-summary.json"
+    },
+    {
+      "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum",
+      "result": "Passed",
+      "summary": "final-test-summary.json"
+    },
+    {
+      "test": "TouchLayoutInteractionTests/testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility",
+      "result": "Passed",
+      "summary": "initial-test-summary.json"
+    }
+  ],
+  "checks": {
+    "swift_format_changed_ranges": "Passed",
+    "scoped_git_diff_check": "Passed",
+    "temporary_test_source_restored_to_baseline": true
+  },
+  "visual_review": {
+    "first_line_icon_alignment": "Passed",
+    "capsule_surface_and_tool_alignment": "Passed",
+    "content_tab_underline": "Passed",
+    "narrow_accessibility_navigation_word_wrapping": "Passed",
+    "scrolling_long_options": "Passed",
+    "retained_stable_images": 9
+  },
+  "failure_diagnostics": "failure-diagnostics.json",
+  "temporary_cleanup": "cleanup.json"
+}

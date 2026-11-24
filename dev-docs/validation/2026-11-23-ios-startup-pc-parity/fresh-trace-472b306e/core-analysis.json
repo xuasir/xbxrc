@@ -1,0 +1,206 @@
+{
+  "budget": {
+    "aggregateExports": [
+      "/Users/guo.xu/Downloads/XBXRC-Diagnostic-472B306E-7D42-452E-AC23-844411487EBF.jsonl"
+    ],
+    "pressureNotices": 0,
+    "rawFiles": [],
+    "retention": [],
+    "violations": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "streamingCoreViolations": 8
+  },
+  "gate": "FAIL",
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "files": [
+      "/Users/guo.xu/Downloads/XBXRC-Diagnostic-472B306E-7D42-452E-AC23-844411487EBF.jsonl"
+    ],
+    "firstTsMs": 1795427229155,
+    "lastTsMs": 1795427385029,
+    "profiles": {
+      "production": 78
+    },
+    "rows": 78,
+    "sessions": [
+      "A714E7DB-7930-4D4B-9403-82CFF439B6FC"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "A714E7DB-7930-4D4B-9403-82CFF439B6FC": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 78,
+        "regressions": 0,
+        "rows": 78
+      }
+    },
+    "violations": []
+  },
+  "streamingCore": {
+    "attempts": [
+      {
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "cleanup": {
+          "accessReleased": [],
+          "iceTasksCancelled": [],
+          "peerClosed": [],
+          "remoteSessionClosed": []
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 1,
+        "passed": false,
+        "peerEpochs": [],
+        "playingStates": [],
+        "rows": 3,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "sessionReady": [],
+        "targets": [
+          "cloud"
+        ],
+        "terminal": [],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "anchor": "sessionReady",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "peerEpochs": [],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "terminalSelected",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "iceTasksCancelled",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "peerClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "remoteSessionClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "accessReleased",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          }
+        ]
+      }
+    ],
+    "contextViolations": [],
+    "gate": "FAIL",
+    "generationViolations": [],
+    "rows": 3,
+    "violations": [
+      {
+        "anchor": "sessionReady",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "generation": 1,
+        "peerEpochs": [],
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": "at least 1",
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "terminalSelected",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "iceTasksCancelled",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "peerClosed",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "remoteSessionClosed",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "accessReleased",
+        "attemptId": "75147E8D-EBE0-4FFD-B889-EE67EC19779C",
+        "expected": 1,
+        "generation": 1,
+        "observed": 0,
+        "sessionId": "A714E7DB-7930-4D4B-9403-82CFF439B6FC",
+        "type": "streaming-cleanup-count"
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-23",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-ui-loading-density-20261123",
+  "rounds": [
+    "r1",
+    "r2"
+  ],
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-ui-loading-density",
+  "ownedSources": [
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+    "iosapp/XBXRC/Features/Library/GameLibraryView.swift",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings"
+  ],
+  "stagingHash": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "temporarySourceEdits": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "baselineSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+      "backup": "/private/tmp/xbxrc-ios-ui-loading-density-20261123/r1/CapabilityMigrationTests.original.swift",
+      "marker": "// BEGIN 20261123 Scoped UI loading/density probe",
+      "restoredSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+      "baselineMatchedAfterRestoration": true,
+      "probeRemoved": true,
+      "verifiedMarkerRemoval": true,
+      "captureConfiguration": "transaction.disablesAnimations=true"
+    }
+  ]
+}

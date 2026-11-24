@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "temporaryArtifactsCreated": 0,
+  "temporaryArtifactsRemoved": 0,
+  "freedBytes": 0,
+  "originalLogPreserved": true,
+  "originalLogHashUnchanged": true,
+  "permanentEvidenceRoot": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-home-access-failure/runtime-trace-1795416820801-5",
+  "businessSourceEdits": 0,
+  "buildOrTestProcessesStarted": 0,
+  "analysisCommandsCompleted": true
+}

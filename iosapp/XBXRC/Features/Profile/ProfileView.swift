@@ -32,6 +32,7 @@ private enum MyRoute: AppSecondaryRoute {
 struct ProfileView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var dataStore: XboxDataStore
+    @Environment(\.locale) private var locale
     @State private var path: [MyRoute] = []
     @State private var showsSignOutConfirmation = false
     let isActive: Bool
@@ -44,19 +45,7 @@ struct ProfileView: View {
                     AppAccountRequestNotice()
                     overview
                     if authStore.isSignedIn {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("游戏与成就概况").appFont(.section, weight: .semibold)
-                            if dataStore.historyState(targetID: nil).hasSnapshot {
-                                PersonalLibraryOverview(games: dataStore.games)
-                            }
-                            AppSectionRequestState(
-                                title: "游戏与成就概况",
-                                status: dataStore.historyState(targetID: nil).requestStatus,
-                                identifier: "my-overview"
-                            ) {
-                                await dataStore.refreshLibrary(reason: .manualRetry)
-                            }
-                        }
+                        libraryOverview
                         VStack(spacing: 12) {
                             ForEach(MyRoute.allCases) { route in
                                 NavigationLink(value: route) {
@@ -85,11 +74,6 @@ struct ProfileView: View {
             .toolbar {
                 if authStore.isSignedIn {
                     ToolbarItem(placement: .topBarTrailing) {
-                        AppRefreshButton("刷新账户资料", isRefreshing: authStore.isBusy) {
-                            await refresh()
-                        }
-                    }.sharedBackgroundVisibility(.hidden)
-                    ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             showsSignOutConfirmation = true
                         } label: {
@@ -104,17 +88,10 @@ struct ProfileView: View {
                     }.sharedBackgroundVisibility(.hidden)
                 }
             }
-            .refreshable { await refresh() }
+            .appRefreshable { await refresh() }
             .navigationDestination(for: MyRoute.self) { route in
                 routeContent(route)
                     .appPageToolbar(route.title)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            AppRefreshButton("刷新", isRefreshing: routeIsRefreshing(route)) {
-                                await refresh(route)
-                            }
-                        }.sharedBackgroundVisibility(.hidden)
-                    }
             }
         }
         .environment(\.appPageIsActive, isActive)
@@ -145,27 +122,10 @@ struct ProfileView: View {
         }
     }
 
-    private func routeIsRefreshing(_ route: MyRoute) -> Bool {
-        switch route {
-        case .friends: dataStore.friendsState.isRefreshing
-        case .achievements, .playtime: dataStore.historyState(targetID: nil).isRefreshing
-        case .album: dataStore.albumStates.values.contains { $0.isRefreshing }
-        }
-    }
-
-    private func refresh(_ route: MyRoute? = nil) async {
-        switch route {
-        case nil:
-            async let profile: Void = authStore.refreshProfile(reason: .manualPull)
-            async let library: Void = dataStore.refreshLibrary(reason: .manualPull)
-            _ = await (profile, library)
-        case .friends: await dataStore.loadFriends(refresh: true)
-        case .achievements, .playtime: await dataStore.loadHistory(refresh: true)
-        case .album:
-            async let screenshots: Void = dataStore.loadAlbum(kind: .screenshot, refresh: true)
-            async let clips: Void = dataStore.loadAlbum(kind: .clip, refresh: true)
-            _ = await (screenshots, clips)
-        }
+    private func refresh() async {
+        async let profile: Void = authStore.refreshProfile(reason: .manualPull)
+        async let library: Void = dataStore.refreshLibrary(reason: .manualPull)
+        _ = await (profile, library)
     }
 
     private func profileSourceTitle(_ source: XboxProfileSource) -> String {
@@ -179,36 +139,37 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var overview: some View {
-        if let profile = authStore.profile, authStore.isSignedIn {
-            PersonalIdentityHero(
-                person: XboxFriendSummary(
-                    id: profile.xuid ?? "self", displayName: profile.displayName,
-                    gamertag: profile.gamertag,
-                    avatarURL: XboxImageURL.resolve(profile.displayPictureUrl),
-                    gamerscore: profile.gamerScore, presenceState: profile.presenceState,
-                    presenceText: profile.richPresence ?? profile.currentTitleName),
-                currentTitle: profile.currentTitleName, friendCount: profile.friendCount,
-                followingCount: profile.followingCount, followersCount: profile.followersCount)
+        if authStore.isSignedIn {
+            let identityState = authStore.profileSectionStates[.identity] ?? XboxSingleDataState()
+            // 身份来源完成后展示头像与名称，其他来源可先返回数量和在线状态。
+            let showsSkeleton =
+                !identityState.hasSnapshot && identityState.failure == nil
+                && !authStore.needsDataSignIn
+                && (identityState.phase == .idle || identityState.phase == .loading)
+            if showsSkeleton {
+                ProfileIdentitySkeleton()
+            } else if identityState.hasSnapshot, let profile = authStore.profile {
+                PersonalIdentityHero(
+                    person: XboxFriendSummary(
+                        id: profile.xuid ?? "self", displayName: profile.displayName,
+                        gamertag: profile.gamertag,
+                        avatarURL: XboxImageURL.resolve(profile.displayPictureUrl),
+                        gamerscore: profile.gamerScore, presenceState: profile.presenceState,
+                        presenceText: profile.richPresence ?? profile.currentTitleName),
+                    currentTitle: profile.currentTitleName, friendCount: profile.friendCount,
+                    followingCount: profile.followingCount, followersCount: profile.followersCount)
+            }
             ForEach([XboxProfileSource.identity, .presence, .friends, .social], id: \.self) {
                 source in
-                AppSectionRequestState(
-                    title: profileSourceTitle(source),
-                    status: (authStore.profileSectionStates[source] ?? XboxSingleDataState())
-                        .requestStatus,
-                    identifier: "profile-\(source)"
-                ) {
-                    await authStore.refreshProfileSource(source)
-                }
-            }
-        } else if authStore.isSignedIn {
-            VStack(alignment: .leading, spacing: 8) {
-                AppSectionRequestState(
-                    title: "账户资料",
-                    status: (authStore.profileSectionStates[.identity]
-                        ?? XboxSingleDataState(phase: .loading, isRefreshing: true)).requestStatus,
-                    identifier: "profile-identity"
-                ) {
-                    await authStore.refreshProfileSource(.identity)
+                let status = (authStore.profileSectionStates[source] ?? XboxSingleDataState())
+                    .requestStatus
+                if !showsSkeleton || status.failure != nil {
+                    AppSectionRequestState(
+                        title: profileSourceTitle(source), status: status,
+                        identifier: "profile-\(source)"
+                    ) {
+                        await authStore.refreshProfileSource(source)
+                    }
                 }
             }
         } else {
@@ -216,5 +177,72 @@ struct ProfileView: View {
                 Task { await authStore.retry() }
             }.frame(maxWidth: .infinity, minHeight: 280)
         }
+    }
+
+    private var libraryOverview: some View {
+        let state = dataStore.historyState(targetID: nil)
+        let showsSkeleton =
+            !state.hasSnapshot && state.failure == nil
+            && !authStore.needsDataSignIn && (state.phase == .idle || state.phase == .loading)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("游戏与成就概况").appFont(.section, weight: .semibold)
+            if state.hasSnapshot {
+                PersonalLibraryOverview(games: dataStore.games)
+            } else if showsSkeleton {
+                AppMetricGrid {
+                    ProfileMetricSkeleton()
+                    ProfileMetricSkeleton()
+                }
+                .skeletonPulse(
+                    accessibilityLabel: appLocalizedString("正在载入游戏与成就概况", locale: locale)
+                )
+                .accessibilityIdentifier("my-overview-skeleton")
+            }
+            if !showsSkeleton {
+                AppSectionRequestState(
+                    title: "游戏与成就概况", status: state.requestStatus,
+                    identifier: "my-overview"
+                ) {
+                    await dataStore.refreshLibrary(reason: .manualRetry)
+                }
+            }
+        }
+    }
+}
+
+private struct ProfileIdentitySkeleton: View {
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            let layout =
+                textSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+            layout {
+                Circle().fill(.quaternary).frame(width: 72, height: 72)
+                VStack(alignment: .leading, spacing: 8) {
+                    Capsule().fill(.quaternary).frame(width: 160, height: 26)
+                    Capsule().fill(.quaternary).frame(width: 120, height: 14)
+                }
+            }
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(0..<4, id: \.self) { _ in ProfileMetricSkeleton() }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 144, alignment: .bottomLeading)
+        .skeletonPulse(accessibilityLabel: appLocalizedString("正在载入账户资料", locale: locale))
+        .accessibilityIdentifier("my-identity-skeleton")
+    }
+}
+
+private struct ProfileMetricSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppLayoutPolicy.detailSpacing) {
+            Capsule().fill(.quaternary).frame(maxWidth: 56).frame(height: 18)
+            Capsule().fill(.quaternary).frame(maxWidth: 44).frame(height: 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

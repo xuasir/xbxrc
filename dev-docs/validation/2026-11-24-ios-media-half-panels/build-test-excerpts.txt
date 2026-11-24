@@ -1,0 +1,17 @@
+media-verified-build.log
+Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' passed (62.413 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 62.413 (62.427) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 62.413 (62.428) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 62.413 (62.432) seconds
+** TEST SUCCEEDED **
+completed-build.log
+Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' started.
+Test Case '-[XBXRCUITests.PCPageInteractionTests testMediaHalfPanelSmoke]' failed (41.497 seconds).
+	 Executed 1 test, with 1 failure (0 unexpected) in 41.497 (41.515) seconds
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' started.
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (20.290 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 20.290 (20.291) seconds
+	 Executed 2 tests, with 1 failure (0 unexpected) in 61.786 (61.811) seconds
+	 Executed 2 tests, with 1 failure (0 unexpected) in 61.786 (61.819) seconds
+** TEST FAILED **

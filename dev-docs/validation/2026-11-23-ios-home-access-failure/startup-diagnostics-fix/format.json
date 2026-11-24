@@ -1,0 +1,55 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "lineRanges": [
+      [
+        97,
+        97
+      ],
+      [
+        242,
+        242
+      ],
+      [
+        259,
+        266
+      ],
+      [
+        276,
+        276
+      ],
+      [
+        279,
+        279
+      ],
+      [
+        284,
+        284
+      ],
+      [
+        362,
+        362
+      ],
+      [
+        369,
+        381
+      ],
+      [
+        1982,
+        1996
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  }
+]

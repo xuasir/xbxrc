@@ -1,0 +1,371 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 16504239,
+        "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Downloads",
+        "files": 1,
+        "maxFiles": 6,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "coverage": {
+    "flows": {
+      "library": {
+        "checks": [
+          {
+            "alternatives": [
+              "libraryPageAppeared"
+            ],
+            "label": "library page",
+            "observed": [
+              "libraryPageAppeared"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreStarted"
+            ],
+            "label": "cache restore start",
+            "observed": [
+              "cacheRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreFailed",
+              "cacheRestoreHit",
+              "cacheRestoreMiss",
+              "cacheRestoreRejected",
+              "cacheRestoreSkipped"
+            ],
+            "label": "cache restore outcome",
+            "observed": [
+              "cacheRestoreHit",
+              "cacheRestoreSkipped"
+            ]
+          },
+          {
+            "alternatives": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ],
+            "label": "catalog activation decision",
+            "observed": [
+              "catalogRefreshStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "contentPresented",
+              "skeletonPresented"
+            ],
+            "label": "library presentation",
+            "observed": [
+              "contentPresented"
+            ]
+          }
+        ],
+        "required": true
+      },
+      "startup": {
+        "checks": [
+          {
+            "alternatives": [
+              "appLaunchStarted"
+            ],
+            "label": "app launch",
+            "observed": [
+              "appLaunchStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreStarted"
+            ],
+            "label": "auth restore start",
+            "observed": [
+              "authRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreFailed",
+              "authRestoreSucceeded"
+            ],
+            "label": "auth restore outcome",
+            "observed": [
+              "authRestoreSucceeded"
+            ]
+          }
+        ],
+        "required": true
+      }
+    },
+    "missingRequiredAnchors": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "coverageViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 2,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "gate": "FAIL",
+  "pairing": {
+    "evaluatedStarts": 14,
+    "violations": [
+      {
+        "expectedOutcomes": [
+          "imageCandidateFailed",
+          "imageCandidateSucceeded"
+        ],
+        "operationId": "E9BB916C-EFE0-4058-8F68-8C9F3266D4A9",
+        "seq": 128,
+        "sessionId": "C4AB11DC-71F8-4F7E-A133-BE8700B857E7",
+        "startEvent": "imageCandidateStarted"
+      },
+      {
+        "expectedOutcomes": [
+          "imageCandidateFailed",
+          "imageCandidateSucceeded"
+        ],
+        "operationId": "AE96C851-2B66-4F68-9BA8-D919A82CCDD7",
+        "seq": 131,
+        "sessionId": "C4AB11DC-71F8-4F7E-A133-BE8700B857E7",
+        "startEvent": "imageCandidateStarted"
+      }
+    ]
+  },
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "categories": {
+      "decision": 19,
+      "event": 279,
+      "snapshot": 434,
+      "state": 25431
+    },
+    "dimensions": {
+      "core": 136,
+      "frontend": 4,
+      "input": 82,
+      "lifecycle": 58,
+      "media_supply": 115,
+      "network": 10049,
+      "presentation": 15620,
+      "recovery": 99
+    },
+    "domains": {
+      "auth": 24,
+      "cloud-library": 255,
+      "image": 62,
+      "ios-app": 9,
+      "ios-streaming": 25771,
+      "library-ui": 4,
+      "trace": 2,
+      "xbox-data": 36
+    },
+    "events": {
+      "accessPrepareStarted": 1,
+      "accessPrepareSucceeded": 1,
+      "accessReleased": 1,
+      "activityOverlayCommitted": 3,
+      "activityOverlayStarted": 3,
+      "answerApplied": 2,
+      "appLaunchStarted": 1,
+      "audioLifecycleStarted": 2,
+      "audioPlayoutGlitchDetected": 1,
+      "audioRouteChanged": 2,
+      "audioSessionActivationStarted": 2,
+      "audioSessionActivationSucceeded": 2,
+      "audioTrackReady": 2,
+      "audioUnitStarted": 2,
+      "authRestoreSessionFound": 1,
+      "authRestoreStarted": 1,
+      "authRestoreSucceeded": 1,
+      "authSessionRenewStarted": 1,
+      "authSessionRenewSucceeded": 1,
+      "cacheDiskLoadStarted": 1,
+      "cacheDiskLoadSucceeded": 1,
+      "cacheDiskSaveStarted": 39,
+      "cacheDiskSaveSucceeded": 39,
+      "cacheRestoreHit": 1,
+      "cacheRestoreScopeChanged": 1,
+      "cacheRestoreSkipped": 1,
+      "cacheRestoreStarted": 2,
+      "catalogActivationRefreshRequired": 1,
+      "catalogActivationStarted": 1,
+      "catalogRefreshCommitted": 1,
+      "catalogRefreshStarted": 1,
+      "catalogRemoteSnapshotReceived": 1,
+      "catalogRequestBoundaryStarted": 1,
+      "catalogRequestBoundarySucceeded": 1,
+      "cloudAccessBoundaryStarted": 1,
+      "cloudAccessBoundarySucceeded": 1,
+      "cloudAccessUniFFIBoundaryStarted": 1,
+      "cloudAccessUniFFIBoundarySucceeded": 1,
+      "contentPresented": 1,
+      "controlBootstrapCompleted": 1,
+      "controlBootstrapPreHandshakeCompleted": 1,
+      "controlReady": 1,
+      "dataChannelProfilesCreated": 1,
+      "dataChannelStateChanged": 9817,
+      "dataSessionBound": 4,
+      "dataStoreCleared": 1,
+      "dataSyncSkipped": 6,
+      "displayFirstPresent": 1,
+      "displayHealthSnapshot": 97,
+      "displayPipelineReady": 2,
+      "displayPipelineReadyDelivered": 2,
+      "displayPresent": 5042,
+      "displaySubmit": 5042,
+      "exportRequested": 1,
+      "fallbackTurnRetry": 1,
+      "fileOpened": 1,
+      "firstVideoFrame": 1,
+      "frameFeedback": 93,
+      "hapticsStopped": 1,
+      "homeAccessBoundaryStarted": 1,
+      "homeAccessBoundarySucceeded": 1,
+      "homeAccessUniFFIBoundaryStarted": 1,
+      "homeAccessUniFFIBoundarySucceeded": 1,
+      "hostsRefreshStarted": 1,
+      "hostsRefreshSucceeded": 1,
+      "iceTasksCancelled": 1,
+      "imageCandidateStarted": 10,
+      "imageCandidateSucceeded": 8,
+      "imageCandidatesExhausted": 3,
+      "imageNetworkCompleted": 10,
+      "imageNetworkStarted": 10,
+      "imageViewPhase": 21,
+      "inputBootstrapCompleted": 1,
+      "inputBootstrapPreHandshakeCompleted": 1,
+      "inputFrameSent": 77,
+      "inputStopped": 1,
+      "libraryActivationCompleted": 1,
+      "libraryActivationRequested": 1,
+      "libraryClearStarted": 1,
+      "libraryContentCommitted": 1,
+      "libraryPageAppeared": 1,
+      "libraryRefreshStarted": 1,
+      "libraryStateChanged": 2,
+      "localIceCompleted": 1,
+      "localIceStarted": 2,
+      "localOfferPrepared": 2,
+      "mailboxOverwrite": 5,
+      "messageHandshakeAcked": 1,
+      "messageHandshakeSent": 1,
+      "messagePostHandshakeCompleted": 1,
+      "metadataHydrationCompleted": 1,
+      "metadataHydrationStarted": 1,
+      "metadataPageBoundaryStarted": 38,
+      "metadataPageBoundarySucceeded": 38,
+      "metadataPageCommitted": 38,
+      "metadataPageStarted": 38,
+      "offerStarted": 1,
+      "peerClosed": 1,
+      "peerConnected": 1,
+      "peerRuntimeConfigured": 2,
+      "presentationDetached": 1,
+      "profileActivationSkipped": 1,
+      "remoteAnswerApplyCompleted": 2,
+      "remoteAnswerApplyStarted": 2,
+      "remoteDescriptionApplyCallback": 2,
+      "remoteDescriptionApplyCompleted": 2,
+      "remoteDescriptionApplyStarted": 2,
+      "remoteDescriptionSetDispatched": 2,
+      "remoteDescriptionSetInvoking": 2,
+      "remoteDescriptionSetWillDispatch": 2,
+      "remoteIceBatchApplied": 2,
+      "remoteIceBatchReceived": 3,
+      "remoteIceCandidatesApplied": 2,
+      "remoteIceCompleted": 1,
+      "remoteSessionClosed": 1,
+      "rtcHealthSnapshot": 100,
+      "rumbleParsed": 1,
+      "runtimeRebuildNegotiated": 1,
+      "runtimeRebuildOfferStarted": 1,
+      "runtimeRebuildStarted": 1,
+      "runtimeSupervisionSnapshot": 95,
+      "scenePhaseChanged": 8,
+      "sectionQueryStarted": 8,
+      "sectionQuerySucceeded": 8,
+      "sessionCreateStarted": 1,
+      "sessionReady": 1,
+      "sessionResumeValidated": 1,
+      "sessionSuspended": 1,
+      "sessionTerminal": 1,
+      "signalingIceBatchStarted": 2,
+      "signalingIceBatchSucceeded": 2,
+      "signalingIceCompletionStarted": 1,
+      "signalingIceCompletionSucceeded": 1,
+      "signalingOfferStarted": 2,
+      "signalingOfferSucceeded": 2,
+      "steadyMediaObserved": 1,
+      "streamControlsVisibilityChanged": 4,
+      "streamLaunchStarted": 1,
+      "streamingStateChanged": 10,
+      "surfaceActivationSkipped": 5,
+      "terminalSelected": 1,
+      "uniffiBoundaryStarted": 5,
+      "uniffiBoundarySucceeded": 5,
+      "videoFrameAcceptedToMailbox": 5047,
+      "videoFrameDropped": 242,
+      "videoSurfaceAttached": 2,
+      "videoSurfaceRendererReady": 1,
+      "videoSurfaceSized": 2
+    },
+    "files": [
+      "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl"
+    ],
+    "firstTsMs": 1795401150206,
+    "importance": {
+      "debug": 10208,
+      "essential": 10,
+      "key": 15945
+    },
+    "lastTsMs": 1795401588672,
+    "profiles": {
+      "dev": 26163
+    },
+    "rows": 26163,
+    "sessions": [
+      "C4AB11DC-71F8-4F7E-A133-BE8700B857E7"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "C4AB11DC-71F8-4F7E-A133-BE8700B857E7": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 26163,
+        "regressions": 0,
+        "rows": 26163
+      }
+    },
+    "violations": []
+  }
+}

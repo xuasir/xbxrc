@@ -1,0 +1,57 @@
+{
+  "mode": "device",
+  "pid": 60447,
+  "startedAt": "2026-11-23T11:47:55.733451+08:00",
+  "finishedAt": "2026-11-23T11:48:18.274469+08:00",
+  "state": "completed",
+  "exitCode": 0,
+  "command": [
+    "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild",
+    "-project",
+    "iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-configuration",
+    "Debug",
+    "-clonedSourcePackagesDirPath",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+    "-disableAutomaticPackageResolution",
+    "-skipPackageUpdates",
+    "-destination",
+    "generic/platform=iOS",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/DerivedDataDevice",
+    "-resultBundlePath",
+    "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/device.xcresult",
+    "CODE_SIGNING_ALLOWED=NO",
+    "COMPILER_INDEX_STORE_ENABLE=NO",
+    "build"
+  ],
+  "log": "/private/tmp/xbxrc-ios-mainactor-drain-20261123/r1/device.log",
+  "sourceHashes": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "sha256": "168dc0909e676938fcc34d237c8195ff389bb84819fe20ce8aaee863a4600a7d"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "sha256": "b5cfa7e254a8472c02d385498a9fd3a8099e3a049747b81abcfe9cab64c15f9a"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "9d3f227c57114561f7d3b63d818211a8e4d09645639c6cb3f6ed76be6c5bc2b2"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+      "sha256": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1"
+    },
+    {
+      "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "sha256": "05c7c66e0da4247c34d8d0b9c6dd8805fbbc42515c75df556d006176aa7e5842"
+    }
+  ]
+}

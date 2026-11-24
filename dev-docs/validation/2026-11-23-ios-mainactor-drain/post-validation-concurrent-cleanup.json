@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-23T12:10:14.736091+08:00",
+  "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "validatedSnapshotSha256": "05c7c66e0da4247c34d8d0b9c6dd8805fbbc42515c75df556d006176aa7e5842",
+  "currentSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+  "change": "仅移除文件末尾BEGIN/END标记包围的临时UI截图探针及专用辅助类型",
+  "existingPrefixExactMatch": true,
+  "selected52TestsRetained": true,
+  "currentSwiftParse": "PASS",
+  "currentTaskRetainedSourceHashesMatch": 5,
+  "preservation": "保留当前工作区清理；归档当时成功编译和验收的完整快照",
+  "testBuildRepairScope": "只读环境赋值修复属于该临时截图探针，随探针收尾移除"
+}

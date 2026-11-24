@@ -83,26 +83,31 @@ enum CloudLibraryPage: String, AppSecondaryRoute, Sendable {
 struct CloudCatalogStatusView: View {
   @ObservedObject var cloud: CloudLibraryStore
   @EnvironmentObject private var auth: AuthStore
+  var showsLoading = true
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       AppAccountRequestNotice()
 
-      AppSectionRequestState(
-        title: "云游戏目录",
-        status: SectionRequestStatus(
-          phase: cloud.phase, isBusy: cloud.isRefreshing,
-          hasSnapshot: cloud.catalogUpdatedAt != nil,
-          updatedAt: cloud.catalogUpdatedAt,
-          attempt: cloud.catalogUpdatedAt == nil ? .initial : .refresh,
-          failure: cloud.catalogFailure), identifier: "cloud-catalog"
-      ) {
-        await cloud.refresh(reason: .manualRetry) { try await auth.prepareCloudAccess() }
+      if showsLoading || cloud.catalogFailure != nil {
+        AppSectionRequestState(
+          title: "云游戏目录",
+          status: SectionRequestStatus(
+            phase: cloud.phase, isBusy: cloud.isRefreshing,
+            hasSnapshot: cloud.catalogUpdatedAt != nil,
+            updatedAt: cloud.catalogUpdatedAt,
+            attempt: cloud.catalogUpdatedAt == nil ? .initial : .refresh,
+            failure: cloud.catalogFailure), identifier: "cloud-catalog"
+        ) {
+          await cloud.refresh(reason: .manualRetry) { try await auth.prepareCloudAccess() }
+        }
       }
-      AppSectionRequestState(
-        title: "游戏图片与资料", status: cloud.metadataState.requestStatus,
-        identifier: "cloud-metadata"
-      ) {
-        await cloud.retryMetadata { try await auth.prepareCloudAccess() }
+      if showsLoading || cloud.metadataState.requestStatus.failure != nil {
+        AppSectionRequestState(
+          title: "游戏图片与资料", status: cloud.metadataState.requestStatus,
+          identifier: "cloud-metadata"
+        ) {
+          await cloud.retryMetadata { try await auth.prepareCloudAccess() }
+        }
       }
     }
   }
@@ -224,13 +229,6 @@ struct CloudLibraryBrowserView: View {
     }
     .accessibilityIdentifier("cloud-browser-scroll")
     .appThemeCanvas().appPageToolbar(page.title, showsBrand: usesSidebar)
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        AppRefreshButton("刷新云目录", isRefreshing: cloud.isRefreshing) {
-          await refresh()
-        }
-      }.sharedBackgroundVisibility(.hidden)
-    }
     .task(id: "\(auth.ownerGeneration):\(page.rawValue):\(isActive)") {
       guard isActive else { return }
       let identity = "\(auth.ownerGeneration):\(page.rawValue)"
@@ -243,7 +241,7 @@ struct CloudLibraryBrowserView: View {
     }
     .onChange(of: category) { _, _ in persistFilters() }
     .onChange(of: sort) { _, _ in persistFilters() }
-    .refreshable { await refresh() }
+    .appRefreshable { await refresh() }
   }
 
   private var filters: some View {
@@ -267,7 +265,7 @@ struct CloudLibraryBrowserView: View {
           touchOnly = false
           sort = .source
         }
-        .buttonStyle(AppInformationActionStyle())
+        .buttonStyle(AppContentCapsuleButtonStyle())
       }
     }
     .accessibilityIdentifier("cloud-browser-tools")

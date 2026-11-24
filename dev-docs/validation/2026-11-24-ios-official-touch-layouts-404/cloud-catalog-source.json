@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+      "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2"
+    },
+    {
+      "url": "https://assets.play.xbox.com/playxbox/static/js/game-stream.42236acb.chunk.js",
+      "sha256": "277ad66491c60c2ceb6efb70615b712f00223de75a05f0f0baeebd76d051615e"
+    }
+  ],
+  "reference": "Cloud title-info initialization and Home-only dynamic title callback",
+  "reviewedAt": "2026-11-24 15:25:09 CST"
+}

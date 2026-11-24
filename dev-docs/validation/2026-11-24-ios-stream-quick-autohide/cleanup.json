@@ -1,0 +1,40 @@
+{
+  "result": "Passed",
+  "removed_paths": [
+    "/private/tmp/xbxrc-ios-quick-autohide-20261124-ds2dddxp"
+  ],
+  "manifest_scope": [
+    "baseline",
+    "DerivedData",
+    "quick-smoke.xcresult",
+    "quick-smoke.log",
+    "exports",
+    "format-2.json",
+    "format-4.json",
+    "resume-baseline",
+    "initial-attachments",
+    "resume-smoke.xcresult",
+    "resume-smoke.log",
+    "resume-attachments",
+    "resume-activities.json",
+    "final-smoke.xcresult",
+    "final-smoke.log",
+    "final-attachments",
+    "final-activities.json",
+    "state-tests-without-probe.swift"
+  ],
+  "processes_using_task_directory": [],
+  "allocated_bytes_removed": 600195072,
+  "allocated_mib_removed": 572.39,
+  "disk_available_before_bytes": 48382787584,
+  "disk_available_after_bytes": 48981745664,
+  "task_temporary_root_exists": false,
+  "retained": [
+    "3张最终截图",
+    "测试摘要与失败诊断",
+    "原生命中JSON与复现探针",
+    "源码哈希与任务差异"
+  ],
+  "shared_cache_preserved": "/Users/guo.xu/Library/Developer/Xcode/DerivedData/XBXRC-alkaoqgihopcxwcelwbewrfmmuow/SourcePackages",
+  "completed_at": "2026-11-24T15:51:08.157763+08:00"
+}

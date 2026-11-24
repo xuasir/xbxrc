@@ -34,6 +34,7 @@ final class CloudLibraryStore: ObservableObject {
     private let client: any XboxCloudDataClient
     private let settingsProvider: AppSettingsStore?
     private let repository: any CloudCatalogSnapshotStoring
+    private let detailRepository: CloudProductDetailRepository
     private let persistenceCoordinator: CloudCatalogPersistenceCoordinator
     private var activeScope: CloudCatalogScope?
     private var activeAccess: PreparedCloudAccess?
@@ -51,11 +52,13 @@ final class CloudLibraryStore: ObservableObject {
     init(
         client: any XboxCloudDataClient = RustXboxCloudDataClient(),
         repository: any CloudCatalogSnapshotStoring = CloudCatalogSnapshotRepository(),
-        settingsProvider: AppSettingsStore? = nil
+        settingsProvider: AppSettingsStore? = nil,
+        detailRepository: CloudProductDetailRepository = .shared
     ) {
         self.client = client
         self.settingsProvider = settingsProvider
         self.repository = repository
+        self.detailRepository = detailRepository
         persistenceCoordinator = CloudCatalogPersistenceCoordinator(repository: repository)
     }
 
@@ -251,7 +254,7 @@ final class CloudLibraryStore: ObservableObject {
             )
             return
         }
-        guard !didRunInitialRefresh else {
+        guard !didRunInitialRefresh || (catalogFailure?.allowsActivation() ?? false) else {
             IOSRuntimeTrace.decision(
                 domain: "cloud-library",
                 event: "catalogActivationSkipped",
@@ -313,7 +316,7 @@ final class CloudLibraryStore: ObservableObject {
         }
         refreshTask = task
         refreshTaskID = taskID
-        await task.value
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
         if refreshTaskID == taskID {
             refreshTask = nil
             refreshTaskID = nil
@@ -363,34 +366,9 @@ final class CloudLibraryStore: ObservableObject {
             } else {
                 access = try await prepareAccess()
             }
-            do {
-                let snapshot = try await client.loadCatalog(
-                    accessHandle: access.handle,
-                    market: market,
-                    language: language
-                )
-                return RemoteLoadResult(access: access, snapshot: snapshot)
-            } catch {
-                guard SectionRequestFailure(error: error).kind == .authentication else {
-                    throw error
-                }
-                IOSRuntimeTrace.decision(
-                    domain: "cloud-library",
-                    event: "catalogAccessRenewRequired",
-                    payload: ["reason": "catalogRequestFailed"],
-                    dimension: .recovery,
-                    importance: .key,
-                    operationID: operationID
-                )
-                await client.releaseAccess(handle: access.handle)
-                let renewedAccess = try await prepareAccess()
-                let snapshot = try await client.loadCatalog(
-                    accessHandle: renewedAccess.handle,
-                    market: market,
-                    language: language
-                )
-                return RemoteLoadResult(access: renewedAccess, snapshot: snapshot)
-            }
+            let snapshot = try await client.loadCatalog(
+                accessHandle: access.handle, market: market, language: language)
+            return RemoteLoadResult(access: access, snapshot: snapshot)
         }
         inFlight = task
         inFlightOperationID = operationID
@@ -406,7 +384,7 @@ final class CloudLibraryStore: ObservableObject {
         }
 
         do {
-            let result = try await task.value
+            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
             guard isCurrent(requestRevision),
                 !Task.isCancelled,
                 requestRevision.scope == nil || requestRevision.scope == result.snapshot.scope
@@ -810,6 +788,10 @@ final class CloudLibraryStore: ObservableObject {
         inFlight = nil
         inFlightOperationID = nil
         isRefreshing = false
+        if phase == .loading {
+            phase = games.isEmpty ? .idle : .loaded
+            if games.isEmpty { didRunInitialRefresh = false }
+        }
         for source in sourceStates.keys {
             if sourceStates[source]?.isRefreshing == true {
                 sourceStates[source]?.failRequest(CancellationError())
@@ -1187,8 +1169,8 @@ extension CloudLibraryStore {
         var state = productDetails[identity] ?? XboxSingleDataState()
         guard productRequestIDs[identity] == nil,
             refresh
-                || (state.updatedAt.map({ Date().timeIntervalSince($0) > 600 })
-                    ?? (state.phase == .idle))
+                || state.needsActivation
+                || (state.updatedAt.map({ Date().timeIntervalSince($0) >= CloudProductDetailRepository.freshDuration }) ?? false)
         else { return }
         let scopeID = productScopeID
         let request = UUID()
@@ -1202,15 +1184,22 @@ extension CloudLibraryStore {
         state.beginRequest()
         productDetails[identity] = state
         do {
-            let detail = try await client.loadProductDetail(
-                productID: productID, market: market, language: language)
+            let market = market
+            let language = language
+            let cached = try await detailRepository.load(
+                productID: productID, market: market, language: language, force: refresh
+            ) { [client] in
+                try await client.loadProductDetail(productID: productID, market: market, language: language)
+            }
+            try Task.checkCancellation()
+            let detail = cached.detail
             guard productScopeID == scopeID, productRequestIDs[identity] == request else { return }
             guard detail.productID.caseInsensitiveCompare(productID) == .orderedSame else {
                 throw XboxNativeQueryError.unavailable
             }
             state.value = detail
             state.phase = .loaded
-            state.updatedAt = .now
+            state.updatedAt = cached.updatedAt
         } catch {
             guard productScopeID == scopeID, productRequestIDs[identity] == request else { return }
             state.failRequest(error)
@@ -1219,6 +1208,37 @@ extension CloudLibraryStore {
         state.isRefreshing = false
         productDetails[identity] = state
         productRequestIDs[identity] = nil
+    }
+
+    /// 低频官方资源查询复用目录的云授权，异步结果按账户和范围代次提交。
+    func withCloudAccess<Value: Sendable>(
+        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess,
+        operation: @Sendable (PreparedCloudAccess) async throws -> Value
+    ) async throws -> Value {
+        let requestGeneration = generation
+        let owner = authentication?.ownerGeneration
+        let scopeID = productScopeID
+        func checkCurrent() throws {
+            try Task.checkCancellation()
+            guard requestGeneration == generation, owner == authentication?.ownerGeneration,
+                scopeID == productScopeID
+            else { throw CancellationError() }
+        }
+        let access: PreparedCloudAccess
+        if let saved = activeAccess,
+            saved.expiresAtMs > UInt64(Date().timeIntervalSince1970 * 1000) + 30_000,
+            authentication == nil || authentication?.session?.cloudAccountID == saved.accountID
+        {
+            access = saved
+        } else {
+            access = try await prepareAccess()
+        }
+        try checkCurrent()
+        activeAccess = access
+        // Cloud 目标拒绝已由 Rust owner 恢复一次，此层只提交当前结果。
+        let result = try await operation(access)
+        try checkCurrent()
+        return result
     }
 
     func loadWaitTime(
@@ -1230,6 +1250,7 @@ extension CloudLibraryStore {
         var state = waitTimes[key] ?? XboxSingleDataState()
         guard productRequestIDs[key] == nil,
             refresh
+                || state.needsActivation
                 || (state.updatedAt.map({ Date().timeIntervalSince($0) > 60 })
                     ?? (state.phase == .idle))
         else { return }
@@ -1291,7 +1312,7 @@ extension CloudLibraryStore {
         sourceStates[source] = state
         defer { if productRequestIDs[key] == request { productRequestIDs[key] = nil } }
         do {
-            var access: PreparedCloudAccess
+            let access: PreparedCloudAccess
             if let saved = activeAccess,
                 saved.expiresAtMs > UInt64(Date().timeIntervalSince1970 * 1000)
             {
@@ -1299,18 +1320,8 @@ extension CloudLibraryStore {
             } else {
                 access = try await prepareAccess()
             }
-            let ids: [String]
-            do {
-                ids = try await client.loadCatalogSource(
-                    accessHandle: access.handle, source: source, market: market, language: language)
-            } catch {
-                guard SectionRequestFailure(error: error).kind == .authentication else {
-                    throw error
-                }
-                access = try await prepareAccess()
-                ids = try await client.loadCatalogSource(
-                    accessHandle: access.handle, source: source, market: market, language: language)
-            }
+            let ids = try await client.loadCatalogSource(
+                accessHandle: access.handle, source: source, market: market, language: language)
             try Task.checkCancellation()
             guard generation == revision, activeScope == scope, productRequestIDs[key] == request
             else {

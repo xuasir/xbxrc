@@ -1,0 +1,147 @@
+{
+  "taskId": "2026-11-24-ios-login-instability-trace",
+  "scope": {
+    "inputPath": "/Users/guo.xu/.pi-desktop/scratch/bb638a2c-df51-4cae-b191-e6504d683537/pasted/pasted-0dbd5ac8-53f0-4376-a541-a18311c19b4f-XBXRC-Diagnostic-39A03964-ED0C-4909-961C-CBAEE4E940C8.jsonl",
+    "inputBytes": 20851,
+    "inputSha256": "e065ed89f0f32df2463c8f9bcfb632c23d6742108c504bbccff9c77e65180457",
+    "inputEndsWithNewline": true,
+    "rows": 37,
+    "sessionId": "942E276E-7174-4D40-9BA0-C4E43765EF1E",
+    "schemaVersion": 3,
+    "traceProfile": "production",
+    "appVersion": "0.1.0",
+    "buildNumber": "1",
+    "buildConfiguration": "debug",
+    "firstTsMs": 1795498565782,
+    "lastTsMs": 1795498664346,
+    "spanMs": 98564,
+    "utcRange": ["2026-11-24T05:36:05.782+00:00", "2026-11-24T05:37:44.346+00:00"],
+    "utcPlus8Range": ["2026-11-24T13:36:05.782+08:00", "2026-11-24T13:37:44.346+08:00"],
+    "firstSeq": 1,
+    "lastSeq": 37
+  },
+  "gate": {
+    "all": {
+      "result": "FAIL",
+      "exitCode": 2,
+      "missingRequiredAnchors": [
+        {"flow": "library", "anchor": "library page"},
+        {"flow": "library", "anchor": "catalog activation decision"},
+        {"flow": "library", "anchor": "library presentation"}
+      ],
+      "interpretation": "登录前导出没有游戏库页面、目录激活与展示锚点；不是结构损坏或具体网络根因。"
+    },
+    "startup": {"result": "PASS", "exitCode": 0},
+    "commonViolations": {
+      "invalidRows": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0,
+      "privacyViolations": 0,
+      "budgetViolations": 0,
+      "builtInPairingViolations": 0
+    },
+    "builtInPairingEvaluatedStarts": 1,
+    "builtInPairingDoesNotCoverInteractiveSignIn": true
+  },
+  "authSummary": {
+    "restore": {"startSeq": 3, "endSeq": 7, "operationId": "3C7C5791-F99D-4FEE-9BD3-8D3B1BC739FA", "elapsedMs": 14, "result": "signedOut"},
+    "signInStarts": 7,
+    "signInSucceeded": 0,
+    "signInFailed": 6,
+    "beginLoginBoundaryFailures": 7,
+    "beginLoginErrorKinds": {"network": 5, "timeout": 2},
+    "allFailuresRetriable": true,
+    "allFailuresStatusCodeAbsent": true,
+    "networkErrorKindObserved": false,
+    "requestStageObserved": false,
+    "unmatchedSignInStartSeqs": [36],
+    "missingTerminalInterpretation": "末行是完整的内层beginLogin失败；第7次外层signIn终态没有被导出。不能据此断言仍在等待网络，也不能认定为物理截断、队列丢失或死锁。",
+    "crossLayerAssociation": "外层signIn与内层UniFFI分别创建operationId；按相邻signIn开始事件之间的时间窗口关联，每个窗口恰有一个beginLogin失败。"
+  },
+  "attempts": [
+    {"attempt": 1, "startSeq": 13, "startTsMs": 1795498567099, "signInOperationId": "0AE7B33D-2A5B-49AB-BF86-C705F5FBB378", "boundarySeq": 14, "boundaryTsMs": 1795498567498, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "389AB530-6B86-4BFA-B2A7-73480830BAE0", "boundaryElapsedMs": 398, "errorKind": "network", "timeout": false, "terminalSeq": 15, "signInElapsedMs": 399},
+    {"attempt": 2, "startSeq": 16, "startTsMs": 1795498568245, "signInOperationId": "C71C5A04-462B-4CA1-BE86-1BC039A55982", "boundarySeq": 17, "boundaryTsMs": 1795498574968, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "FFD57229-BE4B-4878-979C-022B7E595679", "boundaryElapsedMs": 6722, "errorKind": "timeout", "timeout": true, "terminalSeq": 18, "signInElapsedMs": 6723},
+    {"attempt": 3, "startSeq": 19, "startTsMs": 1795498577396, "signInOperationId": "A7ECD370-F364-4CD0-9F8D-A4921026B896", "boundarySeq": 20, "boundaryTsMs": 1795498577545, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "C5625C06-3D2C-489D-9303-90458DE71828", "boundaryElapsedMs": 149, "errorKind": "network", "timeout": false, "terminalSeq": 21, "signInElapsedMs": 150},
+    {"attempt": 4, "startSeq": 22, "startTsMs": 1795498578096, "signInOperationId": "0C4B994A-4A7D-41AE-B102-7C9FDCD7DF35", "boundarySeq": 23, "boundaryTsMs": 1795498578302, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "ED26A68E-0BA4-41A2-8DC5-D86227728AC4", "boundaryElapsedMs": 204, "errorKind": "network", "timeout": false, "terminalSeq": 24, "signInElapsedMs": 205},
+    {"attempt": 5, "startSeq": 25, "startTsMs": 1795498578579, "signInOperationId": "7AC346C8-D4C9-4014-A8F6-75AF4DD7EB6A", "boundarySeq": 26, "boundaryTsMs": 1795498578771, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "33023814-3E0D-4EB9-A205-A180C65F7A6D", "boundaryElapsedMs": 191, "errorKind": "network", "timeout": false, "terminalSeq": 27, "signInElapsedMs": 192},
+    {"attempt": 6, "startSeq": 28, "startTsMs": 1795498579313, "signInOperationId": "43DD07BF-FA1E-44AC-8C72-3704ADD3AADD", "boundarySeq": 29, "boundaryTsMs": 1795498585434, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "EDCB8787-3C17-4593-B175-5D257DE860D7", "boundaryElapsedMs": 6121, "errorKind": "timeout", "timeout": true, "terminalSeq": 30, "signInElapsedMs": 6122},
+    {"attempt": 7, "startSeq": 36, "startTsMs": 1795498663959, "signInOperationId": "9E1BA0D3-A661-4DE1-8356-B52BE69871BA", "boundarySeq": 37, "boundaryTsMs": 1795498664346, "boundaryDomain": "auth", "boundaryEvent": "uniffiBoundaryFailed", "boundaryOperation": "beginLogin", "boundaryOperationId": "E96D9536-2053-4DAD-A06B-14C23069ABD2", "boundaryElapsedMs": 387, "errorKind": "network", "timeout": false, "terminalSeq": null, "signInElapsedMs": null}
+  ],
+  "coverage": {
+    "startupObserved": true,
+    "cacheRestoreOutcome": "cacheRestoreSkipped:signedOut",
+    "interactiveSignInObserved": true,
+    "perRequestAuthStagesObserved": false,
+    "libraryFlowObserved": false,
+    "productionBoundaryStartAndSuccessAreDebugFiltered": true,
+    "firstSixAttemptsRemainActiveUntilAfterFailure": true,
+    "lastAttemptStartsAfterSceneActive": true
+  },
+  "budget": {
+    "inputIsAggregateExport": true,
+    "physicalInputBytes": 20851,
+    "configuredMaxFileBytes": 8388608,
+    "configuredMaxFiles": 4,
+    "configuredPendingRowLimit": 4096,
+    "pressureNotices": 0,
+    "initialQueueAndStorageDropCounters": 0,
+    "rawWriterFileSizesAndRetentionAudited": false,
+    "interpretation": "导出可检查自身大小与事件，不能替代原始轮转文件的物理大小和保留数量审计；没有队列压力丢失证据。"
+  },
+  "privacy": {"violations": 0, "sensitiveValuesIncludedInDerivedEvidence": false},
+  "sourceContext": {
+    "branch": "main",
+    "head": "b6ac29c0599b7651ff9db84395bbbb6fdc7da748",
+    "workingTreeHadPreexistingChanges": true,
+    "runtimeSourceCommitKnown": false,
+    "mappingAppliesTo": "分析时的当前工作树；诊断只含0.1.0/debug/build 1，未证明运行包与当前源码逐字一致。",
+    "sourceSha256": {
+      "iosapp/XBXRC/Features/Authentication/AuthStore.swift": "3bea8fa54ed9932edfc2271bef00431fbf30ff3c86e5160feabb1d45f7af7bd8",
+      "iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift": "2ca38c3941b9633e8992909ec74586e28aacec6acb777392b622033f40657d77",
+      "crates/xbox-ios-bridge/src/lib.rs": "33667d37c707a6d1f6b44ba9c956e47aa6a19aade9b99e927051d2f5b7862326",
+      "crates/xbox-ios-bridge/src/query_failure.rs": "39c6e6d779dc4b1c7bfcfe07fbbad0e41af1ed8ff79839d800fb971f55bf2db5",
+      "crates/xbox-auth-flow/src/flow.rs": "420a7f0db5c73627f35aec76c2b7479b2a83cfc9cf0d49c19af6578bab8486cc",
+      "crates/xbox-webapi/src/auth_api.rs": "4e2b3e4cd45c9ffbc2f2657fded9e66836038454b2dc9c96cf27f8923831af06",
+      "crates/xbox-webapi/src/transport.rs": "6c235938404f94eb4e60ba47a7a95828157c1658731e77060c21892a73b14a78",
+      "crates/xbox-webapi/src/error.rs": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957",
+      "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift": "d25cbe553c068919fe8347079665961a8de32a526fc2eeaf66e294aa6ac4f54f"
+    }
+  },
+  "sourceFacts": {
+    "initialFlow": ["signIn", "beginLogin/start_login", "deviceToken", "sisuAuthenticate", "ASWebAuthenticationSession", "finishLogin"],
+    "initialRequestTargetsFromCode": ["device.auth.xboxlive.com/device/authenticate", "sisu.xboxlive.com/authenticate"],
+    "initialRequestTargetsAreNotObservedFailureTargets": true,
+    "authTransport": "AuthFlow::new -> AuthApi::new -> HttpTransport::for_commands",
+    "connectTimeoutSeconds": 5,
+    "perRequestTimeoutSeconds": 12,
+    "perRequestOverallBudgetSeconds": 18,
+    "overallBudgetIsNotWholeLoginDeadline": true,
+    "retryMode": "Never",
+    "newAuthFlowAndClientPerInteractiveAttempt": true,
+    "initialSignInHasNoRequestStageObserver": true,
+    "queryFailureCollapsesNonTimeoutNetworkKinds": true,
+    "initialLoginDoesNotConsumeCloudForceRegionIP": true
+  },
+  "cause": {
+    "highConfidence": "7次均在打开网页登录之前的初始Rust认证边界失败；5次快速network、2次timeout。无自动重试会放大瞬时故障，但它不是已证明的底层网络根因。",
+    "plausibleButUnproven": "约6.1/6.7秒的整体边界耗时与5秒建连上限加前序/本地耗时相容，不能精确指认建连超时，更不能指认某个域名、DNS、TLS或IPv6。",
+    "statusCodeCaveat": "没有记录到HTTP拒绝状态；statusCode缺失也可能来自成功响应体读取失败，不能据此证明请求未发出或连接未建立。",
+    "notSupportedByThisTrace": ["账号密码拒绝", "过期token续期失败", "登录网页回调超时", "游戏库加载超时", "后台挂起导致前6次失败", "并发登录死锁", "云地区403准入失败"],
+    "currentMappingCaveat": "按当前safe网络映射，非timeout且retriable=true优先对应DNS/connect/body；TLS通常不可重试。运行源码版本未标识，不能用此严格排除其他类型。"
+  },
+  "nextActions": [
+    "为首次登录的deviceToken/sisuAuthenticate补齐白名单requestStage、networkErrorKind、elapsedMs、statusCode、attempt与父操作关联；复用公共Rust诊断，不记录token、seed、JWK、账号或完整URL。",
+    "同一手机、同一运行包对照Wi-Fi裸连与蜂窝，再按实际使用情况对照VPN/TUN开关；保留每一步耗时、成功率和完整外层终态。桌面curl或Safari成功不等价于移动端Rust请求可达。",
+    "逐请求证据确认后再调整连接预算或首次登录恢复；若增加重试，先确认未发送/可安全重建的预握手边界并使用有界退避，不能把所有认证POST改为无限或无条件重试。仅延长超时无法解释5次149–398ms快速失败。"
+  ],
+  "checksPerformed": [
+    "python3 -B .agents/skills/analyze-ios-runtime-trace/scripts/analyze_ios_runtime_trace.py <input> --strict --require-flow all",
+    "python3 -B .agents/skills/analyze-ios-runtime-trace/scripts/analyze_ios_runtime_trace.py <input> --strict --require-flow startup",
+    "完整37行原始JSONL读取；按operationId和相邻开始窗口独立复核7次登录",
+    "当前Swift/Rust调用顺序、5/12/18秒每请求预算、Never重试与错误分类静态核对",
+    "相关2026-11-23启动对齐RFC与任务记录交叉检查"
+  ],
+  "notPerformed": ["业务代码修改", "Rust或iOS构建测试", "移动设备实际网络探测", "运行包源码commit核验", "原始轮转文件保留数量审计"],
+  "temporaryArtifactsCreated": [],
+  "userInputRetained": true
+}

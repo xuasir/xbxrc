@@ -1,0 +1,8 @@
+{
+  "sources": [
+    "iosapp/XBXRC/App/PCPageUITestFixtures.swift",
+    "iosapp/XBXRC/Features/Settings/MobileSettingsControls.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift"
+  ],
+  "action": "preserved; excluded from task diff"
+}

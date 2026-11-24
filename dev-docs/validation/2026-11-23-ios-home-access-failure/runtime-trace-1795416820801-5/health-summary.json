@@ -1,0 +1,29 @@
+{
+  "network": {
+    "authentication": "4次Cloud访问准备返回可重试网络超时",
+    "metadataPageCommits": 26,
+    "metadataPageWorkElapsedMs": {
+      "min": 1515,
+      "median": 2585.5,
+      "max": 11804
+    },
+    "scope": "页面计时为页处理边界；单HTTP请求计时待补充"
+  },
+  "recoveryChain": {
+    "observedDimensionRows": 0,
+    "assessment": "这4次尝试停在授权准备；ReferenceChain、RecoveryLedger、cleanAnchorCommitted、DisplayStable按成功媒体窗口接续评估"
+  },
+  "mediaSupply": {
+    "observedDimensionRows": 0,
+    "assessment": "这4次尝试尚待会话准备与媒体接入"
+  },
+  "steadySupply": {
+    "assessment": "连续播放窗口位于当前分片之前或后续成功尝试中，需要相应分片"
+  },
+  "submitPresentTail": {
+    "assessment": "当前记录为库页面呈现；串流submit/present长尾需要播放器渲染计时"
+  },
+  "frameSupplyDelta": {
+    "assessment": "接收、解码与真实呈现帧供给delta需要媒体窗口"
+  }
+}

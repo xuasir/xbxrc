@@ -1,0 +1,53 @@
+{
+  "taskId": "2026-11-24-ios-pc-http-parity-audit",
+  "completedAtUtc": "2026-11-24T07:44:53.723640+00:00",
+  "result": "PASS",
+  "scope": "仅删除上一会话已授权的ios-pc-http-audit-r1及当前会话ios-pc-http-audit-r2子目录。",
+  "directories": [
+    {
+      "path": "/Users/guo.xu/.pi-desktop/scratch/bb638a2c-df51-4cae-b191-e6504d683537/ios-pc-http-audit-r1",
+      "removedFiles": 15,
+      "logicalBytes": 804046,
+      "allocatedFileBytes": 831488,
+      "processMatches": 0,
+      "lsofOpenFilePids": [],
+      "absentAfterCleanup": true
+    },
+    {
+      "path": "/Users/guo.xu/.pi-desktop/scratch/db44e573-f59b-4da7-a803-2bac40c55af0/ios-pc-http-audit-r2",
+      "removedFiles": 10,
+      "logicalBytes": 150550,
+      "allocatedFileBytes": 167936,
+      "processMatches": 0,
+      "lsofOpenFilePids": [],
+      "absentAfterCleanup": true
+    }
+  ],
+  "removedLogicalBytes": 954596,
+  "removedAllocatedFileBytes": 999424,
+  "availableDiskBytesBefore": 48566927360,
+  "availableDiskBytesAfter": 48567857152,
+  "diskSpaceDeltaIsNotAttributedToThisTaskAlone": true,
+  "retainedEvidenceArtifacts": [
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/source-hashes.json",
+      "sha256": "6209adfab27e03fc58d5496e1416cd8f9c419469a44f31947e6c200a6bb21c66",
+      "bytes": 32388
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/closure-verification.json",
+      "sha256": "2a7817b646469a203681d091f632c8b8c4a2a763416c40ef5a70b23e96d9cfca",
+      "bytes": 7909
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/post-snapshot-drift.json",
+      "sha256": "5d04127084a7d313b26acd0d38f7b22b93d21e80a54eac6d2d1a839642741f7d",
+      "bytes": 2730
+    }
+  ],
+  "userInputAndOtherTaskArtifactsUntouched": true,
+  "sharedCachesUntouched": true,
+  "xcresultOrDerivedDataCreatedByThisTask": false,
+  "privateTmpOrTmpdirArtifactsCreatedByThisTask": false,
+  "taskTemporaryDirectoriesRemaining": 0
+}

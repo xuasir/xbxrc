@@ -130,7 +130,7 @@ struct HostListView: View {
             }
             .accessibilityIdentifier("host-overview-scroll")
             .scrollIndicators(.hidden)
-            .refreshable { await dataStore.refreshHosts() }
+            .appRefreshable { await dataStore.refreshHosts() }
         }
     }
 
@@ -238,8 +238,8 @@ struct HostListView: View {
 
     private func streamSelectedHost(_ host: XboxHostSummary) {
         guard let targetID = host.streamTargetID else { return }
-        streamingStore.startHome(targetID: targetID) {
-            try await authStore.prepareHomeAccess()
+        streamingStore.startHome(targetID: targetID) { startup in
+            try await authStore.prepareHomeAccess(startup: startup)
         }
     }
 
@@ -248,7 +248,7 @@ struct HostListView: View {
         switch dataStore.hostPhase {
         case .idle, .loading:
             HostListLoadingView()
-                .refreshable { await dataStore.refreshHosts() }
+                .appRefreshable { await dataStore.refreshHosts() }
         case .failed:
             refreshableEmptyState { hostRequestState.padding(AppLayoutPolicy.pageInset) }
         case .loaded:
@@ -289,7 +289,7 @@ struct HostListView: View {
                 content()
                     .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
-            .refreshable { await dataStore.refreshHosts() }
+            .appRefreshable { await dataStore.refreshHosts() }
         }
     }
 }

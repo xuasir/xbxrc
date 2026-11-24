@@ -1,0 +1,200 @@
+[
+  {
+    "round": "r2",
+    "name": "section-errors-cloud-recovered",
+    "archiveFile": "section-errors-cloud-recovered.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "sha256": "ffcf621d6f991daa84474fd98bb141c48e85cd243483a681762409106118eb29",
+    "bytes": 2992317
+  },
+  {
+    "round": "r2",
+    "name": "section-errors-cloud-source",
+    "archiveFile": "section-errors-cloud-source.png",
+    "test": "PCPageInteractionTests/testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally()",
+    "sha256": "5aa16e72e317b7b3c18b77b3d5f7b0ed1c85e1773de869f41911f073faf62919",
+    "bytes": 3005514
+  },
+  {
+    "round": "r2",
+    "name": "annotations-my-overview",
+    "archiveFile": "annotations-my-overview.png",
+    "test": "PCPageInteractionTests/testMySubpagesRestoreRootAndDetailNavigation()",
+    "sha256": "a6680bdc79a485f759a3325e3d38237a4900060b23cc96adbe88bb33e909b6b3",
+    "bytes": 2563741
+  },
+  {
+    "round": "r5-phone",
+    "test": "PCPageInteractionTests/testCloudSourcePagePullRefreshRecoversFailure()",
+    "archiveFile": "cloud-pull-refresh-recovered.png",
+    "exportedFileName": "249289EB-F71C-48A6-8044-E37F49F2DEA6.png",
+    "sha256": "26aec18744e06324ef22c67db7dfea6f0bcaa6846689b9370eb076fa2689621c",
+    "bytes": 2835123
+  },
+  {
+    "round": "r5-phone",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-restored-after-relaunch.png",
+    "exportedFileName": "8D233FBB-C571-4104-AEC3-74CBB9502A20.png",
+    "sha256": "46891505aafedfe13de6e3975401099f6b77a5cfac7bbafec61435eafabfc7f8",
+    "bytes": 432851
+  },
+  {
+    "round": "r5-phone",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-adjusted-full-viewport.png",
+    "exportedFileName": "765604A7-5248-42A4-8833-AC683285A23F.png",
+    "sha256": "6afc9f51f728532e7e5286f4ce9664a12c8e87900c24f783876286bb6cce1c3d",
+    "bytes": 195874
+  },
+  {
+    "round": "r5-phone",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-adjusted-preview.png",
+    "exportedFileName": "EDEAF9F0-FB42-466C-B14C-AB4FAC1B6523.png",
+    "sha256": "46891505aafedfe13de6e3975401099f6b77a5cfac7bbafec61435eafabfc7f8",
+    "bytes": 432851
+  },
+  {
+    "round": "r5-phone",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-dragged.png",
+    "exportedFileName": "31A4D826-4778-4F67-A671-FD1FFE276773.png",
+    "sha256": "aca73dc5db902fcbed4037a28193a28ce5d352f7764053cfe64081dab7f23088",
+    "bytes": 172740
+  },
+  {
+    "round": "r5-phone",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "touch-template-settings.png",
+    "exportedFileName": "54F306D8-C2E6-4D1E-A493-7DFF2F7E45DC.png",
+    "sha256": "cb593ae2f58244cc8735509bb89dbb4cca05582e19cf27a5c0179d91673b3ac9",
+    "bytes": 2905295
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-adjustment-tablet-light.png",
+    "sha256": "d96d37ed543937a9e1ccc3de81a5eeb35016a61920da88053254fe415dddb099",
+    "bytes": 172214
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-adjustment-narrow-accessibility.png",
+    "sha256": "ea1f34b883da3e4c2a8b6e08cfd336f83b39f448f464b035f77cb79c0195c16f",
+    "bytes": 135946
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-adjustment-landscape-dark.png",
+    "sha256": "d59218dff03fcadf3f955ef1df0331dea19532ee682e0d766a15eaebff28d282",
+    "bytes": 156209
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-adjustment-phone-dark.png",
+    "sha256": "d76ec7820c547733eb41115258426143e1cf4079495df9db34f4b02cfc156d1f",
+    "bytes": 112135
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-editor-tablet-light.png",
+    "sha256": "af7bf0d7af9f18c7841e443f54552b94202d05002005b911c1fc5d46c837299b",
+    "bytes": 169622
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-editor-narrow-accessibility.png",
+    "sha256": "2bc177aaacde19cc0fbd0d2bdf399870f051b65705d4ee04057acb771b96be02",
+    "bytes": 122627
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-editor-landscape-dark.png",
+    "sha256": "634b5f754a9ddb6d0facd0c0b6de6cb84cbc0226df2dca8b91e109f131b60ea8",
+    "bytes": 151005
+  },
+  {
+    "round": "r6-phone",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "touch-editor-phone-dark.png",
+    "sha256": "183ec4433ca8c93e0c523b8de21b95c3786d1340d22049c45b59f32032550ad3",
+    "bytes": 110576
+  },
+  {
+    "round": "r6-phone",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "touch-template-landscape-full-viewport.png",
+    "sha256": "2d96cba2807168fbb1a4fb02d03a2af7aae7a2c03f5b7b75fbc4aeec5f82281b",
+    "bytes": 219823
+  },
+  {
+    "round": "r6-phone",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "touch-template-portrait-lower-half.png",
+    "sha256": "5c729b710370d44cabc9b3aa9b9432627e68ea473833f4f76b1da6006a87fae6",
+    "bytes": 171267
+  },
+  {
+    "round": "r6-ipad",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "ipad-touch-adjustment-tablet-light.png",
+    "sha256": "6ba924ecd3ef542c690d3f58ac93109c384162c95b086b81bd481ad820527c41",
+    "bytes": 187232
+  },
+  {
+    "round": "r6-ipad",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "ipad-touch-adjustment-narrow-accessibility.png",
+    "sha256": "b02d6878299aefe09b275f4dfaeee19fd121dc11530dade4998a8ed34e11f577",
+    "bytes": 196403
+  },
+  {
+    "round": "r6-ipad",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "ipad-touch-editor-tablet-light.png",
+    "sha256": "54a6ac5f95ccbb498ca9952fcd972942296cd222efecdd7839a7b11a77116b58",
+    "bytes": 185789
+  },
+  {
+    "round": "r6-ipad",
+    "test": "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+    "archiveFile": "ipad-touch-editor-narrow-accessibility.png",
+    "sha256": "1e231286e3b25bc260f428aa2623d01a6fc9168eca79aa20b264aa3dbe108a26",
+    "bytes": 183706
+  },
+  {
+    "round": "r6-ipad",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "ipad-touch-template-landscape-full-viewport.png",
+    "sha256": "2104d8178dedfc8c1b2915acd5b34cb72abbb6d79a8d4db26094fa890de74201",
+    "bytes": 223246
+  },
+  {
+    "round": "r6-ipad",
+    "test": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+    "archiveFile": "ipad-touch-template-portrait-lower-half.png",
+    "sha256": "e727516ef7df12b1996f80bef06d9eb27cfdee6bd740a095341f5b8a19e9f0e2",
+    "bytes": 205765
+  },
+  {
+    "round": "r5-ipad",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "ipad-touch-template-restored-after-relaunch.png",
+    "sha256": "a7f1281038b32d93950f4928a5d954b7de81927da23614b9eae0de9e1b653b8f",
+    "bytes": 378481
+  },
+  {
+    "round": "r5-ipad",
+    "test": "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+    "archiveFile": "ipad-touch-template-adjusted-full-viewport.png",
+    "sha256": "99bbe9018a21f7ab761eb584f95fcaa7a72f26e89f4f891b90cc76c9cbf7dc3d",
+    "bytes": 224735
+  }
+]

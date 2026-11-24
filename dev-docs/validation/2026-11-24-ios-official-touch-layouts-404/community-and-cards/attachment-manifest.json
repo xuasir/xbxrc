@@ -1,0 +1,44 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "E3E39B68-2EF8-4789-8E62-58FC2E1FC498.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "community-touch-saved-library_0_98668F38-45C0-4E0A-8FB5-59AAD632FEED.png",
+        "timestamp" : 1795510548.577
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "2851E3A3-0D47-4306-8567-EFE4208B6E2E.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "community-touch-preview-landscape_0_23A732A9-A4C2-4B4C-96FA-9FF9298A023E.png",
+        "timestamp" : 1795510535.83
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "B84069A0-55CB-4E11-9769-A0B79A365265.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "community-touch-preview-portrait_0_2FEEF1CE-54D3-43C1-9106-815065337BA0.png",
+        "timestamp" : 1795510532.282
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "7F4A70F9-ABF3-4EDF-85BF-834B216120F9.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "community-touch-layout-cards_0_78A6078A-3D1C-4811-97CC-507F3062B5B1.png",
+        "timestamp" : 1795510528.213
+      }
+    ],
+    "testIdentifier" : "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails"
+  }
+]

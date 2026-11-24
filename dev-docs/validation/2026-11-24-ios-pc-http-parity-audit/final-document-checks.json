@@ -1,0 +1,118 @@
+{
+  "taskId": "2026-11-24-ios-pc-http-parity-audit",
+  "verifiedAtUtc": "2026-11-24T08:00:21.987296+00:00",
+  "scope": "最终文档、证据归档和清理状态检查；不是当前业务源码或移动网络全量PASS。",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "all five evidence JSON files parse without duplicate keys",
+      "result": "PASS"
+    },
+    {
+      "name": "snapshot and continuation scope remain distinct",
+      "result": "PASS"
+    },
+    {
+      "name": "146 snapshot hashes and group totals remain complete",
+      "result": "PASS"
+    },
+    {
+      "name": "original inventory fingerprints and eight concurrent paths agree",
+      "result": "PASS"
+    },
+    {
+      "name": "three retained artifact checksums still match cleanup manifest",
+      "result": "PASS"
+    },
+    {
+      "name": "18 original assertions are explicitly not a continuation rerun",
+      "result": "PASS"
+    },
+    {
+      "name": "13 PASS and all three source fingerprint FAIL diagnostics remain preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "four offline locked dependency commands remain recorded exit zero",
+      "result": "PASS"
+    },
+    {
+      "name": "snapshot-after change count remains observation-scoped",
+      "result": "PASS"
+    },
+    {
+      "name": "single completed task row and completed RFC/report exist",
+      "result": "PASS"
+    },
+    {
+      "name": "all final document and task-row local links resolve",
+      "result": "PASS",
+      "details": {
+        "linksChecked": 100,
+        "errors": []
+      }
+    },
+    {
+      "name": "five final Markdown files and task row pass whitespace checks",
+      "result": "PASS"
+    },
+    {
+      "name": "machine-readable evidence pointers resolve inside task directory",
+      "result": "PASS"
+    },
+    {
+      "name": "two authorized temporary directories remain absent",
+      "result": "PASS"
+    },
+    {
+      "name": "cleanup counts and completion flags are consistent",
+      "result": "PASS"
+    },
+    {
+      "name": "task preserves fixed stack and runtime boundaries with no business edit",
+      "result": "PASS"
+    },
+    {
+      "name": "task documents stayed unchanged during final checks",
+      "result": "PASS"
+    }
+  ],
+  "passed": 17,
+  "failed": 0,
+  "jsonFilesChecked": 5,
+  "localFileLinksChecked": 100,
+  "markdownWhitespaceChecks": [
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/README.md",
+      "clean": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/http-diff-matrix.md",
+      "clean": true
+    },
+    {
+      "path": "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/upstream-evidence.md",
+      "clean": true
+    },
+    {
+      "path": "docs/rfcs/2026-11-24-ios-pc-http-parity-audit.md",
+      "clean": true
+    },
+    {
+      "path": "docs/reports/2026-11-24-ios-pc-http-parity-audit.md",
+      "clean": true
+    }
+  ],
+  "documentSha256": {
+    "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/README.md": "48b4df6bb4f451211eff055cee06604f1b9620029cfa03eb6ce9d188432701d5",
+    "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/http-diff-matrix.md": "681e24fadf3eb55e2f942baa1df0be3b83ecb2d89c7c9eba1e931d26779dc70c",
+    "dev-docs/validation/2026-11-24-ios-pc-http-parity-audit/upstream-evidence.md": "815546f3c591a9cf978ad2ba6a4b8b459302898f4e1e54847204adbe6466c812",
+    "docs/rfcs/2026-11-24-ios-pc-http-parity-audit.md": "dcfc5011533c68a713458971c20eebf62d3e044a705aa818a103624f4377b006",
+    "docs/reports/2026-11-24-ios-pc-http-parity-audit.md": "165e5d379b09652b4400ddfe2e2efdf6897cf76034f4371bc5b35f12d3a56c09"
+  },
+  "taskLedgerRowSha256": "6cab9f7680075baefbdedcb11efc3b3cb8dae03434738a44b0cc8ab6a37cc2a3",
+  "sourceFingerprintFailuresRemainRecorded": 3,
+  "snapshotCapturedAtUtc": "2026-11-24T07:09:23.909857+00:00",
+  "temporaryDirectoriesRemaining": 0,
+  "businessCodeEdits": 0
+}

@@ -1,0 +1,55 @@
+{
+  "r1": {
+    "result": "Failed",
+    "errors": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:846: error: -[XBXRCUITests.PCPageInteractionTests testCloudPullRefreshRecoversSourceFailure] : XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:105: error: -[XBXRCUITests.TouchLayoutInteractionTests testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments] : XCTAssertFalse failed",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift:206: error: -[XBXRCUITests.TouchLayoutInteractionTests testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft] : Failed to tap \"app-navigation-back\" Button: Find single matching element. Multiple matching elements found for <XCUIElementQuery: 0x105b43840>."
+    ],
+    "resolutions": [
+      "全屏交互按当前可操作层判定，返回使用独立工作区标识",
+      "整体目录夹具持续返回失败；下拉恢复验收改为真实来源子页请求",
+      "工具集中在画布上方并使用深色表面，右上控件完整显露"
+    ],
+    "renderProbe": "首次快照在最终布局后等待显示帧，保证 UIKit CALayer 已完成绘制",
+    "swiftFormat": "闭包参数使用明确标签，满足 OnlyOneTrailingClosureArgument"
+  },
+  "r2": {
+    "result": "Failed",
+    "passedTests": 12,
+    "failedTests": 1,
+    "failures": [
+      {
+        "failureText": "XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+        "targetName": "XBXRCUITests",
+        "testIdentifier": 10,
+        "testIdentifierString": "PCPageInteractionTests/testCloudSourcePagePullRefreshRecoversFailure()",
+        "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testCloudSourcePagePullRefreshRecoversFailure",
+        "testName": "testCloudSourcePagePullRefreshRecoversFailure()"
+      }
+    ],
+    "resolution": "来源页下拉刷新采用边缘长距离拖动，实际越过原生刷新阈值；r3 单项复验通过。"
+  },
+  "r4-ipad": {
+    "result": "Failed",
+    "passedTests": 3,
+    "failedTests": 1,
+    "failures": [
+      {
+        "failureText": "XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+        "targetName": "XBXRCUITests",
+        "testIdentifier": 4,
+        "testIdentifierString": "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+        "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft",
+        "testName": "testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()"
+      }
+    ],
+    "resolution": "iPad 胶囊只读展示当前窗口方向；r5 通过设备旋转验证真实窗口、选中状态、草稿丢弃与保存。"
+  },
+  "r5-visual-audit": {
+    "result": "Adjustment required",
+    "automatedResult": "iPhone 11 tests passed; iPad 3 tests passed",
+    "diagnostic": "320pt 英文大字号方向胶囊横向空间受限，截图呈现部分长文字。",
+    "resolution": "大字号将完整标题、操作行和方向胶囊分别呈现，胶囊使用整行宽度；r6 复验当前代码。"
+  }
+}

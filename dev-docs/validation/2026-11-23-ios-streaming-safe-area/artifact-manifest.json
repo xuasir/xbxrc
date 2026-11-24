@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-23",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "552620a3943091dd66157bc4a20da5b3d107b4884df6fe2fb2cb0a66fe5076b9",
+      "bytes": 2523
+    },
+    {
+      "path": "cleanup-plan.json",
+      "sha256": "11fcfb86d9f32c35b210ceea8e44829acfcb8c38ca2a51b2ea07b138871b7889",
+      "bytes": 7984
+    },
+    {
+      "path": "cleanup.json",
+      "sha256": "3bf184a6187e34bbbf4942d4ee19ba16c9de851b1cdf8a11c97d125537282f1b",
+      "bytes": 858
+    },
+    {
+      "path": "device-build-summary.json",
+      "sha256": "147a754e005991ea89fa49f450924b7b61dcd1be12f12aa80266aafadc36656e",
+      "bytes": 204
+    },
+    {
+      "path": "diagnostics/r5-black-menu-reference.png",
+      "sha256": "5964c5a53177dba97f1486be43b9f16bd52b615487b8a87641fd19e51179cf76",
+      "bytes": 2759596
+    },
+    {
+      "path": "diagnostics/r5-ipad-segment-selection.png",
+      "sha256": "4db3cb328e04afe48a691a1b57195a7ed96565a562d1e907c6cb69de5c1f4e78",
+      "bytes": 674385
+    },
+    {
+      "path": "execution-manifest.json",
+      "sha256": "e7c288c171825a3722a28a43f23f40895ff45ec68485ebcadfb4ac009633a56f",
+      "bytes": 4863
+    },
+    {
+      "path": "failure-diagnostics.json",
+      "sha256": "990644c9ee0993e20af7f8d179de979e2f18c2a221b7580976e2243c11530b07",
+      "bytes": 4582
+    },
+    {
+      "path": "final/ipad-streaming-diagnostics-portrait.png",
+      "sha256": "74b3baee45af47a5660ca35f67a304424c485b004147fba800929602e4995fd0",
+      "bytes": 5355217
+    },
+    {
+      "path": "final/ipad-streaming-diagnostics-upper-right.png",
+      "sha256": "919b2638cf5316b7dcbeed552af86cde33387074b45a91632fa75eb0f85ab437",
+      "bytes": 5369541
+    },
+    {
+      "path": "final/ipad-streaming-safe-diagnostics-landscape-left.png",
+      "sha256": "00f64c01dc2c2d4c897d5276b698ed2d528a15e9bde2fdcffea50acafb9b4ce7",
+      "bytes": 5328173
+    },
+    {
+      "path": "final/ipad-streaming-safe-diagnostics-landscape-right.png",
+      "sha256": "fdd2ba0936b9b3a0c16a124e9bccf2cab446b0230e49577d2efa403f7f11f5fd",
+      "bytes": 5331837
+    },
+    {
+      "path": "final/ipad-streaming-safe-menu-landscape-left.png",
+      "sha256": "7e88f82fd937b5cdd04351d270743b7d1f107b50061ac87848e267e532dab33d",
+      "bytes": 5204910
+    },
+    {
+      "path": "final/ipad-streaming-safe-menu-landscape-right.png",
+      "sha256": "31f0ac457f61885b4864a0d88b1da0c927884714a1dd97907cc35ecc88c43722",
+      "bytes": 5217956
+    },
+    {
+      "path": "final/ipad-streaming-safe-region-1.txt",
+      "sha256": "4d48b61e1fb8e61afcc5145c29900a69d70794625c165acb1c4ce98978dd747f",
+      "bytes": 82
+    },
+    {
+      "path": "final/ipad-streaming-safe-region-3.txt",
+      "sha256": "a1d8fd57b14da9ff426465f2865f46c28c35bb5432b050e0a442164f8fec1f21",
+      "bytes": 82
+    },
+    {
+      "path": "final/ipad-streaming-safe-region-4.txt",
+      "sha256": "d2517f17e8b172f14ed32340d02263a9b1785c3929f618ebad3b800410585a1a",
+      "bytes": 82
+    },
+    {
+      "path": "final/ipad-streaming-safe-touch-landscape-left.png",
+      "sha256": "74f5075a323d71fffebbe241e9195493ab3d47c034b253c9236f551c317643cb",
+      "bytes": 5167502
+    },
+    {
+      "path": "final/ipad-streaming-safe-touch-landscape-right.png",
+      "sha256": "6ed4969ca2489a156384f25e7b6dc0c4940623d5677c7347b4fd156ee43826b6",
+      "bytes": 5179685
+    },
+    {
+      "path": "final/ipad-streaming-two-rails-portrait.png",
+      "sha256": "ce3d05535b4776b7ff3f9cf416fd9314cba5cf377de47279708295f7c2c8f01e",
+      "bytes": 5248313
+    },
+    {
+      "path": "final/iphone-streaming-diagnostics-portrait.png",
+      "sha256": "693d46216417280b744e68b401a9d815b0d221461002551b57438c2b3b778f13",
+      "bytes": 3096485
+    },
+    {
+      "path": "final/iphone-streaming-diagnostics-upper-right.png",
+      "sha256": "c5e2e507b89478a16d3bcf1a2cc6d01c0249663790c35385b05edb8ac16715bb",
+      "bytes": 3072871
+    },
+    {
+      "path": "final/iphone-streaming-safe-diagnostics-landscape-left.png",
+      "sha256": "dc6c3de0a7305c4253c9c44688b63b41a7c561dcd2a24f296732d30ab7033cf4",
+      "bytes": 3058542
+    },
+    {
+      "path": "final/iphone-streaming-safe-diagnostics-landscape-right.png",
+      "sha256": "c50c188c928b32cfd959fc73b384e952a5204200a523e5f71d2b12735ca2d1ef",
+      "bytes": 3056564
+    },
+    {
+      "path": "final/iphone-streaming-safe-menu-landscape-left.png",
+      "sha256": "f549cecd38a33d940f0bd767346c2d42c756831183a972b86ce87e1332b3fe0d",
+      "bytes": 2982737
+    },
+    {
+      "path": "final/iphone-streaming-safe-menu-landscape-right.png",
+      "sha256": "d14ea5d133065d6224fc3f9ec60a949b8244f82e48d56e9da70ca0ce051219f2",
+      "bytes": 2987649
+    },
+    {
+      "path": "final/iphone-streaming-safe-region-1.txt",
+      "sha256": "4fd236e7d60f60d628f2a19cf9ec21916eb2392d942a17750c8ce27d844afbf8",
+      "bytes": 79
+    },
+    {
+      "path": "final/iphone-streaming-safe-region-3.txt",
+      "sha256": "a3a415bd483537ce8a8b45a40392a9945a385c426f961564328a6127e0736b73",
+      "bytes": 79
+    },
+    {
+      "path": "final/iphone-streaming-safe-region-4.txt",
+      "sha256": "8fbd92d2accb5933c1554bbd20843a1efdc2aa933e7d188659c06914ca43df81",
+      "bytes": 79
+    },
+    {
+      "path": "final/iphone-streaming-safe-touch-landscape-left.png",
+      "sha256": "b1c84e77791b4acacf25b6743c69469224e2fbfaa05b9c31fbb1afcc8854042b",
+      "bytes": 2943914
+    },
+    {
+      "path": "final/iphone-streaming-safe-touch-landscape-right.png",
+      "sha256": "ceb3458e9b04f330a798de4e3891dd5a5ae1d9fc90453cfbcf71c5600dab4759",
+      "bytes": 2948538
+    },
+    {
+      "path": "final/iphone-streaming-two-rails-portrait.png",
+      "sha256": "96aa995322eb3c005c05caa46a54b87ba458416d33202cceedfc6242b5b1f089",
+      "bytes": 2985114
+    },
+    {
+      "path": "logs/frontend-lint.log",
+      "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237",
+      "bytes": 19
+    },
+    {
+      "path": "logs/phone-sandbox-errors.txt",
+      "sha256": "728d1d615feeb24b5aceec7cba6b5c4bcbd58dcd2f6bde1ea4a8b8c5f8d2267f",
+      "bytes": 2090
+    },
+    {
+      "path": "logs/streaming-boundary.log",
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571",
+      "bytes": 40
+    },
+    {
+      "path": "logs/swift-format.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "logs/verification-excerpts.txt",
+      "sha256": "b97e17b85d13f0e2e7b92098eb4505f1f5f7fcb0c16be23978d589a4ac549130",
+      "bytes": 5284
+    },
+    {
+      "path": "observed-safe-frames.json",
+      "sha256": "05154208434671b127d406020aaa277f8771e237dc831ff5122493f8fed5d3aa",
+      "bytes": 1752
+    },
+    {
+      "path": "r1-test-summary.json",
+      "sha256": "a8a4e25fe6093fb469fc81dda0e23d12a1d544cdd28f0c15e2ff865e41ed4356",
+      "bytes": 1184
+    },
+    {
+      "path": "r2-device-build.log",
+      "sha256": "c6593864d8c5312001b9f2f724970df07cf70f99b0ce5c69b849fe514e109480",
+      "bytes": 168522
+    },
+    {
+      "path": "r2-ipad-test-summary.json",
+      "sha256": "5291d1b7819be2d7b84d380a457d67c54c55daccbd03435695cfe8164aaf008a",
+      "bytes": 1007
+    },
+    {
+      "path": "r2-phone-test-summary.json",
+      "sha256": "d99b8298598ad43d6fbe93cada767b7c65e00acb46db99f344a76b47fd7b6ab5",
+      "bytes": 991
+    },
+    {
+      "path": "r4-input-and-ui-summary.json",
+      "sha256": "56b63acccd69ca733be1ea47dc0309803e543119d834f3d5de2081d744bfcfbd",
+      "bytes": 991
+    },
+    {
+      "path": "r5-ipad-test-summary.json",
+      "sha256": "5274c765552edf98c01c83eec2ce4238661bdbbde4cf94689b548a32960025cf",
+      "bytes": 1491
+    },
+    {
+      "path": "r6-ipad-final-summary.json",
+      "sha256": "2d14f9b016da96396d2220b2f91a564c53a85d6b68d260755f8604c1a2be80eb",
+      "bytes": 1007
+    },
+    {
+      "path": "r6-phone-final-summary.json",
+      "sha256": "4b11b22c86ca07d53ae7ac2df3a1d10736dedc649c7fc836148e9567936d4cff",
+      "bytes": 991
+    },
+    {
+      "path": "r6-phone-initial-summary.json",
+      "sha256": "a33d72bf58cf8d5dfe978189e0cbb170d0888ff656e8bee87a2ec82e03d692e5",
+      "bytes": 1475
+    },
+    {
+      "path": "r6-task-changes.diff",
+      "sha256": "d32cd7589dff4e60169d0555a22ed55a99ca87db02818635b4f1e30e7ff03dba",
+      "bytes": 7568
+    },
+    {
+      "path": "retained-artifacts.json",
+      "sha256": "6509736cfc1134c68eba92c2c14acd663b1196b4372f3a16b4866bd690d720e2",
+      "bytes": 10373
+    },
+    {
+      "path": "scope-audit.json",
+      "sha256": "1744543bfe7ce9f0385a5d958b0d93b5232521947367c78ded5f3152c4387653",
+      "bytes": 289
+    },
+    {
+      "path": "source-hashes.json",
+      "sha256": "326043131c7fd2fc59a9fc1765a20350d3db8a871e0db64fce1ad6726a13ee5a",
+      "bytes": 15763
+    },
+    {
+      "path": "superseded-evidence.json",
+      "sha256": "2e8635483a4a151fa435357458befa7499f7eb8fc1b6740f4cd95990ed92e195",
+      "bytes": 6911
+    },
+    {
+      "path": "swift-format-4.json",
+      "sha256": "30dc2b50f04daa641233ec9a6fdf1e4c07d13206cf452f712dbb4364ef5607cf",
+      "bytes": 2814
+    },
+    {
+      "path": "task-input.json",
+      "sha256": "859899fbb57f6fb149d07a6b209823570cb06545a8675ea0b6466c27d30fb299",
+      "bytes": 300
+    },
+    {
+      "path": "task-ledger-before.md",
+      "sha256": "f55263b48f58d728a1323aa70ccfd0640938b9332cd354c1b5af6699463780e4",
+      "bytes": 658
+    },
+    {
+      "path": "task-ledger-changes.diff",
+      "sha256": "f0d6f0871782d64271a4387ca831db560fe66e9dea11002ce1863f034f3e8dce",
+      "bytes": 1665
+    },
+    {
+      "path": "task-ledger-final.md",
+      "sha256": "2a1a5a8e0589f8cfbd313572520b3fd3569b0596e403ab63002f853c09eed108",
+      "bytes": 900
+    },
+    {
+      "path": "touch-template-adjusted-full-viewport.png",
+      "sha256": "dcafff1b4b5a0ed3404a73d76c5983ec7850f02ef40bcd18b4604c5ac0e29fd6",
+      "bytes": 198397
+    },
+    {
+      "path": "touch-template-adjusted-preview.png",
+      "sha256": "28ea903afcff16a18d15ea4f4a626bab6f45008548eae36b000da669f3499f58",
+      "bytes": 435276
+    },
+    {
+      "path": "touch-template-dragged.png",
+      "sha256": "52a8ee935adb2d9ae5a2841c73bd4f750dc3a29d8f98e02773a117883bb7edc0",
+      "bytes": 174861
+    },
+    {
+      "path": "touch-template-landscape-full-viewport.png",
+      "sha256": "c7047a0529ac821a8b063efb3cf2c17277d85a04d236834b12b6720ac66cd8e9",
+      "bytes": 215184
+    },
+    {
+      "path": "touch-template-portrait-lower-half.png",
+      "sha256": "dfc1d81ff49139a5be62e66a9e0b0a1e21cee10da75c0f6839ad93b0594222e5",
+      "bytes": 172881
+    },
+    {
+      "path": "touch-template-restored-after-relaunch.png",
+      "sha256": "28ea903afcff16a18d15ea4f4a626bab6f45008548eae36b000da669f3499f58",
+      "bytes": 435276
+    },
+    {
+      "path": "validation.json",
+      "sha256": "eed28d8fdf0c3ff246b915cd1300db21159819b490946b3418c99e8cdead9e1d",
+      "bytes": 1569
+    }
+  ]
+}

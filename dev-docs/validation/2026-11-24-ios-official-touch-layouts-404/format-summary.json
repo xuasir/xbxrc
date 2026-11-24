@@ -1,0 +1,7 @@
+{
+  "rustFmt": "passed",
+  "swiftProductionStrictLint": "passed",
+  "swiftUITestStrictLint": "passed",
+  "resolvedExistingIssues": 2,
+  "resolution": "withCloudAccess closures use explicit operation label"
+}

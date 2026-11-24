@@ -1,0 +1,22 @@
+{
+  "completedAtUTC": "2026-11-23T10:32:24.729195+00:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay",
+  "removed": true,
+  "removedFileCount": 2430,
+  "logicalBytesRemoved": 897873645,
+  "allocatedBytesRemoved": 908812288,
+  "freeBytesBefore": 48742400000,
+  "freeBytesAfter": 49561600000,
+  "freeBytesDelta": 819200000,
+  "retainedUserLog": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-472B306E-7D42-452E-AC23-844411487EBF.jsonl",
+  "userLogSha256Preserved": true,
+  "retainedEvidence": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-startup-pc-parity/fresh-trace-472b306e",
+  "retainedSharedCaches": [
+    "target/ios-bindgen",
+    "target/ios",
+    "target/ios-webrtc",
+    "target/debug",
+    "Xcode system-managed report cache"
+  ],
+  "scope": "本轮已登记的隔离临时根及全部子目录"
+}

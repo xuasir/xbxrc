@@ -161,6 +161,9 @@ extension MobilePreferences {
     mutating func deleteTouchTemplate(_ id: String) {
         touchLayoutTemplates.removeAll { $0.id == id }
         if touchLayoutID == id { touchLayoutID = TouchLayoutTemplate.standardID }
+        if recentCustomTouchLayoutID == TouchLayoutSelection.template(id).persistentID {
+            recentCustomTouchLayoutID = nil
+        }
     }
 
     mutating func saveTouchAppearance(_ appearance: TouchLayoutAppearance, for id: String) {

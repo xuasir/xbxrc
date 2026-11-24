@@ -1,0 +1,36 @@
+{
+  "status": "automatic-smoke-passed",
+  "uiCases": 1,
+  "uiSeconds": 42.597,
+  "compactCardMaxHeightPt": 96,
+  "saveButtonMinHeightPt": 44,
+  "assertions": [
+    "紧凑卡片",
+    "右侧保存按钮垂直居中",
+    "直接全屏预览",
+    "竖横竖方向变化与每个按键位于屏幕内",
+    "返回自动保存后列表更新",
+    "本机库出现保存项"
+  ],
+  "reusedRustChecks": 31,
+  "reusedSwiftIdentityChecks": 6,
+  "manualPending": [
+    "真实官方包在已登录应用中保存",
+    "Home 实机动作和手感"
+  ],
+  "temporaryRoots": [
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r1",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r2",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r3",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r4",
+    "/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r3",
+    "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r5"
+  ],
+  "finalCardSmoke": {
+    "passedTests": 1,
+    "seconds": 25.758,
+    "scope": "卡片前缀最小冒烟、编译、中心对齐与高度断言",
+    "arrowRemoved": true,
+    "saveVerticallyCentered": true
+  }
+}

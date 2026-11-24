@@ -1,0 +1,25 @@
+### xcode-option-diagnostic.log
+xcodebuild: error: invalid option '-clonedSourcePackagesDir'
+
+### build-failure.log
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Components/AdaptiveSectionNavigation.swift:88:56: error: ambiguous use of 'center'
+     |                                                        `- error: ambiguous use of 'center'
+** TEST FAILED **
+
+### test.log
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedUIStyleSmoke]' passed (1.967 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testCloudBrowseCapsulesKeepSearchAndFiltersBound]' passed (24.125 seconds).
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:456: error: -[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum] : Failed to get matching snapshot: No matches found for Elements matching predicate '"album-media-types" IN identifiers' from input {(
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' failed (18.171 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingDiagnosticMenuGroupsCopyAndMetricsVisibility]' passed (32.155 seconds).
+** TEST FAILED **
+
+### tab-test.log
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:456: error: -[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum] : XCTAssertEqualWithAccuracy failed: ("507.75") is not equal to ("543.0") +/- ("24.0")
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' failed (19.680 seconds).
+** TEST FAILED **
+
+### final-test.log
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedUIStyleSmoke]' passed (2.015 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' passed (18.145 seconds).
+** TEST SUCCEEDED **

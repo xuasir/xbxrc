@@ -1,0 +1,160 @@
+{
+  "crates/xbox-webapi/src/transport.rs": {
+    "sha256": "96474edff0fe0a748cd49927f4b423c600a8f572cf41e14d60269c4aadfcfa73",
+    "bytes": 22264,
+    "ranges": [
+      [
+        9,
+        14
+      ],
+      [
+        103,
+        126
+      ],
+      [
+        583,
+        604
+      ]
+    ]
+  },
+  "crates/xbox-webapi/src/auth_api.rs": {
+    "sha256": "4e2b3e4cd45c9ffbc2f2657fded9e66836038454b2dc9c96cf27f8923831af06",
+    "bytes": 20172,
+    "ranges": [
+      [
+        112,
+        128
+      ]
+    ]
+  },
+  "crates/xbox-auth-flow/src/flow.rs": {
+    "sha256": "004dcbddbcb9e9c6ad9153863c6c7be734c42829b38bd8c11014c334bb4b942a",
+    "bytes": 15856,
+    "ranges": [
+      [
+        132,
+        155
+      ],
+      [
+        180,
+        191
+      ],
+      [
+        224,
+        249
+      ],
+      [
+        283,
+        300
+      ],
+      [
+        314,
+        346
+      ],
+      [
+        379,
+        403
+      ]
+    ]
+  },
+  "crates/xbox-auth-flow/src/error.rs": {
+    "sha256": "c8279f3430a5263193ed4b69a903cd9c9afa97ca3b793c1f452fec8ec0f318fa",
+    "bytes": 2718,
+    "ranges": [
+      [
+        26,
+        36
+      ]
+    ]
+  },
+  "crates/xbox-ios-bridge/src/cloud_access.rs": {
+    "sha256": "529267998790f1d45805e578bfbba462cb4877b83cfde691e0dca5ca39dea0ff",
+    "bytes": 39016,
+    "ranges": [
+      [
+        127,
+        145
+      ],
+      [
+        288,
+        299
+      ]
+    ]
+  },
+  "crates/xbox-ios-bridge/src/lib.rs": {
+    "sha256": "f6ffc16b3e62bc6af77b844dd498cfbb1154a2f73d2ea821a222dfc4c3e9e74b",
+    "bytes": 13779,
+    "ranges": [
+      [
+        178,
+        184
+      ]
+    ]
+  },
+  "src-tauri/src/mods/auth/service.rs": {
+    "sha256": "95ed568ad9210ff47880ace78046b8584b8a52b59cb022d37a3353700eca222b",
+    "bytes": 27595,
+    "ranges": [
+      [
+        170,
+        176
+      ],
+      [
+        222,
+        240
+      ]
+    ]
+  },
+  "src-tauri/src/mods/auth/token_refresh.rs": {
+    "sha256": "625d019ace7135702f6710e5698b79d30b9d8b6349f6a384b336ed5ceb3af0ed",
+    "bytes": 5793,
+    "ranges": [
+      [
+        6,
+        22
+      ],
+      [
+        32,
+        40
+      ]
+    ]
+  },
+  "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift": {
+    "sha256": "431fb177474d55972710b964824255e1928bb3a8bfdd6e65436679bd62bb940f",
+    "bytes": 16706,
+    "ranges": [
+      [
+        106,
+        125
+      ],
+      [
+        150,
+        165
+      ]
+    ]
+  },
+  "iosapp/XBXRC/Features/Authentication/AuthStore.swift": {
+    "sha256": "6ee4a380a20ab28c0fb68c286e272c72451ce296c098f2d1c2764bf511ec4e02",
+    "bytes": 38361,
+    "ranges": [
+      [
+        451,
+        462
+      ],
+      [
+        475,
+        488
+      ]
+    ]
+  },
+  "iosapp/XBXRC/Features/Settings/SettingsView.swift": {
+    "sha256": "e82a6034620d10ecc52bbe43638dcaedebe68e2a50eb1a11e6e56a5151d1b445",
+    "bytes": 15337,
+    "ranges": [
+      [
+        215,
+        225
+      ]
+    ]
+  }
+}

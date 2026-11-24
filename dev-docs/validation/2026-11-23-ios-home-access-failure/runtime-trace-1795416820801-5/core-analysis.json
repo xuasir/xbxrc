@@ -1,0 +1,613 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 47468,
+        "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+        "maxFileBytes": 8388608,
+        "maxFiles": 4,
+        "profile": "production",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Downloads",
+        "files": 1,
+        "maxFiles": 4,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "streamingCoreViolations": 28
+  },
+  "gate": "FAIL",
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "files": [
+      "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl"
+    ],
+    "firstTsMs": 1795416820800,
+    "lastTsMs": 1795417534096,
+    "profiles": {
+      "production": 90
+    },
+    "rows": 90,
+    "sessions": [
+      "32F9018F-186F-47DD-8FFD-D7FDCF482109"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "32F9018F-186F-47DD-8FFD-D7FDCF482109": {
+        "duplicates": 0,
+        "firstSeq": 41307,
+        "lastSeq": 41396,
+        "regressions": 0,
+        "rows": 90
+      }
+    },
+    "violations": []
+  },
+  "streamingCore": {
+    "attempts": [
+      {
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "cleanup": {
+          "accessReleased": [],
+          "iceTasksCancelled": [],
+          "peerClosed": [],
+          "remoteSessionClosed": []
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 15,
+        "passed": false,
+        "peerEpochs": [],
+        "playingStates": [],
+        "rows": 7,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "sessionReady": [],
+        "targets": [
+          "cloud"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+            "line": 63,
+            "seq": 41369,
+            "tsMs": 1795416872535
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "anchor": "sessionReady",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "peerEpochs": [],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "iceTasksCancelled",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "peerClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "remoteSessionClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "accessReleased",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          }
+        ]
+      },
+      {
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "cleanup": {
+          "accessReleased": [],
+          "iceTasksCancelled": [],
+          "peerClosed": [],
+          "remoteSessionClosed": []
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 12,
+        "passed": false,
+        "peerEpochs": [],
+        "playingStates": [],
+        "rows": 6,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "sessionReady": [],
+        "targets": [
+          "cloud"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+            "line": 24,
+            "seq": 41330,
+            "tsMs": 1795416843639
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "anchor": "sessionReady",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "peerEpochs": [],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "iceTasksCancelled",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "peerClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "remoteSessionClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "accessReleased",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          }
+        ]
+      },
+      {
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "cleanup": {
+          "accessReleased": [],
+          "iceTasksCancelled": [],
+          "peerClosed": [],
+          "remoteSessionClosed": []
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 13,
+        "passed": false,
+        "peerEpochs": [],
+        "playingStates": [],
+        "rows": 7,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "sessionReady": [],
+        "targets": [
+          "cloud"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+            "line": 36,
+            "seq": 41342,
+            "tsMs": 1795416859302
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "anchor": "sessionReady",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "peerEpochs": [],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "iceTasksCancelled",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "peerClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "remoteSessionClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "accessReleased",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          }
+        ]
+      },
+      {
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "cleanup": {
+          "accessReleased": [],
+          "iceTasksCancelled": [],
+          "peerClosed": [],
+          "remoteSessionClosed": []
+        },
+        "completePeerEpochs": [],
+        "contextViolations": [],
+        "generation": 11,
+        "passed": false,
+        "peerEpochs": [],
+        "playingStates": [],
+        "rows": 3,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "sessionReady": [],
+        "targets": [],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+            "line": 10,
+            "seq": 41316,
+            "tsMs": 1795416834457
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [
+          {
+            "anchor": "sessionReady",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "peerEpochs": [],
+            "type": "no-complete-peer-epoch"
+          },
+          {
+            "anchor": "streamingStateChanged:playing",
+            "expected": "at least 1",
+            "observed": 0,
+            "type": "streaming-anchor-count"
+          },
+          {
+            "anchor": "iceTasksCancelled",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "peerClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "remoteSessionClosed",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          },
+          {
+            "anchor": "accessReleased",
+            "expected": 1,
+            "observed": 0,
+            "type": "streaming-cleanup-count"
+          }
+        ]
+      }
+    ],
+    "contextViolations": [],
+    "gate": "FAIL",
+    "generationViolations": [],
+    "rows": 25,
+    "violations": [
+      {
+        "anchor": "sessionReady",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": 1,
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "generation": 15,
+        "peerEpochs": [],
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": "at least 1",
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "iceTasksCancelled",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": 1,
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "peerClosed",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": 1,
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "remoteSessionClosed",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": 1,
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "accessReleased",
+        "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+        "expected": 1,
+        "generation": 15,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "sessionReady",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": 1,
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "generation": 12,
+        "peerEpochs": [],
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": "at least 1",
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "iceTasksCancelled",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": 1,
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "peerClosed",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": 1,
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "remoteSessionClosed",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": 1,
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "accessReleased",
+        "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+        "expected": 1,
+        "generation": 12,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "sessionReady",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": 1,
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "generation": 13,
+        "peerEpochs": [],
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": "at least 1",
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "iceTasksCancelled",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": 1,
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "peerClosed",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": 1,
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "remoteSessionClosed",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": 1,
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "accessReleased",
+        "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+        "expected": 1,
+        "generation": 13,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "sessionReady",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": 1,
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "generation": 11,
+        "peerEpochs": [],
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "no-complete-peer-epoch"
+      },
+      {
+        "anchor": "streamingStateChanged:playing",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": "at least 1",
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-anchor-count"
+      },
+      {
+        "anchor": "iceTasksCancelled",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": 1,
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "peerClosed",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": 1,
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "remoteSessionClosed",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": 1,
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      },
+      {
+        "anchor": "accessReleased",
+        "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+        "expected": 1,
+        "generation": 11,
+        "observed": 0,
+        "sessionId": "32F9018F-186F-47DD-8FFD-D7FDCF482109",
+        "type": "streaming-cleanup-count"
+      }
+    ]
+  }
+}

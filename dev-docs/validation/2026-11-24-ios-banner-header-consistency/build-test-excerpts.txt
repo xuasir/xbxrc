@@ -1,0 +1,10 @@
+### test.log
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1053: error: -[XBXRCTests.CapabilityMigrationTests testScopedBannerHeaderSmoke] : XCTAssertNotEqual failed: ("740 bytes") is equal to ("740 bytes") - 进入游戏后标题栏应使用游戏背景
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1056: error: -[XBXRCTests.CapabilityMigrationTests testScopedBannerHeaderSmoke] : XCTAssertEqual failed: ("740 bytes") is not equal to ("725 bytes") - 后台玩家资料更新应保留当前游戏的标题背景
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedBannerHeaderSmoke]' failed (4.969 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testGameOverviewUsesTabsAndCentersEmptyAlbum]' passed (23.306 seconds).
+** TEST FAILED **
+
+### final-test.log
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedBannerHeaderSmoke]' passed (5.613 seconds).
+** TEST SUCCEEDED **

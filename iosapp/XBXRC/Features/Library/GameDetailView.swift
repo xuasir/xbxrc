@@ -7,6 +7,7 @@ struct GameDetailView: View {
   @EnvironmentObject private var streamingStore: StreamingFeatureStore
   @EnvironmentObject private var settings: AppSettingsStore
   @EnvironmentObject private var favorites: CloudFavoritesStore
+  @EnvironmentObject private var touchLayouts: SavedTouchLayoutsStore
   @Environment(\.appPageIsActive) private var isActive
   @Environment(\.locale) private var locale
   private let initialGame: CloudLibraryGame
@@ -30,10 +31,13 @@ struct GameDetailView: View {
   }
   private var detail: CloudProductDetails? { detailState.value }
   private var artworkCandidates: [URL] {
-    [
-      detail?.heroURL, game.heroURL, detail?.posterURL, game.posterURL,
+    var seen = Set<URL>()
+    return [
+      detail?.heroURL, game.heroURL, initialGame.heroURL,
+      detail?.posterURL, game.posterURL, initialGame.posterURL,
       detail?.tileURL, game.tileURL, game.artworkURL,
-    ].compactMap { $0 }
+      initialGame.tileURL, initialGame.artworkURL,
+    ].compactMap { $0 }.filter { seen.insert($0).inserted }
   }
   private var coverCandidates: [URL] {
     [detail?.tileURL, game.tileURL, game.artworkURL, detail?.posterURL, game.posterURL]
@@ -50,7 +54,8 @@ struct GameDetailView: View {
     return GameSummary(
       id: titleID, titleID: titleID, name: detail?.name ?? game.name,
       artworkURL: detail?.tileURL ?? game.tileURL ?? game.artworkURL,
-      heroURL: detail?.heroURL ?? game.heroURL, lastPlayedAt: personalLastPlayed,
+      heroURL: detail?.heroURL ?? game.heroURL ?? initialGame.heroURL,
+      lastPlayedAt: personalLastPlayed,
       playtimeMinutes: personalPlaytime, achievementProgress: personalProgress,
       description: detail?.description ?? game.description, productID: game.productID)
   }
@@ -60,6 +65,7 @@ struct GameDetailView: View {
       VStack(alignment: .leading, spacing: 32) {
         AppAccountRequestNotice()
         header
+        touchLayoutsSection
         personalSection
         productSection
         screenshots
@@ -122,7 +128,7 @@ struct GameDetailView: View {
       guard isActive, authStore.isSignedIn else { return }
       await load(refresh: false)
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
     .sheet(item: $selectedScreenshot) { screenshot in
       NavigationStack { CloudScreenshotPreview(url: screenshot.url) }
         .presentationDragIndicator(.visible)
@@ -167,6 +173,29 @@ struct GameDetailView: View {
       maxWidth: .infinity, minHeight: artworkCandidates.isEmpty ? 0 : 216,
       alignment: .bottomLeading
     )
+  }
+
+  private var touchLayoutsSection: some View {
+    NavigationLink {
+      OfficialTouchLayoutsView(game: game)
+    } label: {
+      HStack(spacing: 12) {
+        AppIconView(.touch).foregroundStyle(AppThemePalette.brand)
+        VStack(alignment: .leading, spacing: 4) {
+          Text("查看游戏布局").appFont(.body, weight: .semibold)
+          Text("保存游戏适配布局，用于 Home 串流")
+            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+          if touchLayouts.layouts.contains(where: { $0.productId == game.productID }) {
+            Text("已保存到本机").appFont(.caption).foregroundStyle(AppThemePalette.brand)
+          }
+        }
+        Spacer(minLength: 8)
+        AppIconView(.chevron, size: 16).foregroundStyle(AppThemePalette.brand)
+      }
+      .padding(16).frame(minHeight: 44).contentShape(Rectangle())
+      .appSurface(radius: AppLayoutPolicy.cardRadius)
+    }
+    .buttonStyle(.plain).accessibilityIdentifier("cloud-official-touch-layouts")
   }
 
   private var recordState: XboxSingleDataState<GameSummary> {
@@ -483,8 +512,8 @@ struct GameDetailView: View {
     if let onPlay, let streamTitleID = game.streamTitleID {
       onPlay(streamTitleID)
     } else {
-      streamingStore.startCloudGame(productID: game.productID) {
-        try await authStore.prepareCloudAccess()
+      streamingStore.startCloudGame(productID: game.productID) { startup in
+        try await authStore.prepareCloudAccess(startup: startup)
       }
     }
   }

@@ -71,7 +71,7 @@ struct FriendsView: View {
       guard isActive else { return }
       await data.loadFriends()
     }
-    .refreshable { await data.loadFriends(refresh: true) }
+    .appRefreshable { await data.loadFriends(refresh: true) }
   }
 }
 
@@ -210,7 +210,7 @@ struct FriendDetailView: View {
       guard isActive else { return }
       await load(refresh: false)
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
   }
 
   private func load(refresh: Bool) async {
@@ -269,10 +269,12 @@ struct PersonalIdentityHero: View {
           }
           .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
           if let activity {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-              AppIconView(.controller, size: 14)
+            Label {
               Text(activity).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+              AppIconView(.controller, size: 14)
             }
+            .labelStyle(AppIconLabelStyle())
             .appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
           }
         }

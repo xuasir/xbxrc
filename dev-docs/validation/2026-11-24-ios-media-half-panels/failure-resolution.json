@@ -1,0 +1,6 @@
+{
+  "zero_progress": "下载进度改用 URLSessionDownloadDelegate 并显示实际字节和百分比；最终相册冒烟已通过。",
+  "fullscreen_locator": "原生控件按实际可访问性元素定位，最终完成全屏进入和返回验证。",
+  "concurrent_source_membership": "当前工程已注册 AlbumFileDownload.swift 与 CloudProductDetailRepository.swift；最终相册构建成功。",
+  "interrupted_cleanup": "下载URL临时例外经过格式化导致精确文本恢复中断；本轮按语义恢复HTTPS并核验四处临时文本已移除。"
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "section": "云游戏",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "navigation_bounds": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "background_frame": {
+      "height": 116,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "excess_height": 0
+  },
+  {
+    "section": "我的",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "navigation_bounds": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "background_frame": {
+      "height": 168,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "excess_height": 52
+  },
+  {
+    "section": "控制器",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "navigation_bounds": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "background_frame": {
+      "height": 168,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "excess_height": 52
+  },
+  {
+    "section": "设置",
+    "navigation_frame": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 62
+    },
+    "navigation_bounds": {
+      "height": 54,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "background_frame": {
+      "height": 168,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "excess_height": 52
+  }
+]

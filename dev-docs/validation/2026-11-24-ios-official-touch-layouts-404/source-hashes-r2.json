@@ -1,0 +1,11 @@
+{
+  "crates/xbox-webapi/src/xcloud_api.rs": "e8ec8d183099aa75a1745fe0a3d22c1611217a5d84d4c9ae5b315e814127cb78",
+  "crates/xbox-ios-bridge/src/touch_layouts/mod.rs": "e0a4969cdda5aa03e96c019e193ecd832cd3c33e7942037471200d277f05e745",
+  "crates/xbox-touch-layouts/src/catalog.rs": "01d2b661cfe2c8ba212be0ec6e0f911658d1cdc5663ebb16bcaa538cf1055158",
+  "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift": "54458ef409cdc2145b4e25207cfe3b701eae92dffe699032309a7ab81ff06180",
+  "docs/project-task.md": "d8b35413e1e22e6ef6fb918630c5aeade2d54618d40195b4a72a08d160b66e4f",
+  "docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md": "fa2ad478d5f628a45e25e2521aca02a1aecf51bdbbfcb1b87ccdc2f725a50d47",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "cc3d73d1a447eed273a817f657839750a813a1bfca7358e9997f1785d2f888f5",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": "a960dbd3463fe0d3ca0f508d811285b90adc94358d965dc2bd8b1e95f539efdf",
+  "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+}

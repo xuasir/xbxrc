@@ -1,0 +1,24 @@
+{
+  "result": "Passed",
+  "passed_tests": 3,
+  "failed_tests": 0,
+  "ui_tests": 2,
+  "native_tests": 1,
+  "ui_bundle": "smoke.xcresult",
+  "native_bundle": "native-control.xcresult",
+  "configuration": {
+    "architecture": "arm64",
+    "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+    "deviceName": "iPhone 18 Pro",
+    "modelName": "iPhone 18 Pro",
+    "osBuildNumber": "24A434",
+    "osVersion": "27.0",
+    "platform": "iOS Simulator"
+  },
+  "validation_scope": [
+    "原生下拉刷新保留系统控件，正文额外 spinner 3→0→3",
+    "TW/zh-TW 与 US/en-US 商品请求切换，保留个人成就数据",
+    "详情44pt圆形串流入口与标题中线一致、单一动作",
+    "左右横屏44pt快捷入口并排8pt且避开虚拟按钮"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "attempts": [
+    {
+      "bundle": "smoke.xcresult",
+      "result": "2 UI Passed / 1 native fixture Failed",
+      "observation": "Native probe waited for refresh environment action inside ScrollView; lifecycle teardown reported idle -> failed(deinit)."
+    },
+    {
+      "bundle": "native-final.xcresult",
+      "result": "native fixture Failed",
+      "observation": "Initial wait still used refresh action consumed by ScrollView."
+    },
+    {
+      "bundle": "native-control.xcresult",
+      "result": "native Passed",
+      "correction": "Use UIRefreshControl valueChanged events and a visible refresh state reader; extra content spinners 3→0→3."
+    }
+  ],
+  "production_compile": "Passed",
+  "final_failures": 0
+}

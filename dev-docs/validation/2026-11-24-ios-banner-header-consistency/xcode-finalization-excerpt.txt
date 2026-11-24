@@ -1,0 +1,82 @@
+Analysis of sampling xcodebuild (pid 91801) every 1 millisecond
+Process:         xcodebuild [91801]
+Path:            /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild
+Load Address:    0x1007d4000
+Identifier:      xcodebuild
+Version:         16.0 (25106)
+Build Info:      IDEApplication-25183107005000000~2 (27A266a)
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  codex [96382]
+Target Type:     live task (Roots Present)
+
+Date/Time:       2026-11-24 12:53:56.519 +0800
+Launch Time:     2026-11-24 12:49:28.163 +0800
+OS Version:      macOS 27.0 (26A428)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         83.4M
+Physical footprint (peak):  161.3M
+Idle exit:                  untracked
+----
+
+Call graph:
+    764 Thread_12715297   DispatchQueue_1: com.apple.main-thread  (serial)
+    + 764 start  (in dyld) + 6688  [0x188a7be80]
+    +   764 main  (in xcodebuild) + 476  [0x1007d506c]
+    +     764 -[XcodebuildPreIDEHandler runWithArguments:]  (in xcodebuild) + 364  [0x1007d551c]
+    +       764 -[XcodebuildPreIDEHandler loadXcode3ProjectSupportAndRunXcode3CommandLineBuildToolWithArguments:]  (in xcodebuild) + 152  [0x1007d7230]
+    +         764 XcodeBuildMain  (in libxcodebuildLoader.dylib) + 608  [0x10092d4bc]
+    +           764 -[Xcode3CommandLineBuildTool run]  (in Xcode3Core) + 4864  [0x105464c54]
+    +             764 -[Xcode3CommandLineBuildTool _buildWithTimingSection:]  (in Xcode3Core) + 700  [0x105458db4]
+    +               764 -[Xcode3CommandLineBuildTool doBuildForBuildAction:timingSection:colorize:colorizeFailure:error:]  (in Xcode3Core) + 1152  [0x10545809c]
+    +                 764 -[Xcode3CommandLineBuildTool waitForBuildWithBuildLog:buildActionTimingSection:executionEnvironment:title:operationToEnqueue:error:]  (in Xcode3Core) + 600  [0x105457778]
+    +                   764 CFRunLoopRun  (in CoreFoundation) + 64  [0x188f894c4]
+    +                     764 _CFRunLoopRunSpecificWithOptions  (in CoreFoundation) + 536  [0x188feb82c]
+    +                       764 __CFRunLoopRun  (in CoreFoundation) + 1172  [0x188f11334]
+    +                         764 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x188f12aec]
+    +                           764 mach_msg  (in libsystem_kernel.dylib) + 24  [0x188e0cfac]
+    +                             764 mach_msg_overwrite  (in libsystem_kernel.dylib) + 480  [0x188e15a28]
+    +                               764 mach_msg2_internal  (in libsystem_kernel.dylib) + 76  [0x188e1f8e0]
+    +                                 764 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x188e0cc20]
+    764 Thread_12715412
+    + 764 thread_start  (in libsystem_pthread.dylib) + 8  [0x188e4ccec]
+    +   764 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x188e51d00]
+    +     764 __NSThread__start__  (in Foundation) + 732  [0x18a60eca8]
+    +       764 @objc ThreadImpl.main()  (in SwiftPM) + 44  [0x127aa3064]
+    +         764 <deduplicated_symbol>  (in SwiftPM) + 28  [0x1273d1ca8]
+    +           764 closure #1 in Thread.init(task:)  (in SwiftPM) + 100  [0x127aa2f08]
+    +             764 closure #1 in FSEventStream.start()  (in SwiftPM) + 224  [0x127ace114]
+    +               764 CFRunLoopRun  (in CoreFoundation) + 64  [0x188f894c4]
+    +                 764 _CFRunLoopRunSpecificWithOptions  (in CoreFoundation) + 536  [0x188feb82c]
+    +                   764 __CFRunLoopRun  (in CoreFoundation) + 1172  [0x188f11334]
+    +                     764 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x188f12aec]
+    +                       764 mach_msg  (in libsystem_kernel.dylib) + 24  [0x188e0cfac]
+    +                         764 mach_msg_overwrite  (in libsystem_kernel.dylib) + 480  [0x188e15a28]
+    +                           764 mach_msg2_internal  (in libsystem_kernel.dylib) + 76  [0x188e1f8e0]
+    +                             764 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x188e0cc20]
+    764 Thread_12716337   DispatchQueue_1721: ConcurrentQueue:/AppleInternal/Library/BuildRoots/4~CXnjugBe-SbN2fdXbMY1Rn4PDSWDkIdN-fw7PJ8/Library/Caches/com.apple.xbs/Tempor  (concurrent)
+    + 764 start_wqthread  (in libsystem_pthread.dylib) + 8  [0x188e4cce0]
+    +   764 _pthread_wqthread  (in libsystem_pthread.dylib) + 232  [0x188e4df60]
+    +     764 _dispatch_worker_thread2  (in libdispatch.dylib) + 184  [0x188ca3248]
+    +       764 _dispatch_root_queue_drain  (in libdispatch.dylib) + 360  [0x188ca2aac]
+    +         764 _dispatch_async_redirect_invoke  (in libdispatch.dylib) + 748  [0x188c948e8]
+    +           764 _dispatch_continuation_pop  (in libdispatch.dylib) + 596  [0x188c951b4]
+    +             764 _dispatch_client_callout  (in libdispatch.dylib) + 16  [0x188caa5a0]
+    +               764 _dispatch_call_block_and_release  (in libdispatch.dylib) + 32  [0x188c90a34]
+    +                 764 <deduplicated_symbol>  (in IDEFoundation) + 28  [0x1111e1214]
+    +                   764 closure #1 in XCTHRunDestinationAllocator.collectSimulatorDiagnostics(for:into:startTime:activityGenerator:completionHandler:)  (in IDEFoundation) + 280  [0x1117817b4]
+    +                     764 static XCTHProcessInvocation.simCtlDiagnose(for:startTime:savingOutputInto:)  (in XCTHarness) + 276  [0x10f270050]
+    +                       764 specialized static XCTHProcessInvocation.invoke(with:processProvider:)  (in XCTHarness) + 524  [0x10f2702d4]
+    +                         764 OS_dispatch_semaphore.wait(wallTimeout:)  (in libswiftDispatch.dylib) + 24  [0x1a53694a0]
+    +                           764 _dispatch_semaphore_wait_slow  (in libdispatch.dylib) + 76  [0x188c92af0]
+    +                             764 _dispatch_sema4_timedwait  (in libdispatch.dylib) + 64  [0x188cc6328]
+    +                               764 semaphore_timedwait_trap  (in libsystem_kernel.dylib) + 8  [0x188e0cbb4]
+    764 Thread_12721035
+      764 start_wqthread  (in libsystem_pthread.dylib) + 8  [0x188e4cce0]
+        764 _pthread_wqthread  (in libsystem_pthread.dylib) + 368  [0x188e4dfe8]
+          764 __workq_kernreturn  (in libsystem_kernel.dylib) + 8  [0x188e0e9ec]
+
+Total number in stack (recursive counted multiple, when >=5):
+

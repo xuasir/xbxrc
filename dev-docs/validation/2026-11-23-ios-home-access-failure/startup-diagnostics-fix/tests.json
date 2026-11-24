@@ -1,0 +1,91 @@
+{
+  "recordedAt": "2026-11-23T14:44:15.585533+08:00",
+  "result": "PASS",
+  "environment": "macOS宿主Foundation/XCTest",
+  "command": [
+    "xcrun",
+    "swift",
+    "test",
+    "--package-path",
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/PureProbe",
+    "--scratch-path",
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/SwiftPMBuild",
+    "--cache-path",
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/SwiftPMCache",
+    "--config-path",
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/SwiftPMConfig",
+    "--security-path",
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/SwiftPMSecurity",
+    "--disable-sandbox",
+    "--disable-index-store"
+  ],
+  "executed": 10,
+  "failures": 0,
+  "cases": [
+    {
+      "name": "testDiscoveryTimeoutRetainsItsOwnStageCode",
+      "seconds": 0.002,
+      "status": "passed"
+    },
+    {
+      "name": "testFoundationTimeoutAndCancellationKeepDistinctCategories",
+      "seconds": 0.001,
+      "status": "passed"
+    },
+    {
+      "name": "testHTTPRegistrationFailureRetainsStatusAndFixedHint",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testNativeNegotiationTimeoutRetainsRuntimeErrorCode",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testRemoteConnectFailureRetainsCategoryAndProtectsPrivateDetails",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testStartupProgressRejectsUnknownTextAndClampsWaitValues",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testStartupProgressRetainsQueueAndRetryFacts",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testTypedHTTPStatusKeepsAuthorityOverServiceMessage",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testUnknownRemoteFailureKeepsOnlySafeClassification",
+      "seconds": 0.0,
+      "status": "passed"
+    },
+    {
+      "name": "testWakeFailureRetainsHostReadinessCode",
+      "seconds": 0.0,
+      "status": "passed"
+    }
+  ],
+  "productionFunctionsByteMatch": true,
+  "productionTestsByteMatch": true,
+  "productionFunctions": {
+    "sha256": "61b981f98c20d1dd149a4ab369421cdb70cb152c603511e4c408ebdaaa7b2a8c",
+    "bytes": 7441
+  },
+  "productionTests": {
+    "sha256": "bce7ca71f850df76c0a086d74307efaff19f1068f641136b0097b1526095273a",
+    "bytes": 5887
+  },
+  "probeTypes": {
+    "sha256": "46e9146aaff47edaba4b26403122e1e9b8de33e25936b2adfcfe128ddaaaf596",
+    "bytes": 4438
+  },
+  "scope": "执行真实生产诊断函数；iPhoneOS构建独立验证正式App类型接线"
+}

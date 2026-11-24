@@ -460,7 +460,13 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 
 
 // Public interface members begin here.
-
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -649,6 +655,413 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 
+public protocol XboxAuthObserver: AnyObject, Sendable {
+
+    func checkpoint(update: XboxAuthCheckpoint) async throws
+
+    func onStage(event: XboxAuthStage)
+
+}
+open class XboxAuthObserverImpl: XboxAuthObserver, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxauthobserver(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxauthobserver(handle, $0) }
+    }
+
+
+
+
+open func checkpoint(update: XboxAuthCheckpoint)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxauthobserver_checkpoint(
+                        self.uniffiCloneHandle(),FfiConverterTypeXboxAuthCheckpoint_lower(update)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func onStage(event: XboxAuthStage)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_method_xboxauthobserver_on_stage(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeXboxAuthStage_lower(event),uniffiCallStatus
+    )
+}
+}
+
+
+
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceXboxAuthObserver {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceXboxAuthObserver = UniffiVTableCallbackInterfaceXboxAuthObserver(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeXboxAuthObserver.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface XboxAuthObserver: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeXboxAuthObserver.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface XboxAuthObserver: handle missing in uniffiClone")
+            }
+        },
+        checkpoint: { (
+            uniffiHandle: UInt64,
+            update: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            // 回调入栈时消费 owned RustBuffer，Task 只捕获 Sendable Swift 值。
+            let uniffiArgument_update = Result { try FfiConverterTypeXboxAuthCheckpoint_lift(update) }
+            let makeCall = { @Sendable
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeXboxAuthObserver.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.checkpoint(
+                     update: try uniffiArgument_update.get()
+                )
+            }
+
+            let uniffiHandleSuccess = { @Sendable (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { @Sendable (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeXboxBridgeError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        onStage: { (
+            uniffiHandle: UInt64,
+            event: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeXboxAuthObserver.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onStage(
+                     event: try FfiConverterTypeXboxAuthStage_lift(event)
+                )
+            }
+
+
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceXboxAuthObserver> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceXboxAuthObserver>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitXboxAuthObserver() {
+    uniffi_xbox_ios_bridge_fn_init_callback_vtable_xboxauthobserver(UniffiCallbackInterfaceXboxAuthObserver.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxAuthObserver: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<XboxAuthObserver>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxAuthObserver
+
+    public static func lift(_ handle: UInt64) throws -> XboxAuthObserver {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return XboxAuthObserverImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: XboxAuthObserver) -> UInt64 {
+         if let rustImpl = value as? XboxAuthObserverImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxAuthObserver {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxAuthObserver, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthObserver_lift(_ handle: UInt64) throws -> XboxAuthObserver {
+    return try FfiConverterTypeXboxAuthObserver.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthObserver_lower(_ value: XboxAuthObserver) -> UInt64 {
+    return FfiConverterTypeXboxAuthObserver.lower(value)
+}
+
+
+
+
+
+
+public protocol XboxOfficialTouchBundleProtocol: AnyObject, Sendable {
+
+    func choices()  -> [XboxTouchLayoutChoice]
+
+    func preview(layoutId: String) async throws  -> XboxTouchLayoutSnapshot
+
+    func version()  -> String
+
+}
+open class XboxOfficialTouchBundle: XboxOfficialTouchBundleProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxofficialtouchbundle(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxofficialtouchbundle(handle, $0) }
+    }
+
+
+
+
+open func choices() -> [XboxTouchLayoutChoice]  {
+    return try!  FfiConverterSequenceTypeXboxTouchLayoutChoice.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_method_xboxofficialtouchbundle_choices(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+
+open func preview(layoutId: String)async throws  -> XboxTouchLayoutSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxofficialtouchbundle_preview(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(layoutId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeXboxTouchLayoutSnapshot_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func version() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_method_xboxofficialtouchbundle_version(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxOfficialTouchBundle: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxOfficialTouchBundle
+
+    public static func lift(_ handle: UInt64) throws -> XboxOfficialTouchBundle {
+        return XboxOfficialTouchBundle(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: XboxOfficialTouchBundle) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxOfficialTouchBundle {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxOfficialTouchBundle, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxOfficialTouchBundle_lift(_ handle: UInt64) throws -> XboxOfficialTouchBundle {
+    return try FfiConverterTypeXboxOfficialTouchBundle.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxOfficialTouchBundle_lower(_ value: XboxOfficialTouchBundle) -> UInt64 {
+    return FfiConverterTypeXboxOfficialTouchBundle.lower(value)
+}
+
+
+
+
+
+
 /**
  * Swift 只转交 libwebrtc 产生的 offer/local ICE，并应用这里返回的 remote ICE。
  * 会话编排、轮询、connect token、keepalive、signaling 与结束判定全部由 Rust 持有。
@@ -759,6 +1172,7 @@ open func acknowledgeAuthUpdate(revision: UInt64)async   {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: nil
 
@@ -776,6 +1190,7 @@ open func cancel()async  -> UInt64  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
             liftFunc: FfiConverterUInt64.lift,
             errorHandler: nil
 
@@ -793,6 +1208,7 @@ open func close()async throws   {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -812,6 +1228,7 @@ open func exchangeMediaOffer(generation: UInt64, sdp: String, kind: String)async
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -828,6 +1245,7 @@ open func exchangeOffer(generation: UInt64, sdp: String)async throws  -> String 
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -844,6 +1262,7 @@ open func markConnected(generation: UInt64)async throws   {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -860,6 +1279,7 @@ open func nextRemoteIceBatch(generation: UInt64)async throws  -> XboxRemoteIceBa
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxRemoteIceBatch_lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -876,6 +1296,7 @@ open func pendingAuthUpdate()async  -> XboxStreamingAuthUpdate?  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeXboxStreamingAuthUpdate.lift,
             errorHandler: nil
 
@@ -893,6 +1314,7 @@ open func powerOffConsole(generation: UInt64)async throws  -> Bool  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -909,6 +1331,7 @@ open func sendText(generation: UInt64, text: String)async throws  -> Bool  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_i8,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_i8,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_i8,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_i8,
             liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -925,6 +1348,7 @@ open func start()async throws  -> XboxPreparedSignaling  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxPreparedSignaling_lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -950,6 +1374,7 @@ open func submitIce(generation: UInt64, candidates: [XboxIceCandidate])async thr
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -966,6 +1391,7 @@ open func superviseRuntime(generation: UInt64, sampleJson: String)async throws  
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -982,6 +1408,7 @@ open func synchronizeAuthSession(revision: UInt64, authSession: AuthSession)asyn
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -998,6 +1425,7 @@ open func validateResume(generation: UInt64)async throws   {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeXboxStreamingError_lift
         )
@@ -1051,19 +1479,589 @@ public func FfiConverterTypeXboxStreamSession_lower(_ value: XboxStreamSession) 
 
 
 
+
+
+/**
+ * 从授权开始到 Plan 解析贯穿同一取消作用域，预算取 PC 的公共常量。
+ */
+public protocol XboxStreamStartupProtocol: AnyObject, Sendable {
+
+    func cancel()
+
+}
+/**
+ * 从授权开始到 Plan 解析贯穿同一取消作用域，预算取 PC 的公共常量。
+ */
+open class XboxStreamStartup: XboxStreamStartupProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxstreamstartup(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxstreamstartup(handle, $0) }
+    }
+
+
+
+
+open func cancel()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_method_xboxstreamstartup_cancel(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamStartup: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxStreamStartup
+
+    public static func lift(_ handle: UInt64) throws -> XboxStreamStartup {
+        return XboxStreamStartup(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: XboxStreamStartup) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamStartup {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxStreamStartup, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamStartup_lift(_ handle: UInt64) throws -> XboxStreamStartup {
+    return try FfiConverterTypeXboxStreamStartup.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamStartup_lower(_ value: XboxStreamStartup) -> UInt64 {
+    return FfiConverterTypeXboxStreamStartup.lower(value)
+}
+
+
+
+
+
+
+/**
+ * 会话续期回到同一个安全存储 owner，复用宿主已有认证事务与当前缓存。
+ */
+public protocol XboxStreamingAuthProvider: AnyObject, Sendable {
+
+    func ensureSession(targetType: String, rejectedToken: String?) async throws  -> AuthSession
+
+}
+/**
+ * 会话续期回到同一个安全存储 owner，复用宿主已有认证事务与当前缓存。
+ */
+open class XboxStreamingAuthProviderImpl: XboxStreamingAuthProvider, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxstreamingauthprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxstreamingauthprovider(handle, $0) }
+    }
+
+
+
+
+open func ensureSession(targetType: String, rejectedToken: String?)async throws  -> AuthSession  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxstreamingauthprovider_ensure_session(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(targetType),FfiConverterOptionString.lower(rejectedToken)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeAuthSession_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+
+
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceXboxStreamingAuthProvider {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceXboxStreamingAuthProvider = UniffiVTableCallbackInterfaceXboxStreamingAuthProvider(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeXboxStreamingAuthProvider.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface XboxStreamingAuthProvider: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeXboxStreamingAuthProvider.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface XboxStreamingAuthProvider: handle missing in uniffiClone")
+            }
+        },
+        ensureSession: { (
+            uniffiHandle: UInt64,
+            targetType: RustBuffer,
+            rejectedToken: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            // 回调入栈时消费 owned RustBuffer，Task 只捕获 Sendable Swift 值。
+            let uniffiArgument_targetType = Result { try FfiConverterString.lift(targetType) }
+            let uniffiArgument_rejectedToken = Result { try FfiConverterOptionString.lift(rejectedToken) }
+            let makeCall = { @Sendable
+                () async throws -> AuthSession in
+                guard let uniffiObj = try? FfiConverterTypeXboxStreamingAuthProvider.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.ensureSession(
+                     targetType: try uniffiArgument_targetType.get(),
+                     rejectedToken: try uniffiArgument_rejectedToken.get()
+                )
+            }
+
+            let uniffiHandleSuccess = { @Sendable (returnValue: AuthSession) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: FfiConverterTypeAuthSession_lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { @Sendable (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeXboxBridgeError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceXboxStreamingAuthProvider> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceXboxStreamingAuthProvider>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitXboxStreamingAuthProvider() {
+    uniffi_xbox_ios_bridge_fn_init_callback_vtable_xboxstreamingauthprovider(UniffiCallbackInterfaceXboxStreamingAuthProvider.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamingAuthProvider: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<XboxStreamingAuthProvider>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxStreamingAuthProvider
+
+    public static func lift(_ handle: UInt64) throws -> XboxStreamingAuthProvider {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return XboxStreamingAuthProviderImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: XboxStreamingAuthProvider) -> UInt64 {
+         if let rustImpl = value as? XboxStreamingAuthProviderImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamingAuthProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxStreamingAuthProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamingAuthProvider_lift(_ handle: UInt64) throws -> XboxStreamingAuthProvider {
+    return try FfiConverterTypeXboxStreamingAuthProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamingAuthProvider_lower(_ value: XboxStreamingAuthProvider) -> UInt64 {
+    return FfiConverterTypeXboxStreamingAuthProvider.lower(value)
+}
+
+
+
+
+
+
+public protocol XboxTouchLayoutLibraryProtocol: AnyObject, Sendable {
+
+    func deleteLayout(id: String) async throws  -> [XboxSavedTouchLayout]
+
+    func loadLayout(id: String) async throws  -> XboxTouchLayoutSnapshot
+
+    func markUsed(id: String) async throws
+
+    func save(bundle: XboxOfficialTouchBundle, layoutId: String) async throws  -> [XboxSavedTouchLayout]
+
+    func savedLayouts() async throws  -> [XboxSavedTouchLayout]
+
+}
+open class XboxTouchLayoutLibrary: XboxTouchLayoutLibraryProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_xbox_ios_bridge_fn_clone_xboxtouchlayoutlibrary(self.handle, $0) }
+    }
+public convenience init(rootDirectory: String)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeXboxBridgeError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_constructor_xboxtouchlayoutlibrary_new(
+        FfiConverterString.lower(rootDirectory),uniffiCallStatus
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_xbox_ios_bridge_fn_free_xboxtouchlayoutlibrary(handle, $0) }
+    }
+
+
+
+
+open func deleteLayout(id: String)async throws  -> [XboxSavedTouchLayout]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxtouchlayoutlibrary_delete_layout(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(id)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func loadLayout(id: String)async throws  -> XboxTouchLayoutSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxtouchlayoutlibrary_load_layout(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(id)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterTypeXboxTouchLayoutSnapshot_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func markUsed(id: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxtouchlayoutlibrary_mark_used(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(id)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_void,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_void,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_void,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func save(bundle: XboxOfficialTouchBundle, layoutId: String)async throws  -> [XboxSavedTouchLayout]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxtouchlayoutlibrary_save(
+                        self.uniffiCloneHandle(),FfiConverterTypeXboxOfficialTouchBundle_lower(bundle),FfiConverterString.lower(layoutId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+open func savedLayouts()async throws  -> [XboxSavedTouchLayout]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_method_xboxtouchlayoutlibrary_saved_layouts(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxSavedTouchLayout.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxTouchLayoutLibrary: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = XboxTouchLayoutLibrary
+
+    public static func lift(_ handle: UInt64) throws -> XboxTouchLayoutLibrary {
+        return XboxTouchLayoutLibrary(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: XboxTouchLayoutLibrary) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxTouchLayoutLibrary {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: XboxTouchLayoutLibrary, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutLibrary_lift(_ handle: UInt64) throws -> XboxTouchLayoutLibrary {
+    return try FfiConverterTypeXboxTouchLayoutLibrary.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutLibrary_lower(_ value: XboxTouchLayoutLibrary) -> UInt64 {
+    return FfiConverterTypeXboxTouchLayoutLibrary.lower(value)
+}
+
+
+
+
 public struct AuthSession: Equatable, Hashable {
     public var refreshToken: String
     public var seedJson: String
     public var webTokenJson: String
     public var appLevel: UInt32
+    public var tokenCacheJson: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(refreshToken: String, seedJson: String, webTokenJson: String, appLevel: UInt32) {
+    public init(refreshToken: String, seedJson: String, webTokenJson: String, appLevel: UInt32, tokenCacheJson: String? = nil) {
         self.refreshToken = refreshToken
         self.seedJson = seedJson
         self.webTokenJson = webTokenJson
         self.appLevel = appLevel
+        self.tokenCacheJson = tokenCacheJson
     }
 
 
@@ -1085,7 +2083,8 @@ public struct FfiConverterTypeAuthSession: FfiConverterRustBuffer {
                 refreshToken: FfiConverterString.read(from: &buf),
                 seedJson: FfiConverterString.read(from: &buf),
                 webTokenJson: FfiConverterString.read(from: &buf),
-                appLevel: FfiConverterUInt32.read(from: &buf)
+                appLevel: FfiConverterUInt32.read(from: &buf),
+                tokenCacheJson: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -1094,6 +2093,7 @@ public struct FfiConverterTypeAuthSession: FfiConverterRustBuffer {
         FfiConverterString.write(value.seedJson, into: &buf)
         FfiConverterString.write(value.webTokenJson, into: &buf)
         FfiConverterUInt32.write(value.appLevel, into: &buf)
+        FfiConverterOptionString.write(value.tokenCacheJson, into: &buf)
     }
 }
 
@@ -1588,6 +2588,138 @@ public func FfiConverterTypeXboxAchievementRequirement_lift(_ buf: RustBuffer) t
 #endif
 public func FfiConverterTypeXboxAchievementRequirement_lower(_ value: XboxAchievementRequirement) -> RustBuffer {
     return FfiConverterTypeXboxAchievementRequirement.lower(value)
+}
+
+
+public struct XboxAuthCheckpoint: Equatable, Hashable {
+    public var previousRefreshToken: String
+    public var authSession: AuthSession
+    public var coreOnly: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(previousRefreshToken: String, authSession: AuthSession, coreOnly: Bool) {
+        self.previousRefreshToken = previousRefreshToken
+        self.authSession = authSession
+        self.coreOnly = coreOnly
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxAuthCheckpoint: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxAuthCheckpoint: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxAuthCheckpoint {
+        return
+            try XboxAuthCheckpoint(
+                previousRefreshToken: FfiConverterString.read(from: &buf),
+                authSession: FfiConverterTypeAuthSession.read(from: &buf),
+                coreOnly: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxAuthCheckpoint, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.previousRefreshToken, into: &buf)
+        FfiConverterTypeAuthSession.write(value.authSession, into: &buf)
+        FfiConverterBool.write(value.coreOnly, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthCheckpoint_lift(_ buf: RustBuffer) throws -> XboxAuthCheckpoint {
+    return try FfiConverterTypeXboxAuthCheckpoint.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthCheckpoint_lower(_ value: XboxAuthCheckpoint) -> RustBuffer {
+    return FfiConverterTypeXboxAuthCheckpoint.lower(value)
+}
+
+
+public struct XboxAuthStage: Equatable, Hashable {
+    public var stage: String
+    public var requestStage: String?
+    public var scope: String?
+    public var elapsedMs: UInt64?
+    public var skipCoreRefresh: Bool?
+    public var networkErrorKind: String?
+    public var failure: XboxQueryFailure?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(stage: String, requestStage: String?, scope: String?, elapsedMs: UInt64?, skipCoreRefresh: Bool?, networkErrorKind: String?, failure: XboxQueryFailure?) {
+        self.stage = stage
+        self.requestStage = requestStage
+        self.scope = scope
+        self.elapsedMs = elapsedMs
+        self.skipCoreRefresh = skipCoreRefresh
+        self.networkErrorKind = networkErrorKind
+        self.failure = failure
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxAuthStage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxAuthStage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxAuthStage {
+        return
+            try XboxAuthStage(
+                stage: FfiConverterString.read(from: &buf),
+                requestStage: FfiConverterOptionString.read(from: &buf),
+                scope: FfiConverterOptionString.read(from: &buf),
+                elapsedMs: FfiConverterOptionUInt64.read(from: &buf),
+                skipCoreRefresh: FfiConverterOptionBool.read(from: &buf),
+                networkErrorKind: FfiConverterOptionString.read(from: &buf),
+                failure: FfiConverterOptionTypeXboxQueryFailure.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxAuthStage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.stage, into: &buf)
+        FfiConverterOptionString.write(value.requestStage, into: &buf)
+        FfiConverterOptionString.write(value.scope, into: &buf)
+        FfiConverterOptionUInt64.write(value.elapsedMs, into: &buf)
+        FfiConverterOptionBool.write(value.skipCoreRefresh, into: &buf)
+        FfiConverterOptionString.write(value.networkErrorKind, into: &buf)
+        FfiConverterOptionTypeXboxQueryFailure.write(value.failure, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthStage_lift(_ buf: RustBuffer) throws -> XboxAuthStage {
+    return try FfiConverterTypeXboxAuthStage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthStage_lower(_ value: XboxAuthStage) -> RustBuffer {
+    return FfiConverterTypeXboxAuthStage.lower(value)
 }
 
 
@@ -3190,6 +4322,68 @@ public func FfiConverterTypeXboxMediaPage_lower(_ value: XboxMediaPage) -> RustB
 }
 
 
+public struct XboxOfficialTouchBundleChoice: Equatable, Hashable {
+    public var id: String
+    public var tabVersion: String
+    public var manifestVersion: String
+    public var layoutVersion: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, tabVersion: String, manifestVersion: String, layoutVersion: String) {
+        self.id = id
+        self.tabVersion = tabVersion
+        self.manifestVersion = manifestVersion
+        self.layoutVersion = layoutVersion
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxOfficialTouchBundleChoice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxOfficialTouchBundleChoice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxOfficialTouchBundleChoice {
+        return
+            try XboxOfficialTouchBundleChoice(
+                id: FfiConverterString.read(from: &buf),
+                tabVersion: FfiConverterString.read(from: &buf),
+                manifestVersion: FfiConverterString.read(from: &buf),
+                layoutVersion: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxOfficialTouchBundleChoice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.tabVersion, into: &buf)
+        FfiConverterString.write(value.manifestVersion, into: &buf)
+        FfiConverterString.write(value.layoutVersion, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxOfficialTouchBundleChoice_lift(_ buf: RustBuffer) throws -> XboxOfficialTouchBundleChoice {
+    return try FfiConverterTypeXboxOfficialTouchBundleChoice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxOfficialTouchBundleChoice_lower(_ value: XboxOfficialTouchBundleChoice) -> RustBuffer {
+    return FfiConverterTypeXboxOfficialTouchBundleChoice.lower(value)
+}
+
+
 public struct XboxPlayerPlaytimes: Equatable, Hashable {
     public var items: [XboxPlaytime]
     public var failedTitleIds: [String]
@@ -3466,14 +4660,20 @@ public struct XboxQueryFailure: Equatable, Hashable {
     public var statusCode: UInt16?
     public var retriable: Bool
     public var retryAfterSeconds: UInt64?
+    public var networkErrorKind: String?
+    public var serviceCode: String?
+    public var protocolErrorCode: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(kind: XboxQueryFailureKind, statusCode: UInt16?, retriable: Bool, retryAfterSeconds: UInt64?) {
+    public init(kind: XboxQueryFailureKind, statusCode: UInt16?, retriable: Bool, retryAfterSeconds: UInt64?, networkErrorKind: String?, serviceCode: String?, protocolErrorCode: String?) {
         self.kind = kind
         self.statusCode = statusCode
         self.retriable = retriable
         self.retryAfterSeconds = retryAfterSeconds
+        self.networkErrorKind = networkErrorKind
+        self.serviceCode = serviceCode
+        self.protocolErrorCode = protocolErrorCode
     }
 
 
@@ -3495,7 +4695,10 @@ public struct FfiConverterTypeXboxQueryFailure: FfiConverterRustBuffer {
                 kind: FfiConverterTypeXboxQueryFailureKind.read(from: &buf),
                 statusCode: FfiConverterOptionUInt16.read(from: &buf),
                 retriable: FfiConverterBool.read(from: &buf),
-                retryAfterSeconds: FfiConverterOptionUInt64.read(from: &buf)
+                retryAfterSeconds: FfiConverterOptionUInt64.read(from: &buf),
+                networkErrorKind: FfiConverterOptionString.read(from: &buf),
+                serviceCode: FfiConverterOptionString.read(from: &buf),
+                protocolErrorCode: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -3504,6 +4707,9 @@ public struct FfiConverterTypeXboxQueryFailure: FfiConverterRustBuffer {
         FfiConverterOptionUInt16.write(value.statusCode, into: &buf)
         FfiConverterBool.write(value.retriable, into: &buf)
         FfiConverterOptionUInt64.write(value.retryAfterSeconds, into: &buf)
+        FfiConverterOptionString.write(value.networkErrorKind, into: &buf)
+        FfiConverterOptionString.write(value.serviceCode, into: &buf)
+        FfiConverterOptionString.write(value.protocolErrorCode, into: &buf)
     }
 }
 
@@ -3581,6 +4787,108 @@ public func FfiConverterTypeXboxRemoteIceBatch_lower(_ value: XboxRemoteIceBatch
 }
 
 
+public struct XboxSavedTouchLayout: Equatable, Hashable {
+    public var id: String
+    public var productId: String
+    public var xboxTitleId: String
+    public var gameName: String
+    public var bundleId: String
+    public var bundleVersion: String
+    public var layoutId: String
+    public var layoutName: String
+    public var isDefault: Bool
+    public var contentHash: String
+    public var revision: String
+    public var savedAtMs: UInt64
+    public var lastUsedAtMs: UInt64
+    public var byteCount: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, productId: String, xboxTitleId: String, gameName: String, bundleId: String, bundleVersion: String, layoutId: String, layoutName: String, isDefault: Bool, contentHash: String, revision: String, savedAtMs: UInt64, lastUsedAtMs: UInt64, byteCount: UInt64) {
+        self.id = id
+        self.productId = productId
+        self.xboxTitleId = xboxTitleId
+        self.gameName = gameName
+        self.bundleId = bundleId
+        self.bundleVersion = bundleVersion
+        self.layoutId = layoutId
+        self.layoutName = layoutName
+        self.isDefault = isDefault
+        self.contentHash = contentHash
+        self.revision = revision
+        self.savedAtMs = savedAtMs
+        self.lastUsedAtMs = lastUsedAtMs
+        self.byteCount = byteCount
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxSavedTouchLayout: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxSavedTouchLayout: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxSavedTouchLayout {
+        return
+            try XboxSavedTouchLayout(
+                id: FfiConverterString.read(from: &buf),
+                productId: FfiConverterString.read(from: &buf),
+                xboxTitleId: FfiConverterString.read(from: &buf),
+                gameName: FfiConverterString.read(from: &buf),
+                bundleId: FfiConverterString.read(from: &buf),
+                bundleVersion: FfiConverterString.read(from: &buf),
+                layoutId: FfiConverterString.read(from: &buf),
+                layoutName: FfiConverterString.read(from: &buf),
+                isDefault: FfiConverterBool.read(from: &buf),
+                contentHash: FfiConverterString.read(from: &buf),
+                revision: FfiConverterString.read(from: &buf),
+                savedAtMs: FfiConverterUInt64.read(from: &buf),
+                lastUsedAtMs: FfiConverterUInt64.read(from: &buf),
+                byteCount: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxSavedTouchLayout, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.productId, into: &buf)
+        FfiConverterString.write(value.xboxTitleId, into: &buf)
+        FfiConverterString.write(value.gameName, into: &buf)
+        FfiConverterString.write(value.bundleId, into: &buf)
+        FfiConverterString.write(value.bundleVersion, into: &buf)
+        FfiConverterString.write(value.layoutId, into: &buf)
+        FfiConverterString.write(value.layoutName, into: &buf)
+        FfiConverterBool.write(value.isDefault, into: &buf)
+        FfiConverterString.write(value.contentHash, into: &buf)
+        FfiConverterString.write(value.revision, into: &buf)
+        FfiConverterUInt64.write(value.savedAtMs, into: &buf)
+        FfiConverterUInt64.write(value.lastUsedAtMs, into: &buf)
+        FfiConverterUInt64.write(value.byteCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxSavedTouchLayout_lift(_ buf: RustBuffer) throws -> XboxSavedTouchLayout {
+    return try FfiConverterTypeXboxSavedTouchLayout.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxSavedTouchLayout_lower(_ value: XboxSavedTouchLayout) -> RustBuffer {
+    return FfiConverterTypeXboxSavedTouchLayout.lower(value)
+}
+
+
 public struct XboxSourceFailure: Equatable, Hashable {
     public var source: String
     public var failure: XboxQueryFailure
@@ -3632,6 +4940,79 @@ public func FfiConverterTypeXboxSourceFailure_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeXboxSourceFailure_lower(_ value: XboxSourceFailure) -> RustBuffer {
     return FfiConverterTypeXboxSourceFailure.lower(value)
+}
+
+
+/**
+ * Swift 仅接收领域分类及固定诊断码，避免远端正文进入 UI/trace。
+ */
+public struct XboxStartupFailure: Equatable, Hashable {
+    public var kind: XboxStartupFailureKind
+    public var phase: String
+    public var retryable: Bool
+    public var statusCode: UInt16?
+    public var failureCode: String?
+    public var networkErrorKind: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: XboxStartupFailureKind, phase: String, retryable: Bool, statusCode: UInt16?, failureCode: String?, networkErrorKind: String?) {
+        self.kind = kind
+        self.phase = phase
+        self.retryable = retryable
+        self.statusCode = statusCode
+        self.failureCode = failureCode
+        self.networkErrorKind = networkErrorKind
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxStartupFailure: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStartupFailure: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStartupFailure {
+        return
+            try XboxStartupFailure(
+                kind: FfiConverterTypeXboxStartupFailureKind.read(from: &buf),
+                phase: FfiConverterString.read(from: &buf),
+                retryable: FfiConverterBool.read(from: &buf),
+                statusCode: FfiConverterOptionUInt16.read(from: &buf),
+                failureCode: FfiConverterOptionString.read(from: &buf),
+                networkErrorKind: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxStartupFailure, into buf: inout [UInt8]) {
+        FfiConverterTypeXboxStartupFailureKind.write(value.kind, into: &buf)
+        FfiConverterString.write(value.phase, into: &buf)
+        FfiConverterBool.write(value.retryable, into: &buf)
+        FfiConverterOptionUInt16.write(value.statusCode, into: &buf)
+        FfiConverterOptionString.write(value.failureCode, into: &buf)
+        FfiConverterOptionString.write(value.networkErrorKind, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStartupFailure_lift(_ buf: RustBuffer) throws -> XboxStartupFailure {
+    return try FfiConverterTypeXboxStartupFailure.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStartupFailure_lower(_ value: XboxStartupFailure) -> RustBuffer {
+    return FfiConverterTypeXboxStartupFailure.lower(value)
 }
 
 
@@ -4016,6 +5397,188 @@ public func FfiConverterTypeXboxStreamingAuthUpdate_lower(_ value: XboxStreaming
 }
 
 
+public struct XboxTouchLayoutAsset: Equatable, Hashable {
+    public var id: String
+    public var data: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, data: Data) {
+        self.id = id
+        self.data = data
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxTouchLayoutAsset: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxTouchLayoutAsset: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxTouchLayoutAsset {
+        return
+            try XboxTouchLayoutAsset(
+                id: FfiConverterString.read(from: &buf),
+                data: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxTouchLayoutAsset, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterData.write(value.data, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutAsset_lift(_ buf: RustBuffer) throws -> XboxTouchLayoutAsset {
+    return try FfiConverterTypeXboxTouchLayoutAsset.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutAsset_lower(_ value: XboxTouchLayoutAsset) -> RustBuffer {
+    return FfiConverterTypeXboxTouchLayoutAsset.lower(value)
+}
+
+
+public struct XboxTouchLayoutChoice: Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var isDefault: Bool
+    public var issues: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, isDefault: Bool, issues: [String]) {
+        self.id = id
+        self.name = name
+        self.isDefault = isDefault
+        self.issues = issues
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxTouchLayoutChoice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxTouchLayoutChoice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxTouchLayoutChoice {
+        return
+            try XboxTouchLayoutChoice(
+                id: FfiConverterString.read(from: &buf),
+                name: FfiConverterString.read(from: &buf),
+                isDefault: FfiConverterBool.read(from: &buf),
+                issues: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxTouchLayoutChoice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterBool.write(value.isDefault, into: &buf)
+        FfiConverterSequenceString.write(value.issues, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutChoice_lift(_ buf: RustBuffer) throws -> XboxTouchLayoutChoice {
+    return try FfiConverterTypeXboxTouchLayoutChoice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutChoice_lower(_ value: XboxTouchLayoutChoice) -> RustBuffer {
+    return FfiConverterTypeXboxTouchLayoutChoice.lower(value)
+}
+
+
+public struct XboxTouchLayoutSnapshot: Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var documentJson: String
+    public var assets: [XboxTouchLayoutAsset]
+    public var issues: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, documentJson: String, assets: [XboxTouchLayoutAsset], issues: [String]) {
+        self.id = id
+        self.name = name
+        self.documentJson = documentJson
+        self.assets = assets
+        self.issues = issues
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxTouchLayoutSnapshot: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxTouchLayoutSnapshot: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxTouchLayoutSnapshot {
+        return
+            try XboxTouchLayoutSnapshot(
+                id: FfiConverterString.read(from: &buf),
+                name: FfiConverterString.read(from: &buf),
+                documentJson: FfiConverterString.read(from: &buf),
+                assets: FfiConverterSequenceTypeXboxTouchLayoutAsset.read(from: &buf),
+                issues: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxTouchLayoutSnapshot, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.documentJson, into: &buf)
+        FfiConverterSequenceTypeXboxTouchLayoutAsset.write(value.assets, into: &buf)
+        FfiConverterSequenceString.write(value.issues, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutSnapshot_lift(_ buf: RustBuffer) throws -> XboxTouchLayoutSnapshot {
+    return try FfiConverterTypeXboxTouchLayoutSnapshot.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxTouchLayoutSnapshot_lower(_ value: XboxTouchLayoutSnapshot) -> RustBuffer {
+    return FfiConverterTypeXboxTouchLayoutSnapshot.lower(value)
+}
+
+
 public struct XboxWebRtcPlan: Equatable, Hashable {
     public var audioDirection: String
     public var videoDirection: String
@@ -4150,11 +5713,85 @@ public func FfiConverterTypeXboxWebRtcPlan_lower(_ value: XboxWebRtcPlan) -> Rus
 }
 
 
+
+public enum XboxAuthScope: Equatable, Hashable {
+
+    case web
+    case home
+    case cloud
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxAuthScope: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxAuthScope: FfiConverterRustBuffer {
+    typealias SwiftType = XboxAuthScope
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxAuthScope {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .web
+
+        case 2: return .home
+
+        case 3: return .cloud
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: XboxAuthScope, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .web:
+            writeInt(&buf, Int32(1))
+
+
+        case .home:
+            writeInt(&buf, Int32(2))
+
+
+        case .cloud:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthScope_lift(_ buf: RustBuffer) throws -> XboxAuthScope {
+    return try FfiConverterTypeXboxAuthScope.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxAuthScope_lower(_ value: XboxAuthScope) -> RustBuffer {
+    return FfiConverterTypeXboxAuthScope.lower(value)
+}
+
+
+
 public
 enum XboxBridgeError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
 
 
+    case Cancelled
     case Query(failure: XboxQueryFailure
     )
     case RetryableAuthentication(String
@@ -4196,22 +5833,23 @@ public struct FfiConverterTypeXboxBridgeError: FfiConverterRustBuffer {
 
 
 
-        case 1: return .Query(
+        case 1: return .Cancelled
+        case 2: return .Query(
             failure: try FfiConverterTypeXboxQueryFailure.read(from: &buf)
             )
-        case 2: return .RetryableAuthentication(
+        case 3: return .RetryableAuthentication(
             try FfiConverterString.read(from: &buf)
             )
-        case 3: return .Authentication(
+        case 4: return .Authentication(
             try FfiConverterString.read(from: &buf)
             )
-        case 4: return .InvalidData(
+        case 5: return .InvalidData(
             try FfiConverterString.read(from: &buf)
             )
-        case 5: return .Profile(
+        case 6: return .Profile(
             try FfiConverterString.read(from: &buf)
             )
-        case 6: return .Data(
+        case 7: return .Data(
             try FfiConverterString.read(from: &buf)
             )
 
@@ -4226,33 +5864,37 @@ public struct FfiConverterTypeXboxBridgeError: FfiConverterRustBuffer {
 
 
 
-        case let .Query(failure):
+        case .Cancelled:
             writeInt(&buf, Int32(1))
+
+
+        case let .Query(failure):
+            writeInt(&buf, Int32(2))
             FfiConverterTypeXboxQueryFailure.write(failure, into: &buf)
 
 
         case let .RetryableAuthentication(v1):
-            writeInt(&buf, Int32(2))
-            FfiConverterString.write(v1, into: &buf)
-
-
-        case let .Authentication(v1):
             writeInt(&buf, Int32(3))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .InvalidData(v1):
+        case let .Authentication(v1):
             writeInt(&buf, Int32(4))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Profile(v1):
+        case let .InvalidData(v1):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Data(v1):
+        case let .Profile(v1):
             writeInt(&buf, Int32(6))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Data(v1):
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(v1, into: &buf)
 
         }
@@ -4543,11 +6185,128 @@ public func FfiConverterTypeXboxQueryFailureKind_lower(_ value: XboxQueryFailure
 
 
 
+
+public enum XboxStartupFailureKind: Equatable, Hashable {
+
+    case sessionCreate
+    case sessionReady
+    case runtime
+    case network
+    case auth
+    case target
+    case hostRemotePlayUnavailable
+    case hostRegistrationRetryExhausted
+    case unknown
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxStartupFailureKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStartupFailureKind: FfiConverterRustBuffer {
+    typealias SwiftType = XboxStartupFailureKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStartupFailureKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .sessionCreate
+
+        case 2: return .sessionReady
+
+        case 3: return .runtime
+
+        case 4: return .network
+
+        case 5: return .auth
+
+        case 6: return .target
+
+        case 7: return .hostRemotePlayUnavailable
+
+        case 8: return .hostRegistrationRetryExhausted
+
+        case 9: return .unknown
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: XboxStartupFailureKind, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .sessionCreate:
+            writeInt(&buf, Int32(1))
+
+
+        case .sessionReady:
+            writeInt(&buf, Int32(2))
+
+
+        case .runtime:
+            writeInt(&buf, Int32(3))
+
+
+        case .network:
+            writeInt(&buf, Int32(4))
+
+
+        case .auth:
+            writeInt(&buf, Int32(5))
+
+
+        case .target:
+            writeInt(&buf, Int32(6))
+
+
+        case .hostRemotePlayUnavailable:
+            writeInt(&buf, Int32(7))
+
+
+        case .hostRegistrationRetryExhausted:
+            writeInt(&buf, Int32(8))
+
+
+        case .unknown:
+            writeInt(&buf, Int32(9))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStartupFailureKind_lift(_ buf: RustBuffer) throws -> XboxStartupFailureKind {
+    return try FfiConverterTypeXboxStartupFailureKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStartupFailureKind_lower(_ value: XboxStartupFailureKind) -> RustBuffer {
+    return FfiConverterTypeXboxStartupFailureKind.lower(value)
+}
+
+
+
 public
 enum XboxStreamingError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
 
 
+    case Startup(failure: XboxStartupFailure
+    )
     case InvalidArgument(String
     )
     case InvalidState(String
@@ -4593,29 +6352,32 @@ public struct FfiConverterTypeXboxStreamingError: FfiConverterRustBuffer {
 
 
 
-        case 1: return .InvalidArgument(
+        case 1: return .Startup(
+            failure: try FfiConverterTypeXboxStartupFailure.read(from: &buf)
+            )
+        case 2: return .InvalidArgument(
             try FfiConverterString.read(from: &buf)
             )
-        case 2: return .InvalidState(
+        case 3: return .InvalidState(
             try FfiConverterString.read(from: &buf)
             )
-        case 3: return .Cancelled(
+        case 4: return .Cancelled(
             try FfiConverterUInt64.read(from: &buf)
             )
-        case 4: return .Authentication(
+        case 5: return .Authentication(
             try FfiConverterString.read(from: &buf)
             )
-        case 5: return .Network(
+        case 6: return .Network(
             try FfiConverterString.read(from: &buf)
             )
-        case 6: return .Http(
+        case 7: return .Http(
             try FfiConverterUInt16.read(from: &buf),
             try FfiConverterString.read(from: &buf)
             )
-        case 7: return .Parse(
+        case 8: return .Parse(
             try FfiConverterString.read(from: &buf)
             )
-        case 8: return .Remote(
+        case 9: return .Remote(
             try FfiConverterString.read(from: &buf)
             )
 
@@ -4630,44 +6392,49 @@ public struct FfiConverterTypeXboxStreamingError: FfiConverterRustBuffer {
 
 
 
-        case let .InvalidArgument(v1):
+        case let .Startup(failure):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(v1, into: &buf)
+            FfiConverterTypeXboxStartupFailure.write(failure, into: &buf)
 
 
-        case let .InvalidState(v1):
+        case let .InvalidArgument(v1):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Cancelled(v1):
+        case let .InvalidState(v1):
             writeInt(&buf, Int32(3))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Cancelled(v1):
+            writeInt(&buf, Int32(4))
             FfiConverterUInt64.write(v1, into: &buf)
 
 
         case let .Authentication(v1):
-            writeInt(&buf, Int32(4))
-            FfiConverterString.write(v1, into: &buf)
-
-
-        case let .Network(v1):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(v1, into: &buf)
 
 
-        case let .Http(v1,v2):
+        case let .Network(v1):
             writeInt(&buf, Int32(6))
+            FfiConverterString.write(v1, into: &buf)
+
+
+        case let .Http(v1,v2):
+            writeInt(&buf, Int32(7))
             FfiConverterUInt16.write(v1, into: &buf)
             FfiConverterString.write(v2, into: &buf)
 
 
         case let .Parse(v1):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(8))
             FfiConverterString.write(v1, into: &buf)
 
 
         case let .Remote(v1):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(v1, into: &buf)
 
         }
@@ -4804,6 +6571,54 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeXboxStreamStartup: FfiConverterRustBuffer {
+    typealias SwiftType = XboxStreamStartup?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeXboxStreamStartup.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeXboxStreamStartup.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeXboxStreamingAuthProvider: FfiConverterRustBuffer {
+    typealias SwiftType = XboxStreamingAuthProvider?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeXboxStreamingAuthProvider.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeXboxStreamingAuthProvider.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -5477,6 +7292,31 @@ fileprivate struct FfiConverterSequenceTypeXboxMediaItem: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeXboxOfficialTouchBundleChoice: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxOfficialTouchBundleChoice]
+
+    public static func write(_ value: [XboxOfficialTouchBundleChoice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxOfficialTouchBundleChoice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxOfficialTouchBundleChoice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxOfficialTouchBundleChoice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxOfficialTouchBundleChoice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeXboxPlaytime: FfiConverterRustBuffer {
     typealias SwiftType = [XboxPlaytime]
 
@@ -5494,6 +7334,31 @@ fileprivate struct FfiConverterSequenceTypeXboxPlaytime: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeXboxPlaytime.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxSavedTouchLayout: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxSavedTouchLayout]
+
+    public static func write(_ value: [XboxSavedTouchLayout], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxSavedTouchLayout.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxSavedTouchLayout] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxSavedTouchLayout]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxSavedTouchLayout.read(from: &buf))
         }
         return seq
     }
@@ -5573,43 +7438,120 @@ fileprivate struct FfiConverterSequenceTypeXboxStreamFrameFeedback: FfiConverter
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxTouchLayoutAsset: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxTouchLayoutAsset]
+
+    public static func write(_ value: [XboxTouchLayoutAsset], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxTouchLayoutAsset.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxTouchLayoutAsset] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxTouchLayoutAsset]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxTouchLayoutAsset.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXboxTouchLayoutChoice: FfiConverterRustBuffer {
+    typealias SwiftType = [XboxTouchLayoutChoice]
+
+    public static func write(_ value: [XboxTouchLayoutChoice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXboxTouchLayoutChoice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XboxTouchLayoutChoice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XboxTouchLayoutChoice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXboxTouchLayoutChoice.read(from: &buf))
+        }
+        return seq
+    }
+}
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
 
 fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+
+// XBXRC: Swift cancellation owns the Rust future lifecycle.
+fileprivate final class UniffiRustFutureCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handle: UInt64?
+    private let cancelFunc: @Sendable (UInt64) -> Void
+    init(handle: UInt64, cancelFunc: @escaping @Sendable (UInt64) -> Void) {
+        self.handle = handle
+        self.cancelFunc = cancelFunc
+    }
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        if let handle { cancelFunc(handle) }
+    }
+    func finish(_ free: (UInt64) -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let handle {
+            self.handle = nil
+            free(handle)
+        }
+    }
+}
 
 fileprivate func uniffiRustCallAsync<F, T>(
     rustFutureFunc: () -> UInt64,
     pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
     completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
     freeFunc: (UInt64) -> (),
+    cancelFunc: @escaping @Sendable (UInt64) -> Void,
     liftFunc: (F) throws -> T,
     errorHandler: ((RustBuffer) throws -> Swift.Error)?
 ) async throws -> T {
-    // Make sure to call the ensure init function since future creation doesn't have a
-    // RustCallStatus param, so doesn't use makeRustCall()
     uniffiEnsureXboxIosBridgeInitialized()
+    // 只有可抛错读取消费 Swift 取消；不可抛错的 teardown 继续完成清理。
+    let cancellable = errorHandler != nil
+    if cancellable { try Task.checkCancellation() }
     let rustFuture = rustFutureFunc()
-    defer {
-        freeFunc(rustFuture)
+    let cancellation = UniffiRustFutureCancellation(handle: rustFuture, cancelFunc: cancelFunc)
+    defer { cancellation.finish(freeFunc) }
+    return try await withTaskCancellationHandler {
+        if cancellable { try Task.checkCancellation() }
+        var pollResult: Int8
+        repeat {
+            pollResult = await withUnsafeContinuation {
+                pollFunc(rustFuture, { handle, result in
+                    uniffiFutureContinuationCallback(handle: handle, pollResult: result)
+                }, uniffiContinuationHandleMap.insert(obj: $0))
+            }
+            if cancellable { try Task.checkCancellation() }
+        } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+        let result = try liftFunc(makeRustCall(
+            { completeFunc(rustFuture, $0) }, errorHandler: errorHandler
+        ))
+        if cancellable { try Task.checkCancellation() }
+        return result
+    } onCancel: {
+        if cancellable { cancellation.cancel() }
     }
-    var pollResult: Int8;
-    repeat {
-        pollResult = await withUnsafeContinuation {
-            pollFunc(
-                rustFuture,
-                { handle, pollResult in
-                    uniffiFutureContinuationCallback(handle: handle, pollResult: pollResult)
-                },
-                uniffiContinuationHandleMap.insert(obj: $0)
-            )
-        }
-    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
-
-    return try liftFunc(makeRustCall(
-        { completeFunc(rustFuture, $0) },
-        errorHandler: errorHandler
-    ))
 }
 
 // Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
@@ -5621,6 +7563,96 @@ fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: In
         print("uniffiFutureContinuationCallback invalid handle")
     }
 }
+private func uniffiTraitInterfaceCallAsync<T: Sendable>(
+    makeCall: @escaping @Sendable () async throws -> T,
+    handleSuccess: @escaping @Sendable (T) -> (),
+    handleError: @escaping @Sendable (Int8, RustBuffer) -> (),
+    droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+) {
+    let task = Task {
+        // Note: it's important we call either `handleSuccess` or `handleError` exactly once.  Each
+        // call consumes an Arc reference, which means there should be no possibility of a double
+        // call.  The following code is structured so that will will never call both `handleSuccess`
+        // and `handleError`, even in the face of weird errors.
+        //
+        // On platforms that need extra machinery to make C-ABI calls, like JNA or ctypes, it's
+        // possible that we fail to make either call.  However, it doesn't seem like this is
+        // possible on Swift since swift can just make the C call directly.
+        var callResult: T
+        do {
+            callResult = try await makeCall()
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+            return
+        }
+        handleSuccess(callResult)
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    droppedCallback.pointee = UniffiForeignFutureDroppedCallbackStruct(
+        handle: handle,
+        free: uniffiForeignFutureDroppedCallback
+    )
+}
+
+private func uniffiTraitInterfaceCallAsyncWithError<T: Sendable, E>(
+    makeCall: @escaping @Sendable () async throws -> T,
+    handleSuccess: @escaping @Sendable (T) -> (),
+    handleError: @escaping @Sendable (Int8, RustBuffer) -> (),
+    lowerError: @escaping @Sendable (E) -> RustBuffer,
+    droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+) {
+    let task = Task {
+        // See the note in uniffiTraitInterfaceCallAsync for details on `handleSuccess` and
+        // `handleError`.
+        var callResult: T
+        do {
+            callResult = try await makeCall()
+        } catch let error as E {
+            handleError(CALL_ERROR, lowerError(error))
+            return
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+            return
+        }
+        handleSuccess(callResult)
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    droppedCallback.pointee = UniffiForeignFutureDroppedCallbackStruct(
+        handle: handle,
+        free: uniffiForeignFutureDroppedCallback
+    )
+}
+
+// Borrow the callback handle map implementation to store foreign future handles
+// TODO: consolidate the handle-map code (https://github.com/mozilla/uniffi-rs/pull/1823)
+fileprivate let UNIFFI_FOREIGN_FUTURE_HANDLE_MAP = UniffiHandleMap<UniffiForeignFutureTask>()
+
+// Protocol for tasks that handle foreign futures.
+//
+// Defining a protocol allows all tasks to be stored in the same handle map.  This can't be done
+// with the task object itself, since has generic parameters.
+fileprivate protocol UniffiForeignFutureTask {
+    func cancel()
+}
+
+extension Task: UniffiForeignFutureTask {}
+
+private func uniffiForeignFutureDroppedCallback(handle: UInt64) {
+    do {
+        let task = try UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.remove(handle: handle)
+        // Set the cancellation flag on the task.  If it's still running, the code can check the
+        // cancellation flag or call `Task.checkCancellation()`.  If the task has completed, this is
+        // a no-op.
+        task.cancel()
+    } catch {
+        print("uniffiForeignFutureDroppedCallback: handle missing from handlemap")
+    }
+}
+
+// For testing
+public func uniffiForeignFutureHandleCountXboxIosBridge() -> Int {
+    UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.count
+}
 public func completeLogin(callbackUrl: String, pendingJson: String, seedJson: String, forceRegionIp: String)async throws  -> AuthSession  {
     return
         try  await uniffiRustCallAsync(
@@ -5631,6 +7663,7 @@ public func completeLogin(callbackUrl: String, pendingJson: String, seedJson: St
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAuthSession_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5645,20 +7678,22 @@ public func fetchProfile(webTokenJson: String)async throws  -> XboxProfile  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxProfile_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func refreshLogin(refreshToken: String, seedJson: String, forceRegionIp: String)async throws  -> AuthSession  {
+public func refreshLogin(session: AuthSession, forceRegionIp: String, scope: XboxAuthScope, forceCoreRefresh: Bool, rejectedToken: String?, observer: XboxAuthObserver)async throws  -> AuthSession  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_xbox_ios_bridge_fn_func_refresh_login(FfiConverterString.lower(refreshToken),FfiConverterString.lower(seedJson),FfiConverterString.lower(forceRegionIp)
+                uniffi_xbox_ios_bridge_fn_func_refresh_login(FfiConverterTypeAuthSession_lower(session),FfiConverterString.lower(forceRegionIp),FfiConverterTypeXboxAuthScope_lower(scope),FfiConverterBool.lower(forceCoreRefresh),FfiConverterOptionString.lower(rejectedToken),FfiConverterTypeXboxAuthObserver_lower(observer)
                 )
             },
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeAuthSession_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5673,6 +7708,7 @@ public func startLogin()async throws  -> LoginStartResult  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeLoginStartResult_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5687,34 +7723,37 @@ public func fetchCatalogSource(accessHandle: String, source: String, market: Str
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceString.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func prepareCloudAccess(refreshToken: String, seedJson: String, forceRegionIp: String)async throws  -> CloudAccessResult  {
+public func prepareCloudAccess(session: AuthSession, forceRegionIp: String, observer: XboxAuthObserver, startup: XboxStreamStartup?, authProvider: XboxStreamingAuthProvider?)async throws  -> CloudAccessResult  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_xbox_ios_bridge_fn_func_prepare_cloud_access(FfiConverterString.lower(refreshToken),FfiConverterString.lower(seedJson),FfiConverterString.lower(forceRegionIp)
+                uniffi_xbox_ios_bridge_fn_func_prepare_cloud_access(FfiConverterTypeAuthSession_lower(session),FfiConverterString.lower(forceRegionIp),FfiConverterTypeXboxAuthObserver_lower(observer),FfiConverterOptionTypeXboxStreamStartup.lower(startup),FfiConverterOptionTypeXboxStreamingAuthProvider.lower(authProvider)
                 )
             },
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeCloudAccessResult_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func prepareHomeAccess(refreshToken: String, seedJson: String, forceRegionIp: String)async throws  -> HomeAccessResult  {
+public func prepareHomeAccess(session: AuthSession, forceRegionIp: String, observer: XboxAuthObserver, startup: XboxStreamStartup?, authProvider: XboxStreamingAuthProvider?)async throws  -> HomeAccessResult  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_xbox_ios_bridge_fn_func_prepare_home_access(FfiConverterString.lower(refreshToken),FfiConverterString.lower(seedJson),FfiConverterString.lower(forceRegionIp)
+                uniffi_xbox_ios_bridge_fn_func_prepare_home_access(FfiConverterTypeAuthSession_lower(session),FfiConverterString.lower(forceRegionIp),FfiConverterTypeXboxAuthObserver_lower(observer),FfiConverterOptionTypeXboxStreamStartup.lower(startup),FfiConverterOptionTypeXboxStreamingAuthProvider.lower(authProvider)
                 )
             },
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeHomeAccessResult_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5744,6 +7783,7 @@ public func fetchCloudCatalog(accessHandle: String, market: String, language: St
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxCloudCatalogSnapshot_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5758,6 +7798,7 @@ public func hydrateCloudCatalogPage(accessHandle: String, market: String, langua
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxCloudCatalogMetadata.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5772,6 +7813,7 @@ public func fetchCloudProductDetail(productId: String, market: String, language:
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxCloudProductDetail_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5786,20 +7828,22 @@ public func fetchCloudWaitTime(accessHandle: String, streamTitleId: String, serv
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionUInt64.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
 }
-public func resolveCloudGame(accessHandle: String, productId: String, serverRegion: String)async throws  -> XboxCloudGame?  {
+public func resolveCloudGame(accessHandle: String, productId: String, serverRegion: String, startup: XboxStreamStartup?)async throws  -> XboxCloudGame?  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_xbox_ios_bridge_fn_func_resolve_cloud_game(FfiConverterString.lower(accessHandle),FfiConverterString.lower(productId),FfiConverterString.lower(serverRegion)
+                uniffi_xbox_ios_bridge_fn_func_resolve_cloud_game(FfiConverterString.lower(accessHandle),FfiConverterString.lower(productId),FfiConverterString.lower(serverRegion),FfiConverterOptionTypeXboxStreamStartup.lower(startup)
                 )
             },
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeXboxCloudGame.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5814,6 +7858,7 @@ public func fetchAchievements(webTokenJson: String, titleId: String, locale: Str
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxAchievement.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5828,6 +7873,7 @@ public func fetchGameLibrary(webTokenJson: String)async throws  -> [XboxGame]  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxGame.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5842,6 +7888,7 @@ public func fetchHosts(webTokenJson: String)async throws  -> [XboxHost]  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxHost.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5856,6 +7903,7 @@ public func fetchPlaytimes(webTokenJson: String, titleIds: [String])async throws
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxPlaytime.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5870,6 +7918,7 @@ public func powerOffConsole(webTokenJson: String, consoleId: String)async throws
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5884,6 +7933,7 @@ public func powerOnConsole(webTokenJson: String, consoleId: String)async throws 
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxConsolePowerResult_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5898,6 +7948,7 @@ public func fetchInstalledSection(webTokenJson: String, consoleId: String, marke
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxInstalledSection_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5912,6 +7963,7 @@ public func fetchFriends(webTokenJson: String)async throws  -> [XboxFriend]  {
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterSequenceTypeXboxFriend.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5926,6 +7978,7 @@ public func fetchInstalledLibrary(webTokenJson: String, consoleId: String, marke
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxInstalledLibrary_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5940,6 +7993,7 @@ public func fetchMediaPage(webTokenJson: String, kind: String, continuation: Str
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxMediaPage_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5954,6 +8008,7 @@ public func fetchAchievementPage(webTokenJson: String, titleId: String, targetXu
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxAchievementPage_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5968,6 +8023,7 @@ public func fetchGameHistoryPage(webTokenJson: String, targetXuid: String?, cont
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxGameHistoryPage_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5982,6 +8038,7 @@ public func fetchLibraryGame(webTokenJson: String, titleId: String, targetXuid: 
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterOptionTypeXboxLibraryGame.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -5996,6 +8053,7 @@ public func fetchPlayerPlaytimes(webTokenJson: String, targetXuid: String?, titl
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxPlayerPlaytimes_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -6010,6 +8068,7 @@ public func fetchPlayerProfile(webTokenJson: String, targetXuid: String)async th
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxFriend_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -6027,6 +8086,7 @@ public func fetchProfileSection(webTokenJson: String, source: XboxProfileSource)
             pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
             completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
             freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
             liftFunc: FfiConverterTypeXboxProfile_lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
@@ -6034,7 +8094,7 @@ public func fetchProfileSection(webTokenJson: String, source: XboxProfileSource)
 /**
  * 账户、代际和 target 都由 Swift 启动请求显式回传，bridge 在创建远端会话前校验。
  */
-public func createScopedStreamSession(accessHandle: String, targetType: String, targetId: String, accountId: String, ownerGeneration: UInt64, settings: XboxStreamSettings)throws  -> XboxStreamSession  {
+public func createScopedStreamSession(accessHandle: String, targetType: String, targetId: String, accountId: String, ownerGeneration: UInt64, settings: XboxStreamSettings, startup: XboxStreamStartup?)throws  -> XboxStreamSession  {
     return try  FfiConverterTypeXboxStreamSession_lift(try rustCallWithError(FfiConverterTypeXboxStreamingError_lift) {
         uniffiCallStatus in
     uniffi_xbox_ios_bridge_fn_func_create_scoped_stream_session(
@@ -6043,7 +8103,8 @@ public func createScopedStreamSession(accessHandle: String, targetType: String, 
         FfiConverterString.lower(targetId),
         FfiConverterString.lower(accountId),
         FfiConverterUInt64.lower(ownerGeneration),
-        FfiConverterTypeXboxStreamSettings_lower(settings),uniffiCallStatus
+        FfiConverterTypeXboxStreamSettings_lower(settings),
+        FfiConverterOptionTypeXboxStreamStartup.lower(startup),uniffiCallStatus
     )
 })
 }
@@ -6127,6 +8188,74 @@ public func streamInputFrameFeedbackPayload(gamepadPayload: Data, frames: [XboxS
     )
 })
 }
+public func createStreamStartup(targetType: String)throws  -> XboxStreamStartup  {
+    return try  FfiConverterTypeXboxStreamStartup_lift(try rustCallWithError(FfiConverterTypeXboxStreamingError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_create_stream_startup(
+        FfiConverterString.lower(targetType),uniffiCallStatus
+    )
+})
+}
+public func fetchOfficialTouchBundle(accessHandle: String, xboxTitleId: String, bundleId: String, productId: String, gameName: String, locale: String, displayScale: Double)async throws  -> XboxOfficialTouchBundle  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundle(FfiConverterString.lower(accessHandle),FfiConverterString.lower(xboxTitleId),FfiConverterString.lower(bundleId),FfiConverterString.lower(productId),FfiConverterString.lower(gameName),FfiConverterString.lower(locale),FfiConverterDouble.lower(displayScale)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
+            liftFunc: FfiConverterTypeXboxOfficialTouchBundle_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+public func fetchOfficialTouchBundles(accessHandle: String, xboxTitleId: String, productId: String)async throws  -> [XboxOfficialTouchBundleChoice]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_fetch_official_touch_bundles(FfiConverterString.lower(accessHandle),FfiConverterString.lower(xboxTitleId),FfiConverterString.lower(productId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxOfficialTouchBundleChoice.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+public func fetchCommunityTouchBundle(xboxTitleId: String, bundleId: String, productId: String, gameName: String, locale: String, displayScale: Double)async throws  -> XboxOfficialTouchBundle  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_fetch_community_touch_bundle(FfiConverterString.lower(xboxTitleId),FfiConverterString.lower(bundleId),FfiConverterString.lower(productId),FfiConverterString.lower(gameName),FfiConverterString.lower(locale),FfiConverterDouble.lower(displayScale)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_u64,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_u64,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_u64,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_u64,
+            liftFunc: FfiConverterTypeXboxOfficialTouchBundle_lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
+public func fetchCommunityTouchBundles(xboxTitleId: String, productId: String)async throws  -> [XboxOfficialTouchBundleChoice]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_xbox_ios_bridge_fn_func_fetch_community_touch_bundles(FfiConverterString.lower(xboxTitleId),FfiConverterString.lower(productId)
+                )
+            },
+            pollFunc: ffi_xbox_ios_bridge_rust_future_poll_rust_buffer,
+            completeFunc: ffi_xbox_ios_bridge_rust_future_complete_rust_buffer,
+            freeFunc: ffi_xbox_ios_bridge_rust_future_free_rust_buffer,
+            cancelFunc: ffi_xbox_ios_bridge_rust_future_cancel_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeXboxOfficialTouchBundleChoice.lift,
+            errorHandler: FfiConverterTypeXboxBridgeError_lift
+        )
+}
 
 private enum InitializationResult {
     case ok
@@ -6149,7 +8278,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_profile() != 25802) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_refresh_login() != 52321) {
+    if (uniffi_xbox_ios_bridge_checksum_func_refresh_login() != 4566) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_start_login() != 59074) {
@@ -6158,10 +8287,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_catalog_source() != 53137) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_prepare_cloud_access() != 23893) {
+    if (uniffi_xbox_ios_bridge_checksum_func_prepare_cloud_access() != 301) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_prepare_home_access() != 38550) {
+    if (uniffi_xbox_ios_bridge_checksum_func_prepare_home_access() != 50791) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_release_stream_access() != 55925) {
@@ -6182,7 +8311,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_cloud_wait_time() != 59751) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_resolve_cloud_game() != 1945) {
+    if (uniffi_xbox_ios_bridge_checksum_func_resolve_cloud_game() != 63351) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_achievements() != 52189) {
@@ -6233,7 +8362,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_profile_section() != 31670) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_xbox_ios_bridge_checksum_func_create_scoped_stream_session() != 16824) {
+    if (uniffi_xbox_ios_bridge_checksum_func_create_scoped_stream_session() != 30192) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_create_stream_session() != 16123) {
@@ -6264,6 +8393,30 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_stream_input_frame_feedback_payload() != 52036) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_create_stream_startup() != 32845) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundle() != 35998) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundles() != 61851) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_community_touch_bundle() != 42837) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_fetch_community_touch_bundles() != 27572) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxauthobserver_checkpoint() != 9291) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxauthobserver_on_stage() != 20821) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamingauthprovider_ensure_session() != 32776) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_acknowledge_auth_update() != 64848) {
@@ -6314,7 +8467,39 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamsession_validate_resume() != 27140) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxstreamstartup_cancel() != 57513) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxofficialtouchbundle_choices() != 48925) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxofficialtouchbundle_preview() != 51319) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxofficialtouchbundle_version() != 50976) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxtouchlayoutlibrary_delete_layout() != 55834) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxtouchlayoutlibrary_load_layout() != 23874) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxtouchlayoutlibrary_mark_used() != 27351) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxtouchlayoutlibrary_save() != 6466) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_method_xboxtouchlayoutlibrary_saved_layouts() != 47619) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_constructor_xboxtouchlayoutlibrary_new() != 11075) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitXboxAuthObserver()
+    uniffiCallbackInitXboxStreamingAuthProvider()
     return InitializationResult.ok
 }()
 

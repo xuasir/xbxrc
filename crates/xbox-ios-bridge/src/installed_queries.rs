@@ -142,6 +142,9 @@ pub async fn fetch_installed_section(
                         status_code: None,
                         retriable: true,
                         retry_after_seconds: None,
+                        network_error_kind: None,
+                        service_code: None,
+                        protocol_error_code: None,
                     });
                 }
             }

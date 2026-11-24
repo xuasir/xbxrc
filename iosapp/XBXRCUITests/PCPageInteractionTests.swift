@@ -28,10 +28,25 @@ final class PCPageInteractionTests: XCTestCase {
       XCTAssertTrue(title.waitForExistence(timeout: 5))
       let navigation = app.navigationBars.firstMatch
       let logo = app.descendants(matching: .any)["page-xbox-logo"].firstMatch
+      let firstContent: XCUIElement
+      switch section {
+      case "hosts": firstContent = app.staticTexts["host-selected-name"].firstMatch
+      case "library":
+        firstContent =
+          app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "最近游玩")).firstMatch
+      case "my": firstContent = app.staticTexts["移动端验收"].firstMatch
+      case "controller":
+        // 首行随实际连接的手柄名称更新，按正文滚动容器定位。
+        firstContent = app.scrollViews.firstMatch.staticTexts.firstMatch
+      default: firstContent = app.staticTexts["应用偏好"].firstMatch
+      }
+      XCTAssertTrue(firstContent.waitForExistence(timeout: 5))
+      XCTAssertGreaterThanOrEqual(firstContent.frame.minY, navigation.frame.maxY + 20)
+      XCTAssertGreaterThan(try titleContrast(app: app, title: firstContent), 30)
       save(app, "reading-root-\(section)")
       XCTAssertGreaterThan(try titleContrast(app: app, title: title), 30)
       geometry.append(
-        "\(section): navigation=\(navigation.frame), logo=\(logo.frame), title=\(title.frame)"
+        "\(section): navigation=\(navigation.frame), logo=\(logo.frame), title=\(title.frame), firstContent=\(firstContent.frame)"
       )
       XCTAssertTrue(logo.exists, "根页应使用一致的Xbox标志和标题位置：\(section)")
       XCTAssertEqual(logo.label, "Xbox")
@@ -277,16 +292,16 @@ final class PCPageInteractionTests: XCTestCase {
     waitForPage(app, "我的")
     XCTAssertFalse(app.scrollViews["my-section-tabs"].exists)
     XCTAssertFalse(app.buttons["app-navigation-back"].exists)
-    let refresh = app.buttons["刷新账户资料"]
-    XCTAssertTrue(refresh.exists)
-    XCTAssertLessThan(refresh.frame.midX, app.frame.maxX)
-    XCTAssertGreaterThan(refresh.frame.midX, app.frame.midX)
+    XCTAssertFalse(app.buttons["刷新账户资料"].exists)
+    app.scrollViews["my-information-scroll"].swipeDown()
+    waitForPage(app, "我的")
     let friends = app.buttons["section-friends"]
     reveal(friends, in: app)
     let rootPosition = friends.frame.minY
     save(app, "annotations-my-overview")
     friends.tap()
     waitForPage(app, "好友")
+    XCTAssertFalse(app.buttons["刷新"].exists)
     let friend = app.buttons["friend-2000"]
     reveal(friend, in: app)
     friend.tap()
@@ -299,7 +314,7 @@ final class PCPageInteractionTests: XCTestCase {
     XCTAssertEqual(friends.frame.minY, rootPosition, accuracy: 24)
     let signOut = app.buttons["my-sign-out"]
     XCTAssertTrue(signOut.exists)
-    XCTAssertGreaterThan(signOut.frame.midX, refresh.frame.midX)
+    XCTAssertGreaterThan(signOut.frame.midX, app.frame.midX)
     XCTAssertLessThan(signOut.frame.maxY, app.navigationBars.firstMatch.frame.maxY + 1)
     XCTAssertGreaterThanOrEqual(signOut.frame.width, 44)
     XCTAssertGreaterThanOrEqual(signOut.frame.height, 44)
@@ -425,7 +440,7 @@ final class PCPageInteractionTests: XCTestCase {
     save(app, "pc-installed-filter")
   }
 
-  func testGameOverviewUsesTabsAndCentersEmptyAlbum() {
+  func testGameOverviewUsesTabsAndCentersEmptyAlbum() throws {
     let app = launch()
     let installed = app.buttons.matching(identifier: "host-open-installed").firstMatch
     reveal(installed, in: app)
@@ -434,6 +449,22 @@ final class PCPageInteractionTests: XCTestCase {
     reveal(game, in: app)
     game.tap()
     waitForPage(app, "Forza Horizon 5")
+    let name = app.staticTexts["personal-game-name"].firstMatch
+    XCTAssertTrue(name.waitForExistence(timeout: 5))
+    let stream = app.buttons["personal-game-start-stream"]
+    XCTAssertTrue(stream.isHittable)
+    XCTAssertEqual(stream.frame.width, 44, accuracy: 1)
+    XCTAssertEqual(stream.frame.height, 44, accuracy: 1)
+    XCTAssertEqual(stream.frame.midY, name.frame.midY, accuracy: 1)
+    XCTAssertGreaterThan(stream.frame.minX, name.frame.maxX)
+    XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "串流此主机")).count, 1)
+    let sections = app.scrollViews["personal-game-sections"]
+    let identityFrame = name.frame
+    let tabsFrame = sections.frame
+    XCTAssertGreaterThan(identityFrame.minY, app.navigationBars.firstMatch.frame.maxY)
+    XCTAssertLessThan(identityFrame.maxY, tabsFrame.minY)
+    let background = try toolbarBackgroundPixels(
+      app: app, navigation: app.navigationBars.firstMatch)
     let description = app.buttons["game-description-toggle"]
     XCTAssertTrue(description.waitForExistence(timeout: 5))
     XCTAssertEqual(description.label, "展开简介")
@@ -447,13 +478,26 @@ final class PCPageInteractionTests: XCTestCase {
     XCTAssertFalse(app.buttons["查看我的游戏相册"].exists)
     XCTAssertFalse(app.buttons["查看游玩统计"].exists)
     save(app, "priority-game-overview")
+    for (section, content) in [("statistics", "游玩统计"), ("achievements", "游戏成就")] {
+      app.buttons["personal-game-section-\(section)"].tap()
+      XCTAssertTrue(app.staticTexts[content].firstMatch.waitForExistence(timeout: 5))
+      XCTAssertEqual(name.frame.minY, identityFrame.minY, accuracy: 1)
+      XCTAssertEqual(name.frame.maxY, identityFrame.maxY, accuracy: 1)
+      XCTAssertEqual(sections.frame.minY, tabsFrame.minY, accuracy: 1)
+    }
     app.buttons["personal-game-section-album"].tap()
     let empty = app.descendants(matching: .any)["album-empty-state"].firstMatch
     XCTAssertTrue(empty.waitForExistence(timeout: 5))
-    let types = app.scrollViews["album-media-types"]
+    let types = app.descendants(matching: .any)["album-media-types"].firstMatch
     let scroll = app.scrollViews["app-information-scroll"].firstMatch
+    XCTAssertEqual(name.frame.minY, identityFrame.minY, accuracy: 1)
+    XCTAssertEqual(name.frame.maxY, identityFrame.maxY, accuracy: 1)
+    XCTAssertEqual(sections.frame.minY, tabsFrame.minY, accuracy: 1)
+    XCTAssertEqual(
+      try toolbarBackgroundPixels(app: app, navigation: app.navigationBars.firstMatch), background)
     XCTAssertEqual(empty.frame.midX, scroll.frame.midX, accuracy: 2)
-    XCTAssertEqual(empty.frame.midY, (types.frame.maxY + scroll.frame.maxY) / 2, accuracy: 24)
+    let contentBottom = min(scroll.frame.maxY, app.buttons["primary-navigation-hosts"].frame.minY)
+    XCTAssertEqual(empty.frame.midY, (types.frame.maxY + contentBottom) / 2, accuracy: 24)
     save(app, "priority-game-album-empty")
     let clips = app.buttons["album-media-types-clip"]
     XCTAssertTrue(clips.isHittable)
@@ -677,10 +721,11 @@ final class PCPageInteractionTests: XCTestCase {
     let app = launch()
     guard app.frame.width >= 900 else { throw XCTSkip("宽屏密度在iPad验证") }
     app.buttons["primary-navigation-my"].tap()
-    let refresh = app.buttons["刷新账户资料"]
-    XCTAssertTrue(refresh.waitForExistence(timeout: 5))
-    XCTAssertLessThan(refresh.frame.width, 200)
-    XCTAssertLessThanOrEqual(refresh.frame.height, 48)
+    let signOut = app.buttons["my-sign-out"]
+    XCTAssertTrue(signOut.waitForExistence(timeout: 5))
+    XCTAssertGreaterThanOrEqual(signOut.frame.width, 44)
+    XCTAssertLessThanOrEqual(signOut.frame.height, 48)
+    XCTAssertFalse(app.buttons["刷新账户资料"].exists)
     save(app, "density-ipad-account")
     app.buttons["section-friends"].tap()
     let friend = app.buttons["friend-2000"]
@@ -827,7 +872,33 @@ extension PCPageInteractionTests {
       predicate: NSPredicate(format: "exists == false"), object: retry)
     XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 5), .completed)
     XCTAssertTrue(app.buttons["cloud-game-HALO00000001"].firstMatch.exists)
+    XCTAssertFalse(app.buttons["刷新云目录"].exists)
     save(app, "section-errors-cloud-recovered")
+  }
+
+  func testCloudSourcePagePullRefreshRecoversFailure() {
+    let app = launch(arguments: ["--section-errors-ui-test"])
+    app.buttons["primary-navigation-library"].tap()
+    let retry = app.buttons["section-retry-cloud-popular"]
+    reveal(retry, in: app)
+    XCTAssertTrue(retry.waitForExistence(timeout: 5))
+    let entry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "热门游戏，")).firstMatch
+    reveal(entry, in: app)
+    entry.tap()
+    waitForPage(app, "热门游戏")
+    let scroll = app.scrollViews["cloud-browser-scroll"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+    scroll.swipeDown()
+    let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.2))
+    let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.9))
+    start.press(forDuration: 0.1, thenDragTo: end)
+    waitForPage(app, "热门游戏")
+    let recovered = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == false"), object: retry)
+    XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 5), .completed)
+    XCTAssertTrue(app.buttons["cloud-game-HALO00000001"].firstMatch.exists)
+    XCTAssertFalse(app.buttons["刷新云目录"].exists)
+    save(app, "cloud-pull-refresh-recovered")
   }
 }
 

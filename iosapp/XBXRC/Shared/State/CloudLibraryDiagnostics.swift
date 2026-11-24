@@ -15,10 +15,24 @@ enum CloudLibraryDiagnostics {
         payload["errorDomain"] = .string(nsError.domain)
         payload["errorCode"] = .integer(Int64(nsError.code))
         payload["errorType"] = .string(String(describing: type(of: error)))
+        payload["error"] = .string(safeMessage)
+        // 类型化事实直接进入诊断，避免枚举描述的标点影响可重试判断。
+        if let bridge = error as? XboxBridgeError, case .Query(let failure) = bridge {
+            payload["errorKind"] = .string(String(describing: failure.kind))
+            payload["timeout"] = .bool(failure.kind == .timeout)
+            payload["retriable"] = .bool(failure.retriable)
+            payload["statusCode"] = failure.statusCode.map { .integer(Int64($0)) }
+            payload["retryAfterSeconds"] = failure.retryAfterSeconds.map {
+                .integer(Int64(clamping: $0))
+            }
+            payload["networkErrorKind"] = failure.networkErrorKind.map { .string($0) }
+            payload["serviceCode"] = failure.serviceCode.map { .string($0) }
+            payload["protocolErrorCode"] = failure.protocolErrorCode.map { .string($0) }
+            return payload
+        }
         payload["errorKind"] = .string(classifyError(safeMessage))
         payload["timeout"] = .bool(isTimeout(nsError: nsError, message: safeMessage))
         payload["retriable"] = .bool(isRetriable(nsError: nsError, message: safeMessage))
-        payload["error"] = .string(safeMessage)
         if let statusCode = statusCode(in: safeMessage) {
             payload["statusCode"] = .integer(Int64(statusCode))
         }

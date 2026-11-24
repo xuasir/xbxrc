@@ -15,7 +15,7 @@ enum StreamInputSource: String, Sendable {
 }
 
 enum StreamInputSuppressionReason: Hashable {
-    case menu, lifecycle, terminal, settingsCapture, settingsTest
+    case menu, lifecycle, terminal, settingsCapture, settingsTest, layoutSwitch
 }
 
 enum IOSStreamStickTransform {
@@ -69,6 +69,7 @@ final class StreamInputSession: ObservableObject {
     private var virtualState = IOSStreamGamepadState.neutral
     private var activeTouches: Set<String> = []
     private var requiresNeutral = false
+    private var pendingTouchNeutralFrame = false
     private var suppressionReasons: Set<StreamInputSuppressionReason> = []
     private var shortcuts = MobileShortcutMatcher()
     private var lastShortcutPreferences: MobilePreferences?
@@ -259,12 +260,15 @@ final class StreamInputSession: ObservableObject {
         let mapped = snapshot.mapped(using: preferences)
         let physical = IOSStreamStickTransform.apply(mapped, preferences: preferences)
         guard !isSuppressed else { return .neutral }
+        if pendingTouchNeutralFrame {
+            pendingTouchNeutralFrame = false
+            return .neutral
+        }
         if requiresNeutral {
             guard snapshot.buttons.values.allSatisfy({ $0 <= 0.5 }),
                 MobileShortcutButton.allCases.allSatisfy({ !$0.isPressed(in: mapped) }),
                 MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: rawPhysical)) <= 0.15 }),
-                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: mapped)) <= 0.15 }),
-                activeTouches.isEmpty
+                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: mapped)) <= 0.15 })
             else { return .neutral }
             requiresNeutral = false
         }
@@ -302,6 +306,7 @@ final class StreamInputSession: ObservableObject {
         isSuppressed = suppressed
         releaseTouches()
         requiresNeutral = true
+        pendingTouchNeutralFrame = true
         shortcuts.reset()
     }
 
@@ -345,6 +350,12 @@ final class StreamInputSession: ObservableObject {
         activeTouches.removeAll()
     }
 
+    func releaseTouchesForLayoutChange() {
+        releaseTouches()
+        // 唯一采样出口先发 neutral，紧接着的新触点保持自己的完整生命周期。
+        pendingTouchNeutralFrame = true
+    }
+
     func setTouchLayoutState(_ state: IOSStreamGamepadState, active: Bool) {
         guard !isSuppressed else { return }
         virtualState = state
@@ -357,6 +368,7 @@ final class StreamInputSession: ObservableObject {
 
     func reset() {
         releaseTouches()
+        pendingTouchNeutralFrame = false
         suppressionReasons.removeAll()
         isSuppressed = false
         requiresNeutral = true

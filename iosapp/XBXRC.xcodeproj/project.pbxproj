@@ -7,6 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */; };
+		5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */; };
+		4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */; };
+		3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */; };
+		C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */; };
+		17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */; };
+		495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */; };
+		E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */; };
+		7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */; };
+		907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */; };
+		DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */; };
+		09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */; };
+		C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */; };
+		5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */; };
 		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
 		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
 		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
@@ -124,6 +138,9 @@
 		A60000000000000000000620 /* TouchLayoutTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000620 /* TouchLayoutTemplate.swift */; };
 		A60000000000000000000621 /* TouchLayoutSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000621 /* TouchLayoutSettingsViews.swift */; };
 		A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */; };
+		182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */; };
+		956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */; };
+		B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -137,6 +154,20 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchQuickSwitch.swift; sourceTree = "<group>"; };
+		B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutInteractionTests.swift; sourceTree = "<group>"; };
+		74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutTests.swift; sourceTree = "<group>"; };
+		6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsUITestFixtures.swift; sourceTree = "<group>"; };
+		414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutPickerPanel.swift; sourceTree = "<group>"; };
+		4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsView.swift; sourceTree = "<group>"; };
+		A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutPreviewView.swift; sourceTree = "<group>"; };
+		2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsView.swift; sourceTree = "<group>"; };
+		1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutController.swift; sourceTree = "<group>"; };
+		0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsStore.swift; sourceTree = "<group>"; };
+		6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxTouchLayoutClient.swift; sourceTree = "<group>"; };
+		78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutModels.swift; sourceTree = "<group>"; };
+		384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnostics.swift; sourceTree = "<group>"; };
+		2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnosticsTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		B00000000000000000000035 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
@@ -260,6 +291,9 @@
 		B60000000000000000000620 /* TouchLayoutTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutTemplate.swift; sourceTree = "<group>"; };
 		B60000000000000000000621 /* TouchLayoutSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutSettingsViews.swift; sourceTree = "<group>"; };
 		B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutCustomizationTests.swift; sourceTree = "<group>"; };
+		5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProductDetailRepository.swift; sourceTree = "<group>"; };
+		1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumFileDownload.swift; sourceTree = "<group>"; };
+		DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPBehaviorParityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -309,6 +343,7 @@
 		C00000000000000000000003 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */,
 				B40000000000000000000001 /* PCPageUITestFixtures.swift */,
 				B00000000000000000000001 /* XBXRCApp.swift */,
 				B00000000000000000000002 /* AppRootView.swift */,
@@ -377,6 +412,7 @@
 		C00000000000000000000007 /* Profile */ = {
 			isa = PBXGroup;
 			children = (
+				1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */,
 				B40000000000000000000004 /* XboxAlbumView.swift */,
 				B40000000000000000000003 /* PersonalGameViews.swift */,
 				B9235FFFFA1375C8BD4E415D /* PersonalPages.swift */,
@@ -413,6 +449,7 @@
 		C00000000000000000000011 /* RustBridge */ = {
 			isa = PBXGroup;
 			children = (
+				6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */,
 				B40000000000000000000006 /* XboxPersonalDataClient.swift */,
 				B40000000000000000000005 /* CloudProductDataClient.swift */,
 				B00000000000000000000011 /* XboxAuthClient.swift */,
@@ -445,6 +482,9 @@
 		C00000000000000000000009 /* Streaming */ = {
 			isa = PBXGroup;
 			children = (
+				744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */,
+				414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */,
+				1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */,
 				B9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift */,
 				B99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift */,
 				B00000000000000000000006 /* StreamingRuntime.swift */,
@@ -458,6 +498,7 @@
 				B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */,
 				B00000000000000000000046 /* StreamingControlsOverlay.swift */,
 				B0000000000000000000002E /* StreamSessionActor.swift */,
+				384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */,
 				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
 				B508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift */,
 				B00000000000000000000030 /* StreamingPlayerView.swift */,
@@ -516,6 +557,8 @@
 		C00000000000000000000015 /* State */ = {
 			isa = PBXGroup;
 			children = (
+				5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */,
+				0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */,
 				B40000000000000000000008 /* XboxPlayerData.swift */,
 				B40000000000000000000007 /* CloudFavoritesStore.swift */,
 				B9BC5E82238132BB99913E9D /* XboxPersonalData.swift */,
@@ -555,6 +598,8 @@
 		C0000000000000000000000D /* XBXRCTests */ = {
 			isa = PBXGroup;
 			children = (
+				DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */,
+				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
 				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
 				B6000000000000000000060A /* TouchLayoutTests.swift */,
 				B40000000000000000000009 /* PCDataParityTests.swift */,
@@ -567,6 +612,7 @@
 				B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */,
 				B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */,
 				B00000000000000000000047 /* StreamingControlsStateTests.swift */,
+				2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */,
 			);
 			path = XBXRCTests;
 			sourceTree = "<group>";
@@ -597,10 +643,15 @@
 			path = Controllers;
 			sourceTree = "<group>";
 		};
-        C30000000000000000000001 = {isa = PBXGroup; children = (B6000000000000000000060B, B4000000000000000000000A, B30000000000000000000001,); path = XBXRCUITests; sourceTree = "<group>"; };
+        C30000000000000000000001 = {isa = PBXGroup; children = (
+				B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */,B6000000000000000000060B, B4000000000000000000000A, B30000000000000000000001,); path = XBXRCUITests; sourceTree = "<group>"; };
 		C60000000000000000000001 /* TouchControls */ = {
 			isa = PBXGroup;
 			children = (
+				4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */,
+				A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */,
+				2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */,
+				78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */,
 				B60000000000000000000600 /* TouchControlRuntime.swift */,
 				B60000000000000000000601 /* TouchInputAccumulator.swift */,
 				B60000000000000000000620 /* TouchLayoutTemplate.swift */,
@@ -762,6 +813,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */,
+				182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */,
+				BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */,
+				3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */,
+				C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */,
+				17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */,
+				495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */,
+				E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */,
+				7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */,
+				907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */,
+				DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */,
+				09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */,
 				A60000000000000000000608 /* TouchLayoutSurface.swift in Sources */,
 				A6000000000000000000060F /* TouchLayoutRecorder.swift in Sources */,
 				A6000000000000000000060E /* TouchSampleBatch.swift in Sources */,
@@ -827,6 +890,7 @@
 				A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */,
 				A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */,
 				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
+				C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */,
 				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
 				A508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift in Sources */,
 				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
@@ -866,6 +930,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */,
+				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
 				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,
 				A6000000000000000000060A /* TouchLayoutTests.swift in Sources */,
 				A40000000000000000000009 /* PCDataParityTests.swift in Sources */,
@@ -878,10 +944,12 @@
 				A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */,
 				A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */,
 				A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */,
+				5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
         D30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */,
 				A6000000000000000000060B /* TouchLayoutInteractionTests.swift in Sources */,A4000000000000000000000A, A30000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

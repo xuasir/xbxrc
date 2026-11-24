@@ -1,0 +1,8 @@
+{
+  "crates/xbox-webapi/src/xcloud_api.rs": "e8ec8d183099aa75a1745fe0a3d22c1611217a5d84d4c9ae5b315e814127cb78",
+  "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift": "d1f53dff7e0103f5fc6e450e7bedf954d15248ecf7f90b64d8584e4688c3a735",
+  "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift": "5f2c041404f4684dd153344a6878400681eb9d6699b9eaa8fd9921fcca6d125b",
+  "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift": "c155289fa2350a697a6972a31b69913bfdbe1d48b96c93bffec7f757d38b6098",
+  "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift": "6157fedb67acd6d30c54b36efccf436292678d82458693cd7e261caf89537b46",
+  "iosapp/XBXRC/Resources/Localizable.xcstrings": "6edac6d5407e13b47a5e94c940d257e3f3205c074dada74b775573195f4a99ef"
+}

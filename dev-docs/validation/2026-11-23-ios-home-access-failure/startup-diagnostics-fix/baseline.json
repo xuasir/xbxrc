@@ -1,0 +1,52 @@
+{
+  "task": "2026-11-23-ios-home-startup-diagnostics",
+  "timeShanghai": "2026-11-23T14:23:05.278400+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1",
+  "systemTemporary": "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1/SystemTemporary",
+  "evidenceRoot": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-home-access-failure/startup-diagnostics-fix",
+  "baseline": {
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": {
+      "sha256": "94a7817e09ec73db4d295ce898d1e9d6174d45165a9c8967d98a127d205f1c95",
+      "bytes": 102364,
+      "mtimeNs": 1795398333925109248
+    },
+    "iosapp/XBXRC.xcodeproj/project.pbxproj": {
+      "sha256": "e4e0a019c98daf8690825f570e5ddfcc607b9eff390e3c171ae34a5ae716cfbf",
+      "bytes": 81758,
+      "mtimeNs": 1795167886967489406
+    },
+    "docs/project-task.md": {
+      "sha256": "eb9134be82840718c670d54901ef3e1e79d8377e92ee90cdfaf01e9026551456",
+      "bytes": 158606,
+      "mtimeNs": 1795410905973007500
+    }
+  },
+  "projectIDs": {
+    "StreamingStartupDiagnostics.swift": {
+      "build": "C5DAD6886F11B8D41EA420B1",
+      "file": "384FD9083CB51D185D4C2016"
+    },
+    "StreamingStartupDiagnosticsTests.swift": {
+      "build": "5CF3B5786EEAA3DF425A05D5",
+      "file": "2A08116442E67A7B6294ABA1"
+    }
+  },
+  "userConfirmed": {
+    "network": "Wi-Fi 裸连",
+    "consoleState": "待机",
+    "wakeOnConnect": true,
+    "pcCanConnect": true
+  },
+  "plannedProductionScope": [
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift"
+  ],
+  "plannedAdditionalFiles": [
+    "iosapp/XBXRCTests/StreamingStartupDiagnosticsTests.swift",
+    "iosapp/XBXRC.xcodeproj/project.pbxproj",
+    "docs/project-task.md"
+  ],
+  "temporaryArtifactsManifest": [
+    "/private/tmp/xbxrc-ios-home-startup-diagnostics-20261123-33399546-r1"
+  ]
+}

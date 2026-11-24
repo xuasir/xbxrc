@@ -1,0 +1,77 @@
+{
+  "testAndBuildHistory": {
+    "r1/card-ui-r2.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' passed (36.770 seconds).",
+      "** TEST SUCCEEDED **"
+    ],
+    "r1/card-ui.txt": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift:179:13: error: cannot assign to value: 'error' is immutable",
+      "179 |             error = SectionRequestFailure(error: error)",
+      "    |             `- error: cannot assign to value: 'error' is immutable",
+      "** TEST FAILED **"
+    ],
+    "r1/failure-export.txt": [
+      "Error: Failed to create a new result bundle reader, underlying error: Info.plist at /private/tmp/xbxrc-ios-game-touch-layouts-20261124/r1/ui-smoke.xcresult/Info.plist does not exist, the result bundle might be corrupted or the provided path is not a result bundle"
+    ],
+    "r1/ui-smoke-r2.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' passed (33.079 seconds).",
+      "** TEST SUCCEEDED **"
+    ],
+    "r1/ui-smoke.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift:28: error: -[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails] : XCTAssertTrue failed",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' failed (36.134 seconds)."
+    ],
+    "r3/final-device-capture.txt": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift:344:66: error: value of type 'XCUIDevice' has no member 'screenshot'",
+      "    |                                                                  `- error: value of type 'XCUIDevice' has no member 'screenshot'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift:346:28: error: cannot infer contextual base in reference to member 'keepAlways'",
+      "    |                            `- error: cannot infer contextual base in reference to member 'keepAlways'",
+      "** TEST FAILED **"
+    ],
+    "r3/final-screen-capture.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' passed (42.310 seconds).",
+      "** TEST SUCCEEDED **"
+    ],
+    "r3/fullscreen-style-ui-r2.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' passed (46.829 seconds).",
+      "** TEST SUCCEEDED **"
+    ],
+    "r3/fullscreen-style-ui.txt": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift:77:55: error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "    |                                                       `- error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift:78:50: error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "    |                                                  `- error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift:79:56: error: value of type 'XboxQueryFailure' has no member 'protocolErrorCode'",
+      "    |                                                        `- error: value of type 'XboxQueryFailure' has no member 'protocolErrorCode'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift:28:51: error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "    |                                                   `- error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift:29:46: error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "    |                                              `- error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift:36:36: error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "    |                                    `- error: value of type 'XboxQueryFailure' has no member 'networkErrorKind'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift:37:31: error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "    |                               `- error: value of type 'XboxQueryFailure' has no member 'serviceCode'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Shared/Models/SectionRequestFailure.swift:38:37: error: value of type 'XboxQueryFailure' has no member 'protocolErrorCode'",
+      "    |                                     `- error: value of type 'XboxQueryFailure' has no member 'protocolErrorCode'",
+      " 40 |     init(error: any Error) {",
+      "** TEST FAILED **"
+    ],
+    "r4/final-compact-ui.txt": [
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' started.",
+      "Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testCommunityLayoutRemainsAvailableWhenOfficialSourceFails]' passed (42.597 seconds).",
+      "** TEST SUCCEEDED **"
+    ]
+  },
+  "resolved": [
+    "来源选择无障碍值断言",
+    "catch 使用 self.error 更新视图状态",
+    "共享 Query 字段沿正式脚本生成绑定并保留旧构造兼容",
+    "整屏截图使用 XCUIScreen.main，按 EXIF 方向归一化"
+  ],
+  "realOfficialAndHome": "待正常 Xcode 应用内及 Home 实机验收"
+}

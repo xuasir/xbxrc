@@ -1,0 +1,342 @@
+--- a/crates/xbox-ios-bridge/src/auth_session.rs
++++ b/crates/xbox-ios-bridge/src/auth_session.rs
+@@ -44,6 +44,7 @@
+     pub scope: Option<String>,
+     pub elapsed_ms: Option<u64>,
+     pub skip_core_refresh: Option<bool>,
++    pub network_error_kind: Option<String>,
+     pub failure: Option<XboxQueryFailure>,
+ }
+ 
+@@ -192,6 +193,16 @@
+             scope: facts["scope"].as_str().map(str::to_owned),
+             elapsed_ms: facts["elapsedMs"].as_u64(),
+             skip_core_refresh: facts["skipCoreRefresh"].as_bool(),
++            // 固定分类穿过 FFI；底层 source 正文留在 HTTP 边界内。
++            network_error_kind: facts["networkErrorKind"]
++                .as_str()
++                .filter(|kind| {
++                    matches!(
++                        *kind,
++                        "dns" | "connect" | "tls" | "timeout" | "body" | "request" | "unknown"
++                    )
++                })
++                .map(str::to_owned),
+             failure: facts
+                 .get("errorKind")
+                 .map(|_| XboxQueryFailure::from_safe_summary(&facts)),
+@@ -291,6 +302,7 @@
+                 scope: Some(scope.as_str().into()),
+                 elapsed_ms: None,
+                 skip_core_refresh: Some(true),
++                network_error_kind: None,
+                 failure: None,
+             });
+             return Ok(AuthSession {
+--- a/crates/xbox-ios-bridge/src/auth_session.test.rs
++++ b/crates/xbox-ios-bridge/src/auth_session.test.rs
+@@ -306,6 +306,92 @@
+     assert!(token_was_rejected(&session, DownstreamTokenScope::Web, Some("web")).unwrap());
+ }
+ 
++#[test]
++fn auth_stage_retains_fixed_network_failure_details() {
++    let session = fixture_session();
++    let host = Observer::default();
++    let observer = BridgeAuthRenewal {
++        host: &host,
++        current: &session,
++        cache: None,
++        scope: DownstreamTokenScope::Cloud,
++    };
++    for (kind, name, retriable, failure_kind) in [
++        (
++            NetworkErrorKind::Dns,
++            "dns",
++            true,
++            crate::XboxQueryFailureKind::Network,
++        ),
++        (
++            NetworkErrorKind::Connect,
++            "connect",
++            true,
++            crate::XboxQueryFailureKind::Network,
++        ),
++        (
++            NetworkErrorKind::Tls,
++            "tls",
++            false,
++            crate::XboxQueryFailureKind::Network,
++        ),
++        (
++            NetworkErrorKind::Timeout,
++            "timeout",
++            true,
++            crate::XboxQueryFailureKind::Timeout,
++        ),
++        (
++            NetworkErrorKind::Body,
++            "body",
++            true,
++            crate::XboxQueryFailureKind::Network,
++        ),
++        (
++            NetworkErrorKind::Request,
++            "request",
++            false,
++            crate::XboxQueryFailureKind::Network,
++        ),
++    ] {
++        let mut facts = WebApiError::network_kind(kind).safe_summary();
++        facts["requestStage"] = json!("deviceToken");
++        facts["elapsedMs"] = json!(156);
++        observer.stage("authRequestFailed", facts);
++        let stages = host.stages.lock().unwrap();
++        let stage = stages.last().unwrap();
++        assert_eq!(stage.request_stage.as_deref(), Some("deviceToken"));
++        assert_eq!(stage.elapsed_ms, Some(156));
++        assert_eq!(stage.network_error_kind.as_deref(), Some(name));
++        assert_eq!(stage.failure.as_ref().unwrap().kind, failure_kind);
++        assert_eq!(stage.failure.as_ref().unwrap().retriable, retriable);
++    }
++}
++
++#[test]
++fn auth_stage_discards_free_form_network_details() {
++    let session = fixture_session();
++    let host = Observer::default();
++    let observer = BridgeAuthRenewal {
++        host: &host,
++        current: &session,
++        cache: None,
++        scope: DownstreamTokenScope::Cloud,
++    };
++    observer.stage(
++        "authRequestFailed",
++        json!({
++            "requestStage": "deviceToken", "errorKind": "network", "retriable": true,
++            "networkErrorKind": "https://private.invalid?token=secret", "error": "Bearer secret"
++        }),
++    );
++    let stages = host.stages.lock().unwrap();
++    let stage = stages.last().unwrap();
++    assert!(stage.network_error_kind.is_none());
++    assert!(!format!("{stage:?}").contains("private"));
++    assert!(!format!("{stage:?}").contains("secret"));
++}
++
+ #[tokio::test]
+ async fn failed_cloud_recovery_keeps_home_warm_and_cloud_on_core_recovery() {
+     let backend = Backend {
+--- a/iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift
++++ b/iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift
+@@ -15,10 +15,21 @@
+         payload["errorDomain"] = .string(nsError.domain)
+         payload["errorCode"] = .integer(Int64(nsError.code))
+         payload["errorType"] = .string(String(describing: type(of: error)))
++        payload["error"] = .string(safeMessage)
++        // 类型化事实直接进入诊断，避免枚举描述的标点影响可重试判断。
++        if let bridge = error as? XboxBridgeError, case .Query(let failure) = bridge {
++            payload["errorKind"] = .string(String(describing: failure.kind))
++            payload["timeout"] = .bool(failure.kind == .timeout)
++            payload["retriable"] = .bool(failure.retriable)
++            payload["statusCode"] = failure.statusCode.map { .integer(Int64($0)) }
++            payload["retryAfterSeconds"] = failure.retryAfterSeconds.map {
++                .integer(Int64(clamping: $0))
++            }
++            return payload
++        }
+         payload["errorKind"] = .string(classifyError(safeMessage))
+         payload["timeout"] = .bool(isTimeout(nsError: nsError, message: safeMessage))
+         payload["retriable"] = .bool(isRetriable(nsError: nsError, message: safeMessage))
+-        payload["error"] = .string(safeMessage)
+         if let statusCode = statusCode(in: safeMessage) {
+             payload["statusCode"] = .integer(Int64(statusCode))
+         }
+--- a/iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift
++++ b/iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift
+@@ -154,6 +154,13 @@
+     }
+ 
+     func onStage(event: XboxAuthStage) {
++        IOSRuntimeTrace.event(
++            domain: "auth", event: "credentialFlowStage", payload: Self.stagePayload(event),
++            dimension: .network, importance: event.failure == nil ? .key : .essential,
++            operationID: operationID)
++    }
++
++    static func stagePayload(_ event: XboxAuthStage) -> [String: IOSRuntimeTraceValue] {
+         var payload: [String: IOSRuntimeTraceValue] = ["stage": .string(event.stage)]
+         if let stage = event.requestStage { payload["requestStage"] = .string(stage) }
+         if let scope = event.scope { payload["scope"] = .string(scope) }
+@@ -161,15 +168,13 @@
+             payload["elapsedMs"] = .integer(Int64(clamping: elapsed))
+         }
+         if let skipCore = event.skipCoreRefresh { payload["skipCoreRefresh"] = .bool(skipCore) }
++        if let kind = event.networkErrorKind { payload["networkErrorKind"] = .string(kind) }
+         if let failure = event.failure {
+             payload["errorKind"] = .string(String(describing: failure.kind))
+             payload["retriable"] = .bool(failure.retriable)
+             if let status = failure.statusCode { payload["statusCode"] = .integer(Int64(status)) }
+         }
+-        IOSRuntimeTrace.event(
+-            domain: "auth", event: "credentialFlowStage", payload: payload,
+-            dimension: .network, importance: event.failure == nil ? .key : .essential,
+-            operationID: operationID)
++        return payload
+     }
+ }
+ 
+--- a/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift
++++ b/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift
+@@ -2281,16 +2281,18 @@
+     public var scope: String?
+     public var elapsedMs: UInt64?
+     public var skipCoreRefresh: Bool?
++    public var networkErrorKind: String?
+     public var failure: XboxQueryFailure?
+ 
+     // Default memberwise initializers are never public by default, so we
+     // declare one manually.
+-    public init(stage: String, requestStage: String?, scope: String?, elapsedMs: UInt64?, skipCoreRefresh: Bool?, failure: XboxQueryFailure?) {
++    public init(stage: String, requestStage: String?, scope: String?, elapsedMs: UInt64?, skipCoreRefresh: Bool?, networkErrorKind: String?, failure: XboxQueryFailure?) {
+         self.stage = stage
+         self.requestStage = requestStage
+         self.scope = scope
+         self.elapsedMs = elapsedMs
+         self.skipCoreRefresh = skipCoreRefresh
++        self.networkErrorKind = networkErrorKind
+         self.failure = failure
+     }
+ 
+@@ -2315,6 +2317,7 @@
+                 scope: FfiConverterOptionString.read(from: &buf),
+                 elapsedMs: FfiConverterOptionUInt64.read(from: &buf),
+                 skipCoreRefresh: FfiConverterOptionBool.read(from: &buf),
++                networkErrorKind: FfiConverterOptionString.read(from: &buf),
+                 failure: FfiConverterOptionTypeXboxQueryFailure.read(from: &buf)
+         )
+     }
+@@ -2325,6 +2328,7 @@
+         FfiConverterOptionString.write(value.scope, into: &buf)
+         FfiConverterOptionUInt64.write(value.elapsedMs, into: &buf)
+         FfiConverterOptionBool.write(value.skipCoreRefresh, into: &buf)
++        FfiConverterOptionString.write(value.networkErrorKind, into: &buf)
+         FfiConverterOptionTypeXboxQueryFailure.write(value.failure, into: &buf)
+     }
+ }
+--- a/iosapp/XBXRCTests/XBXRCTests.swift
++++ b/iosapp/XBXRCTests/XBXRCTests.swift
+@@ -2031,6 +2031,69 @@
+         XCTAssertEqual(payload["forceRegionApplied"], .bool(false))
+     }
+ 
++    func testCloudLibraryDiagnosticsRetainsRetryableQueryNetworkFailure() {
++        let error = XboxBridgeError.Query(
++            failure: XboxQueryFailure(
++                kind: .network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
++        let payload = CloudLibraryDiagnostics.errorPayload(error, extra: ["phase": "loaded"])
++
++        XCTAssertEqual(payload["errorKind"], .string("network"))
++        XCTAssertEqual(payload["retriable"], .bool(true))
++        XCTAssertEqual(payload["timeout"], .bool(false))
++        XCTAssertEqual(payload["phase"], .string("loaded"))
++        XCTAssertNil(payload["statusCode"])
++    }
++
++    func testCloudLibraryDiagnosticsRetainsQueryStatusAndCooldown() {
++        let error = XboxBridgeError.Query(
++            failure: XboxQueryFailure(
++                kind: .rateLimited, statusCode: 429, retriable: true, retryAfterSeconds: 30))
++        let payload = CloudLibraryDiagnostics.errorPayload(error)
++
++        XCTAssertEqual(payload["errorKind"], .string("rateLimited"))
++        XCTAssertEqual(payload["statusCode"], .integer(429))
++        XCTAssertEqual(payload["retryAfterSeconds"], .integer(30))
++        XCTAssertEqual(payload["retriable"], .bool(true))
++        XCTAssertEqual(payload["timeout"], .bool(false))
++    }
++
++    func testCloudLibraryDiagnosticsRetainsQueryTimeoutAndPermanentNetworkFailure() {
++        let timeout = XboxBridgeError.Query(
++            failure: XboxQueryFailure(
++                kind: .timeout, statusCode: nil, retriable: true, retryAfterSeconds: nil))
++        let timeoutPayload = CloudLibraryDiagnostics.errorPayload(timeout)
++        XCTAssertEqual(timeoutPayload["errorKind"], .string("timeout"))
++        XCTAssertEqual(timeoutPayload["timeout"], .bool(true))
++        XCTAssertEqual(timeoutPayload["retriable"], .bool(true))
++
++        let permanent = XboxBridgeError.Query(
++            failure: XboxQueryFailure(
++                kind: .network, statusCode: nil, retriable: false, retryAfterSeconds: nil))
++        XCTAssertEqual(
++            CloudLibraryDiagnostics.errorPayload(permanent)["retriable"], .bool(false))
++    }
++
++    func testAuthStageDiagnosticsRetainsNetworkFailureDetails() {
++        for (kind, requestStage, elapsed, failureKind) in [
++            ("connect", "deviceToken", UInt64(156), XboxQueryFailureKind.network),
++            ("timeout", "sisuAuthorize", UInt64(5_011), XboxQueryFailureKind.timeout),
++        ] {
++            let event = XboxAuthStage(
++                stage: "authRequestFailed", requestStage: requestStage, scope: "cloud",
++                elapsedMs: elapsed, skipCoreRefresh: nil, networkErrorKind: kind,
++                failure: XboxQueryFailure(
++                    kind: failureKind, statusCode: nil, retriable: true, retryAfterSeconds: nil))
++            let payload = RustAuthCheckpointObserver.stagePayload(event)
++
++            XCTAssertEqual(payload["networkErrorKind"], .string(kind))
++            XCTAssertEqual(payload["requestStage"], .string(requestStage))
++            XCTAssertEqual(payload["elapsedMs"], .integer(Int64(elapsed)))
++            XCTAssertEqual(payload["scope"], .string("cloud"))
++            XCTAssertEqual(payload["errorKind"], .string(String(describing: failureKind)))
++            XCTAssertEqual(payload["retriable"], .bool(true))
++        }
++    }
++
+     func testIOSRuntimeTraceWriterEmitsSchemaV3AndRedactsPayload() async throws {
+         let rootDirectory = FileManager.default.temporaryDirectory
+             .appendingPathComponent(UUID().uuidString, isDirectory: true)
+--- a/docs/project-task.md
++++ b/docs/project-task.md
+@@ -10,7 +10,7 @@
+ | --- | --- | --- | --- | --- |
+ | 2026-11-23-ios-saved-official-touch-layouts | 官方游戏触屏布局保存到本机并在 Home 串流实时切换 | Planned | 2026-11-23 | complex；用户确认云游戏官方来源；详情页查询/预览/保存、本机资源库、多个布局与会话内切换方案已形成，沿现有 Rust/UniFFI 和触屏输入链路；官方 TAKX 获取及能力矩阵为首个实施里程碑，等待执行确认。[RFC](rfcs/2026-11-23-ios-saved-official-touch-layouts.md)。 |
+ | 2026-11-23-ios-launch-dark-mode | 启动画面适配暗黑模式 | Done | 2026-11-23 | simple；系统启动屏与SwiftUI恢复层共用LaunchBackground，暗色采用画布色#202E27、浅色白底；生产视图/资源Simulator构建、手机/iPad8组颜色/居中及外观覆盖、格式/解析/diff通过。6图归档，验收应用卸载、原外观恢复，临时清理50.06MiB；实机冷启动过渡接续手动确认。[证据](../dev-docs/validation/2026-11-23-ios-launch-dark-mode/README.md)。 |
+-| 2026-11-23-ios-startup-pc-parity | 启动流程完全对齐PC | Validation Pending | 2026-11-23 | complex；共享 Rust 凭据缓存/目标续期、轮换 checkpoint、90 秒启动上下文、Home 发现/唤醒与 Cloud 准入、取消/错误接线完成。Rust 339 项、iOS XCTest 102 项、iPhoneOS 构建、fmt/check/边界与绑定复现通过；原暂存内容核验一致，约 0.9 GiB 临时产物已清理。待新构建 Wi-Fi 裸连热启动、待机唤醒和取消重试实机 trace。[RFC](rfcs/2026-11-23-ios-startup-pc-parity.md)；[证据](../dev-docs/validation/2026-11-23-ios-startup-pc-parity/README.md)。 |
++| 2026-11-23-ios-startup-pc-parity | 启动流程完全对齐PC | Validation Pending | 2026-11-23 | complex；共享凭据缓存/目标续期、checkpoint、90秒上下文、Home发现/唤醒与Cloud准入完成，既有Rust339项与Swift102项通过。17:47新日志确认Web缓存89ms复用；Cloud准备两次deviceToken网络失败、一次SISU5.01s超时。固定网络细分与类型化Query诊断接续修复，Rust93项、iOS37项、iPhoneOS构建/小栈/绑定复现通过；待完整实机网络、待机唤醒与连接trace。[RFC](rfcs/2026-11-23-ios-startup-pc-parity.md)；[新日志证据](../dev-docs/validation/2026-11-23-ios-startup-pc-parity/fresh-trace-472b306e/README.md)。 |
+ | 2026-11-23-ios-auth-timeout-trace | 分析云连接间歇性授权超时 | Done | 2026-11-23 | simple只读；第5分片90行、4次Cloud授权6.342–14.032s超时，分片结构PASS；5s建连/12s请求预算、iOS全量授权与PC复用差异已核对，具体接口及成功样本接续；原件/锚点/hash归档，临时0。[证据](../dev-docs/validation/2026-11-23-ios-home-access-failure/runtime-trace-1795416820801-5/README.md)。 |
+ | 2026-11-23-ios-streaming-safe-area | 串流功能菜单与触屏布局避让灵动岛和系统安全区 | In Progress | 2026-11-23 | simple；操作层恢复原生安全区，正式Surface按窗口安全范围生成绘制与命中几何，编辑位置采用同一避让范围；两侧横屏、竖屏与iPad验收接续。 |
+ | 2026-11-23-ios-streaming-menu-overlay | 统一串流菜单层级与公共弹出层背景 | In Progress | 2026-11-23 | simple；用户接续授权；功能菜单位于触屏和指标上方，入口/双栏/诊断复用公共突出浮层与深绿色表面，降低透明度采用实色面板；沿用输入接管，手机/iPad复验与证据清理接续。 |
+--- a/docs/rfcs/2026-11-23-ios-startup-pc-parity.md
++++ b/docs/rfcs/2026-11-23-ios-startup-pc-parity.md
+@@ -80,6 +80,7 @@
+ 
+ ## Execution Notes
+ 
++- 2026-11-23 实机接续：`472B306E` 导出包含 78 行、一个会话。Web 热缓存实际复用，恢复 89ms；Cloud 准备两次在 deviceToken 网络失败，实际串流启动一次在 SISU 5011ms 超时。PC/iOS 均经 `AuthFlow::new -> AuthApi::new -> HttpTransport::for_commands`，连接/单次/整体请求预算分别为 5/12/18 秒。observer 已补齐固定 `networkErrorKind`，Cloud 外层诊断直接消费类型化 Query 的 kind/status/retriable；请求配置沿公共实现。Rust bridge 93 项与 iOS 定向 37 项、iPhoneOS 构建、小栈、格式、边界和绑定复现通过；测试模块补齐 `home_host_facts` 导入。新导出在内层失败事件结束，具体网络原因、外层终态与媒体验收继续等待完整 trace。[新日志与接续修复证据](../../dev-docs/validation/2026-11-23-ios-startup-pc-parity/fresh-trace-472b306e/README.md)。
+ - 2026-11-23：修改前基线保存到 `/private/tmp/xbxrc-ios-startup-pc-20261123-cfnj_z17/baseline`；文件 hash 和本轮清理范围登记在证据目录。共享构建缓存继续保留。
+ - 2026-11-23：101 份修改前文件基线与原暂存差异哈希完成核对，原暂存内容一致。代码与自动验证完成，任务进入实机验证阶段；Report 在实机复验收口后补齐。
+ - 2026-11-23：构建、测试与导出进程已结束；约 0.893 GiB 本轮临时产物已清理，磁盘可用空间增加约 0.763 GiB。55 份最终源码快照、独立差异、验证摘要和失败诊断留存证据目录；共享构建缓存继续保留。
+--- a/dev-docs/validation/2026-11-23-ios-startup-pc-parity/README.md
++++ b/dev-docs/validation/2026-11-23-ios-startup-pc-parity/README.md
+@@ -48,3 +48,9 @@
+ 5. 从新 trace 核对认证各步骤、启动阶段及实际网络、媒体供给、恢复链和显示长尾。
+ 
+ 超时概率改善与实际连接成功率由这轮实机证据确认。
++
++## 17:47 新实机日志与诊断接续
++
++`472B306E` 导出确认 Web 热缓存复用，登录恢复 89ms。三轮 Cloud 准备有两次 deviceToken 网络失败和一次 SISU 5011ms 超时；认证客户端与 PC 共用 5/12/18 秒连接、单次和整体请求预算。网络具体成因需要固定细分类别，导出尾部还缺外层终态。
++
++网络细分类别已穿过 Rust observer；Cloud 诊断保留类型化 Query 的 kind/status/retriable。Rust bridge 93 项、iOS 37 项、iPhoneOS 构建与绑定复现通过，完整连接和媒体健康继续实机验收。详见[新日志与修复证据](fresh-trace-472b306e/README.md)。
+--- a/crates/xbox-ios-bridge/src/streaming.rs
++++ b/crates/xbox-ios-bridge/src/streaming.rs
+@@ -1697,6 +1697,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use crate::cloud_access::home_host_facts;
+     use xbox_streaming::policy::session::SessionAccessContext;
+     use xbox_streaming::{HostAddr, Region, RemoteConsoleSnapshot, TurnServer, TurnSource};
+ 

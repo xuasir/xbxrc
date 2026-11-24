@@ -13,7 +13,7 @@ extension XboxDataStore {
         let key = "profile-\(targetID)"
         var state = playerProfiles[targetID] ?? XboxSingleDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
-            refresh || state.phase == .idle
+            refresh || state.needsActivation
         else { return }
         let request = UUID()
         nativeRequestIDs[key] = request
@@ -53,7 +53,7 @@ extension XboxDataStore {
         var state = playerHistoryStates[targetID] ?? XboxNativeDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
         if nextPage && state.continuation == nil { return }
-        if !refresh && !nextPage && state.phase != .idle { return }
+        if !refresh && !nextPage && !state.needsActivation { return }
         let continuation = nextPage ? state.continuation : nil
         let request = UUID()
         if !nextPage { invalidateHistoryPlaytimes(owner: targetID) }
@@ -193,7 +193,7 @@ extension XboxDataStore {
         let key = "game-\(identity)"
         var state = libraryGameStates[identity] ?? XboxSingleDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
-            refresh || state.phase == .idle
+            refresh || state.needsActivation
         else { return }
         let request = UUID()
         nativeRequestIDs[key] = request
@@ -223,7 +223,7 @@ extension XboxDataStore {
         let key = "time-\(identity)"
         var state = playerPlaytimeStates[identity] ?? XboxSingleDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil,
-            refresh || state.phase == .idle
+            refresh || state.needsActivation
         else { return }
         let request = UUID()
         nativeRequestIDs[key] = request
@@ -263,7 +263,7 @@ extension XboxDataStore {
         var state = playerAchievementStates[identity] ?? XboxNativeDataState()
         guard let context = nativeQueryContext(), nativeRequestIDs[key] == nil else { return }
         if nextPage && state.continuation == nil { return }
-        if !refresh && !nextPage && state.phase != .idle { return }
+        if !refresh && !nextPage && !state.needsActivation { return }
         let continuation = nextPage ? state.continuation : nil
         let request = UUID()
         nativeRequestIDs[key] = request

@@ -1,0 +1,29 @@
+{
+  "input": {
+    "path": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+    "sha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d",
+    "bytes": 16504239,
+    "rows": 26163,
+    "firstTsMs": 1795401150206,
+    "lastTsMs": 1795401588672
+  },
+  "scriptSha256": "321055c0c8618f4d016c7722a19ad0f058953a8de19005a6806dcfeb7f56a4d1",
+  "method": {
+    "fps": "sum(counter delta) / sum(actual sampleWindowMs); same attempt, generation, peerEpoch, sampleId and equal RTC/display time boundaries",
+    "foreground": "complete sample inside active scene interval after first GPU completion",
+    "normalSupply": "foreground sample with decode FPS >= 50, matching previous baseline method",
+    "quantiles": "nearest rank; per-frame GPU timings and rolling drawable snapshot quantiles are reported separately",
+    "gpuGap": "sort by actual presentedAtMonotonicMs, independent of delayed MainActor trace delivery",
+    "ingressTimingBoundary": "timings observe accepted latest frames; coalesced discarded frames have no individual queue-age sample",
+    "drawableBoundary": "drawable FPS uses aligned health deltas; per-drawable timestamps remain sampled cumulative distributions"
+  },
+  "repositoryCopy": "runtime-logs/ios/runtime-trace-ios-1795401150207-1.jsonl",
+  "baseCommand": "python3 -B .agents/skills/analyze-ios-runtime-trace/scripts/analyze_ios_runtime_trace.py <source> --strict --require-flow all --pretty",
+  "coreCommand": "python3 -B iosapp/scripts/check-streaming-core-trace.py <source> --strict --pretty",
+  "analyzerExitCodes": {
+    "base": 2,
+    "streamingCore": 0,
+    "displaySupply": 0
+  },
+  "checkedAt": "2026-11-23T10:57:08.364615+08:00"
+}

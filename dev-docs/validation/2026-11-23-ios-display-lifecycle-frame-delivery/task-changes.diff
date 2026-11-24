@@ -1,0 +1,1054 @@
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+@@ -230,6 +230,18 @@
+     }
+ }
+ 
++struct StreamingFrameIngressTiming: Sendable {
++    let receivedAtMs: Double
++    let mainActorEnteredAtMs: Double
++
++    func tracePayload(acceptedAtMs: Double) -> [String: IOSRuntimeTraceValue] {
++        [
++            "ingressQueueMs": .double(max(0, mainActorEnteredAtMs - receivedAtMs)),
++            "frameAcceptWorkMs": .double(max(0, acceptedAtMs - mainActorEnteredAtMs)),
++        ]
++    }
++}
++
+ func streamingPresentationTracePayload(
+     _ payload: [String: IOSRuntimeTraceValue],
+     context: StreamingPresentationTraceContext?
+@@ -791,6 +803,15 @@
+         return false
+     }
+ 
++    func drain(consume: (StreamingLatestIngressDelivery<Value>) -> Void) -> Bool {
++        // 同次处理接续最多两帧，减少补送排队并保留 UI 的执行机会。
++        for _ in 0..<2 {
++            guard let delivery = take() else { break }
++            consume(delivery)
++        }
++        return finishDelivery()
++    }
++
+     func reset() {
+         lock.lock()
+         pendingValue = nil
+@@ -800,9 +821,14 @@
+     }
+ }
+ 
++private struct StreamingQueuedVideoFrame: @unchecked Sendable {
++    let frame: RTCVideoFrame
++    let receivedAtMs: Double
++}
++
+ private final class StreamingVideoFrameIngress: NSObject, RTCVideoRenderer, @unchecked Sendable {
+-    private let frameSlot = StreamingLatestIngressSlot<RTCVideoFrame>()
+-    @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64) -> Void)?
++    private let frameSlot = StreamingLatestIngressSlot<StreamingQueuedVideoFrame>()
++    @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64, Double) -> Void)?
+     @MainActor var sizeSink: (@MainActor (CGSize) -> Void)?
+ 
+     func setSize(_ size: CGSize) {
+@@ -814,7 +840,9 @@
+ 
+     func renderFrame(_ frame: RTCVideoFrame?) {
+         guard let frame else { return }
+-        if frameSlot.submit(frame) { scheduleDrain() }
++        let queued = StreamingQueuedVideoFrame(
++            frame: frame, receivedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
++        if frameSlot.submit(queued) { scheduleDrain() }
+     }
+ 
+     func reset() {
+@@ -829,18 +857,23 @@
+ 
+     @MainActor
+     private func drainLatestFrame() {
+-        guard let delivery = frameSlot.take() else {
+-            _ = frameSlot.finishDelivery()
+-            return
+-        }
+-        frameSink?(delivery.value, delivery.replacedCount)
+-        if frameSlot.finishDelivery() { scheduleDrain() }
++        let hasPending = frameSlot.drain { delivery in
++            frameSink?(
++                delivery.value.frame, delivery.replacedCount, delivery.value.receivedAtMs)
++        }
++        if hasPending { scheduleDrain() }
+     }
+ }
+ 
+ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked Sendable {
+     @MainActor var presentationEventSink:
+         (@MainActor (StreamingPresentationLifecycleEvent) -> Void)?
++    {
++        didSet {
++            if presentationEventSink == nil { didDeliverDisplayPipelineReady = false }
++            deliverDisplayPipelineReadyIfNeeded(reason: "sinkAttached")
++        }
++    }
+     private let frameIngress = StreamingVideoFrameIngress()
+ 
+     var renderer: RTCVideoRenderer { frameIngress }
+@@ -867,6 +900,7 @@
+     private var lastReportedSurfaceSize: CGSize = .zero
+     private var lastReportedFrameSize: CGSize = .zero
+     private var didReportDisplayPipelineReady = false
++    private var didDeliverDisplayPipelineReady = false
+     private var didReportFirstFrameAccepted = false
+     private var didReportFirstFrameSubmitted = false
+     private var didReportFirstFramePresented = false
+@@ -894,8 +928,9 @@
+         bgraPipelineState = compiledPipelines?.bgra
+         super.init(frame: frameRect, device: device)
+         scheduler.attach(self)
+-        frameIngress.frameSink = { [weak self] frame, replacedCount in
+-            self?.consumeFrame(frame, ingressReplacedCount: replacedCount)
++        frameIngress.frameSink = { [weak self] frame, replacedCount, receivedAtMs in
++            self?.consumeFrame(
++                frame, ingressReplacedCount: replacedCount, receivedAtMs: receivedAtMs)
+         }
+         frameIngress.sizeSink = { [weak self] size in
+             self?.consumeFrameSize(size)
+@@ -944,6 +979,7 @@
+         lastReportedSurfaceSize = .zero
+         lastReportedFrameSize = .zero
+         didReportDisplayPipelineReady = false
++        didDeliverDisplayPipelineReady = false
+         didReportFirstFrameAccepted = false
+         didReportFirstFrameSubmitted = false
+         didReportFirstFramePresented = false
+@@ -971,11 +1007,15 @@
+         flushDisplayHealth(reset: true)
+         presentationActive = active
+         presentationRevision &+= 1
++        didDeliverDisplayPipelineReady = false
+         mailbox.reset()
+         telemetry.cancelPendingSubmissions()
+         frameIngress.reset()
+         scheduler.setActive(active && window != nil)
+-        if active { scheduler.requestTick() }
++        if active {
++            deliverDisplayPipelineReadyIfNeeded(reason: "foreground")
++            scheduler.requestTick()
++        }
+     }
+ 
+     func shutdown() {
+@@ -1013,10 +1053,16 @@
+         reportDisplayPipelineReadyIfNeeded(frameSize: size)
+     }
+ 
+-    private func consumeFrame(_ frame: RTCVideoFrame, ingressReplacedCount: Int64) {
+-        guard presentationActive else { return }
++    private func consumeFrame(
++        _ frame: RTCVideoFrame, ingressReplacedCount: Int64, receivedAtMs: Double
++    ) {
++        let ingressTiming = StreamingFrameIngressTiming(
++            receivedAtMs: receivedAtMs,
++            mainActorEnteredAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
++        // 后台首帧只补齐管线能力事实；后续后台帧在入口释放。
++        guard presentationActive || !didReportDisplayPipelineReady else { return }
+         let ingressContext = currentTraceContext()
+-        if ingressReplacedCount > 0 {
++        if presentationActive, ingressReplacedCount > 0 {
+             recordDrop(
+                 reason: .ingressCoalesced,
+                 count: ingressReplacedCount,
+@@ -1061,6 +1107,7 @@
+             ),
+             storage: decodedStorage
+         )
++        guard presentationActive else { return }
+ 
+         stateLock.lock()
+         let feedbackSession = frameFeedbackSession
+@@ -1097,6 +1144,10 @@
+             if let compatibilityPath {
+                 acceptedPayload["compatibilityPath"] = .string(compatibilityPath)
+             }
++            acceptedPayload.merge(
++                ingressTiming.tracePayload(
++                    acceptedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
++            ) { _, new in new }
+             IOSRuntimeTrace.state(
+                 domain: "ios-streaming",
+                 event: "videoFrameAcceptedToMailbox",
+@@ -1144,6 +1195,7 @@
+ 
+     func draw(in _: MTKView) {
+         guard presentationActive else { return }
++        let drawStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+         let drain = mailbox.beginRender()
+         if drain.drawableBusy { return }
+         guard let frame = drain.frame else { return }
+@@ -1151,6 +1203,7 @@
+             _ = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
+             return
+         }
++        let drawableAcquireStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+         guard let commandQueue,
+             let descriptor = currentRenderPassDescriptor,
+             let drawable = currentDrawable
+@@ -1162,6 +1215,7 @@
+             )
+             return
+         }
++        let drawableAcquiredAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+ 
+         guard let renderResources = makeRenderResources(for: frame) else {
+             handleSkippedPresent(
+@@ -1213,6 +1267,9 @@
+             "submittedAtMonotonicMs": .double(submitTimestamp),
+             "frameWidth": .integer(Int64(frame.width)),
+             "frameHeight": .integer(Int64(frame.height)),
++            "drawToSubmitMs": .double(max(0, submitTimestamp - drawStartedAtMs)),
++            "drawableAcquireMs": .double(
++                max(0, drawableAcquiredAtMs - drawableAcquireStartedAtMs)),
+         ]
+         if let compatibilityPath = frame.storage.compatibilityPath {
+             submitPayload["compatibilityPath"] = .string(compatibilityPath)
+@@ -1411,6 +1468,8 @@
+             hasPendingFrame: hasPending
+         ) {
+             scheduler.requestTick()
++        } else {
++            scheduler.scheduleDisplayTickIfNeeded()
+         }
+     }
+ 
+@@ -1887,8 +1946,8 @@
+                 importance: .essential,
+                 operationID: context.attemptID
+             )
+-            emitPresentationEvent(.displayPipelineReady(context))
+-        }
++        }
++        deliverDisplayPipelineReadyIfNeeded(reason: "observed")
+ 
+         if shouldReportRendererReady {
+             IOSRuntimeTrace.state(
+@@ -1909,6 +1968,28 @@
+         }
+     }
+ 
++    private func deliverDisplayPipelineReadyIfNeeded(reason: String) {
++        guard presentationActive, let context = currentTraceContext(),
++            let presentationEventSink
++        else { return }
++        stateLock.lock()
++        let shouldDeliver = didReportDisplayPipelineReady && !didDeliverDisplayPipelineReady
++        if shouldDeliver { didDeliverDisplayPipelineReady = true }
++        stateLock.unlock()
++        guard shouldDeliver else { return }
++        IOSRuntimeTrace.state(
++            domain: "ios-streaming", event: "displayPipelineReadyDelivered",
++            payload: streamingPresentationTracePayload(
++                [
++                    "reason": .string(reason),
++                    "presentationRevision": .integer(Int64(clamping: presentationRevision)),
++                ], context: context),
++            dimension: .presentation, importance: .essential, operationID: context.attemptID)
++        presentationEventSink(.displayPipelineReady(context))
++    }
++
++    fileprivate var hasPendingVideoFrame: Bool { mailbox.hasPendingFrame() }
++
+     private func didReportFirstFrameAcceptedForCurrentContext() -> Bool {
+         stateLock.lock()
+         defer { stateLock.unlock() }
+@@ -2036,12 +2117,17 @@
+ 
+     func setActive(_ active: Bool) {
+         isActive = active
+-        displayLink?.isPaused = !active
++        scheduleDisplayTickIfNeeded()
+     }
+ 
+     func requestTick() {
+-        guard isActive else { return }
+-        target?.draw()
++        guard isActive, let target else { return }
++        if target.hasPendingVideoFrame { target.draw() }
++        scheduleDisplayTickIfNeeded()
++    }
++
++    func scheduleDisplayTickIfNeeded() {
++        displayLink?.isPaused = !(isActive && target?.hasPendingVideoFrame == true)
+     }
+ 
+     func invalidate() {
+@@ -2053,7 +2139,6 @@
+ 
+     @objc
+     private func handleDisplayTick() {
+-        guard isActive else { return }
+-        target?.draw()
+-    }
+-}
++        requestTick()
++    }
++}
+--- a/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+@@ -133,6 +133,7 @@
+     private var microphoneTask: Task<Void, Error>?
+     private var microphoneRequested = false
+     private var resumedAtMilliseconds: Double?
++    private var pendingResumeValidation: (revision: UInt64, peerEpoch: UInt64)?
+     private var supervisionTask: Task<Void, Never>?
+     private var firstFrameGuardTask: Task<Void, Never>?
+     private var supervisionConnectedAtMs: UInt64 = 0
+@@ -450,7 +451,7 @@
+     }
+ 
+     func setVisible(_ value: Bool, generation: UInt64) async {
+-        guard isCurrent(generation) else { return }
++        guard isCurrent(generation), visible != value else { return }
+         visibilityRevision &+= 1
+         let revision = visibilityRevision
+         visible = value
+@@ -462,13 +463,17 @@
+         firstFrameGuardTask?.cancel()
+         firstFrameGuardTask = nil
+         recoveryProbe = nil
++        pendingResumeValidation = nil
+         if !value {
++            resumedAtMilliseconds = nil
++            playbackReadiness.remove(.framePresented)
+             microphoneRevision &+= 1
+             microphoneTask?.cancel()
++            microphonePeerEpoch = 0
+             await peerRuntime?.stopMicrophoneCapture()
+-            microphonePeerEpoch = 0
++            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+             await microphoneSink?(generation, false, microphoneRequested)
+-            playbackReadiness.remove(.framePresented)
++            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+             trace(
+                 "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
+                 dimension: .lifecycle)
+@@ -476,25 +481,46 @@
+             return
+         }
+         guard let control = controlSession, let peer = peerRuntime else { return }
++        let peerEpoch = activePeerEpoch
+         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
++        pendingResumeValidation = (revision, peerEpoch)
++        await publish(.waitingForFirstFrame, generation: generation)
++        guard isCurrent(generation), visible, revision == visibilityRevision,
++            peerEpoch == activePeerEpoch
++        else { return }
+         do {
+             try await control.validateResume()
+             try ensureCurrent(generation)
+-            guard visible, revision == visibilityRevision else { return }
++            guard visible, revision == visibilityRevision, peerEpoch == activePeerEpoch else {
++                return
++            }
+             let snapshot = await peer.debugSnapshot()
++            guard isCurrent(generation), visible, revision == visibilityRevision,
++                peerEpoch == activePeerEpoch
++            else { return }
++            pendingResumeValidation = nil
+             trace("sessionResumeValidated", dimension: .lifecycle)
+             lastVideoActivityAtMs = Self.nowMs
+-            armFirstFrameGuard(generation: generation, peerEpoch: activePeerEpoch)
+             if snapshot.iceConnectionState == "connected"
+                 || snapshot.iceConnectionState == "completed"
+             {
+-                await publish(.waitingForFirstFrame, generation: generation)
++                if resumedAtMilliseconds != nil {
++                    armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
++                }
++                // 验证期间已保存的新上屏事实，直接决定恢复后的可见状态。
++                await publish(
++                    playbackReady ? .playing : .waitingForFirstFrame, generation: generation)
+             } else {
+-                await recoverDisconnectedPeer(generation: generation, peerEpoch: activePeerEpoch)
+-            }
++                await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
++            }
++            guard isCurrent(generation), visible, revision == visibilityRevision,
++                peerEpoch == activePeerEpoch
++            else { return }
+             if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
+         } catch {
+-            guard isCurrent(generation), visible, revision == visibilityRevision else { return }
++            guard isCurrent(generation), visible, revision == visibilityRevision,
++                peerEpoch == activePeerEpoch
++            else { return }
+             await fail(reason: .sessionFailed, generation: generation, error: error)
+         }
+     }
+@@ -779,7 +805,9 @@
+                 stats.frameSupplyDelta.map({ $0 > 0 }) == true
+             {
+                 playbackReadiness.mark(.steadyMedia)
+-                trace("steadyMediaObserved", dimension: .mediaSupply)
++                trace(
++                    "steadyMediaObserved", payload: ["presentationActive": .bool(visible)],
++                    dimension: .mediaSupply)
+             }
+         case .dataChannelEvent(let label, let event):
+             await traceDataChannelEvent(label: label, event: event)
+@@ -1986,6 +2014,7 @@
+         visible = true
+         visibilityRevision &+= 1
+         resumedAtMilliseconds = nil
++        pendingResumeValidation = nil
+         let localIceTask = localIceFlushTask
+         let peer = peerRuntime
+         let retiringPeer = retiringPeerRuntime
+@@ -2350,7 +2379,10 @@
+     }
+ 
+     private var playbackReady: Bool {
+-        playbackReadiness.isPlaybackReady
++        guard playbackReadiness.isPlaybackReady else { return false }
++        guard let pendingResumeValidation else { return true }
++        return pendingResumeValidation.revision != visibilityRevision
++            || pendingResumeValidation.peerEpoch != activePeerEpoch
+     }
+ 
+     private var connectionStateAfterNegotiation: StreamingFeatureState {
+--- a/iosapp/XBXRCTests/XBXRCTests.swift
++++ b/iosapp/XBXRCTests/XBXRCTests.swift
+@@ -165,6 +165,344 @@
+                     payload: payload, profile: profile, fingerprintSalt: "test"),
+                 payload)
+         }
++    }
++
++    func testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames() {
++        let slot = StreamingLatestIngressSlot<Int>()
++        XCTAssertTrue(slot.submit(1))
++        var delivered: [Int] = []
++        let hasPending = slot.drain { delivery in
++            delivered.append(delivery.value)
++            XCTAssertFalse(slot.submit(delivery.value + 1))
++        }
++        XCTAssertEqual(delivered, [1, 2])
++        XCTAssertTrue(hasPending)
++        XCTAssertFalse(slot.drain { delivered.append($0.value) })
++        XCTAssertEqual(delivered, [1, 2, 3])
++        XCTAssertTrue(slot.submit(4))
++    }
++
++    func testIngressDrainKeepsLatestReplacementCountsAndResetBoundary() {
++        let slot = StreamingLatestIngressSlot<Int>()
++        _ = slot.submit(1)
++        var delivered: [(Int, Int64)] = []
++        XCTAssertFalse(
++            slot.drain { delivery in
++                delivered.append((delivery.value, delivery.replacedCount))
++                if delivery.value == 1 {
++                    _ = slot.submit(2)
++                    _ = slot.submit(3)
++                }
++            })
++        XCTAssertEqual(delivered.map(\.0), [1, 3])
++        XCTAssertEqual(delivered.map(\.1), [0, 1])
++        _ = slot.submit(4)
++        slot.reset()
++        XCTAssertFalse(slot.drain { _ in XCTFail("旧入口帧应在reset边界释放") })
++        XCTAssertTrue(slot.submit(5))
++    }
++
++    func testIngressAndDrawPreparationTimingSurviveRedaction() {
++        let timing = StreamingFrameIngressTiming(receivedAtMs: 100, mainActorEnteredAtMs: 120)
++        var payload = timing.tracePayload(acceptedAtMs: 123)
++        XCTAssertEqual(payload["ingressQueueMs"], .double(20))
++        XCTAssertEqual(payload["frameAcceptWorkMs"], .double(3))
++        payload["drawToSubmitMs"] = .double(4)
++        payload["drawableAcquireMs"] = .double(2)
++        payload["presentationActive"] = .bool(false)
++        for profile in [IOSRuntimeTraceProfile.dev, .production] {
++            XCTAssertEqual(
++                IOSRuntimeTraceRedactor.redact(
++                    payload: payload, profile: profile, fingerprintSalt: "test"), payload)
++        }
++    }
++
++    func testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery() throws {
++        RTCInitializeSSL()
++        let factory = RTCPeerConnectionFactory()
++        let configuration = RTCConfiguration()
++        configuration.sdpSemantics = .unifiedPlan
++        let peer = try XCTUnwrap(
++            factory.peerConnection(
++                with: configuration,
++                constraints: RTCMediaConstraints(
++                    mandatoryConstraints: nil, optionalConstraints: nil),
++                delegate: nil))
++        defer { peer.close() }
++        let transceiverInit = RTCRtpTransceiverInit()
++        transceiverInit.direction = .recvOnly
++        let transceiver = try XCTUnwrap(peer.addTransceiver(of: .video, init: transceiverInit))
++        let first = try XCTUnwrap(transceiver.receiver.track as? RTCVideoTrack)
++        for _ in 0..<60 {
++            let next = try XCTUnwrap(transceiver.receiver.track as? RTCVideoTrack)
++            XCTAssertFalse(first === next)
++            XCTAssertTrue(streamingVideoTracksMatch(first, next))
++        }
++    }
++
++    func testDifferentNativeTracksWithSameIdentifierRequireReattachment() {
++        let factory = RTCPeerConnectionFactory()
++        let first = factory.videoTrack(with: factory.videoSource(), trackId: "shared-label")
++        let replacement = factory.videoTrack(with: factory.videoSource(), trackId: "shared-label")
++        XCTAssertEqual(first.trackId, replacement.trackId)
++        XCTAssertFalse(streamingVideoTracksMatch(first, replacement))
++        XCTAssertTrue(streamingVideoTracksMatch(first, first))
++        XCTAssertTrue(streamingVideoTracksMatch(nil, nil))
++        XCTAssertFalse(streamingVideoTracksMatch(first, nil))
++        XCTAssertFalse(streamingVideoTracksMatch(nil, replacement))
++    }
++
++    private func makeNativeFrame() throws -> RTCVideoFrame {
++        var buffer: CVPixelBuffer?
++        let attributes =
++            [
++                kCVPixelBufferMetalCompatibilityKey: true,
++                kCVPixelBufferIOSurfacePropertiesKey: [:],
++            ] as CFDictionary
++        XCTAssertEqual(
++            CVPixelBufferCreate(
++                kCFAllocatorDefault, 64, 64, kCVPixelFormatType_32BGRA, attributes, &buffer),
++            kCVReturnSuccess)
++        return RTCVideoFrame(
++            buffer: RTCCVPixelBuffer(pixelBuffer: try XCTUnwrap(buffer)),
++            rotation: ._0, timeStampNs: 0)
++    }
++
++    @MainActor
++    func testBackgroundPipelineReadinessReplaysOncePerVisibleInterval() async throws {
++        let surface = StreamingMetalVideoSurfaceView(
++            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
++            device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
++        defer { surface.shutdown() }
++        let context = StreamingPresentationTraceContext(
++            attemptID: "background-readiness", generation: 1, peerEpoch: 1)
++        var readiness: [StreamingPresentationTraceContext] = []
++        var accepted = 0
++        surface.presentationEventSink = { event in
++            if case .displayPipelineReady(let context) = event { readiness.append(context) }
++            if case .firstFrameAccepted = event { accepted += 1 }
++        }
++        surface.setPresentationActive(false)
++        surface.updateTraceContext(context)
++        let delivery = StreamingNativeFrameDelivery(
++            renderer: surface.renderer, frame: try makeNativeFrame())
++        await Task.detached { delivery.deliver() }.value
++        try await Task.sleep(for: .milliseconds(100))
++        XCTAssertTrue(readiness.isEmpty)
++        XCTAssertEqual(accepted, 0)
++        surface.setPresentationActive(true)
++        XCTAssertEqual(readiness, [context])
++        surface.setPresentationActive(true)
++        surface.updateTraceContext(context)
++        XCTAssertEqual(readiness, [context])
++        surface.setPresentationActive(false)
++        surface.setPresentationActive(true)
++        XCTAssertEqual(readiness, [context, context])
++        XCTAssertEqual(accepted, 0)
++    }
++
++    @MainActor
++    func testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext() async throws {
++        let surface = StreamingMetalVideoSurfaceView(
++            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
++            device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
++        defer { surface.shutdown() }
++        surface.setPresentationActive(false)
++        let first = StreamingPresentationTraceContext(
++            attemptID: "first", generation: 1, peerEpoch: 1)
++        let current = StreamingPresentationTraceContext(
++            attemptID: "current", generation: 2, peerEpoch: 2)
++        let delivery = StreamingNativeFrameDelivery(
++            renderer: surface.renderer, frame: try makeNativeFrame())
++        for context in [first, current] {
++            surface.updateTraceContext(context)
++            await Task.detached { delivery.deliver() }.value
++            try await Task.sleep(for: .milliseconds(100))
++        }
++        surface.setPresentationActive(true)
++        var readiness: [StreamingPresentationTraceContext] = []
++        let sink: @MainActor (StreamingPresentationLifecycleEvent) -> Void = { event in
++            if case .displayPipelineReady(let context) = event { readiness.append(context) }
++        }
++        surface.presentationEventSink = sink
++        XCTAssertEqual(readiness, [current])
++        surface.presentationEventSink = sink
++        XCTAssertEqual(readiness, [current])
++    }
++
++    @MainActor
++    private func startReadySession(
++        resumeGate: StreamingAsyncGate? = nil, failResume: Bool = false,
++        snapshotGate: StreamingAsyncGate? = nil
++    ) async throws -> (StreamSessionActor, StreamingPublicationRecorder) {
++        let recorder = StreamingRuntimeRecorder()
++        let publication = StreamingPublicationRecorder()
++        let session = StreamSessionActor(
++            controlFactory: StreamingTestControlFactory(
++                session: StreamingTestControlSession(
++                    recorder: recorder, resumeValidationGate: resumeGate,
++                    failResumeValidation: failResume), recorder: recorder),
++            peerFactory: StreamingTestPeerFactory(
++                recorder: recorder, debugSnapshotGate: snapshotGate))
++        try await session.start(
++            request: StreamingLaunchRequest(
++                streamTitleID: "test-title", accessHandle: "test-access",
++                accountGeneration: 1, sessionGeneration: 1),
++            stateSink: { publication.states.append(($0, $1)) },
++            videoSink: { _, track in publication.context = track?.traceContext },
++            diagnosticsSink: { _, _ in })
++        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
++        while publication.context == nil {
++            guard ContinuousClock.now < deadline else { throw StreamingRuntimeError.superseded }
++            try await Task.sleep(for: .milliseconds(10))
++        }
++        let context = try XCTUnwrap(publication.context)
++        await session.displayPipelineReady(context: context)
++        await session.firstFrameAcceptedToMailbox(context: context)
++        await session.firstFrameSubmitted(context: context)
++        await session.firstFramePresented(context: context)
++        XCTAssertEqual(publication.states.last?.1, .playing)
++        return (session, publication)
++    }
++
++    @MainActor
++    private func waitForGate(_ gate: StreamingAsyncGate) async throws {
++        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
++        while await gate.waiterCount() == 0 {
++            guard ContinuousClock.now < deadline else {
++                XCTFail("异步恢复操作应到达测试门禁")
++                throw StreamingRuntimeError.superseded
++            }
++            try await Task.sleep(for: .milliseconds(10))
++        }
++    }
++
++    private func presentSnapshot() -> StreamingDisplayHealthSnapshot {
++        let telemetry = StreamingDisplayTelemetry()
++        let now = StreamingFrameFeedbackClock.nowMilliseconds
++        _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: now)
++        return telemetry.recordPresent(identifier: 1, timestampMilliseconds: now).snapshot
++    }
++
++    @MainActor
++    func testResumeKeepsFreshPresentUntilValidationCompletes() async throws {
++        let gate = StreamingAsyncGate()
++        let (session, publication) = try await startReadySession(resumeGate: gate)
++        defer {
++            Task {
++                await gate.open()
++                await session.stop(generation: 1)
++            }
++        }
++        let context = try XCTUnwrap(publication.context)
++        await session.setVisible(false, generation: 1)
++        let resume = Task { await session.setVisible(true, generation: 1) }
++        try await waitForGate(gate)
++        let fresh = presentSnapshot()
++        await session.displayHealthUpdated(context: context, snapshot: fresh)
++        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
++        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
++        await gate.open()
++        await resume.value
++        XCTAssertEqual(
++            publication.states.suffix(3).map(\.1), [.suspending, .waitingForFirstFrame, .playing])
++        await session.displayHealthUpdated(context: context, snapshot: fresh)
++        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 2)
++        await session.stop(generation: 1)
++    }
++
++    @MainActor
++    func testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility() async throws {
++        let (session, publication) = try await startReadySession()
++        defer { Task { await session.stop(generation: 1) } }
++        let context = try XCTUnwrap(publication.context)
++        let old = presentSnapshot()
++        await session.setVisible(false, generation: 1)
++        await session.setVisible(true, generation: 1)
++        await session.displayHealthUpdated(context: context, snapshot: old)
++        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
++        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
++        XCTAssertEqual(publication.states.last?.1, .playing)
++        let count = publication.states.count
++        await session.setVisible(true, generation: 1)
++        XCTAssertEqual(publication.states.count, count)
++        await session.stop(generation: 1)
++    }
++
++    @MainActor
++    func testLateResumeValidationKeepsNewVisibilityRevisionSuspended() async throws {
++        let gate = StreamingAsyncGate()
++        let (session, publication) = try await startReadySession(resumeGate: gate)
++        defer {
++            Task {
++                await gate.open()
++                await session.stop(generation: 1)
++            }
++        }
++        let context = try XCTUnwrap(publication.context)
++        await session.setVisible(false, generation: 1)
++        let resume = Task { await session.setVisible(true, generation: 1) }
++        try await waitForGate(gate)
++        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
++        await session.setVisible(false, generation: 1)
++        let count = publication.states.count
++        await gate.open()
++        await resume.value
++        XCTAssertEqual(publication.states.count, count)
++        XCTAssertEqual(publication.states.last?.1, .suspending)
++        await session.setVisible(true, generation: 1)
++        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
++        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
++        XCTAssertEqual(publication.states.last?.1, .playing)
++        await session.stop(generation: 1)
++    }
++
++    @MainActor
++    func testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended() async throws {
++        let gate = StreamingAsyncGate()
++        await gate.open()
++        let (session, publication) = try await startReadySession(snapshotGate: gate)
++        defer {
++            Task {
++                await gate.open()
++                await session.stop(generation: 1)
++            }
++        }
++        await gate.close()
++        await session.setVisible(false, generation: 1)
++        let resume = Task { await session.setVisible(true, generation: 1) }
++        try await waitForGate(gate)
++        await session.setVisible(false, generation: 1)
++        let count = publication.states.count
++        await gate.open()
++        await resume.value
++        XCTAssertEqual(publication.states.count, count)
++        XCTAssertEqual(publication.states.last?.1, .suspending)
++        await session.stop(generation: 1)
++    }
++
++    @MainActor
++    func testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying() async throws {
++        let gate = StreamingAsyncGate()
++        let (session, publication) = try await startReadySession(resumeGate: gate, failResume: true)
++        defer {
++            Task {
++                await gate.open()
++                await session.stop(generation: 1)
++            }
++        }
++        await session.setVisible(false, generation: 1)
++        let resume = Task { await session.setVisible(true, generation: 1) }
++        try await waitForGate(gate)
++        await session.displayHealthUpdated(
++            context: try XCTUnwrap(publication.context), snapshot: presentSnapshot())
++        await gate.open()
++        await resume.value
++        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
++        guard let finalState = publication.states.last?.1, case .failed = finalState else {
++            return XCTFail("恢复验证失败应发布终止状态")
++        }
++        await session.stop(generation: 1)
+     }
+ 
+     func testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters() {
+@@ -3620,6 +3958,9 @@
+             continuation.resume()
+         }
+     }
++
++    func close() { isOpen = false }
++    func waiterCount() -> Int { waiters.count }
+ }
+ 
+ private struct StreamingRuntimeRecorderSnapshot: Sendable {
+@@ -3732,6 +4073,8 @@
+     let recorder: StreamingRuntimeRecorder
+     private let firstLocalCandidateSubmitGate: StreamingAsyncGate?
+     private let prepareGate: StreamingAsyncGate?
++    private let resumeValidationGate: StreamingAsyncGate?
++    private let failResumeValidation: Bool
+     private var progress: StreamingStartupProgress?
+     private var localCandidateSubmitCount = 0
+     private let prepared: StreamingPreparedSignaling
+@@ -3749,12 +4092,16 @@
+         recorder: StreamingRuntimeRecorder,
+         firstLocalCandidateSubmitGate: StreamingAsyncGate? = nil,
+         prepareGate: StreamingAsyncGate? = nil,
++        resumeValidationGate: StreamingAsyncGate? = nil,
++        failResumeValidation: Bool = false,
+         progress: StreamingStartupProgress? = nil,
+         prepared: StreamingPreparedSignaling = .init(iceServers: [])
+     ) {
+         self.recorder = recorder
+         self.firstLocalCandidateSubmitGate = firstLocalCandidateSubmitGate
+         self.prepareGate = prepareGate
++        self.resumeValidationGate = resumeValidationGate
++        self.failResumeValidation = failResumeValidation
+         self.progress = progress
+         self.prepared = prepared
+     }
+@@ -3827,6 +4174,11 @@
+         await recorder.recordMarkConnected()
+     }
+ 
++    func validateResume() async throws {
++        if let resumeValidationGate { await resumeValidationGate.wait() }
++        if failResumeValidation { throw StreamingRuntimeError.peerConnectionFailed }
++    }
++
+     func sendText(_: String) async throws -> Bool { true }
+ 
+     func powerOffConsole() async throws -> Bool { true }
+@@ -3848,6 +4200,7 @@
+     let firstPeerStopGate: StreamingAsyncGate?
+     private(set) var runtimesCreated = 0
+     private let connectsFirstRuntime: Bool
++    private let debugSnapshotGate: StreamingAsyncGate?
+     private var latestEventSink: (@Sendable (StreamingPeerEvent) -> Void)?
+ 
+     init(
+@@ -3859,10 +4212,12 @@
+         emitsControlReadyAutomatically: Bool = true,
+         emitsFirstVideoFrameAutomatically: Bool = true,
+         suspendFirstPeerStop: Bool = false,
+-        connectsFirstRuntime: Bool = true
++        connectsFirstRuntime: Bool = true,
++        debugSnapshotGate: StreamingAsyncGate? = nil
+     ) {
+         self.recorder = recorder
+         self.connectsFirstRuntime = connectsFirstRuntime
++        self.debugSnapshotGate = debugSnapshotGate
+         self.transientDisconnectAfterConnect = transientDisconnectAfterConnect
+         self.terminalStateAfterConnect = terminalStateAfterConnect
+         self.failIceRestart = failIceRestart
+@@ -3888,7 +4243,8 @@
+             emitsControlReadyAutomatically: emitsControlReadyAutomatically,
+             emitsFirstVideoFrameAutomatically: emitsFirstVideoFrameAutomatically,
+             stopGate: isFirstRuntime ? firstPeerStopGate : nil,
+-            emitsConnectedAutomatically: connectsFirstRuntime || !isFirstRuntime
++            emitsConnectedAutomatically: connectsFirstRuntime || !isFirstRuntime,
++            debugSnapshotGate: debugSnapshotGate
+         )
+     }
+ 
+@@ -3925,6 +4281,7 @@
+     private var answerCount = 0
+     private var qualityCap = 20_000
+     private let emitsConnectedAutomatically: Bool
++    private let debugSnapshotGate: StreamingAsyncGate?
+ 
+     init(
+         eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void,
+@@ -3936,7 +4293,8 @@
+         emitsControlReadyAutomatically: Bool,
+         emitsFirstVideoFrameAutomatically: Bool,
+         stopGate: StreamingAsyncGate?,
+-        emitsConnectedAutomatically: Bool = true
++        emitsConnectedAutomatically: Bool = true,
++        debugSnapshotGate: StreamingAsyncGate? = nil
+     ) {
+         self.eventSink = eventSink
+         self.recorder = recorder
+@@ -3948,6 +4306,7 @@
+         self.emitsFirstVideoFrameAutomatically = emitsFirstVideoFrameAutomatically
+         self.stopGate = stopGate
+         self.emitsConnectedAutomatically = emitsConnectedAutomatically
++        self.debugSnapshotGate = debugSnapshotGate
+     }
+ 
+     func makeOffer(
+@@ -4014,7 +4373,8 @@
+     }
+ 
+     func debugSnapshot() async -> StreamingPeerDebugSnapshot {
+-        StreamingPeerDebugSnapshot(
++        if let debugSnapshotGate { await debugSnapshotGate.wait() }
++        return StreamingPeerDebugSnapshot(
+             signalingState: suspendAnswerApply ? "haveLocalOffer" : "stable",
+             iceConnectionState: suspendAnswerApply ? "checking" : "connected",
+             iceGatheringState: "complete",
+--- a/iosapp/scripts/check-streaming-core-trace.py
++++ b/iosapp/scripts/check-streaming-core-trace.py
+@@ -538,6 +538,7 @@
+ 
+     ordering_violations: list[dict[str, Any]] = []
+     tolerated_reorders: list[dict[str, Any]] = []
++    background_supply_before_first_present: list[dict[str, Any]] = []
+     if answers and local_started:
+         record_causal_order(
+             answers[0],
+@@ -628,13 +629,26 @@
+             tolerated_reorders,
+         )
+     if display_first_present and steady_media:
+-        record_causal_order(
+-            display_first_present[0],
+-            steady_media[0],
+-            "displayFirstPresent < steadyMediaObserved",
+-            ordering_violations,
+-            tolerated_reorders,
+-        )
++        if (
++            payload_for(steady_media[0]).get("presentationActive") is False
++            and row_seq(steady_media[0]) < row_seq(display_first_present[0])
++        ):
++            # 后台接收供给独立推进；首显与 playing 仍由各自完整门槛验收。
++            background_supply_before_first_present.append(
++                {
++                    "steadyMediaObserved": row_reference(steady_media[0]),
++                    "displayFirstPresent": row_reference(display_first_present[0]),
++                    "presentationActive": False,
++                }
++            )
++        else:
++            record_causal_order(
++                display_first_present[0],
++                steady_media[0],
++                "displayFirstPresent < steadyMediaObserved",
++                ordering_violations,
++                tolerated_reorders,
++            )
+ 
+     failed_checks = sorted(name for name, check in checks.items() if not check["passed"])
+     return {
+@@ -646,6 +660,7 @@
+         "failedChecks": failed_checks,
+         "orderingViolations": ordering_violations,
+         "toleratedReorders": tolerated_reorders,
++        "backgroundSupplyBeforeFirstPresent": background_supply_before_first_present,
+         "passed": not failed_checks and not ordering_violations,
+     }
+ 
+--- a/iosapp/scripts/tests/test_check_streaming_core_trace.py
++++ b/iosapp/scripts/tests/test_check_streaming_core_trace.py
+@@ -192,6 +192,22 @@
+     )
+ 
+ 
++def early_steady_rows(presentation_active: object = None) -> list[dict]:
++    rows = healthy_rows()
++    steady = next(row for row in rows if row["event"] == "steadyMediaObserved")
++    rows.remove(steady)
++    if presentation_active is not None:
++        steady["payload"]["presentationActive"] = presentation_active
++    first_video = next(
++        i for i, row in enumerate(rows) if row["event"] == "firstVideoFrame"
++    )
++    rows.insert(first_video + 1, steady)
++    for seq, row in enumerate(rows, start=1):
++        row["seq"] = seq
++        row["tsMs"] = 1_000 + seq
++    return rows
++
++
+ class CheckStreamingCoreTraceTests(unittest.TestCase):
+     def run_gate(self, path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+         return subprocess.run(
+@@ -217,6 +233,53 @@
+             control = attempt["peerEpochs"][0]["checks"]["controlReady"]
+             self.assertFalse(control["details"]["legacyFallback"])
+             self.assertEqual(control["details"]["ignoredLegacyCount"], 1)
++
++    def test_background_supply_before_first_present_preserves_complete_core_gate(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
++            write_trace(path, early_steady_rows(False))
++            result = self.run_gate(path, "--strict")
++            report = json.loads(result.stdout)
++            self.assertEqual(result.returncode, 0, result.stdout)
++            peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
++            self.assertTrue(peer["passed"])
++            self.assertEqual(len(peer["backgroundSupplyBeforeFirstPresent"]), 1)
++            self.assertFalse(
++                peer["backgroundSupplyBeforeFirstPresent"][0]["presentationActive"]
++            )
++
++    def test_early_foreground_or_unknown_supply_keeps_original_order_gate(self) -> None:
++        for presentation_active in [True, None, "false", 0]:
++            with (
++                self.subTest(presentationActive=presentation_active),
++                tempfile.TemporaryDirectory() as directory,
++            ):
++                path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
++                write_trace(path, early_steady_rows(presentation_active))
++                result = self.run_gate(path, "--strict")
++                report = json.loads(result.stdout)
++                self.assertEqual(result.returncode, 2, result.stdout)
++                peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
++                self.assertEqual(peer["backgroundSupplyBeforeFirstPresent"], [])
++                self.assertIn(
++                    "displayFirstPresent < steadyMediaObserved",
++                    json.dumps(peer["orderingViolations"]),
++                )
++
++    def test_background_supply_still_requires_first_present(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
++            rows = [
++                row
++                for row in early_steady_rows(False)
++                if row["event"] != "displayFirstPresent"
++            ]
++            write_trace(path, rows)
++            result = self.run_gate(path, "--strict")
++            report = json.loads(result.stdout)
++            self.assertEqual(result.returncode, 2, result.stdout)
++            peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
++            self.assertIn("displayFirstPresent", peer["failedChecks"])
+ 
+     def test_selected_remote_candidate_is_application_evidence(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:
+--- a/iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift
++++ b/iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift
+@@ -635,6 +635,18 @@
+             }
+         let protocolRank = descriptor.transportProtocol == "udp" ? 0 : 1
+         return [typeRank, familyRank, protocolRank, originalIndex]
++    }
++}
++
++func streamingVideoTracksMatch(_ current: RTCVideoTrack?, _ next: RTCVideoTrack?) -> Bool {
++    switch (current, next) {
++    case (nil, nil):
++        true
++    case (let current?, let next?):
++        // libwebrtc 的 receiver getter 会新建包装对象，相等性比较其底层轨道。
++        current.isEqual(next)
++    default:
++        false
+     }
+ }
+ 
+@@ -1300,7 +1312,7 @@
+             videoTrackLock.unlock()
+             return false
+         }
+-        if attachedVideoTrack === track, frameProbe != nil {
++        if streamingVideoTracksMatch(attachedVideoTrack, track), frameProbe != nil {
+             videoTrackLock.unlock()
+             return false
+         }
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+@@ -212,7 +212,9 @@
+             let traceContext = handle?.traceContext
+             view?.updateTraceContext(traceContext)
+             view?.updateFrameFeedbackSession(handle?.frameFeedback)
+-            guard nextTrack !== currentTrack || videoGeneration != traceContext?.videoGeneration
++            guard
++                !streamingVideoTracksMatch(currentTrack, nextTrack)
++                    || videoGeneration != traceContext?.videoGeneration
+             else {
+                 return
+             }

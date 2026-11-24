@@ -3,7 +3,7 @@ use crate::{XboxBridgeError, XboxCloudGame};
 use serde_json::json;
 use xbox_cloud_catalog_flow::extract_product_detail;
 use xbox_streaming::{Config, Target};
-use xbox_webapi::{GamePassApi, XcloudApi};
+use xbox_webapi::GamePassApi;
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct XboxCloudLanguageSupport {
@@ -98,17 +98,18 @@ pub async fn fetch_cloud_wait_time(
         config.session.preferred_region_name = Some(preferred.into());
     }
     if !access.force_region_ip.is_empty() {
-        config.session.force_region_ip = Some(access.force_region_ip);
+        config.session.force_region_ip = Some(access.force_region_ip.clone());
     }
     let region = xbox_streaming::policy::session::compiler::pick_region(
         &access.session_access.regions,
         &config,
     )
     .map_err(|error| XboxBridgeError::InvalidData(error.to_string()))?;
-    let response = XcloudApi::new(region.base_uri.clone(), access.bearer_token)
-        .get_waiting_time(&stream_title_id)
-        .await
-        .map_err(|error| crate::query_failure::query_error(error))?;
+    let response =
+        crate::cloud_access::query_xcloud_api(&access_handle, &access, Some(&region.base_uri))?
+            .get_waiting_time(&stream_title_id)
+            .await
+            .map_err(|error| crate::query_failure::query_error(error))?;
     Ok(response
         .get("estimatedAllocationTimeInSeconds")
         .and_then(serde_json::Value::as_u64))
@@ -119,6 +120,19 @@ pub async fn resolve_cloud_game(
     access_handle: String,
     product_id: String,
     server_region: String,
+    startup: Option<std::sync::Arc<crate::XboxStreamStartup>>,
+) -> Result<Option<XboxCloudGame>, XboxBridgeError> {
+    let operation = resolve_cloud_game_inner(access_handle, product_id, server_region);
+    match startup {
+        Some(startup) => Box::pin(startup.run_context(Target::Cloud, operation)).await,
+        None => Box::pin(operation).await,
+    }
+}
+
+async fn resolve_cloud_game_inner(
+    access_handle: String,
+    product_id: String,
+    server_region: String,
 ) -> Result<Option<XboxCloudGame>, XboxBridgeError> {
     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
     let mut config = Config::default();
@@ -126,7 +140,7 @@ pub async fn resolve_cloud_game(
         config.session.preferred_region_name = Some(server_region);
     }
     if !access.force_region_ip.is_empty() {
-        config.session.force_region_ip = Some(access.force_region_ip);
+        config.session.force_region_ip = Some(access.force_region_ip.clone());
     }
     let region = xbox_streaming::policy::session::compiler::pick_region(
         &access.session_access.regions,
@@ -142,10 +156,11 @@ pub async fn resolve_cloud_game(
             "invalid product identity".into(),
         ));
     }
-    let response = XcloudApi::new(region.base_uri.clone(), access.bearer_token)
-        .get_titles_by_ids(std::slice::from_ref(&product_id), "productId")
-        .await
-        .map_err(|error| crate::query_failure::query_error(error))?;
+    let response =
+        crate::cloud_access::query_xcloud_api(&access_handle, &access, Some(&region.base_uri))?
+            .get_titles_by_ids(std::slice::from_ref(&product_id), "productId")
+            .await
+            .map_err(|error| crate::query_failure::query_error(error))?;
     let overlay = xbox_cloud_catalog_flow::build_overlay_load(
         &response,
         &json!({"results":[]}),

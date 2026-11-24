@@ -1,0 +1,17 @@
+{
+  "activeScopedBuildTestExportProcesses": [],
+  "command": [
+    "ps",
+    "-axo",
+    "pid=,comm=,args="
+  ],
+  "completedCommands": {
+    "rustBridgeTests": 0,
+    "iosSimulatorTests": 0,
+    "iPhoneOSBuild": 0,
+    "bindingsGeneration": 0,
+    "bindingsReproduction": 0,
+    "xcresultSummaryExtraction": 0
+  },
+  "safeToClean": true
+}

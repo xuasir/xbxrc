@@ -1,0 +1,49 @@
+{
+  "validatedAt": "2026-11-23T10:07:34.302135+08:00",
+  "implementation": "PASS",
+  "simulator": {
+    "device": "iPhone 17e",
+    "os": "iOS 27.0",
+    "passed": 45,
+    "failed": 0,
+    "addedTests": 12,
+    "artifact": "simulator-summary.json",
+    "fullBundleVerified": true
+  },
+  "deviceBuild": {
+    "sdk": "iPhoneOS",
+    "codeSigningAllowed": false,
+    "result": "BUILD SUCCEEDED",
+    "artifact": "device-build-summary.log"
+  },
+  "checks": {
+    "streamingCoreAnalyzerTests": 17,
+    "baseTraceAnalyzerTests": 3,
+    "swiftFormat": "PASS: 四空格；renderer/tests全文件，Actor/LibWebRTC/Player本轮范围",
+    "swiftAndPythonParse": "PASS",
+    "streamingSessionBoundary": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "sourceSnapshots": {
+    "count": 7,
+    "allHashesMatch": true
+  },
+  "rawTraceUnchanged": true,
+  "manualValidation": {
+    "status": "Validation Pending",
+    "target": "当前构建按原1440p同场景连续前台至少60秒，后台启动与多次恢复；核验playing、触控/菜单、退出和六维健康",
+    "performanceClaim": "代码与定向回归通过，实际帧率提升及长尾由新Trace验证"
+  },
+  "cleanup": {
+    "result": "PASS",
+    "removedAllocatedMiB": 857.72,
+    "observedFreeSpaceDeltaMiB": 814.87,
+    "temporaryRootAbsent": true,
+    "retained": [
+      "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery",
+      "dev-docs/validation/2026-11-20-ios-display-callback",
+      "runtime-logs/ios 原始用户Trace",
+      "target/ios 与 target/ios-webrtc 共享Rust/WebRTC缓存"
+    ]
+  }
+}

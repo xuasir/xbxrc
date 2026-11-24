@@ -1,0 +1,9 @@
+{
+  "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+  "prefix_matches_baseline": true,
+  "baseline_sha256": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+  "restored_sha256": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+  "temporary_probe_removed": true,
+  "restored_exactly": true,
+  "archived_probe": "native-banner-smoke.swift"
+}

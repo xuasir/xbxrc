@@ -1,0 +1,420 @@
+--- before/crates/xbox-webapi/src/xcloud_api.rs
++++ after/crates/xbox-webapi/src/xcloud_api.rs
+@@ -46,15 +46,9 @@
+         ids: &[String],
+         id_type: &str,
+     ) -> Result<Value, WebApiError> {
+-        if !matches!(id_type, "productId" | "titleId") || ids.is_empty() || ids.len() > 75 {
+-            return Err(WebApiError::parse("invalid cloud title query"));
+-        }
++        let payload = title_ids_payload(ids, id_type)?;
+         self.transport
+-            .post_query(
+-                &titles_url(&self.host)?,
+-                serde_json::json!({"ids": ids, "idType": id_type}),
+-                Some(self.headers()?),
+-            )
++            .post_query(&titles_url(&self.host)?, payload, Some(self.headers()?))
+             .await
+     }
+ 
+@@ -167,6 +161,14 @@
+     let mut url = normalized_origin(host)?;
+     url.set_path("/v2/titles");
+     Ok(url.into())
++}
++
++fn title_ids_payload(ids: &[String], id_type: &str) -> Result<Value, WebApiError> {
++    if !matches!(id_type, "productId" | "titleId") || ids.is_empty() || ids.len() > 75 {
++        return Err(WebApiError::parse("invalid cloud title query"));
++    }
++    // 云目录使用 alternate identity 合同，商品 ID 经此查询转换为 Xbox TitleId。
++    Ok(serde_json::json!({"alternateIds": ids, "alternateIdType": id_type}))
+ }
+ 
+ fn touch_bundle_url(host: &str, bundle_id: &str) -> Result<String, WebApiError> {
+@@ -224,7 +226,23 @@
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{recent_titles_url, titles_url, touch_bundle_url, validate_touch_download_address};
++    use super::{
++        recent_titles_url, title_ids_payload, titles_url, touch_bundle_url,
++        validate_touch_download_address,
++    };
++
++    #[test]
++    fn product_identity_query_matches_official_sdk_contract() {
++        assert_eq!(
++            title_ids_payload(&["9MWRLK77D9F4".into()], "productId").unwrap(),
++            serde_json::json!({
++                "alternateIds": ["9MWRLK77D9F4"],
++                "alternateIdType": "productId"
++            })
++        );
++        assert!(title_ids_payload(&[], "productId").is_err());
++        assert!(title_ids_payload(&["9MWRLK77D9F4".into()], "xboxTitleId").is_err());
++    }
+ 
+     #[test]
+     fn official_touch_bundle_uses_authenticated_address_then_signed_resource() {
+--- before/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ after/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -19,9 +19,9 @@
+     @State private var querying = false
+     @State private var downloading = false
+     @State private var preparing = false
+-    @State private var queryError: String?
+-    @State private var downloadError: String?
+-    @State private var previewError: String?
++    @State private var queryError: SectionRequestFailure?
++    @State private var downloadError: SectionRequestFailure?
++    @State private var previewError: SectionRequestFailure?
+     @State private var saveError: String?
+     @State private var saveTask: Task<Void, Never>?
+     @State private var queryRevision = 0
+@@ -50,6 +50,7 @@
+     var body: some View {
+         AppPageScroll {
+             VStack(alignment: .leading, spacing: 24) {
++                AppAccountRequestNotice()
+                 VStack(alignment: .leading, spacing: 8) {
+                     Text(verbatim: game.name).appFont(.section, weight: .semibold)
+                     Text("保存后可在 Home 串流菜单中切换布局。")
+@@ -60,7 +61,7 @@
+                 } else if querying {
+                     ProgressView("正在查询官方布局").frame(minHeight: 80)
+                 } else if let queryError {
+-                    retrySection(queryError, identifier: "official-touch-query-retry") {
++                    retrySection(queryError, title: "官方布局", identifier: "official-touch-query") {
+                         queryRevision += 1
+                     }
+                 } else if let catalog, catalog.bundles.isEmpty {
+@@ -149,7 +150,7 @@
+         if downloading {
+             ProgressView("正在下载布局包").frame(minHeight: 120)
+         } else if let downloadError {
+-            retrySection(downloadError, identifier: "official-touch-download-retry") {
++            retrySection(downloadError, title: "布局包", identifier: "official-touch-download") {
+                 downloadRevision += 1
+             }
+         } else if let bundle, bundle.choices.isEmpty {
+@@ -157,7 +158,7 @@
+         } else if preparing {
+             ProgressView("正在准备布局预览").frame(minHeight: 120)
+         } else if let previewError {
+-            retrySection(previewError, identifier: "official-touch-preview-retry") {
++            retrySection(previewError, title: "布局预览", identifier: "official-touch-preview") {
+                 previewRevision += 1
+             }
+         } else if let prepared {
+@@ -215,13 +216,16 @@
+         }
+     }
+ 
+-    private func retrySection(_ error: String, identifier: String, retry: @escaping () -> Void)
++    private func retrySection(
++        _ error: SectionRequestFailure, title: String, identifier: String,
++        retry: @escaping @MainActor () -> Void
++    )
+         -> some View
+     {
+-        VStack(alignment: .leading, spacing: 8) {
+-            Text(verbatim: error).appFont(.bodySmall).foregroundStyle(AppThemePalette.textSecondary)
+-            Button("重试", action: retry).frame(minHeight: 44).accessibilityIdentifier(identifier)
+-        }
++        AppSectionRequestState(
++            title: title, status: SectionRequestStatus(phase: .failed, failure: error),
++            identifier: identifier
++        ) { retry() }
+     }
+ 
+     private func queryCatalog() async {
+@@ -239,18 +243,23 @@
+         let game = game
+         let region = settings.mobile.cloudServerRegion
+         do {
+-            let result = try await cloud.withCloudAccess(prepareAccess: {
+-                try await auth.prepareCloudAccess()
+-            }) {
+-                try await client.catalog(accessHandle: $0.handle, game: game, serverRegion: region)
+-            }
++            let result = try await cloud.withCloudAccess(
++                prepareAccess: {
++                    try await auth.prepareCloudAccess()
++                },
++                operation: {
++                    try await client.catalog(
++                        accessHandle: $0.handle, game: game, serverRegion: region)
++                })
+             try Task.checkCancellation()
+             guard request == queryIdentity else { return }
+             catalog = result
+             selectedBundleID = result.bundles.first?.id ?? ""
+         } catch {
+-            guard request == queryIdentity, !Task.isCancelled else { return }
+-            queryError = CloudLibraryDiagnostics.safeError(error)
++            guard request == queryIdentity, !SectionRequestFailure.isCancellation(error),
++                !Task.isCancelled
++            else { return }
++            queryError = SectionRequestFailure(error: error)
+         }
+     }
+ 
+@@ -274,13 +283,15 @@
+         let scale = Double(displayScale)
+         let owner = auth.ownerGeneration
+         do {
+-            let result = try await cloud.withCloudAccess(prepareAccess: {
+-                try await auth.prepareCloudAccess()
+-            }) {
+-                try await client.download(
+-                    accessHandle: $0.handle, titleID: titleID, bundleID: bundleID, game: game,
+-                    locale: language, displayScale: scale)
+-            }
++            let result = try await cloud.withCloudAccess(
++                prepareAccess: {
++                    try await auth.prepareCloudAccess()
++                },
++                operation: {
++                    try await client.download(
++                        accessHandle: $0.handle, titleID: titleID, bundleID: bundleID, game: game,
++                        locale: language, displayScale: scale)
++                })
+             try Task.checkCancellation()
+             guard request == downloadIdentity, owner == auth.ownerGeneration else { return }
+             bundle = result
+@@ -289,8 +300,10 @@
+             selectedLayoutID =
+                 result.choices.first(where: { $0.isDefault })?.id ?? result.choices.first?.id ?? ""
+         } catch {
+-            guard request == downloadIdentity, !Task.isCancelled else { return }
+-            downloadError = CloudLibraryDiagnostics.safeError(error)
++            guard request == downloadIdentity, !SectionRequestFailure.isCancellation(error),
++                !Task.isCancelled
++            else { return }
++            downloadError = SectionRequestFailure(error: error)
+         }
+     }
+ 
+@@ -312,8 +325,10 @@
+             guard request == previewIdentity else { return }
+             prepared = result
+         } catch {
+-            guard request == previewIdentity, !Task.isCancelled else { return }
+-            previewError = CloudLibraryDiagnostics.safeError(error)
++            guard request == previewIdentity, !SectionRequestFailure.isCancellation(error),
++                !Task.isCancelled
++            else { return }
++            previewError = SectionRequestFailure(error: error)
+         }
+     }
+ 
+@@ -324,8 +339,10 @@
+         saveTask?.cancel()
+         saveTask = Task { @MainActor in
+             do { try await library.save(bundle: bundle, prepared: prepared) } catch {
+-                guard request == previewIdentity, !Task.isCancelled else { return }
+-                saveError = CloudLibraryDiagnostics.safeError(error)
++                guard request == previewIdentity, !SectionRequestFailure.isCancellation(error),
++                    !Task.isCancelled
++                else { return }
++                saveError = SectionRequestFailure(error: error).message
+             }
+         }
+     }
+--- before/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
++++ after/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
+@@ -44,21 +44,44 @@
+     func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String) async throws
+         -> OfficialTouchCatalog
+     {
+-        let titleID: String
+-        if let known = game.xboxTitleID, !known.isEmpty {
+-            titleID = known
+-        } else if let resolved = try await resolveCloudGame(
+-            accessHandle: accessHandle, productId: game.productID, serverRegion: serverRegion,
+-            startup: nil), let identity = resolved.xboxTitleId, !identity.isEmpty
+-        {
+-            titleID = identity
+-        } else {
+-            throw TouchLayoutError.invalid("此游戏的 Xbox 身份暂缺")
++        let operationID = UUID().uuidString
++        var stage = "titleIdentity"
++        IOSRuntimeTrace.event(
++            domain: "touch-layouts", event: "officialTouchCatalogStarted",
++            payload: ["hasTitleIdentity": .bool(game.xboxTitleID?.isEmpty == false)],
++            dimension: .core, importance: .key, operationID: operationID)
++        do {
++            let titleID: String
++            if let known = game.xboxTitleID, !known.isEmpty {
++                titleID = known
++            } else if let resolved = try await resolveCloudGame(
++                accessHandle: accessHandle, productId: game.productID, serverRegion: serverRegion,
++                startup: nil), let identity = resolved.xboxTitleId, !identity.isEmpty
++            {
++                titleID = identity
++            } else {
++                throw TouchLayoutError.invalid("此游戏的 Xbox 身份暂缺")
++            }
++            try Task.checkCancellation()
++            stage = "inputConfigurations"
++            let bundles = try await fetchOfficialTouchBundles(
++                accessHandle: accessHandle, xboxTitleId: titleID)
++            try Task.checkCancellation()
++            IOSRuntimeTrace.event(
++                domain: "touch-layouts", event: "officialTouchCatalogSucceeded",
++                payload: ["bundleCount": .integer(Int64(bundles.count))],
++                dimension: .core, importance: .key, operationID: operationID)
++            return OfficialTouchCatalog(titleID: titleID, bundles: bundles)
++        } catch {
++            IOSRuntimeTrace.event(
++                domain: "touch-layouts",
++                event: SectionRequestFailure.isCancellation(error)
++                    ? "officialTouchCatalogCancelled" : "officialTouchCatalogFailed",
++                payload: CloudLibraryDiagnostics.errorPayload(
++                    error, extra: ["stage": .string(stage)]),
++                dimension: .core, importance: .key, operationID: operationID)
++            throw error
+         }
+-        return OfficialTouchCatalog(
+-            titleID: titleID,
+-            bundles: try await fetchOfficialTouchBundles(
+-                accessHandle: accessHandle, xboxTitleId: titleID))
+     }
+ 
+     func download(
+--- before/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift
++++ after/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift
+@@ -88,7 +88,9 @@
+         {
+             if failOnce {
+                 failOnce = false
+-                throw URLError(.timedOut)
++                throw XboxBridgeError.Query(
++                    failure: XboxQueryFailure(
++                        kind: .unknown, statusCode: 404, retriable: false, retryAfterSeconds: nil))
+             }
+             guard let source = bundles.first(where: { $0.game.productID == game.productID }) else {
+                 throw TouchLayoutError.invalid("夹具游戏暂缺")
+--- before/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
++++ after/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+@@ -3,6 +3,37 @@
+ 
+ @MainActor
+ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
++  func testOfficialLayout404UsesSharedRetryAndRecovers() {
++    continueAfterFailure = false
++    XCUIDevice.shared.orientation = .portrait
++    let app = XCUIApplication()
++    app.launchArguments = [
++      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--official-touch-query-failure",
++      "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
++    ]
++    app.launch()
++    let library = app.buttons["primary-navigation-library"]
++    XCTAssertTrue(library.waitForExistence(timeout: 10))
++    library.tap()
++    let game = app.buttons.matching(identifier: "cloud-game-HALO00000001").firstMatch
++    reveal(game, in: app)
++    game.tap()
++    let entry = app.buttons["cloud-official-touch-layouts"]
++    reveal(entry, in: app)
++    entry.tap()
++    let retry = app.buttons["section-retry-official-touch-query"]
++    XCTAssertTrue(retry.waitForExistence(timeout: 10))
++    XCTAssertTrue(retry.label.contains("官方布局加载失败"))
++    XCTAssertFalse(retry.label.contains("XboxBridgeError"))
++    XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
++    save(app, "official-touch-shared-retry")
++    retry.tap()
++    let preview = app.buttons["official-touch-preview-open"]
++    reveal(preview, in: app)
++    XCTAssertTrue(preview.isHittable)
++    save(app, "official-touch-recovered")
++  }
++
+   func testCloudDetailRetriesPreviewsSavesMultipleLayoutsAndDeletes() {
+     continueAfterFailure = false
+     XCUIDevice.shared.orientation = .portrait
+@@ -22,7 +53,7 @@
+     reveal(entry, in: app)
+     save(app, "official-touch-cloud-entry")
+     entry.tap()
+-    let retry = app.buttons["official-touch-query-retry"]
++    let retry = app.buttons["section-retry-official-touch-query"]
+     XCTAssertTrue(retry.waitForExistence(timeout: 10))
+     save(app, "official-touch-query-failure")
+     retry.tap()
+--- before/iosapp/XBXRC/Resources/Localizable.xcstrings
++++ after/iosapp/XBXRC/Resources/Localizable.xcstrings
+@@ -4713,6 +4713,23 @@
+         }
+       }
+     },
++    "官方布局" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Official layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "官方布局"
++          }
++        }
++      }
++    },
+     "官方版本" : {
+       "localizations" : {
+         "en" : {
+@@ -5583,6 +5600,40 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "布局模板"
++          }
++        }
++      }
++    },
++    "布局包" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Layout bundle"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "布局包"
++          }
++        }
++      }
++    },
++    "布局预览" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Layout preview"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "布局预览"
+           }
+         }
+       }
+@@ -15566,4 +15617,4 @@
+     }
+   },
+   "version" : "1.0"
+-}+}

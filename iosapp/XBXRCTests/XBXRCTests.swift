@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import CoreVideo
 import Metal
+import SwiftUI
 import UIKit
 @preconcurrency import WebRTC
 import XCTest
@@ -165,6 +166,484 @@ final class StreamingDisplayCallbackTests: XCTestCase {
                     payload: payload, profile: profile, fingerprintSalt: "test"),
                 payload)
         }
+    }
+
+    func testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames() throws {
+        let slot = StreamingLatestIngressSlot<Int>()
+        let firstTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
+        var delivered: [Int] = []
+        let nextTicket = try XCTUnwrap(
+            slot.drain(firstTicket) { delivery in
+                delivered.append(delivery.value)
+                XCTAssertNil(slot.submit(delivery.value + 1))
+            })
+        XCTAssertEqual(delivered, [1, 2])
+        XCTAssertGreaterThan(nextTicket.identifier, firstTicket.identifier)
+        XCTAssertNil(slot.drain(firstTicket) { _ in XCTFail("旧任务应保持接续帧归属") })
+        XCTAssertNil(slot.drain(nextTicket) { delivered.append($0.value) })
+        XCTAssertEqual(delivered, [1, 2, 3])
+        XCTAssertNotNil(slot.submit(4))
+    }
+
+    func testIngressDrainKeepsLatestReplacementCountsAndResetBoundary() throws {
+        let slot = StreamingLatestIngressSlot<Int>()
+        let ticket = try XCTUnwrap(slot.submit(1))
+        var delivered: [(Int, Int64)] = []
+        XCTAssertNil(
+            slot.drain(ticket) { delivery in
+                delivered.append((delivery.value, delivery.replacedCount))
+                if delivery.value == 1 {
+                    _ = slot.submit(2)
+                    _ = slot.submit(3)
+                }
+            })
+        XCTAssertEqual(delivered.map(\.0), [1, 3])
+        XCTAssertEqual(delivered.map(\.1), [0, 1])
+        let oldTicket = try XCTUnwrap(slot.submit(4))
+        slot.reset()
+        XCTAssertNil(slot.drain(oldTicket) { _ in XCTFail("旧入口帧应在reset边界释放") })
+        XCTAssertNotNil(slot.submit(5))
+    }
+
+    func testIngressReplacementKeepsOriginalDrainScheduleTime() throws {
+        let slot = StreamingLatestIngressSlot<Int>()
+        let ticket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
+        for value in 2...39 {
+            XCTAssertNil(slot.submit(value, scheduledAtMs: Double(100 + value)))
+        }
+        XCTAssertEqual(ticket.scheduledAtMs, 100)
+        var delivered: StreamingLatestIngressDelivery<Int>?
+        XCTAssertNil(slot.drain(ticket) { delivered = $0 })
+        XCTAssertEqual(delivered?.value, 39)
+        XCTAssertEqual(delivered?.replacedCount, 38)
+    }
+
+    func testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket() async throws {
+        let slot = StreamingLatestIngressSlot<Int>()
+        let oldTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
+        let scheduledAfterReset = await Task.detached {
+            slot.reset()
+            return slot.submit(2, scheduledAtMs: 200)
+        }.value
+        let newTicket = try XCTUnwrap(scheduledAfterReset)
+        XCTAssertNil(slot.submit(3, scheduledAtMs: 201))
+        XCTAssertGreaterThan(newTicket.identifier, oldTicket.identifier)
+        for _ in 0..<2 {
+            XCTAssertNil(slot.drain(oldTicket) { _ in XCTFail("迟到任务应保持新代次帧归属") })
+            XCTAssertNil(slot.take(oldTicket))
+            XCTAssertNil(slot.finishDelivery(oldTicket))
+        }
+        var delivered: StreamingLatestIngressDelivery<Int>?
+        XCTAssertNil(slot.drain(newTicket) { delivered = $0 })
+        XCTAssertEqual(delivered?.value, 3)
+        XCTAssertEqual(delivered?.replacedCount, 1)
+        let latest = try XCTUnwrap(slot.submit(4))
+        XCTAssertNil(slot.drain(newTicket) { _ in XCTFail("重复任务应保持最新帧归属") })
+        XCTAssertEqual(slot.take(latest)?.value, 4)
+        XCTAssertNil(slot.finishDelivery(latest))
+    }
+
+    func testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount() throws {
+        let slot = StreamingLatestIngressSlot<Int>()
+        let oldTicket = try XCTUnwrap(slot.submit(1))
+        var newTicket: StreamingIngressDrainTicket?
+        XCTAssertNil(
+            slot.drain(oldTicket) { delivery in
+                XCTAssertEqual(delivery.value, 1)
+                slot.reset()
+                newTicket = slot.submit(2)
+                XCTAssertNil(slot.submit(3))
+            })
+        let currentTicket = try XCTUnwrap(newTicket)
+        var delivered: StreamingLatestIngressDelivery<Int>?
+        XCTAssertNil(slot.drain(currentTicket) { delivered = $0 })
+        XCTAssertEqual(delivered?.value, 3)
+        XCTAssertEqual(delivered?.replacedCount, 1)
+    }
+
+    func testIngressAndDrawPreparationTimingSurviveRedaction() {
+        let timing = StreamingFrameIngressTiming(
+            receivedAtMs: 119, drainScheduledAtMs: 100, drainStartedAtMs: 120,
+            mainActorEnteredAtMs: 121)
+        var payload = timing.tracePayload(acceptedAtMs: 123)
+        XCTAssertEqual(payload["ingressQueueMs"], .double(2))
+        XCTAssertEqual(payload["ingressDrainQueueMs"], .double(20))
+        XCTAssertEqual(payload["ingressDrainWorkBeforeFrameMs"], .double(1))
+        XCTAssertEqual(payload["frameAcceptWorkMs"], .double(2))
+        var dropPayload = timing.queueTracePayload()
+        dropPayload["count"] = .integer(38)
+        dropPayload["reason"] = .string("ingressCoalesced")
+        for key in timing.queueTracePayload().keys {
+            XCTAssertEqual(payload[key], dropPayload[key])
+        }
+        payload["drawToSubmitMs"] = .double(4)
+        payload["drawableAcquireMs"] = .double(2)
+        payload["presentationActive"] = .bool(false)
+        for profile in [IOSRuntimeTraceProfile.dev, .production] {
+            XCTAssertEqual(
+                IOSRuntimeTraceRedactor.redact(
+                    payload: payload, profile: profile, fingerprintSalt: "test"), payload)
+            XCTAssertEqual(
+                IOSRuntimeTraceRedactor.redact(
+                    payload: dropPayload, profile: profile, fingerprintSalt: "test"), dropPayload)
+        }
+    }
+
+    @MainActor
+    func testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression() async throws {
+        let suite = "XBXRC.StreamingTouchSuppression.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let settings = AppSettingsStore(defaults: defaults)
+        let session = StreamInputSession(controller: { nil })
+        _ = session.outputState(now: 0)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
+        let hosting = UIHostingController(
+            rootView: TouchGamepadOverlay(input: session).environmentObject(settings))
+        window.rootViewController = hosting
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            defaults.removePersistentDomain(forName: suite)
+        }
+        func findSurface(_ view: UIView) -> TouchLayoutSurfaceView? {
+            if let surface = view as? TouchLayoutSurfaceView { return surface }
+            for child in view.subviews {
+                if let surface = findSurface(child) { return surface }
+            }
+            return nil
+        }
+        hosting.view.layoutIfNeeded()
+        for _ in 0..<50 {
+            if let surface = findSurface(hosting.view), surface.input.onInput != nil,
+                !surface.input.sockets.isEmpty
+            {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let surface = try XCTUnwrap(findSurface(hosting.view))
+        let a = try XCTUnwrap(
+            surface.input.sockets.first { $0.control.action == .gamepad("gamepadA") })
+        surface.input.process([.init(id: 1, phase: .began, position: a.center)])
+        XCTAssertEqual(session.outputState(now: 1).buttonMask, 16)
+        for _ in 0..<20 { session.refreshDeviceStatus() }
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertTrue(findSurface(hosting.view) === surface)
+        XCTAssertEqual(surface.input.gamepad.buttonMask, 16)
+        let point = surface.convert(a.center, to: window)
+        XCTAssertTrue(window.hitTest(point, with: nil) === surface)
+        session.setSuppressed(true)
+        for _ in 0..<50 {
+            if surface.input.gamepad == .neutral, window.hitTest(point, with: nil) !== surface {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(surface.input.gamepad, .neutral)
+        XCTAssertEqual(session.outputState(now: 2), .neutral)
+        XCTAssertFalse(window.hitTest(point, with: nil) === surface)
+        session.setSuppressed(false)
+        for _ in 0..<50 {
+            if window.hitTest(point, with: nil) === surface { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(window.hitTest(point, with: nil) === surface)
+        XCTAssertEqual(session.outputState(now: 3), .neutral)
+        surface.input.process([.init(id: 2, phase: .began, position: a.center)])
+        XCTAssertEqual(session.outputState(now: 4).buttonMask, 16)
+        surface.stop()
+        XCTAssertEqual(session.outputState(now: 5), .neutral)
+    }
+
+    func testReceiverTrackWrappersKeepNativeIdentityAcrossRepeatedDiscovery() throws {
+        RTCInitializeSSL()
+        let factory = RTCPeerConnectionFactory()
+        let configuration = RTCConfiguration()
+        configuration.sdpSemantics = .unifiedPlan
+        let peer = try XCTUnwrap(
+            factory.peerConnection(
+                with: configuration,
+                constraints: RTCMediaConstraints(
+                    mandatoryConstraints: nil, optionalConstraints: nil),
+                delegate: nil))
+        defer { peer.close() }
+        let transceiverInit = RTCRtpTransceiverInit()
+        transceiverInit.direction = .recvOnly
+        let transceiver = try XCTUnwrap(peer.addTransceiver(of: .video, init: transceiverInit))
+        let first = try XCTUnwrap(transceiver.receiver.track as? RTCVideoTrack)
+        for _ in 0..<60 {
+            let next = try XCTUnwrap(transceiver.receiver.track as? RTCVideoTrack)
+            XCTAssertFalse(first === next)
+            XCTAssertTrue(streamingVideoTracksMatch(first, next))
+        }
+    }
+
+    func testDifferentNativeTracksWithSameIdentifierRequireReattachment() {
+        let factory = RTCPeerConnectionFactory()
+        let first = factory.videoTrack(with: factory.videoSource(), trackId: "shared-label")
+        let replacement = factory.videoTrack(with: factory.videoSource(), trackId: "shared-label")
+        XCTAssertEqual(first.trackId, replacement.trackId)
+        XCTAssertFalse(streamingVideoTracksMatch(first, replacement))
+        XCTAssertTrue(streamingVideoTracksMatch(first, first))
+        XCTAssertTrue(streamingVideoTracksMatch(nil, nil))
+        XCTAssertFalse(streamingVideoTracksMatch(first, nil))
+        XCTAssertFalse(streamingVideoTracksMatch(nil, replacement))
+    }
+
+    private func makeNativeFrame() throws -> RTCVideoFrame {
+        var buffer: CVPixelBuffer?
+        let attributes =
+            [
+                kCVPixelBufferMetalCompatibilityKey: true,
+                kCVPixelBufferIOSurfacePropertiesKey: [:],
+            ] as CFDictionary
+        XCTAssertEqual(
+            CVPixelBufferCreate(
+                kCFAllocatorDefault, 64, 64, kCVPixelFormatType_32BGRA, attributes, &buffer),
+            kCVReturnSuccess)
+        return RTCVideoFrame(
+            buffer: RTCCVPixelBuffer(pixelBuffer: try XCTUnwrap(buffer)),
+            rotation: ._0, timeStampNs: 0)
+    }
+
+    @MainActor
+    func testBackgroundPipelineReadinessReplaysOncePerVisibleInterval() async throws {
+        let surface = StreamingMetalVideoSurfaceView(
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
+            device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        defer { surface.shutdown() }
+        let context = StreamingPresentationTraceContext(
+            attemptID: "background-readiness", generation: 1, peerEpoch: 1)
+        var readiness: [StreamingPresentationTraceContext] = []
+        var accepted = 0
+        surface.presentationEventSink = { event in
+            if case .displayPipelineReady(let context) = event { readiness.append(context) }
+            if case .firstFrameAccepted = event { accepted += 1 }
+        }
+        surface.setPresentationActive(false)
+        surface.updateTraceContext(context)
+        let delivery = StreamingNativeFrameDelivery(
+            renderer: surface.renderer, frame: try makeNativeFrame())
+        await Task.detached { delivery.deliver() }.value
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(readiness.isEmpty)
+        XCTAssertEqual(accepted, 0)
+        surface.setPresentationActive(true)
+        XCTAssertEqual(readiness, [context])
+        surface.setPresentationActive(true)
+        surface.updateTraceContext(context)
+        XCTAssertEqual(readiness, [context])
+        surface.setPresentationActive(false)
+        surface.setPresentationActive(true)
+        XCTAssertEqual(readiness, [context, context])
+        XCTAssertEqual(accepted, 0)
+    }
+
+    @MainActor
+    func testPipelineReadinessWaitsForSinkAndDiscardsReplacedContext() async throws {
+        let surface = StreamingMetalVideoSurfaceView(
+            frame: CGRect(x: 0, y: 0, width: 64, height: 64),
+            device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        defer { surface.shutdown() }
+        surface.setPresentationActive(false)
+        let first = StreamingPresentationTraceContext(
+            attemptID: "first", generation: 1, peerEpoch: 1)
+        let current = StreamingPresentationTraceContext(
+            attemptID: "current", generation: 2, peerEpoch: 2)
+        let delivery = StreamingNativeFrameDelivery(
+            renderer: surface.renderer, frame: try makeNativeFrame())
+        for context in [first, current] {
+            surface.updateTraceContext(context)
+            await Task.detached { delivery.deliver() }.value
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        surface.setPresentationActive(true)
+        var readiness: [StreamingPresentationTraceContext] = []
+        let sink: @MainActor (StreamingPresentationLifecycleEvent) -> Void = { event in
+            if case .displayPipelineReady(let context) = event { readiness.append(context) }
+        }
+        surface.presentationEventSink = sink
+        XCTAssertEqual(readiness, [current])
+        surface.presentationEventSink = sink
+        XCTAssertEqual(readiness, [current])
+    }
+
+    @MainActor
+    private func startReadySession(
+        resumeGate: StreamingAsyncGate? = nil, failResume: Bool = false,
+        snapshotGate: StreamingAsyncGate? = nil
+    ) async throws -> (StreamSessionActor, StreamingPublicationRecorder) {
+        let recorder = StreamingRuntimeRecorder()
+        let publication = StreamingPublicationRecorder()
+        let session = StreamSessionActor(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(
+                    recorder: recorder, resumeValidationGate: resumeGate,
+                    failResumeValidation: failResume), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(
+                recorder: recorder, debugSnapshotGate: snapshotGate))
+        try await session.start(
+            request: StreamingLaunchRequest(
+                streamTitleID: "test-title", accessHandle: "test-access",
+                accountGeneration: 1, sessionGeneration: 1),
+            stateSink: { publication.states.append(($0, $1)) },
+            videoSink: { _, track in publication.context = track?.traceContext },
+            diagnosticsSink: { _, _ in })
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while publication.context == nil {
+            guard ContinuousClock.now < deadline else { throw StreamingRuntimeError.superseded }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let context = try XCTUnwrap(publication.context)
+        await session.displayPipelineReady(context: context)
+        await session.firstFrameAcceptedToMailbox(context: context)
+        await session.firstFrameSubmitted(context: context)
+        await session.firstFramePresented(context: context)
+        XCTAssertEqual(publication.states.last?.1, .playing)
+        return (session, publication)
+    }
+
+    @MainActor
+    private func waitForGate(_ gate: StreamingAsyncGate) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await gate.waiterCount() == 0 {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("异步恢复操作应到达测试门禁")
+                throw StreamingRuntimeError.superseded
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    private func presentSnapshot() -> StreamingDisplayHealthSnapshot {
+        let telemetry = StreamingDisplayTelemetry()
+        let now = StreamingFrameFeedbackClock.nowMilliseconds
+        _ = telemetry.recordSubmit(identifier: 1, timestampMilliseconds: now)
+        return telemetry.recordPresent(identifier: 1, timestampMilliseconds: now).snapshot
+    }
+
+    @MainActor
+    func testResumeKeepsFreshPresentUntilValidationCompletes() async throws {
+        let gate = StreamingAsyncGate()
+        let (session, publication) = try await startReadySession(resumeGate: gate)
+        defer {
+            Task {
+                await gate.open()
+                await session.stop(generation: 1)
+            }
+        }
+        let context = try XCTUnwrap(publication.context)
+        await session.setVisible(false, generation: 1)
+        let resume = Task { await session.setVisible(true, generation: 1) }
+        try await waitForGate(gate)
+        let fresh = presentSnapshot()
+        await session.displayHealthUpdated(context: context, snapshot: fresh)
+        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
+        await gate.open()
+        await resume.value
+        XCTAssertEqual(
+            publication.states.suffix(3).map(\.1), [.suspending, .waitingForFirstFrame, .playing])
+        await session.displayHealthUpdated(context: context, snapshot: fresh)
+        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 2)
+        await session.stop(generation: 1)
+    }
+
+    @MainActor
+    func testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility() async throws {
+        let (session, publication) = try await startReadySession()
+        defer { Task { await session.stop(generation: 1) } }
+        let context = try XCTUnwrap(publication.context)
+        let old = presentSnapshot()
+        await session.setVisible(false, generation: 1)
+        await session.setVisible(true, generation: 1)
+        await session.displayHealthUpdated(context: context, snapshot: old)
+        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+        XCTAssertEqual(publication.states.last?.1, .playing)
+        let count = publication.states.count
+        await session.setVisible(true, generation: 1)
+        XCTAssertEqual(publication.states.count, count)
+        await session.stop(generation: 1)
+    }
+
+    @MainActor
+    func testLateResumeValidationKeepsNewVisibilityRevisionSuspended() async throws {
+        let gate = StreamingAsyncGate()
+        let (session, publication) = try await startReadySession(resumeGate: gate)
+        defer {
+            Task {
+                await gate.open()
+                await session.stop(generation: 1)
+            }
+        }
+        let context = try XCTUnwrap(publication.context)
+        await session.setVisible(false, generation: 1)
+        let resume = Task { await session.setVisible(true, generation: 1) }
+        try await waitForGate(gate)
+        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+        await session.setVisible(false, generation: 1)
+        let count = publication.states.count
+        await gate.open()
+        await resume.value
+        XCTAssertEqual(publication.states.count, count)
+        XCTAssertEqual(publication.states.last?.1, .suspending)
+        await session.setVisible(true, generation: 1)
+        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+        XCTAssertEqual(publication.states.last?.1, .playing)
+        await session.stop(generation: 1)
+    }
+
+    @MainActor
+    func testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended() async throws {
+        let gate = StreamingAsyncGate()
+        await gate.open()
+        let (session, publication) = try await startReadySession(snapshotGate: gate)
+        defer {
+            Task {
+                await gate.open()
+                await session.stop(generation: 1)
+            }
+        }
+        await gate.close()
+        await session.setVisible(false, generation: 1)
+        let resume = Task { await session.setVisible(true, generation: 1) }
+        try await waitForGate(gate)
+        await session.setVisible(false, generation: 1)
+        let count = publication.states.count
+        await gate.open()
+        await resume.value
+        XCTAssertEqual(publication.states.count, count)
+        XCTAssertEqual(publication.states.last?.1, .suspending)
+        await session.stop(generation: 1)
+    }
+
+    @MainActor
+    func testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying() async throws {
+        let gate = StreamingAsyncGate()
+        let (session, publication) = try await startReadySession(resumeGate: gate, failResume: true)
+        defer {
+            Task {
+                await gate.open()
+                await session.stop(generation: 1)
+            }
+        }
+        await session.setVisible(false, generation: 1)
+        let resume = Task { await session.setVisible(true, generation: 1) }
+        try await waitForGate(gate)
+        await session.displayHealthUpdated(
+            context: try XCTUnwrap(publication.context), snapshot: presentSnapshot())
+        await gate.open()
+        await resume.value
+        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
+        guard let finalState = publication.states.last?.1, case .failed = finalState else {
+            return XCTFail("恢复验证失败应发布终止状态")
+        }
+        await session.stop(generation: 1)
     }
 
     func testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters() {
@@ -400,27 +879,31 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(StreamingCleanupStage.allCases.last, .accessReleased)
     }
 
-    func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() {
+    func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() throws {
         let slot = StreamingLatestIngressSlot<Int>()
 
-        XCTAssertTrue(slot.submit(1))
-        XCTAssertFalse(slot.submit(2))
-        XCTAssertFalse(slot.submit(3))
-        let firstDelivery = slot.take()
+        let firstTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
+        XCTAssertNil(slot.submit(2, scheduledAtMs: 101))
+        XCTAssertNil(slot.submit(3, scheduledAtMs: 102))
+        let firstDelivery = slot.take(firstTicket)
         XCTAssertEqual(firstDelivery?.value, 3)
         XCTAssertEqual(firstDelivery?.replacedCount, 2)
 
-        XCTAssertFalse(slot.submit(4))
-        XCTAssertTrue(slot.finishDelivery())
-        let secondDelivery = slot.take()
+        XCTAssertNil(slot.submit(4, scheduledAtMs: 103))
+        let nextTicket = try XCTUnwrap(slot.finishDelivery(firstTicket, scheduledAtMs: 110))
+        XCTAssertGreaterThan(nextTicket.identifier, firstTicket.identifier)
+        XCTAssertEqual(nextTicket.scheduledAtMs, 110)
+        XCTAssertNil(slot.take(firstTicket))
+        XCTAssertNil(slot.finishDelivery(firstTicket))
+        let secondDelivery = slot.take(nextTicket)
         XCTAssertEqual(secondDelivery?.value, 4)
         XCTAssertEqual(secondDelivery?.replacedCount, 0)
-        XCTAssertFalse(slot.finishDelivery())
+        XCTAssertNil(slot.finishDelivery(nextTicket))
 
-        XCTAssertTrue(slot.submit(5))
+        let oldTicket = try XCTUnwrap(slot.submit(5))
         slot.reset()
-        XCTAssertNil(slot.take())
-        XCTAssertTrue(slot.submit(6))
+        XCTAssertNil(slot.take(oldTicket))
+        XCTAssertNotNil(slot.submit(6))
     }
 
     func testStreamingRenderRetryWaitsForDisplayTickWhenFrameIsRequeued() {
@@ -1548,6 +2031,69 @@ final class XBXRCTests: XCTestCase {
         XCTAssertEqual(payload["forceRegionApplied"], .bool(false))
     }
 
+    func testCloudLibraryDiagnosticsRetainsRetryableQueryNetworkFailure() {
+        let error = XboxBridgeError.Query(
+            failure: XboxQueryFailure(
+                kind: .network, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+        let payload = CloudLibraryDiagnostics.errorPayload(error, extra: ["phase": "loaded"])
+
+        XCTAssertEqual(payload["errorKind"], .string("network"))
+        XCTAssertEqual(payload["retriable"], .bool(true))
+        XCTAssertEqual(payload["timeout"], .bool(false))
+        XCTAssertEqual(payload["phase"], .string("loaded"))
+        XCTAssertNil(payload["statusCode"])
+    }
+
+    func testCloudLibraryDiagnosticsRetainsQueryStatusAndCooldown() {
+        let error = XboxBridgeError.Query(
+            failure: XboxQueryFailure(
+                kind: .rateLimited, statusCode: 429, retriable: true, retryAfterSeconds: 30))
+        let payload = CloudLibraryDiagnostics.errorPayload(error)
+
+        XCTAssertEqual(payload["errorKind"], .string("rateLimited"))
+        XCTAssertEqual(payload["statusCode"], .integer(429))
+        XCTAssertEqual(payload["retryAfterSeconds"], .integer(30))
+        XCTAssertEqual(payload["retriable"], .bool(true))
+        XCTAssertEqual(payload["timeout"], .bool(false))
+    }
+
+    func testCloudLibraryDiagnosticsRetainsQueryTimeoutAndPermanentNetworkFailure() {
+        let timeout = XboxBridgeError.Query(
+            failure: XboxQueryFailure(
+                kind: .timeout, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+        let timeoutPayload = CloudLibraryDiagnostics.errorPayload(timeout)
+        XCTAssertEqual(timeoutPayload["errorKind"], .string("timeout"))
+        XCTAssertEqual(timeoutPayload["timeout"], .bool(true))
+        XCTAssertEqual(timeoutPayload["retriable"], .bool(true))
+
+        let permanent = XboxBridgeError.Query(
+            failure: XboxQueryFailure(
+                kind: .network, statusCode: nil, retriable: false, retryAfterSeconds: nil))
+        XCTAssertEqual(
+            CloudLibraryDiagnostics.errorPayload(permanent)["retriable"], .bool(false))
+    }
+
+    func testAuthStageDiagnosticsRetainsNetworkFailureDetails() {
+        for (kind, requestStage, elapsed, failureKind) in [
+            ("connect", "deviceToken", UInt64(156), XboxQueryFailureKind.network),
+            ("timeout", "sisuAuthorize", UInt64(5_011), XboxQueryFailureKind.timeout),
+        ] {
+            let event = XboxAuthStage(
+                stage: "authRequestFailed", requestStage: requestStage, scope: "cloud",
+                elapsedMs: elapsed, skipCoreRefresh: nil, networkErrorKind: kind,
+                failure: XboxQueryFailure(
+                    kind: failureKind, statusCode: nil, retriable: true, retryAfterSeconds: nil))
+            let payload = RustAuthCheckpointObserver.stagePayload(event)
+
+            XCTAssertEqual(payload["networkErrorKind"], .string(kind))
+            XCTAssertEqual(payload["requestStage"], .string(requestStage))
+            XCTAssertEqual(payload["elapsedMs"], .integer(Int64(elapsed)))
+            XCTAssertEqual(payload["scope"], .string("cloud"))
+            XCTAssertEqual(payload["errorKind"], .string(String(describing: failureKind)))
+            XCTAssertEqual(payload["retriable"], .bool(true))
+        }
+    }
+
     func testIOSRuntimeTraceWriterEmitsSchemaV3AndRedactsPayload() async throws {
         let rootDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -2446,7 +2992,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
 
-        store.start(streamTitleID: "  1234abcd  ") {
+        store.start(streamTitleID: "  1234abcd  ") { _ in
             Self.streamingAccess(handle: "access-1")
         }
 
@@ -2526,7 +3072,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: peerFactory
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-control-ready")
         }
 
@@ -2557,7 +3103,7 @@ final class XBXRCTests: XCTestCase {
             remoteAnswerApplyTimeout: .milliseconds(40)
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-answer-timeout")
         }
 
@@ -2591,7 +3137,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             throw NSError(
                 domain: "stream-access-fixture",
                 code: 1,
@@ -2746,7 +3292,7 @@ final class XBXRCTests: XCTestCase {
             )
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-restart")
         }
 
@@ -2780,7 +3326,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: peerFactory
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-rebuild")
         }
 
@@ -2816,7 +3362,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: peerFactory
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-retiring-stop")
         }
         try await waitUntilAsync {
@@ -2857,7 +3403,7 @@ final class XBXRCTests: XCTestCase {
             )
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-ice-epoch")
         }
         try await waitUntilAsync {
@@ -2901,7 +3447,7 @@ final class XBXRCTests: XCTestCase {
                 session: StreamingTestControlSession(recorder: recorder, prepared: prepared),
                 recorder: recorder),
             peerFactory: factory, initialConnectionTimeout: .milliseconds(30))
-        store.startHome(targetID: "fixture-console") {
+        store.startHome(targetID: "fixture-console") { _ in
             Self.streamingHomeAccess(handle: "fallback-access")
         }
         try await waitUntilAsync {
@@ -2928,7 +3474,9 @@ final class XBXRCTests: XCTestCase {
             controlFactory: StreamingTestControlFactory(
                 session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
             peerFactory: factory, initialConnectionTimeout: .milliseconds(30))
-        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "deadline-access") }
+        store.start(streamTitleID: "1234abcd") { _ in
+            Self.streamingAccess(handle: "deadline-access")
+        }
         try await waitUntil { store.canRetry }
         try await waitUntilAsync {
             let snapshot = await recorder.snapshot()
@@ -2952,7 +3500,7 @@ final class XBXRCTests: XCTestCase {
             controlFactory: StreamingTestControlFactory(
                 session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
             peerFactory: factory)
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "temporary-disconnect")
         }
         try await markCurrentVideoSurfaceReady(store)
@@ -2978,7 +3526,7 @@ final class XBXRCTests: XCTestCase {
                 controlFactory: StreamingTestControlFactory(
                     session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
                 peerFactory: factory)
-            store.start(streamTitleID: "1234abcd") {
+            store.start(streamTitleID: "1234abcd") { _ in
                 Self.streamingAccess(handle: "access-\(terminal.rawValue)")
             }
             try await waitUntilAsync {
@@ -3013,7 +3561,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
 
-        store.startHome(targetID: "  console-server-id  ") {
+        store.startHome(targetID: "  console-server-id  ") { _ in
             Self.streamingHomeAccess(handle: "home-access-1")
         }
 
@@ -3060,7 +3608,7 @@ final class XBXRCTests: XCTestCase {
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
 
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-settings")
         }
 
@@ -3093,7 +3641,7 @@ final class XBXRCTests: XCTestCase {
             ),
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-stop")
         }
         try await markCurrentVideoSurfaceReady(store)
@@ -3130,7 +3678,7 @@ final class XBXRCTests: XCTestCase {
             ),
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
-        store.start(streamTitleID: "1234abcd") {
+        store.start(streamTitleID: "1234abcd") { _ in
             Self.streamingAccess(handle: "access-background")
         }
         try await markCurrentVideoSurfaceReady(store)
@@ -3177,7 +3725,8 @@ final class XBXRCTests: XCTestCase {
             controlFactory: StreamingTestControlFactory(
                 session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
             peerFactory: factory)
-        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "audio-rebuild") }
+        store.start(streamTitleID: "1234abcd") { _ in Self.streamingAccess(handle: "audio-rebuild")
+        }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
         store.setAudioMuted(true)
@@ -3216,7 +3765,9 @@ final class XBXRCTests: XCTestCase {
         let store = StreamingFeatureStore(
             controlFactory: StreamingTestControlFactory(session: control, recorder: recorder),
             peerFactory: factory)
-        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "quality-consumer") }
+        store.start(streamTitleID: "1234abcd") { _ in
+            Self.streamingAccess(handle: "quality-consumer")
+        }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
         try await waitUntilAsync {
@@ -3241,7 +3792,9 @@ final class XBXRCTests: XCTestCase {
                 session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
             peerFactory: StreamingTestPeerFactory(
                 recorder: recorder, emitsFirstVideoFrameAutomatically: false))
-        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "first-frame-guard") }
+        store.start(streamTitleID: "1234abcd") { _ in
+            Self.streamingAccess(handle: "first-frame-guard")
+        }
         try await waitUntil { store.state == .waitingForFirstFrame }
         try await waitUntilAsync(timeout: .seconds(5)) {
             await recorder.snapshot().offers.contains("keyframeRequest")
@@ -3260,7 +3813,9 @@ final class XBXRCTests: XCTestCase {
             controlFactory: StreamingTestControlFactory(
                 session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
             peerFactory: StreamingTestPeerFactory(recorder: recorder))
-        store.start(streamTitleID: "1234abcd") { Self.streamingAccess(handle: "access-microphone") }
+        store.start(streamTitleID: "1234abcd") { _ in
+            Self.streamingAccess(handle: "access-microphone")
+        }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
         for enabled in [true, false] {
@@ -3286,14 +3841,14 @@ final class XBXRCTests: XCTestCase {
             ),
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
-        store.start(streamTitleID: "1111aaaa") {
+        store.start(streamTitleID: "1111aaaa") { _ in
             Self.streamingAccess(handle: "access-first")
         }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
 
         store.stop()
-        store.start(streamTitleID: "2222bbbb") {
+        store.start(streamTitleID: "2222bbbb") { _ in
             Self.streamingAccess(handle: "access-second")
         }
         try await markCurrentVideoSurfaceReady(store)
@@ -3428,8 +3983,10 @@ extension XBXRCTests {
             peerFactory: StreamingTestPeerFactory(recorder: recorder),
             cloudLaunchResolver: resolver
         )
-        store.startCloudGame(productID: "fixture-product") {
-            Self.streamingAccess(handle: "resolved-access")
+        var authorizationContext: XboxStreamStartup?
+        store.startCloudGame(productID: "fixture-product") { startup in
+            authorizationContext = startup
+            return Self.streamingAccess(handle: "resolved-access")
         }
         try await markCurrentVideoSurfaceReady(store)
         try await waitUntil { store.state == .playing }
@@ -3438,10 +3995,69 @@ extension XBXRCTests {
         XCTAssertEqual(snapshot.streamTitleIDs, ["resolved-1"])
         XCTAssertEqual(requests.map(\.productID), ["fixture-product"])
         XCTAssertEqual(requests.map(\.accessHandle), ["resolved-access"])
+        let controlContexts = await recorder.recordedStartupContexts()
+        XCTAssertNotNil(authorizationContext)
+        XCTAssertTrue(requests.first?.startup === authorizationContext)
+        XCTAssertTrue(controlContexts.first === authorizationContext)
         store.stop()
         try await waitUntil { store.state == .idle }
         let stopped = await recorder.snapshot()
         XCTAssertEqual(stopped.releasedAccessHandles, ["resolved-access"])
+    }
+
+    @MainActor
+    func testHomeAuthorizationAndControlShareStartupContext() async throws {
+        let recorder = StreamingRuntimeRecorder()
+        let store = StreamingFeatureStore(
+            controlFactory: StreamingTestControlFactory(
+                session: StreamingTestControlSession(recorder: recorder), recorder: recorder),
+            peerFactory: StreamingTestPeerFactory(recorder: recorder))
+        var context: XboxStreamStartup?
+        store.startHome(targetID: "fixture-console") { startup in
+            context = startup
+            return PreparedHomeAccess(
+                authSession: AuthSession(
+                    refreshToken: "fixture", seedJson: "seed",
+                    webTokenJson: "web", appLevel: 1), handle: "scoped-home", accountID: "account",
+                regionHost: "home.example.com")
+        }
+        try await markCurrentVideoSurfaceReady(store)
+        try await waitUntil { store.state == .playing }
+        let controlContexts = await recorder.recordedStartupContexts()
+        XCTAssertNotNil(context)
+        XCTAssertTrue(controlContexts.first === context)
+        store.stop()
+        try await waitUntil { store.state == .idle }
+    }
+
+    @MainActor
+    func testStartupFailureRetryabilityReachesPageAndCleanup() async throws {
+        for (kind, retryable, status) in [
+            (XboxStartupFailureKind.auth, false, UInt16(401)), (.network, true, UInt16(503)),
+        ] {
+            let recorder = StreamingRuntimeRecorder()
+            let failure = XboxStartupFailure(
+                kind: kind, phase: "resolvingContext", retryable: retryable,
+                statusCode: status, failureCode: nil, networkErrorKind: nil)
+            let store = StreamingFeatureStore(
+                controlFactory: StreamingTestControlFactory(
+                    session: StreamingTestControlSession(
+                        recorder: recorder, prepareFailure: failure), recorder: recorder),
+                peerFactory: StreamingTestPeerFactory(recorder: recorder))
+            store.start(streamTitleID: "1234abcd") { _ in
+                Self.streamingAccess(handle: "failed-access")
+            }
+            try await waitUntil {
+                if case .failed = store.state { return true }; return false
+            }
+            XCTAssertEqual(store.canRetry, retryable)
+            let snapshot = await recorder.snapshot()
+            XCTAssertEqual(snapshot.controlCloses, 1)
+            XCTAssertEqual(snapshot.peerStops, 0)
+            XCTAssertEqual(snapshot.releasedAccessHandles, ["failed-access"])
+            store.stop()
+            try await waitUntil { store.state == .idle }
+        }
     }
 
     @MainActor
@@ -3457,7 +4073,7 @@ extension XBXRCTests {
                 peerFactory: StreamingTestPeerFactory(recorder: recorder),
                 cloudLaunchResolver: resolver
             )
-            store.startCloudGame(productID: "fixture-product") {
+            store.startCloudGame(productID: "fixture-product") { _ in
                 Self.streamingAccess(handle: "invalid-access")
             }
             try await waitUntil {
@@ -3486,7 +4102,7 @@ extension XBXRCTests {
             peerFactory: StreamingTestPeerFactory(recorder: recorder),
             cloudLaunchResolver: resolver
         )
-        store.startCloudGame(productID: "fixture-product") {
+        store.startCloudGame(productID: "fixture-product") { _ in
             Self.streamingAccess(handle: "late-identity-access")
         }
         try await waitUntilAsync { await resolver.requests.count == 1 }
@@ -3518,7 +4134,7 @@ extension XBXRCTests {
             peerFactory: StreamingTestPeerFactory(recorder: recorder),
             cloudLaunchResolver: resolver
         )
-        store.startCloudGame(productID: "fixture-product") {
+        store.startCloudGame(productID: "fixture-product") { _ in
             Self.streamingAccess(handle: "retry-access")
         }
         try await waitUntil { store.canRetry }
@@ -3550,7 +4166,7 @@ extension XBXRCTests {
             controlFactory: StreamingTestControlFactory(session: control, recorder: recorder),
             peerFactory: StreamingTestPeerFactory(recorder: recorder)
         )
-        store.startHome(targetID: "fixture-console") {
+        store.startHome(targetID: "fixture-console") { _ in
             Self.streamingHomeAccess(handle: "queue-access")
         }
         try await waitUntil { store.startupProgress == progress }
@@ -3570,11 +4186,14 @@ extension XBXRCTests {
 }
 
 private actor StreamingIdentityTestResolver: CloudGameLaunchResolving {
-    enum InvalidIdentity: CaseIterable { case noEntitlement, wrongProduct, emptyTitle }
+    enum InvalidIdentity: CaseIterable {
+        case noEntitlement, unknownEntitlement, wrongProduct, emptyTitle
+    }
     struct Request: Sendable {
         let accessHandle: String
         let productID: String
         let serverRegion: String
+        let startup: XboxStreamStartup?
     }
     private let gate: StreamingAsyncGate?
     private let rejectFirst: Bool
@@ -3587,17 +4206,23 @@ private actor StreamingIdentityTestResolver: CloudGameLaunchResolving {
         self.rejectFirst = rejectFirst
         self.invalid = invalid
     }
-    func resolve(accessHandle: String, productID: String, serverRegion: String) async throws
+    func resolve(
+        accessHandle: String, productID: String, serverRegion: String, startup: XboxStreamStartup?
+    ) async throws
         -> CloudStreamingIdentity
     {
         requests.append(
-            Request(accessHandle: accessHandle, productID: productID, serverRegion: serverRegion))
+            Request(
+                accessHandle: accessHandle, productID: productID, serverRegion: serverRegion,
+                startup: startup))
         let count = requests.count
         if let gate { await gate.wait() }
         return CloudStreamingIdentity(
             productID: invalid == .wrongProduct ? "another-product" : productID,
             streamTitleID: invalid == .emptyTitle ? "   " : "resolved-\(count)",
-            hasEntitlement: invalid == .noEntitlement || (rejectFirst && count == 1) ? false : true)
+            hasEntitlement: invalid == .unknownEntitlement
+                ? nil
+                : invalid == .noEntitlement || (rejectFirst && count == 1) ? false : true)
     }
 }
 
@@ -3620,6 +4245,9 @@ private actor StreamingAsyncGate {
             continuation.resume()
         }
     }
+
+    func close() { isOpen = false }
+    func waiterCount() -> Int { waiters.count }
 }
 
 private struct StreamingRuntimeRecorderSnapshot: Sendable {
@@ -3643,6 +4271,11 @@ private struct StreamingRuntimeRecorderSnapshot: Sendable {
 }
 
 private actor StreamingRuntimeRecorder {
+    private var startupContexts: [XboxStreamStartup] = []
+    func recordStartupContext(_ context: XboxStreamStartup?) {
+        if let context { startupContexts.append(context) }
+    }
+    func recordedStartupContexts() -> [XboxStreamStartup] { startupContexts }
     private var targets: [StreamingLaunchTarget] = []
     private var streamTitleIDs: [String] = []
     private var settings: [StreamingSessionSettingsSnapshot] = []
@@ -3716,6 +4349,7 @@ private struct StreamingTestControlFactory: StreamingControlSessionFactory {
 
     func createSession(request: StreamingLaunchRequest) async throws -> any StreamingControlSession
     {
+        await recorder.recordStartupContext(request.startup)
         await recorder.recordTarget(request.target)
         await recorder.recordTitleID(request.streamTitleID)
         await recorder.recordSettings(request.settings)
@@ -3732,6 +4366,9 @@ private actor StreamingTestControlSession: StreamingControlSession {
     let recorder: StreamingRuntimeRecorder
     private let firstLocalCandidateSubmitGate: StreamingAsyncGate?
     private let prepareGate: StreamingAsyncGate?
+    private let resumeValidationGate: StreamingAsyncGate?
+    private let failResumeValidation: Bool
+    private let prepareFailure: XboxStartupFailure?
     private var progress: StreamingStartupProgress?
     private var localCandidateSubmitCount = 0
     private let prepared: StreamingPreparedSignaling
@@ -3749,17 +4386,24 @@ private actor StreamingTestControlSession: StreamingControlSession {
         recorder: StreamingRuntimeRecorder,
         firstLocalCandidateSubmitGate: StreamingAsyncGate? = nil,
         prepareGate: StreamingAsyncGate? = nil,
+        resumeValidationGate: StreamingAsyncGate? = nil,
+        failResumeValidation: Bool = false,
+        prepareFailure: XboxStartupFailure? = nil,
         progress: StreamingStartupProgress? = nil,
         prepared: StreamingPreparedSignaling = .init(iceServers: [])
     ) {
         self.recorder = recorder
         self.firstLocalCandidateSubmitGate = firstLocalCandidateSubmitGate
         self.prepareGate = prepareGate
+        self.resumeValidationGate = resumeValidationGate
+        self.failResumeValidation = failResumeValidation
+        self.prepareFailure = prepareFailure
         self.progress = progress
         self.prepared = prepared
     }
 
     func prepareSignaling() async throws -> StreamingPreparedSignaling {
+        if let prepareFailure { throw XboxStreamingError.Startup(failure: prepareFailure) }
         if let prepareGate { await prepareGate.wait() }
         return prepared
     }
@@ -3827,6 +4471,11 @@ private actor StreamingTestControlSession: StreamingControlSession {
         await recorder.recordMarkConnected()
     }
 
+    func validateResume() async throws {
+        if let resumeValidationGate { await resumeValidationGate.wait() }
+        if failResumeValidation { throw StreamingRuntimeError.peerConnectionFailed }
+    }
+
     func sendText(_: String) async throws -> Bool { true }
 
     func powerOffConsole() async throws -> Bool { true }
@@ -3848,6 +4497,7 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
     let firstPeerStopGate: StreamingAsyncGate?
     private(set) var runtimesCreated = 0
     private let connectsFirstRuntime: Bool
+    private let debugSnapshotGate: StreamingAsyncGate?
     private var latestEventSink: (@Sendable (StreamingPeerEvent) -> Void)?
 
     init(
@@ -3859,10 +4509,12 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
         emitsControlReadyAutomatically: Bool = true,
         emitsFirstVideoFrameAutomatically: Bool = true,
         suspendFirstPeerStop: Bool = false,
-        connectsFirstRuntime: Bool = true
+        connectsFirstRuntime: Bool = true,
+        debugSnapshotGate: StreamingAsyncGate? = nil
     ) {
         self.recorder = recorder
         self.connectsFirstRuntime = connectsFirstRuntime
+        self.debugSnapshotGate = debugSnapshotGate
         self.transientDisconnectAfterConnect = transientDisconnectAfterConnect
         self.terminalStateAfterConnect = terminalStateAfterConnect
         self.failIceRestart = failIceRestart
@@ -3888,7 +4540,8 @@ private final class StreamingTestPeerFactory: StreamingPeerRuntimeFactory, @unch
             emitsControlReadyAutomatically: emitsControlReadyAutomatically,
             emitsFirstVideoFrameAutomatically: emitsFirstVideoFrameAutomatically,
             stopGate: isFirstRuntime ? firstPeerStopGate : nil,
-            emitsConnectedAutomatically: connectsFirstRuntime || !isFirstRuntime
+            emitsConnectedAutomatically: connectsFirstRuntime || !isFirstRuntime,
+            debugSnapshotGate: debugSnapshotGate
         )
     }
 
@@ -3925,6 +4578,7 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
     private var answerCount = 0
     private var qualityCap = 20_000
     private let emitsConnectedAutomatically: Bool
+    private let debugSnapshotGate: StreamingAsyncGate?
 
     init(
         eventSink: @escaping @Sendable (StreamingPeerEvent) -> Void,
@@ -3936,7 +4590,8 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
         emitsControlReadyAutomatically: Bool,
         emitsFirstVideoFrameAutomatically: Bool,
         stopGate: StreamingAsyncGate?,
-        emitsConnectedAutomatically: Bool = true
+        emitsConnectedAutomatically: Bool = true,
+        debugSnapshotGate: StreamingAsyncGate? = nil
     ) {
         self.eventSink = eventSink
         self.recorder = recorder
@@ -3948,6 +4603,7 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
         self.emitsFirstVideoFrameAutomatically = emitsFirstVideoFrameAutomatically
         self.stopGate = stopGate
         self.emitsConnectedAutomatically = emitsConnectedAutomatically
+        self.debugSnapshotGate = debugSnapshotGate
     }
 
     func makeOffer(
@@ -4014,7 +4670,8 @@ private final class StreamingTestPeerRuntime: StreamingPeerRuntime, @unchecked S
     }
 
     func debugSnapshot() async -> StreamingPeerDebugSnapshot {
-        StreamingPeerDebugSnapshot(
+        if let debugSnapshotGate { await debugSnapshotGate.wait() }
+        return StreamingPeerDebugSnapshot(
             signalingState: suspendAnswerApply ? "haveLocalOffer" : "stable",
             iceConnectionState: suspendAnswerApply ? "checking" : "connected",
             iceGatheringState: "complete",
@@ -4102,9 +4759,9 @@ private actor MockXboxCloudDataClient: XboxCloudDataClient {
     }
 
     func prepareAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedCloudAccess {
         PreparedCloudAccess(
             authSession: AuthSession(
@@ -4120,9 +4777,9 @@ private actor MockXboxCloudDataClient: XboxCloudDataClient {
     }
 
     func prepareHomeAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedHomeAccess {
         PreparedHomeAccess(
             authSession: AuthSession(
@@ -4248,9 +4905,9 @@ private struct MockXboxAuthClient: XboxAuthClient {
     }
 
     func renewLogin(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP: String
+        session: StoredAuthSession, forceRegionIP: String, scope: XboxAuthScope,
+        forceCoreRefresh: Bool, rejectedToken: String?,
+        checkpoint: @escaping AuthCredentialCheckpoint
     ) async throws -> AuthSession {
         await recorder?.recordRenew(forceRegionIP)
         return renewedSession

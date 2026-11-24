@@ -1,0 +1,81 @@
+{
+  "checkedAt": "2026-11-23T11:07:04.213564+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-trace-1795401150207",
+  "roundDirectory": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1",
+  "processCheck": "all tracked analysis and export exec calls returned completed results; no active exec sessions",
+  "processQueryFailure": {
+    "type": "PermissionError",
+    "errno": 1,
+    "tool": "ps",
+    "reason": "environment does not permit process inventory"
+  },
+  "trackedAnalysisExitCodes": {
+    "baseAnalyzer": 2,
+    "streamingCoreAnalyzer": 0,
+    "displaySupplyAnalyzer": 0,
+    "archiveExport": 0
+  },
+  "expectedNonzeroExit": "baseAnalyzer returns 2 for two image candidate pairing gaps",
+  "activeExecSessions": 0,
+  "relatedAnalysisProcesses": [],
+  "inventory": [
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/analysis-input.json",
+      "bytes": 1219,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/base-analysis.json",
+      "bytes": 10281,
+      "allocatedBytes": 12288
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/comparison.json",
+      "bytes": 3749,
+      "allocatedBytes": 4096
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/core-analysis.json",
+      "bytes": 4616184,
+      "allocatedBytes": 4616192
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/evidence-anchors.json",
+      "bytes": 354899,
+      "allocatedBytes": 356352
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/health-summary.json",
+      "bytes": 94454,
+      "allocatedBytes": 98304
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/steady-windows.csv",
+      "bytes": 30010,
+      "allocatedBytes": 32768
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-display-trace-1795401150207/r1/work-manifest.json",
+      "bytes": 896,
+      "allocatedBytes": 4096
+    }
+  ],
+  "retained": [
+    "Downloads original trace",
+    "runtime-logs/ios/runtime-trace-ios-1795401150207-1.jsonl",
+    "dev-docs/validation/2026-11-23-ios-display-lifecycle-fresh-trace",
+    "prior source snapshots and validation evidence",
+    "shared Rust and WebRTC caches"
+  ],
+  "allocatedBytes": 5128192,
+  "logicalBytes": 5111692,
+  "freeBytesBefore": 55705600000,
+  "result": "PASS",
+  "completedAt": "2026-11-23T11:07:04.217066+08:00",
+  "temporaryRootAbsent": true,
+  "removedAllocatedMiB": 4.89,
+  "freeBytesAfter": 55705600000,
+  "observedFreeSpaceDeltaMiB": 0.0,
+  "freeGiBAfter": 51.88,
+  "spaceInterpretation": "文件分配量按唯一inode统计，可用空间变化同时记录APFS回收与同期活动。"
+}

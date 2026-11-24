@@ -1,0 +1,13 @@
+Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedLoadingCapsulesAndCloudDensity]' passed (7.443 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 7.443 (7.445) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 7.443 (7.446) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 7.443 (7.449) seconds
+Test Case '-[XBXRCUITests.PCPageInteractionTests testCloudSourceFailureKeepsOtherShelvesAndRetriesLocally]' passed (17.557 seconds).
+Test Case '-[XBXRCUITests.PCPageInteractionTests testMySubpagesRestoreRootAndDetailNavigation]' passed (36.082 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 53.639 (53.645) seconds
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments]' passed (56.904 seconds).
+Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft]' passed (29.220 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 86.124 (86.126) seconds
+	 Executed 4 tests, with 0 failures (0 unexpected) in 139.763 (139.784) seconds
+	 Executed 4 tests, with 0 failures (0 unexpected) in 139.763 (139.789) seconds
+** TEST SUCCEEDED **

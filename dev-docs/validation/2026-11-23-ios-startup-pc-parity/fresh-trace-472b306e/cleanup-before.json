@@ -1,0 +1,22 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay",
+  "fileCount": 2430,
+  "logicalBytes": 897873645,
+  "allocatedBytes": 908812288,
+  "freeBytesBefore": 48742400000,
+  "entries": [
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/core-analysis.json",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/incident-analysis.json",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/input-inventory.json",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/ios-analysis.json",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/runtime-summary.json",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/safe-timeline.json"
+  ],
+  "scopedBuildArtifacts": [
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/DerivedDataSimulator",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/DerivedDataDevice",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/simulator-results.xcresult",
+    "/private/tmp/xbxrc-ios-startup-fresh-20261123-l_0oo_ay/diagnostic-fix/device-results.xcresult"
+  ]
+}

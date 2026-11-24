@@ -2,17 +2,18 @@ import SwiftUI
 
 private struct SkeletonPulseModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appIsPullRefreshing) private var isPullRefreshing
     @State private var isHighlighted = false
 
     let accessibilityLabel: String
 
     func body(content: Content) -> some View {
         content
-            .opacity(reduceMotion ? 0.62 : (isHighlighted ? 0.74 : 0.44))
+            .opacity(reduceMotion || isPullRefreshing ? 0.62 : (isHighlighted ? 0.74 : 0.44))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
-            .task {
-                guard !reduceMotion else {
+            .task(id: reduceMotion || isPullRefreshing) {
+                guard !reduceMotion && !isPullRefreshing else {
                     return
                 }
 

@@ -117,7 +117,7 @@ struct AchievementComparisonView: View {
       guard isActive else { return }
       await load()
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
     .onChange(of: auth.ownerGeneration) { _, _ in
       selected = nil
       revealed = []

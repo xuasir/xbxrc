@@ -1,0 +1,85 @@
+{
+  "createdAt": 1795482315.454487,
+  "task": "2026-11-23-ios-saved-official-touch-layouts",
+  "temporaryRoots": [
+    "/private/tmp/xbxrc-ios-saved-official-touch-layouts-20261124"
+  ],
+  "files": {
+    "docs/project-task.md": {
+      "workingSha256": "ee17be6bfe29101c8f843c7d4aafef1cab067a60bae79c91be07c8c780e8216d",
+      "indexSha256": "f3525b9f3f8e96c30df6ebf29dd1acde8fd2aa85cfacdbdb6d77f797329796cf"
+    },
+    "docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md": {
+      "workingSha256": "1dc9bd4e5a02e95fe79f3b6b21907bb89c86f9fde4b005f68ddc6a78826bafc5",
+      "indexSha256": null
+    },
+    "Cargo.toml": {
+      "workingSha256": "8befa99b80b685bc8023ab70ffb22312971bef50509d057290467d3ba08e2fd4",
+      "indexSha256": "8befa99b80b685bc8023ab70ffb22312971bef50509d057290467d3ba08e2fd4"
+    },
+    "Cargo.lock": {
+      "workingSha256": "e39c383955911e14021069f6fd650c85be55c185d4f3e07ab6a9e73f555702f1",
+      "indexSha256": "e39c383955911e14021069f6fd650c85be55c185d4f3e07ab6a9e73f555702f1"
+    },
+    "crates/xbox-webapi/src/lib.rs": {
+      "workingSha256": "1f08d02d570a1a7de769096803d2ad1e815ee96e89269d6d22cce4632cdfa1ce",
+      "indexSha256": "1f08d02d570a1a7de769096803d2ad1e815ee96e89269d6d22cce4632cdfa1ce"
+    },
+    "crates/xbox-webapi/src/xcloud_api.rs": {
+      "workingSha256": "4f629ee3c7807b2a631b42f4c04c0b57b299ae512aaeda97ba1ca6e08d94c52e",
+      "indexSha256": "4f629ee3c7807b2a631b42f4c04c0b57b299ae512aaeda97ba1ca6e08d94c52e"
+    },
+    "crates/xbox-webapi/src/transport.rs": {
+      "workingSha256": "96474edff0fe0a748cd49927f4b423c600a8f572cf41e14d60269c4aadfcfa73",
+      "indexSha256": "96474edff0fe0a748cd49927f4b423c600a8f572cf41e14d60269c4aadfcfa73"
+    },
+    "crates/xbox-ios-bridge/src/lib.rs": {
+      "workingSha256": "615679323cd3c5254c899fa6a3a1787dc4e32d7300ed10d20e55b9e538a02f2f",
+      "indexSha256": "615679323cd3c5254c899fa6a3a1787dc4e32d7300ed10d20e55b9e538a02f2f"
+    },
+    "iosapp/XBXRC.xcodeproj/project.pbxproj": {
+      "workingSha256": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391",
+      "indexSha256": "13829891d6c39ebc1f0cdb545e856e8dfa7a777a389547ec9b3810b2eea4c391"
+    },
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": {
+      "workingSha256": "569a236f261c6c364ee7095da755495db93775125404454f5785bae011e53e31",
+      "indexSha256": "569a236f261c6c364ee7095da755495db93775125404454f5785bae011e53e31"
+    },
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift": {
+      "workingSha256": "b23891fa4dd71c5c06f99ce0dc97c347473ae395ce9edf6bdbdc921fad92af16",
+      "indexSha256": "b23891fa4dd71c5c06f99ce0dc97c347473ae395ce9edf6bdbdc921fad92af16"
+    },
+    "iosapp/XBXRC/Features/Controllers/ControllerView.swift": {
+      "workingSha256": "155ec63230422d5dce79b4d93a464fcaf3f559b4b7a8b3c350f2f2fc4fd8e27e",
+      "indexSha256": "155ec63230422d5dce79b4d93a464fcaf3f559b4b7a8b3c350f2f2fc4fd8e27e"
+    },
+    "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift": {
+      "workingSha256": "a6772d955b97bd875a280fd5ed637a10762ca969338691f3b285f04ff6ab9514",
+      "indexSha256": "a6772d955b97bd875a280fd5ed637a10762ca969338691f3b285f04ff6ab9514"
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": {
+      "workingSha256": "91864f6667670ae15baad42a4842ee66b3c9bd643e3e698b32285ff87efc3fd3",
+      "indexSha256": "91864f6667670ae15baad42a4842ee66b3c9bd643e3e698b32285ff87efc3fd3"
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": {
+      "workingSha256": "3b256077938fd0c8cc7f0d4784fdb3d65ec2fea5b85f9482e8ced1405955342f",
+      "indexSha256": "e23a3f52ccb7bccd2ec348326a7305e9f2381ee26cfe90e147491328e1401512"
+    },
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift": {
+      "workingSha256": "6bb2bd7dbb846259196bf3e14a87aecb3bae646ad5fb3da3dcf5a247de91edd1",
+      "indexSha256": "6bb2bd7dbb846259196bf3e14a87aecb3bae646ad5fb3da3dcf5a247de91edd1"
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift": {
+      "workingSha256": "e5d4508665b2be7ad97593332a0ef1a6c37d789f77b9525cf22ef7404f195806",
+      "indexSha256": "e5d4508665b2be7ad97593332a0ef1a6c37d789f77b9525cf22ef7404f195806"
+    },
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift": {
+      "workingSha256": "5459c36d1acda4be8afe942c38f8532df8de04e44da9028a17073eaf36c7e946",
+      "indexSha256": "5459c36d1acda4be8afe942c38f8532df8de04e44da9028a17073eaf36c7e946"
+    },
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": {
+      "workingSha256": "60069e2af20f80cb9193037e798e07e218ac0345c6473a98e1ee5ef890a72c8c",
+      "indexSha256": "c40f917cf49568519b362e589374ec543900eac6551f49fc205b59db4ff6753c"
+    }
+  }
+}

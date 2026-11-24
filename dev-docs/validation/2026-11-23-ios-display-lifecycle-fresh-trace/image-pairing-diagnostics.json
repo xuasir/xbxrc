@@ -1,0 +1,27 @@
+{
+  "gate": "FAIL",
+  "pairingViolations": [
+    {
+      "expectedOutcomes": [
+        "imageCandidateFailed",
+        "imageCandidateSucceeded"
+      ],
+      "operationId": "E9BB916C-EFE0-4058-8F68-8C9F3266D4A9",
+      "seq": 128,
+      "sessionId": "C4AB11DC-71F8-4F7E-A133-BE8700B857E7",
+      "startEvent": "imageCandidateStarted"
+    },
+    {
+      "expectedOutcomes": [
+        "imageCandidateFailed",
+        "imageCandidateSucceeded"
+      ],
+      "operationId": "AE96C851-2B66-4F68-9BA8-D919A82CCDD7",
+      "seq": 131,
+      "sessionId": "C4AB11DC-71F8-4F7E-A133-BE8700B857E7",
+      "startEvent": "imageCandidateStarted"
+    }
+  ],
+  "sourceCancellationAnchor": "iosapp/XBXRC/Shared/Components/CircularCardCarousel.swift:379",
+  "interpretation": "两组候选开始事件缺少同operationId的结束事件；邻接网络请求均HTTP200。源码await后的取消分支直接返回，可产生此终结回报缺口。日志单独的取消原因尚无锚点。"
+}

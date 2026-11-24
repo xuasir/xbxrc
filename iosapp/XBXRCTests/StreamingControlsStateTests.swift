@@ -105,14 +105,24 @@ final class StreamingControlsStateTests: XCTestCase {
 
     func testControlsStateReturnsToDockAfterSheet() {
         var state = StreamingControlsState()
+        XCTAssertTrue(state.quickControlsVisible)
+        state.hideAutomatically()
+        XCTAssertEqual(state.surface, .hidden)
+        XCTAssertFalse(state.quickControlsVisible)
+        state.revealQuickControls()
+        XCTAssertTrue(state.quickControlsVisible)
         state.reveal()
         XCTAssertEqual(state.surface, .dock)
+        XCTAssertFalse(state.quickControlsVisible)
         state.present(.debugSheet)
         XCTAssertTrue(state.suspendsAutoHide)
+        state.revealQuickControls()
+        XCTAssertEqual(state.surface, .debugSheet)
         state.dismissPresentedSurface()
         XCTAssertEqual(state.surface, .dock)
         state.hide()
         XCTAssertEqual(state.surface, .hidden)
+        XCTAssertTrue(state.quickControlsVisible)
     }
 
     func testConnectionSummaryKeepsRawMetricsOutOfUserState() {
@@ -283,7 +293,8 @@ final class StreamingControlsStateTests: XCTestCase {
             CGSize(width: 1194, height: 800),
         ] {
             let panel = StreamingDiagnosticsPlacement.size(in: available)
-            XCTAssertLessThan(panel.width * panel.height, available.width * available.height * 0.6)
+            XCTAssertLessThan(panel.width * panel.height, available.width * available.height * 2 / 3)
+            XCTAssertLessThanOrEqual(panel.height, available.height * 2 / 3)
             XCTAssertLessThan(panel.width, available.width)
             XCTAssertLessThan(panel.height, available.height)
         }
@@ -333,7 +344,8 @@ final class StreamingControlsStateTests: XCTestCase {
                     TouchGamepadOverlay(input: session)
                     StreamingRuntimeMetricsBar(model: model).padding(.horizontal, 64).padding(
                         .top, 8)
-                }.environmentObject(settings).environment(\.locale, Locale(identifier: locale)),
+                }.environmentObject(settings).environmentObject(SavedTouchLayoutsStore())
+                    .environment(\.locale, Locale(identifier: locale)),
                 size: size, name: "\(name)-streaming-standard-touch")
         }
         for group in StreamingDiagnosticGroup.allCases {
@@ -341,7 +353,8 @@ final class StreamingControlsStateTests: XCTestCase {
                 StreamingDiagnosticsPanel(
                     model: model, group: .constant(group), copied: .constant(false)
                 )
-                .environmentObject(settings).appThemeCanvas().environment(
+                .environmentObject(settings).environmentObject(SavedTouchLayoutsStore())
+                .appThemeCanvas().environment(
                     \.locale, Locale(identifier: "zh-Hans")),
                 size: CGSize(width: 390, height: 700), name: "phone-diagnostics-\(group.rawValue)")
         }

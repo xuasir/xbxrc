@@ -1,0 +1,51 @@
+{
+  "task": "2026-11-24-ios-banner-header-consistency",
+  "status": "passed",
+  "unique_passed_tests": 2,
+  "result_sources": [
+    {
+      "test": "PCPageInteractionTests/testGameOverviewUsesTabsAndCentersEmptyAlbum()",
+      "source": "initial-test-summary.json",
+      "status": "passed",
+      "assertions": [
+        "游戏名称位于 Tab 上方",
+        "四个分类切换后身份区与 Tab 坐标保持稳定",
+        "相册类型切换和可用区域中心",
+        "返回安装库"
+      ]
+    },
+    {
+      "test": "CapabilityMigrationTests/testScopedBannerHeaderSmoke()",
+      "source": "final-test-summary.json",
+      "status": "passed",
+      "assertions": [
+        "进入游戏后使用游戏头部背景",
+        "后台玩家图片更新保留当前游戏背景",
+        "返回后使用更新后的玩家背景",
+        "头像、个人游戏、云游戏、主机原生绘制",
+        "手机深浅色与横屏紧凑身份区"
+      ]
+    }
+  ],
+  "build": {
+    "platform": "iOS Simulator",
+    "device": "iPhone 18 Pro",
+    "os": "27.0",
+    "architecture": "arm64",
+    "xcode": "27.0",
+    "minimum_deployment": "26.0",
+    "code_signing": false,
+    "final_exit_code": 0
+  },
+  "visual_review": {
+    "stable_screenshots": 9,
+    "diagnostic_screenshots": 1,
+    "status": "passed",
+    "artwork_source": "本轮固定 PNG 缓存，覆盖生产图片组件成功绘制路径"
+  },
+  "temporary_source_restored": true,
+  "formatting": [
+    "swift-format.json",
+    "final-swift-format.json"
+  ]
+}

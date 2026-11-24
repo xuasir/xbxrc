@@ -1,0 +1,415 @@
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift:1828
+1828:     private func reportDisplayPipelineReadyIfNeeded(
+1829:         frameSize: CGSize?,
+1830:         storage: StreamingDecodedFrameStorage? = nil
+1831:     ) {
+1832:         let context = currentTraceContext()
+1833:         guard let context else { return }
+1834:         #if targetEnvironment(simulator)
+1835:             let hasPipeline: Bool
+1836:             switch storage {
+1837:             case .pixelBuffer:
+1838:                 hasPipeline =
+1839:                     device != nil
+1840:                     && commandQueue != nil
+1841:                     && (nv12PipelineState != nil || bgraPipelineState != nil)
+1842:                     && textureCache != nil
+1843:             case .simulatorI420:
+1844:                 hasPipeline =
+1845:                     device != nil
+1846:                     && commandQueue != nil
+1847:                     && i420PipelineState != nil
+1848:             case nil:
+1849:                 return
+1850:             }
+1851:         #else
+1852:             let hasPipeline =
+1853:                 device != nil
+1854:                 && commandQueue != nil
+1855:                 && (nv12PipelineState != nil || bgraPipelineState != nil)
+1856:                 && textureCache != nil
+1857:         #endif
+1858:         guard hasPipeline else {
+1859:             recordDrop(reason: .pipelineUnavailable, context: context)
+1860:             return
+1861:         }
+1862: 
+1863:         var shouldReportPipelineReady = false
+1864:         var shouldReportRendererReady = false
+1865:         stateLock.lock()
+1866:         if !didReportDisplayPipelineReady {
+1867:             didReportDisplayPipelineReady = true
+1868:             shouldReportPipelineReady = true
+1869:         }
+1870:         if let frameSize, frameSize.width > 0, frameSize.height > 0,
+1871:             frameSize != lastReportedFrameSize
+1872:         {
+1873:             lastReportedFrameSize = frameSize
+1874:             shouldReportRendererReady = true
+1875:         }
+1876:         stateLock.unlock()
+1877: 
+1878:         if shouldReportPipelineReady {
+1879:             IOSRuntimeTrace.state(
+1880:                 domain: "ios-streaming",
+1881:                 event: "displayPipelineReady",
+1882:                 payload: streamingPresentationTracePayload(
+1883:                     ["renderer": .string(rendererName)],
+1884:                     context: context
+1885:                 ),
+1886:                 dimension: .presentation,
+1887:                 importance: .essential,
+1888:                 operationID: context.attemptID
+1889:             )
+1890:             emitPresentationEvent(.displayPipelineReady(context))
+1891:         }
+1892: 
+
+iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift:1942
+1942: 
+1943:     @MainActor
+1944:     private func emitPresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
+1945:         guard presentationActive, currentTraceContext() == event.context else { return }
+1946:         switch event {
+1947:         case .displayHealth(let context, let snapshot):
+1948:             if let immediate = healthCoalescer.offer(context: context, snapshot: snapshot) {
+1949:                 presentationEventSink?(immediate)
+1950:             }
+1951:             guard healthCoalescer.pending != nil, healthReportTask == nil else { return }
+1952:             healthReportTask = Task { @MainActor [weak self] in
+1953:                 do { try await Task.sleep(for: StreamingDisplayHealthCoalescer.interval) } catch {
+1954:                     return
+1955:                 }
+1956:                 self?.flushDisplayHealth()
+1957:             }
+1958:         case .firstFramePresented:
+1959:             flushDisplayHealth()
+1960:             presentationEventSink?(event)
+1961:         default:
+1962:             presentationEventSink?(event)
+1963:         }
+1964:     }
+1965: 
+1966:     @MainActor
+1967:     private func flushDisplayHealth(reset: Bool = false) {
+1968:         healthReportTask?.cancel()
+1969:         healthReportTask = nil
+1970:         if let event = healthCoalescer.flush() { presentationEventSink?(event) }
+1971:         if reset { healthCoalescer.reset() }
+
+iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift:583
+583: 
+584:     func handleScenePhase(_ phase: ScenePhase) {
+585:         input.setSuppressed(phase != .active, reason: .lifecycle)
+586:         presentationActive = phase == .active
+587:         guard state != .idle, state != .stopping else { return }
+588:         let requestGeneration = generation
+589:         Task { [sessionActor] in
+590:             await sessionActor.setVisible(phase == .active, generation: requestGeneration)
+591:         }
+592:     }
+593: 
+594:     func handlePresentationEvent(_ event: StreamingPresentationLifecycleEvent) {
+595:         let context = event.context
+596:         guard presentationActive, context.generation == generation,
+597:             context.attemptID == attemptID,
+598:             videoTrack?.traceContext == context
+599:         else { return }
+600:         Task { [sessionActor] in
+601:             switch event {
+602:             case .displayPipelineReady(let context):
+603:                 await sessionActor.displayPipelineReady(context: context)
+604:             case .firstFrameAccepted(let context):
+605:                 await sessionActor.firstFrameAcceptedToMailbox(context: context)
+606:             case .firstFrameSubmitted(let context):
+607:                 await sessionActor.firstFrameSubmitted(context: context)
+608:             case .firstFramePresented(let context):
+609:                 await sessionActor.firstFramePresented(context: context)
+610:             case .displayHealth(let context, let snapshot):
+611:                 await sessionActor.displayHealthUpdated(context: context, snapshot: snapshot)
+612:             }
+613:         }
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift:452
+452:     func setVisible(_ value: Bool, generation: UInt64) async {
+453:         guard isCurrent(generation) else { return }
+454:         visibilityRevision &+= 1
+455:         let revision = visibilityRevision
+456:         visible = value
+457:         latestPeerStats = nil
+458:         rtcTraceWindow = StreamingTraceCounterWindow()
+459:         displayTraceWindow = StreamingTraceCounterWindow()
+460:         latestDisplayHealthSnapshot = nil
+461:         supervisionEligibleSinceMs = Self.nowMs
+462:         firstFrameGuardTask?.cancel()
+463:         firstFrameGuardTask = nil
+464:         recoveryProbe = nil
+465:         if !value {
+466:             microphoneRevision &+= 1
+467:             microphoneTask?.cancel()
+468:             await peerRuntime?.stopMicrophoneCapture()
+469:             microphonePeerEpoch = 0
+470:             await microphoneSink?(generation, false, microphoneRequested)
+471:             playbackReadiness.remove(.framePresented)
+472:             trace(
+473:                 "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
+474:                 dimension: .lifecycle)
+475:             await publish(.suspending, generation: generation)
+476:             return
+477:         }
+478:         guard let control = controlSession, let peer = peerRuntime else { return }
+479:         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+480:         do {
+481:             try await control.validateResume()
+482:             try ensureCurrent(generation)
+483:             guard visible, revision == visibilityRevision else { return }
+484:             let snapshot = await peer.debugSnapshot()
+485:             trace("sessionResumeValidated", dimension: .lifecycle)
+486:             lastVideoActivityAtMs = Self.nowMs
+487:             armFirstFrameGuard(generation: generation, peerEpoch: activePeerEpoch)
+488:             if snapshot.iceConnectionState == "connected"
+489:                 || snapshot.iceConnectionState == "completed"
+490:             {
+491:                 await publish(.waitingForFirstFrame, generation: generation)
+492:             } else {
+493:                 await recoverDisconnectedPeer(generation: generation, peerEpoch: activePeerEpoch)
+494:             }
+495:             if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
+496:         } catch {
+497:             guard isCurrent(generation), visible, revision == visibilityRevision else { return }
+498:             await fail(reason: .sessionFailed, generation: generation, error: error)
+499:         }
+500:     }
+501: 
+502:     func sendText(_ text: String, generation: UInt64) async throws -> Bool {
+
+iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift:526
+526:     func displayPipelineReady(context: StreamingPresentationTraceContext) async {
+527:         guard isCurrent(context.generation),
+528:             context.attemptID == activeAttemptID,
+529:             context.peerEpoch == activePeerEpoch, context.videoGeneration == videoGeneration,
+530:             !playbackReadiness.contains(.displayPipelineReady)
+531:         else { return }
+532:         playbackReadiness.mark(.displayPipelineReady)
+533:         if playbackReady {
+534:             await publish(.playing, generation: context.generation)
+535:         }
+536:     }
+537: 
+538:     func firstFrameAcceptedToMailbox(context: StreamingPresentationTraceContext) async {
+539:         guard isCurrent(context.generation),
+540:             context.attemptID == activeAttemptID,
+541:             context.peerEpoch == activePeerEpoch, context.videoGeneration == videoGeneration,
+542:             !playbackReadiness.contains(.frameAcceptedToMailbox)
+543:         else { return }
+544:         playbackReadiness.mark(.frameAcceptedToMailbox)
+545:         if playbackReady {
+546:             await publish(.playing, generation: context.generation)
+547:         }
+548:     }
+549: 
+550:     func firstFrameSubmitted(context: StreamingPresentationTraceContext) async {
+551:         guard isCurrent(context.generation),
+552:             context.attemptID == activeAttemptID,
+553:             context.peerEpoch == activePeerEpoch, context.videoGeneration == videoGeneration,
+554:             !playbackReadiness.contains(.frameSubmitted)
+555:         else { return }
+556:         playbackReadiness.mark(.frameSubmitted)
+557:         if playbackReady {
+558:             await publish(.playing, generation: context.generation)
+559:         }
+560:     }
+561: 
+562:     func firstFramePresented(context: StreamingPresentationTraceContext) async {
+563:         guard visible, resumedAtMilliseconds == nil, isCurrent(context.generation),
+564:             context.attemptID == activeAttemptID,
+565:             context.peerEpoch == activePeerEpoch, context.videoGeneration == videoGeneration,
+566:             !playbackReadiness.contains(.framePresented)
+567:         else { return }
+568:         playbackReadiness.mark(.framePresented)
+569:         if playbackReady {
+570:             await publish(.playing, generation: context.generation)
+571:         }
+572:     }
+573: 
+574:     func displayHealthUpdated(
+575:         context: StreamingPresentationTraceContext,
+576:         snapshot: StreamingDisplayHealthSnapshot
+577:     ) async {
+578:         guard visible, isCurrent(context.generation),
+579:             context.attemptID == activeAttemptID,
+580:             context.peerEpoch == activePeerEpoch
+581:         else { return }
+582:         guard context.videoGeneration == videoGeneration else { return }
+583:         latestDisplayHealthSnapshot = snapshot
+584:         if let presented = snapshot.lastPresentAtMilliseconds {
+585:             lastVideoActivityAtMs = max(lastVideoActivityAtMs, UInt64(max(0, presented)))
+586:         }
+587:         if let resumedAtMilliseconds,
+588:             let presentedAt = snapshot.lastPresentAtMilliseconds,
+589:             presentedAt > resumedAtMilliseconds
+590:         {
+591:             playbackReadiness.mark(.framePresented)
+592:             self.resumedAtMilliseconds = nil
+593:             firstFrameGuardTask?.cancel()
+594:             firstFrameGuardTask = nil
+595:         }
+596:         if playbackReady {
+597:             await publish(.playing, generation: context.generation)
+598:         }
+599:     }
+600: 
+
+iosapp/XBXRC/Platform/Streaming/StreamingSessionState.swift:1
+1: import Foundation
+2: 
+3: struct StreamingPlaybackReadiness: Equatable, Sendable {
+4:     enum Fact: Hashable, Sendable {
+5:         case peerConnected
+6:         case firstVideoFrame
+7:         case controlReady
+8:         case displayPipelineReady
+9:         case frameAcceptedToMailbox
+10:         case frameSubmitted
+11:         case framePresented
+12:         case steadyMedia
+13:     }
+14: 
+15:     private static let requiredFacts: Set<Fact> = [
+16:         .peerConnected,
+17:         .controlReady,
+18:         .displayPipelineReady,
+19:         .frameAcceptedToMailbox,
+20:         .frameSubmitted,
+21:         .framePresented,
+22:     ]
+23: 
+24:     private(set) var facts: Set<Fact> = []
+25: 
+26:     var isPlaybackReady: Bool {
+27:         facts.isSuperset(of: Self.requiredFacts)
+28:     }
+29: 
+30:     func contains(_ fact: Fact) -> Bool {
+31:         facts.contains(fact)
+32:     }
+33: 
+
+iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift:45
+45:                 active: presentationActive,
+46:                 presentationEventSink: store.handlePresentationEvent
+47:             )
+48:             .frame(maxWidth: .infinity, maxHeight: .infinity)
+49:             .ignoresSafeArea()
+50:             if playerState == .playing {
+51:                 StreamingTouchInputLayer(input: store.input)
+52:             }
+53:             if playerState != .playing {
+54:                 VStack(spacing: 16) {
+55:                     if case .failed = playerState {
+56:                         Image(systemName: "exclamationmark.triangle.fill")
+57:                             .font(.largeTitle)
+58:                             .foregroundStyle(.orange)
+59:                     } else {
+60:                         ProgressView().controlSize(.large).tint(.white)
+61:                     }
+62:                     Text(LocalizedStringKey(statusText))
+63:                         .font(.headline)
+64:                         .foregroundStyle(.white)
+65:                         .multilineTextAlignment(.center)
+
+iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift:169
+169:     func makeUIView(context: Context) -> StreamingMetalVideoSurfaceView {
+170:         let view = StreamingMetalVideoSurfaceView()
+171:         context.coordinator.view = view
+172:         context.coordinator.contentMode = contentMode
+173:         context.coordinator.picture = picture
+174:         view.presentationEventSink = presentationEventSink
+175:         view.updateVideoContentMode(contentMode)
+176:         view.updatePicture(picture)
+177:         view.setPresentationActive(active)
+178:         context.coordinator.update(track: track)
+179:         return view
+180:     }
+181: 
+182:     func updateUIView(_ uiView: StreamingMetalVideoSurfaceView, context: Context) {
+183:         context.coordinator.view = uiView
+184:         uiView.presentationEventSink = presentationEventSink
+185:         if context.coordinator.contentMode != contentMode {
+186:             context.coordinator.contentMode = contentMode
+187:             uiView.updateVideoContentMode(contentMode)
+188:         }
+189:         if context.coordinator.picture != picture {
+190:             context.coordinator.picture = picture
+191:             uiView.updatePicture(picture)
+192:         }
+193:         uiView.setPresentationActive(active)
+194:         context.coordinator.update(track: track)
+195:     }
+
+iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift:1287
+1287:                     continuation.resume(throwing: error)
+1288:                 }
+1289:             }
+1290:         }
+1291:     }
+1292: 
+1293:     @discardableResult
+1294:     private func attachVideoTrack(_ track: RTCVideoTrack) -> Bool {
+1295:         let probe = FirstVideoFrameProbe { [weak self] in
+1296:             self?.eventSink(.firstVideoFrame)
+1297:         }
+1298:         videoTrackLock.lock()
+1299:         guard acceptsVideoTracks else {
+1300:             videoTrackLock.unlock()
+1301:             return false
+1302:         }
+1303:         if attachedVideoTrack === track, frameProbe != nil {
+1304:             videoTrackLock.unlock()
+1305:             return false
+1306:         }
+1307:         if let attachedVideoTrack, let frameProbe {
+1308:             attachedVideoTrack.remove(frameProbe)
+1309:         }
+1310:         attachedVideoTrack = track
+1311:         frameProbe = probe
+1312:         track.add(probe)
+1313:         videoTrackLock.unlock()
+1314:         eventSink(
+1315:             .videoTrack(StreamingVideoTrackHandle(rawValue: track, frameFeedback: frameFeedback)))
+1316:         return true
+1317:     }
+1318: 
+1319:     @discardableResult
+1320:     private func attachAudioTrack(_ track: RTCAudioTrack) -> Bool {
+1321:         videoTrackLock.lock()
+1322:         guard acceptsVideoTracks, !didEmitAudioTrackReady else {
+1323:             videoTrackLock.unlock()
+1324:             return false
+1325:         }
+1326:         didEmitAudioTrackReady = true
+1327:         attachedAudioTrack = track
+1328:         videoTrackLock.unlock()
+
+iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift:1360
+1360:     }
+1361: 
+1362:     private func collectStats(generation: UInt64) {
+1363:         apiQueue.async { [weak self] in
+1364:             guard let self, let peerConnection = self.peerConnection,
+1365:                 self.statsRequestGate.begin(generation: generation)
+1366:             else { return }
+1367:             peerConnection.statistics { [weak self] report in
+1368:                 guard let self else { return }
+1369:                 self.apiQueue.async {
+1370:                     guard self.statsRequestGate.complete(generation: generation) else { return }
+1371:                     let stats = self.projectStats(report)
+1372:                     if stats.framesDecoded > 0 || stats.inboundVideoBytes > 0 {
+1373:                         self.attachExistingReceiverTracks(
+1374:                             on: peerConnection,
+1375:                             reason: "statsMediaObserved"
+1376:                         )
+1377:                     }
+1378:                     self.eventSink(.stats(stats))
+1379:                 }
+1380:             }

@@ -3,6 +3,7 @@ import SwiftUI
 /// 无背景的分区提示，整个文字行可点按恢复。
 struct AppSectionRequestState: View {
     @Environment(\.locale) private var locale
+    @Environment(\.appIsPullRefreshing) private var isPullRefreshing
     let title: String
     let status: SectionRequestStatus
     var identifier: String = "data"
@@ -16,7 +17,7 @@ struct AppSectionRequestState: View {
             if let failure = status.failure, failure.kind != .authentication {
                 if let action {
                     Button {
-                        guard !running && !status.isBusy else { return }
+                        guard !running && !status.isBusy && !isPullRefreshing else { return }
                         running = true
                         retryTask = Task {
                             await action()
@@ -25,13 +26,15 @@ struct AppSectionRequestState: View {
                     } label: {
                         notice(failure)
                     }
-                    .buttonStyle(.plain).disabled(running || status.isBusy || coolingDown(failure))
+                    .buttonStyle(.plain).disabled(
+                        running || status.isBusy || isPullRefreshing || coolingDown(failure)
+                    )
                     .accessibilityIdentifier("section-retry-\(identifier)")
                     .accessibilityHint(Text(LocalizedStringKey(retryTitle(failure))))
                 } else {
                     notice(failure)
                 }
-            } else if status.isBusy && status.failure == nil {
+            } else if status.isBusy && status.failure == nil && !isPullRefreshing {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(LocalizedStringKey(status.hasSnapshot ? "正在更新…" : "正在载入…"))
@@ -62,7 +65,7 @@ struct AppSectionRequestState: View {
                 locale: locale, appLocalizedString(title, locale: locale)),
             reason: failure.message, detail: snapshotDescription,
             actionTitle: running || status.isBusy ? "正在重试…" : retryTitle(failure),
-            showsAction: action != nil, isBusy: running || status.isBusy
+            showsAction: action != nil, isBusy: (running || status.isBusy) && !isPullRefreshing
         )
         .accessibilityIdentifier("section-error-\(identifier)")
     }
@@ -95,6 +98,7 @@ struct AppSectionRequestState: View {
 
 private struct AppPlainRequestNotice: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var actionIconSize: CGFloat = 18
     let title: String
     let reason: String
     var detail: String? = nil
@@ -131,11 +135,14 @@ private struct AppPlainRequestNotice: View {
     }
     private var retryLabel: some View {
         HStack(spacing: 5) {
-            if isBusy {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: "arrow.clockwise")
+            Group {
+                if isBusy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
+            .frame(width: actionIconSize, height: actionIconSize).accessibilityHidden(true)
             Text(LocalizedStringKey(actionTitle))
         }
         .appFont(.body, weight: .semibold).foregroundStyle(AppThemePalette.brand)

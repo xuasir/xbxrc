@@ -1,6 +1,6 @@
 use crate::{cloud_access::load_scoped_stream_access, query_failure::query_error, XboxBridgeError};
 use xbox_streaming::Target;
-use xbox_webapi::{GamePassApi, WebApiError, XcloudApi};
+use xbox_webapi::{GamePassApi, WebApiError};
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn fetch_catalog_source(
@@ -11,7 +11,7 @@ pub async fn fetch_catalog_source(
 ) -> Result<Vec<String>, XboxBridgeError> {
     let access = load_scoped_stream_access(&access_handle, Target::Cloud, None, None)?;
     if source == "recent" {
-        let value = XcloudApi::new(access.host, access.bearer_token)
+        let value = crate::cloud_access::query_xcloud_api(&access_handle, &access, None)?
             .get_recent_titles(xbox_cloud_catalog_flow::DEFAULT_RECENT_TITLE_LIMIT)
             .await
             .map_err(query_error)?;

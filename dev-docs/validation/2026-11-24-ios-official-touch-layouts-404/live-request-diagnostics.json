@@ -1,0 +1,23 @@
+{
+  "status": "validationPending",
+  "platform": "Mac Designed for iPad/iPhone",
+  "implementationBuild": "succeeded",
+  "testBootstrap": "systemTerminatedBeforeConnection",
+  "reason": "XCTest host crashed with signal kill before establishing connection",
+  "setupAttempts": [
+    {
+      "kind": "destinationParser",
+      "resolution": "selected Xcode device ID and arm64"
+    },
+    {
+      "kind": "testTargetSigning",
+      "resolution": "used existing application development team"
+    },
+    {
+      "kind": "uiRunnerProfile",
+      "resolution": "temporary scheme excluded UI runner"
+    }
+  ],
+  "nextValidation": "Run the current application in Xcode and issue one official layout request",
+  "officialLayoutRequests": 0
+}

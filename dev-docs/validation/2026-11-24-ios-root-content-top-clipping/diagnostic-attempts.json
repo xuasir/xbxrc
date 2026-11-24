@@ -1,0 +1,202 @@
+[
+  {
+    "log": "before-test.log",
+    "purpose": "临时探针编译诊断",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1014:13: error: invalid redeclaration of 'data'",
+      "     |             `- error: invalid redeclaration of 'data'",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1017:32: error: cannot infer contextual base in reference to member 'keepAlways'",
+      "     |                                `- error: cannot infer contextual base in reference to member 'keepAlways'",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "baseline-test.log",
+    "purpose": "基线五页几何",
+    "result": "Passed",
+    "excerpts": [
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' passed (4.010 seconds).",
+      "** TEST SUCCEEDED **"
+    ]
+  },
+  {
+    "log": "header-diagnostic.log",
+    "purpose": "单页导航背景诊断",
+    "result": "Passed",
+    "excerpts": [
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' passed (1.111 seconds).",
+      "** TEST SUCCEEDED **"
+    ]
+  },
+  {
+    "log": "test.log",
+    "purpose": "首行冒烟与控制器定位",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1044: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.447 seconds).",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertTrue failed",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:46: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : Failed to get matching snapshot: No matches found for first query match sequence: `Descendants matching type StaticText` -> `Elements matching predicate 'label == \"控制器\" AND identifier != \"current-page-title\"'`, given input App element pid: 9900",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' failed (34.153 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "ui-final-test.log",
+    "purpose": "控制器动态名称定位",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' failed (52.223 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "refined-test.log",
+    "purpose": "淡入位置对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1044: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1044: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (3.927 seconds).",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' failed (49.337 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "edge-effect-test.log",
+    "purpose": "SwiftUI边缘效果对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1045: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1045: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.227 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "native-edge-diagnostic.log",
+    "purpose": "原生边缘效果对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1053: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1053: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.364 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "page-background-diagnostic.log",
+    "purpose": "背景装配对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.157 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "root-opacity-diagnostic.log",
+    "purpose": "透明合成对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.040 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "root-foreground-diagnostic.log",
+    "purpose": "文字颜色对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1051: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.097 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "root-compositing-diagnostic.log",
+    "purpose": "合成及遮罩对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1071: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1071: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.493 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "final-test.log",
+    "purpose": "背景窗口边界计算",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:999: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTUnwrap failed: expected non-nil value of type \"UIView\"",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (0.985 seconds).",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/PCPageInteractionTests.swift:45: error: -[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned] : XCTAssertGreaterThan failed: (\"5\") is not greater than (\"30\")",
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' failed (74.853 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "fixed-size-test.log",
+    "purpose": "手动尺寸对照",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1007: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"168.0\") is not equal to (\"116.0\") +/- (\"1.0\") - 主机标题背景应止于导航真实底边",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1007: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"168.0\") is not equal to (\"116.0\") +/- (\"1.0\") - 我的标题背景应止于导航真实底边",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1007: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"168.0\") is not equal to (\"116.0\") +/- (\"1.0\") - 控制器标题背景应止于导航真实底边",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1063: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 控制器首次切换时首行标题应完整绘制",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1007: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"168.0\") is not equal to (\"116.0\") +/- (\"1.0\") - 设置标题背景应止于导航真实底边",
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1063: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertGreaterThan failed: (\"3\") is not greater than (\"30\") - 设置首次切换时首行标题应完整绘制",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.362 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "constrained-test.log",
+    "purpose": "原生边缘约束",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1006: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"106.0\") is not equal to (\"0.0\") +/- (\"1.0\")",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.114 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "container-test.log",
+    "purpose": "独立背景容器及窗口锚点",
+    "result": "Failed",
+    "excerpts": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift:1004: error: -[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry] : XCTAssertEqualWithAccuracy failed: (\"106.0\") is not equal to (\"0.0\") +/- (\"1.0\") - 云游戏标题背景应从窗口顶部开始",
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' failed (4.219 seconds).",
+      "** TEST FAILED **"
+    ]
+  },
+  {
+    "log": "navigation-anchor-test.log",
+    "purpose": "最终导航容器锚点",
+    "result": "Passed",
+    "excerpts": [
+      "Test Case '-[XBXRCTests.CapabilityMigrationTests testScopedRootViewportGeometry]' passed (4.009 seconds).",
+      "** TEST SUCCEEDED **"
+    ]
+  },
+  {
+    "log": "ui-acceptance-test.log",
+    "purpose": "最终正式入口五页切换",
+    "result": "Passed",
+    "excerpts": [
+      "Test Case '-[XBXRCUITests.PCPageInteractionTests testRootHeadersKeepBrandTitleAndNavigationHeightAligned]' passed (54.630 seconds).",
+      "** TEST SUCCEEDED **"
+    ]
+  }
+]

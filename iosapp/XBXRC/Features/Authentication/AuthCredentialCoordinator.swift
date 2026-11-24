@@ -33,7 +33,7 @@ enum AuthRenewalFailureDisposition: String {
                 self = failure.retriable ? .retryable : .terminal
             case .RetryableAuthentication:
                 self = .retryable
-            case .InvalidData, .Profile, .Data:
+            case .Cancelled, .InvalidData, .Profile, .Data:
                 self = .terminal
             case .Authentication:
                 self = .terminal
@@ -93,6 +93,7 @@ final class AuthCredentialCoordinator {
         let predecessor = mutationTail
         let task = Task { @MainActor [weak self] () throws -> Commit<Value> in
             await predecessor?.value
+            try Task.checkCancellation()
             guard let self else { throw AuthStoreError.staleOperation }
             if let expectedRevision,
                expectedRevision != self.currentRevision {
@@ -101,6 +102,7 @@ final class AuthCredentialCoordinator {
 
             let operationRevision = self.currentRevision
             let value = try await operation(operationRevision)
+            try Task.checkCancellation()
             guard operationRevision == self.currentRevision else {
                 throw AuthStoreError.staleOperation
             }
@@ -112,7 +114,11 @@ final class AuthCredentialCoordinator {
         mutationTail = Task { @MainActor in
             _ = try? await task.value
         }
-        return try await task.value
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 }
 
@@ -123,6 +129,13 @@ enum AuthStoreError: LocalizedError {
     static func isStale(_ error: Error) -> Bool {
         guard let authError = error as? AuthStoreError else { return false }
         if case .staleOperation = authError { return true }
+        return false
+    }
+
+    static func isCancelled(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if case .Cancelled? = error as? XboxBridgeError { return true }
+        if case .Cancelled? = error as? XboxStreamingError { return true }
         return false
     }
 

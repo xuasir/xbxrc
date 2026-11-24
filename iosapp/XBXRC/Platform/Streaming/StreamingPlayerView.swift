@@ -48,7 +48,7 @@ struct StreamingPlayerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
             if playerState == .playing {
-                StreamingTouchInputLayer(input: store.input)
+                StreamingTouchInputLayer(input: store.input, layout: store.touchLayout)
             }
             if playerState != .playing {
                 VStack(spacing: 16) {
@@ -89,6 +89,8 @@ struct StreamingPlayerView: View {
                     revealToken: controlsRevealToken,
                     revealSource: controlsRevealSource
                 )
+                // 功能菜单统一叠在触屏和指标上方。
+                .zIndex(1)
             } else {
                 VStack {
                     HStack {
@@ -110,7 +112,9 @@ struct StreamingPlayerView: View {
             }
         }
         .background {
-            StreamingControlsGestureLayer { revealControls(.twoFingerInward) }
+            StreamingControlsGestureLayer(onBlankTap: { revealControls(.blankTap) }) {
+                revealControls(.twoFingerInward)
+            }
         }
         .statusBarHidden(true)
         .onReceive(store.input.$menuRevealToken.dropFirst()) { _ in revealControls(.accessibility) }
@@ -137,20 +141,29 @@ struct StreamingPlayerView: View {
 }
 
 private struct StreamingTouchInputLayer: View {
-    @ObservedObject var input: StreamInputSession
+    let input: StreamInputSession
+    let layout: StreamingTouchLayoutController
     @EnvironmentObject private var settings: AppSettingsStore
-    @State private var hasController = false
+    @State private var hasController: Bool
+
+    init(input: StreamInputSession, layout: StreamingTouchLayoutController) {
+        self.input = input
+        self.layout = layout
+        _hasController = State(initialValue: input.hasController)
+    }
+
     var body: some View {
         Group {
             if settings.mobile.touchControllerMode == .always
                 || (settings.mobile.touchControllerMode == .automatic && !hasController)
             {
-                TouchGamepadOverlay(input: input)
+                TouchGamepadOverlay(input: input, layout: layout)
             }
         }
-        .task {
+        .task(id: ObjectIdentifier(input)) {
             while !Task.isCancelled {
-                hasController = input.hasController
+                let available = input.hasController
+                if hasController != available { hasController = available }
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
@@ -212,7 +225,9 @@ private struct StreamingVideoSurface: UIViewRepresentable {
             let traceContext = handle?.traceContext
             view?.updateTraceContext(traceContext)
             view?.updateFrameFeedbackSession(handle?.frameFeedback)
-            guard nextTrack !== currentTrack || videoGeneration != traceContext?.videoGeneration
+            guard
+                !streamingVideoTracksMatch(currentTrack, nextTrack)
+                    || videoGeneration != traceContext?.videoGeneration
             else {
                 return
             }

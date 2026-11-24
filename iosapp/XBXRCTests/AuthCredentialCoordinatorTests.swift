@@ -1,7 +1,188 @@
+import Synchronization
 import XCTest
 @testable import XBXRC
 
 final class AuthCredentialCoordinatorTests: XCTestCase {
+    @MainActor
+    func testRealBridgeReusesWebHomeAndCloudCacheBeforeParsingSeed() async throws {
+        let session = try Self.cachedBridgeSession()
+        let initialHandles = uniffiForeignFutureHandleCountXboxIosBridge()
+        for scope in [XboxAuthScope.web, .home, .cloud] {
+            let observer = AuthBridgeTestObserver()
+            let output = try await refreshLogin(
+                session: session, forceRegionIp: "", scope: scope,
+                forceCoreRefresh: false, rejectedToken: nil, observer: observer)
+            XCTAssertEqual(output, session)
+            XCTAssertEqual(observer.snapshot.stages.map(\.stage), ["validCredentialsReused"])
+            XCTAssertTrue(observer.snapshot.checkpoints.isEmpty)
+        }
+        XCTAssertEqual(uniffiForeignFutureHandleCountXboxIosBridge(), initialHandles)
+    }
+
+    @MainActor
+    func testRealBridgeAwaitsCoreRecoveryCheckpointAndReleasesForeignFuture() async throws {
+        let session = try Self.cachedBridgeSession()
+        let observer = AuthBridgeTestObserver()
+        let initialHandles = uniffiForeignFutureHandleCountXboxIosBridge()
+        do {
+            _ = try await refreshLogin(
+                session: session, forceRegionIp: "", scope: .home,
+                forceCoreRefresh: true, rejectedToken: nil, observer: observer)
+            XCTFail("Invalid seed must stop before an authorization request")
+        } catch let error as XboxBridgeError {
+            guard case .InvalidData = error else { return XCTFail("Expected invalid seed data") }
+        }
+        let checkpoints = observer.snapshot.checkpoints
+        XCTAssertEqual(checkpoints.count, 1)
+        let update = try XCTUnwrap(checkpoints.first)
+        XCTAssertTrue(update.coreOnly)
+        XCTAssertEqual(update.previousRefreshToken, session.refreshToken)
+        let cacheData = try XCTUnwrap(update.authSession.tokenCacheJson?.data(using: .utf8))
+        let cache = try XCTUnwrap(JSONSerialization.jsonObject(with: cacheData) as? [String: Any])
+        XCTAssertEqual(cache["core_refresh_scopes"] as? [String], ["home"])
+        XCTAssertTrue(observer.snapshot.stages.isEmpty)
+        XCTAssertEqual(uniffiForeignFutureHandleCountXboxIosBridge(), initialHandles)
+    }
+
+    @MainActor
+    func testRealBridgeReturnsCheckpointFailureBeforeCredentialRequests() async throws {
+        let observer = AuthBridgeTestObserver(failsCheckpoint: true)
+        let initialHandles = uniffiForeignFutureHandleCountXboxIosBridge()
+        do {
+            _ = try await refreshLogin(
+                session: Self.cachedBridgeSession(), forceRegionIp: "", scope: .cloud,
+                forceCoreRefresh: true, rejectedToken: nil, observer: observer)
+            XCTFail("Checkpoint failure must stop credential preparation")
+        } catch let error as XboxBridgeError {
+            guard case .InvalidData(let reason) = error else {
+                return XCTFail("Expected the foreign checkpoint error")
+            }
+            XCTAssertEqual(reason, "fixtureCheckpointRejected")
+        }
+        XCTAssertEqual(observer.snapshot.checkpoints.count, 1)
+        XCTAssertTrue(observer.snapshot.stages.isEmpty)
+        XCTAssertEqual(uniffiForeignFutureHandleCountXboxIosBridge(), initialHandles)
+    }
+
+    private static func cachedBridgeSession() throws -> AuthSession {
+        let now = Date()
+        let web: [String: Any] = [
+            "data": [
+                "Token": "cached-web", "NotAfter": now.addingTimeInterval(3600).ISO8601Format(),
+                "DisplayClaims": ["xui": [["xid": "fixture-account", "uhs": "fixture-uhs"]]],
+            ]
+        ]
+        func stream(_ token: String) -> [String: Any] {
+            [
+                "_objectCreateTime": Int64(now.timeIntervalSince1970 * 1000),
+                "data": ["gsToken": token, "durationInSeconds": 3600],
+            ]
+        }
+        let cache: [String: Any] = [
+            "schema_version": 1, "force_core_refresh": false, "cloud_force_region_ip": "",
+            "stream_tokens": [
+                "xHomeToken": stream("cached-home"), "xCloudToken": stream("cached-cloud"),
+            ],
+        ]
+        func json(_ object: [String: Any]) throws -> String {
+            String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
+        }
+        // 热路径成功证明无需解析 seed；强制恢复通过同一 fixture 在网络请求前结束。
+        return try AuthSession(
+            refreshToken: "cached-refresh", seedJson: "invalid-seed", webTokenJson: json(web),
+            appLevel: 2, tokenCacheJson: json(cache))
+    }
+
+    func testLegacyKeychainSessionDecodesWithOptionalTokenCache() throws {
+        let data = Data(
+            #"{"refreshToken":"legacy","seedJSON":"seed","webTokenJSON":"web","appLevel":1}"#.utf8)
+        let session = try JSONDecoder().decode(StoredAuthSession.self, from: data)
+        XCTAssertNil(session.tokenCacheJSON)
+        XCTAssertEqual(session.bridgeSession.refreshToken, "legacy")
+        XCTAssertEqual(
+            try JSONDecoder().decode(StoredAuthSession.self, from: JSONEncoder().encode(session)),
+            session)
+    }
+
+    @MainActor
+    func testCancelledQueuedMutationSkipsCredentialWork() async throws {
+        let coordinator = AuthCredentialCoordinator()
+        let gate = AuthTestGate()
+        let events = AuthTestEventRecorder()
+        let first = Task { @MainActor in
+            try await coordinator.perform(advancesRevision: true) { _ in
+                await gate.wait(); return 1
+            }
+        }
+        await gate.waitUntilEntered()
+        let queued = Task { @MainActor in
+            try await coordinator.perform(advancesRevision: true) { _ in
+                await events.append("cancelled-work"); return 2
+            }
+        }
+        await Task.yield()
+        queued.cancel()
+        await gate.open()
+        _ = try await first.value
+        do { _ = try await queued.value; XCTFail("Cancelled mutation must be skipped") } catch {
+            XCTAssertTrue(AuthStoreError.isCancelled(error))
+        }
+        let recorded = await events.snapshot()
+        XCTAssertTrue(recorded.isEmpty)
+        XCTAssertEqual(coordinator.currentRevision, 1)
+    }
+
+    @MainActor
+    func testCoreCheckpointSurvivesDownstreamTimeout() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let cloud = AuthTestCloudClient(checkpointBeforeResult: true, failsAfterCheckpoint: true)
+        let store = makeStore(keychain: keychain, cloudClient: cloud)
+        await store.restore()
+        do {
+            _ = try await store.prepareCloudAccess(); XCTFail("Expected downstream timeout")
+        } catch { XCTAssertEqual(SectionRequestFailure(error: error).kind, .timeout) }
+        XCTAssertEqual(store.session?.refreshToken, "checkpoint-refresh")
+        XCTAssertEqual(store.session?.tokenCacheJSON, "checkpoint-cache")
+        let persisted = await keychain.currentSession()
+        XCTAssertEqual(persisted, store.session)
+        XCTAssertEqual(store.phase, .signedIn)
+    }
+
+    @MainActor
+    func testCheckpointSaveFailureStopsAccessPreparation() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let cloud = AuthTestCloudClient(checkpointBeforeResult: true)
+        let store = makeStore(keychain: keychain, cloudClient: cloud)
+        await store.restore()
+        await keychain.failNextSave()
+        do {
+            _ = try await store.prepareCloudAccess(); XCTFail("Expected checkpoint storage failure")
+        } catch {}
+        XCTAssertEqual(store.session?.refreshToken, "renewed-refresh")
+        let completed = await cloud.completedPreparations()
+        XCTAssertEqual(completed, 0)
+    }
+
+    @MainActor
+    func testCancellationAfterCoreCheckpointPreservesRotationAndReleasesAccess() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let gate = AuthTestGate()
+        let cloud = AuthTestCloudClient(prepareGate: gate, checkpointBeforeResult: true)
+        let store = makeStore(keychain: keychain, cloudClient: cloud)
+        await store.restore()
+        let access = Task { @MainActor in try await store.prepareCloudAccess() }
+        await gate.waitUntilEntered()
+        access.cancel()
+        await gate.open()
+        do {
+            _ = try await access.value; XCTFail("Cancelled preparation must release access")
+        } catch { XCTAssertTrue(AuthStoreError.isCancelled(error)) }
+        XCTAssertEqual(store.session?.refreshToken, "checkpoint-refresh")
+        let persisted = await keychain.currentSession()
+        let released = await cloud.releasedHandles()
+        XCTAssertEqual(persisted, store.session)
+        XCTAssertEqual(released, ["delayed-access"])
+    }
     @MainActor
     func testCoordinatorSerializesCredentialMutations() async throws {
         let coordinator = AuthCredentialCoordinator()
@@ -258,6 +439,24 @@ final class AuthCredentialCoordinatorTests: XCTestCase {
                 seedJson: "seed", webTokenJson: "stream-web", appLevel: 2))
     }
 
+    @MainActor
+    func testSameRefreshTokenStillPersistsUpdatedDownstreamCache() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let store = makeStore(keychain: keychain)
+        await store.restore()
+        var update = Self.streamingUpdate()
+        update.authSession = AuthSession(
+            refreshToken: "renewed-refresh", seedJson: "seed",
+            webTokenJson: "updated-web", appLevel: 2, tokenCacheJson: "target-cache")
+        let result = try await store.persistStreamingAuthUpdate(
+            update, expectedOwnerGeneration: store.ownerGeneration)
+        guard case .committed = result else { return XCTFail("Expected downstream update commit") }
+        XCTAssertEqual(store.session?.refreshToken, "renewed-refresh")
+        XCTAssertEqual(store.session?.tokenCacheJSON, "target-cache")
+        let persisted = await keychain.currentSession()
+        XCTAssertEqual(persisted?.webTokenJSON, "updated-web")
+    }
+
     private static let storedSession = StoredAuthSession(
         refreshToken: "stored-refresh",
         seedJSON: "seed",
@@ -266,6 +465,25 @@ final class AuthCredentialCoordinatorTests: XCTestCase {
         cloudAccountID: "account",
         cloudRegionHost: "cloud.example.com"
     )
+}
+
+private final class AuthBridgeTestObserver: XboxAuthObserver, Sendable {
+    struct Snapshot: Sendable {
+        var checkpoints: [XboxAuthCheckpoint] = []
+        var stages: [XboxAuthStage] = []
+    }
+    private let state = Mutex(Snapshot())
+    private let failsCheckpoint: Bool
+    var snapshot: Snapshot { state.withLock { $0 } }
+
+    init(failsCheckpoint: Bool = false) { self.failsCheckpoint = failsCheckpoint }
+
+    func checkpoint(update: XboxAuthCheckpoint) async throws {
+        state.withLock { $0.checkpoints.append(update) }
+        if failsCheckpoint { throw XboxBridgeError.InvalidData("fixtureCheckpointRejected") }
+    }
+
+    func onStage(event: XboxAuthStage) { state.withLock { $0.stages.append(event) } }
 }
 
 private enum AuthTestError: LocalizedError {
@@ -384,9 +602,9 @@ private struct AuthTestXboxAuthClient: XboxAuthClient {
     }
 
     func renewLogin(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String, scope: XboxAuthScope,
+        forceCoreRefresh: Bool, rejectedToken: String?,
+        checkpoint: @escaping AuthCredentialCheckpoint
     ) async throws -> AuthSession {
         AuthSession(
             refreshToken: "renewed-refresh",
@@ -403,18 +621,43 @@ private struct AuthTestXboxAuthClient: XboxAuthClient {
 
 private actor AuthTestCloudClient: XboxCloudDataClient {
     private let prepareGate: AuthTestGate?
+    private let checkpointBeforeResult: Bool
+    private let failsAfterCheckpoint: Bool
+    private var completed = 0
     private var releases: [String] = []
 
-    init(prepareGate: AuthTestGate? = nil) {
+    init(
+        prepareGate: AuthTestGate? = nil, checkpointBeforeResult: Bool = false,
+        failsAfterCheckpoint: Bool = false
+    ) {
         self.prepareGate = prepareGate
+        self.checkpointBeforeResult = checkpointBeforeResult
+        self.failsAfterCheckpoint = failsAfterCheckpoint
     }
 
     func prepareAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedCloudAccess {
+        if checkpointBeforeResult {
+            try await checkpoint(
+                XboxAuthCheckpoint(
+                    previousRefreshToken: session.refreshToken,
+                    authSession: AuthSession(
+                        refreshToken: "checkpoint-refresh", seedJson: session.seedJSON,
+                        webTokenJson: session.webTokenJSON, appLevel: session.appLevel,
+                        tokenCacheJson: "checkpoint-cache"),
+                    coreOnly: true))
+        }
+        if failsAfterCheckpoint {
+            throw XboxBridgeError.Query(
+                failure: XboxQueryFailure(
+                    kind: .timeout, statusCode: nil,
+                    retriable: true, retryAfterSeconds: nil))
+        }
         await prepareGate?.wait()
+        completed += 1
         return PreparedCloudAccess(
             authSession: AuthSession(
                 refreshToken: "access-refresh",
@@ -428,10 +671,12 @@ private actor AuthTestCloudClient: XboxCloudDataClient {
         )
     }
 
+    func completedPreparations() -> Int { completed }
+
     func prepareHomeAccess(
-        refreshToken _: String,
-        seedJSON _: String,
-        forceRegionIP _: String
+        session: StoredAuthSession, forceRegionIP: String,
+        checkpoint: @escaping AuthCredentialCheckpoint,
+        authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
     ) async throws -> PreparedHomeAccess {
         throw AuthTestError.unexpectedCall
     }

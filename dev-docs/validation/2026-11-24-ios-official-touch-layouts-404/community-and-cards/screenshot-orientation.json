@@ -1,0 +1,58 @@
+[
+  {
+    "file": "community-touch-saved-library.png",
+    "capture": "XCUIScreen.main",
+    "rawSize": [
+      2064,
+      2752
+    ],
+    "originalExifOrientation": 1,
+    "uprightSize": [
+      2064,
+      2752
+    ],
+    "sourceSha256": "c575e8c7c6f55570301e11bb04fe4be8a5b6f867df173aa32c276a7eb1401c6a"
+  },
+  {
+    "file": "community-touch-preview-landscape.png",
+    "capture": "XCUIScreen.main",
+    "rawSize": [
+      2064,
+      2752
+    ],
+    "originalExifOrientation": 8,
+    "uprightSize": [
+      2752,
+      2064
+    ],
+    "sourceSha256": "1baaf9a48951c3a674196bf8feecc9a5947bf9a873360f7838c442d0d7e4ec58"
+  },
+  {
+    "file": "community-touch-preview-portrait.png",
+    "capture": "XCUIScreen.main",
+    "rawSize": [
+      2064,
+      2752
+    ],
+    "originalExifOrientation": 1,
+    "uprightSize": [
+      2064,
+      2752
+    ],
+    "sourceSha256": "dec74f9874a1636b5d0f85ff3fa1b9e14e1ddd138f389ec3452e64a469767ac0"
+  },
+  {
+    "file": "community-touch-layout-cards.png",
+    "capture": "XCUIScreen.main",
+    "rawSize": [
+      2064,
+      2752
+    ],
+    "originalExifOrientation": 1,
+    "uprightSize": [
+      2064,
+      2752
+    ],
+    "sourceSha256": "f5da259e5da425c94696baf80987f02988e90c483b304f6b9cfcf31d8072e73e"
+  }
+]

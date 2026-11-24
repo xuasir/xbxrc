@@ -1,0 +1,230 @@
+{
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 5807,
+      "sha256": "8df6e03c841cd7d5b9b4fd145f81499e84f60d45aab82b2dbd390bf9e0be94e6"
+    },
+    {
+      "path": "baseline.json",
+      "bytes": 3465,
+      "sha256": "ebf678231bf4f234674b8e7d0c95e2b5c561766d6375819b1300701ff8ffc111"
+    },
+    {
+      "path": "bindings-reproduction.json",
+      "bytes": 922,
+      "sha256": "7377761c88b7e5bd07168bf69efa8bd0d6ba328c16b8cdb3e2cac23e561c2f84"
+    },
+    {
+      "path": "cleanup-before.json",
+      "bytes": 1214,
+      "sha256": "14df007aeb95698494aed165e5a6aa2dc379de081b09ab8ed98d14e66085d179"
+    },
+    {
+      "path": "cleanup-process-check.json",
+      "bytes": 340,
+      "sha256": "fc9069dd82ca30ce6fc21503fcc1e1dab02729b1357fce418b888ddbd721a699"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 865,
+      "sha256": "e45939f626880612e54f9fa223bf8e6da911216402a4fc2cc1898d82e93b74eb"
+    },
+    {
+      "path": "core-analysis.json",
+      "bytes": 5542,
+      "sha256": "c09ae695104697d23cce547787de88df8aa5329369560033f5cfa4c1f283bd59"
+    },
+    {
+      "path": "device-summary.json",
+      "bytes": 1449,
+      "sha256": "0c9294e81e421069f7240e09b50079b438f35c65a1a21f79980b6dbb90edd1f7"
+    },
+    {
+      "path": "incident-analysis.json",
+      "bytes": 3539,
+      "sha256": "5d744470b31872c6fc5adfe19ac088707f1a7376ea314a9fc626cdccadf978df"
+    },
+    {
+      "path": "input-inventory.json",
+      "bytes": 3055,
+      "sha256": "17c80eec2dcd97b63067204cbbc49ae9f741f9f92ebb6aa6182ab3d274b77c8b"
+    },
+    {
+      "path": "ios-analysis.json",
+      "bytes": 3786,
+      "sha256": "09391fb2f175d5623ca0e8314a717bbe24f5623a4fc5577c0ae4cfb3896515f0"
+    },
+    {
+      "path": "logs/bindings-generation.log",
+      "bytes": 1372,
+      "sha256": "6d9d9f9b410781c09ebd610450518fe762ca50c17bf7f1c0245bf66174799df6"
+    },
+    {
+      "path": "logs/bindings-reproduction.log",
+      "bytes": 1372,
+      "sha256": "4963b47304b32b7849240be0e7a94e5ba973a3dc2fd4742301a0ddab370ef358"
+    },
+    {
+      "path": "logs/device-build.log",
+      "bytes": 174494,
+      "sha256": "2ff960d4bbc62fb7955c9f7b931494f2af228ffed5fd85aa93d4c11fb24d7ac5"
+    },
+    {
+      "path": "logs/diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs/rust-format-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs/rust-format.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs/rust-tests-before-import-fix.log",
+      "bytes": 1160,
+      "sha256": "2474ce404db338837dcea2744923e3323a6ea5b4540f83cc7f96e33d518036f5"
+    },
+    {
+      "path": "logs/rust-tests.log",
+      "bytes": 8905,
+      "sha256": "71661b791095bc7bc5a637267ea0283d576a8c3589b431ef5bec45f008d969a1"
+    },
+    {
+      "path": "logs/simulator-tests.log",
+      "bytes": 304764,
+      "sha256": "8e0feebe0953d026bcf0bf8e948c45d97a6fd1910c6870ad7c33c6dfdbdea3c1"
+    },
+    {
+      "path": "logs/streaming-boundary.log",
+      "bytes": 40,
+      "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571"
+    },
+    {
+      "path": "runtime-summary.txt",
+      "bytes": 12873,
+      "sha256": "f4bdcad019085e4e18b6d14945a957d09fc80aa7d103aec2e11e854319999a27"
+    },
+    {
+      "path": "safe-timeline.json",
+      "bytes": 26754,
+      "sha256": "a61fb1ec88813d41c474c20cf3cc455c5030895a0525609c62cde8c92d5fb2b8"
+    },
+    {
+      "path": "simulator-summary.json",
+      "bytes": 988,
+      "sha256": "840f369be3115b083bbc42f38413a7ec0b8414ed8bf6f40fa7259414547b2b94"
+    },
+    {
+      "path": "source-hashes.json",
+      "bytes": 2541,
+      "sha256": "9cc11373db259272e759020a19dd525e6c78b34c2b2e18ce86403b4294bf90cc"
+    },
+    {
+      "path": "sources/crates/xbox-auth-flow/src/flow.rs",
+      "bytes": 18351,
+      "sha256": "420a7f0db5c73627f35aec76c2b7479b2a83cfc9cf0d49c19af6578bab8486cc"
+    },
+    {
+      "path": "sources/crates/xbox-auth-flow/src/telemetry.rs",
+      "bytes": 1551,
+      "sha256": "b326a83065811e60fd1f9e43bdac8f2edba432616d490a671a9f0cb23fed479e"
+    },
+    {
+      "path": "sources/crates/xbox-ios-bridge/src/auth_session.rs",
+      "bytes": 13225,
+      "sha256": "31d4883e9666844f44118483fd6e1dbc6129674f144899debaf998fb0aca7fc8"
+    },
+    {
+      "path": "sources/crates/xbox-ios-bridge/src/auth_session.test.rs",
+      "bytes": 14775,
+      "sha256": "4311806718e773e68f69f654e44501d4f4db3f29f75a9baf5a12c806029b17a9"
+    },
+    {
+      "path": "sources/crates/xbox-ios-bridge/src/query_failure.rs",
+      "bytes": 4682,
+      "sha256": "39c6e6d779dc4b1c7bfcfe07fbbad0e41af1ed8ff79839d800fb971f55bf2db5"
+    },
+    {
+      "path": "sources/crates/xbox-ios-bridge/src/streaming.rs",
+      "bytes": 90103,
+      "sha256": "55f639521810e9ce2e69fac181dadc2b47079116639c3f1558b4608ceba739f8"
+    },
+    {
+      "path": "sources/crates/xbox-webapi/src/auth_api.rs",
+      "bytes": 20172,
+      "sha256": "4e2b3e4cd45c9ffbc2f2657fded9e66836038454b2dc9c96cf27f8923831af06"
+    },
+    {
+      "path": "sources/crates/xbox-webapi/src/error.rs",
+      "bytes": 13787,
+      "sha256": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957"
+    },
+    {
+      "path": "sources/crates/xbox-webapi/src/transport.rs",
+      "bytes": 22264,
+      "sha256": "96474edff0fe0a748cd49927f4b423c600a8f572cf41e14d60269c4aadfcfa73"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap",
+      "bytes": 146,
+      "sha256": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift",
+      "bytes": 272244,
+      "sha256": "60069e2af20f80cb9193037e798e07e218ac0345c6473a98e1ee5ef890a72c8c"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h",
+      "bytes": 59817,
+      "sha256": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Platform/RustBridge/XboxAuthClient.swift",
+      "bytes": 7683,
+      "sha256": "2ca38c3941b9633e8992909ec74586e28aacec6acb777392b622033f40657d77"
+    },
+    {
+      "path": "sources/iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift",
+      "bytes": 5943,
+      "sha256": "d25cbe553c068919fe8347079665961a8de32a526fc2eeaf66e294aa6ac4f54f"
+    },
+    {
+      "path": "sources/iosapp/XBXRCTests/XBXRCTests.swift",
+      "bytes": 210097,
+      "sha256": "fba6d8fdd94575cbda178f1cfdb7e4bdcaf8c756950b30c524d660232be58b9b"
+    },
+    {
+      "path": "sources/src-tauri/src/mods/auth/token_refresh.rs",
+      "bytes": 3646,
+      "sha256": "4c66553b3ba6a814083729dbd8a1ee1e5a3ce42a0e9a77cc909fd7d911d876bf"
+    },
+    {
+      "path": "staging-preservation.json",
+      "bytes": 215,
+      "sha256": "b79ff6d74bb978d50d9aac9ec683fa4e836375bcd91f101edce00c8453fe8587"
+    },
+    {
+      "path": "swift-format.json",
+      "bytes": 615,
+      "sha256": "7d93dddba9d9167fc92b323e4b3d170d314d9c17190b08206e4c6648a304fc8d"
+    },
+    {
+      "path": "task-changes.diff",
+      "bytes": 19921,
+      "sha256": "eb5ee009cfecc3f9c6fc456e6dc148adc024e87ea8714aff5eb04e5fb3af10b1"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 1437,
+      "sha256": "4d2df2dc5f3f68f783ba464ea26a95197eb0b1358a70e3790910818e59468548"
+    }
+  ],
+  "count": 45
+}

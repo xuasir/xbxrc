@@ -9,6 +9,23 @@ pub enum DownstreamTokenScope {
 }
 
 impl DownstreamTokenScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Web => "web",
+            Self::Home => "home",
+            Self::Cloud => "cloud",
+            Self::All => "all",
+        }
+    }
+
+    pub fn stream_key(self) -> Option<&'static str> {
+        match self {
+            Self::Home => Some("xHomeToken"),
+            Self::Cloud => Some("xCloudToken"),
+            Self::Web | Self::All => None,
+        }
+    }
+
     pub fn includes_home(self) -> bool {
         matches!(self, Self::Home | Self::All)
     }

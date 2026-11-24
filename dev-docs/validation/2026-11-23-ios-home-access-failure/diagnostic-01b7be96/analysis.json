@@ -1,0 +1,910 @@
+{
+  "source": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl",
+  "sourceBytes": 42046,
+  "sourceSha256": "a3c580fcfb7e753cf14e2d6ddc31abfb5a4e9d4a7791aacff349022d18e6ef61",
+  "rowCount": 90,
+  "sessionCount": 1,
+  "firstTimeShanghai": "2026-11-23T11:59:41.035000+08:00",
+  "lastTimeShanghai": "2026-11-23T12:17:58.516000+08:00",
+  "profiles": [
+    "production"
+  ],
+  "appIdentity": {
+    "appVersion": "0.1.0",
+    "buildConfiguration": "debug",
+    "buildNumber": "1",
+    "platform": "ios"
+  },
+  "anchors": [
+    {
+      "line": 8,
+      "timeShanghai": "2026-11-23T11:59:41.088000+08:00",
+      "seq": 8,
+      "tsMs": 1795406381088,
+      "domain": "auth",
+      "event": "authSessionRenewStarted",
+      "payload": {
+        "operationId": "5067FFDB-11D4-4E84-9E89-E286497206C7",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 10,
+      "timeShanghai": "2026-11-23T11:59:47.289000+08:00",
+      "seq": 10,
+      "tsMs": 1795406387289,
+      "domain": "auth",
+      "event": "uniffiBoundaryFailed",
+      "payload": {
+        "elapsedMs": 6196,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operation": "renewLogin",
+        "operationId": "E1838EE1-B695-430A-B55F-5DE87EF41124",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 11,
+      "timeShanghai": "2026-11-23T11:59:47.290000+08:00",
+      "seq": 11,
+      "tsMs": 1795406387290,
+      "domain": "auth",
+      "event": "authSessionRenewFailed",
+      "payload": {
+        "disposition": "retryable",
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "fallback": "storedWebToken",
+        "operationId": "5067FFDB-11D4-4E84-9E89-E286497206C7",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 12,
+      "timeShanghai": "2026-11-23T11:59:47.386000+08:00",
+      "seq": 12,
+      "tsMs": 1795406387386,
+      "domain": "auth",
+      "event": "authSessionFallbackSucceeded",
+      "payload": {
+        "elapsedMs": 6297,
+        "fallback": "storedCredentials",
+        "operationId": "5067FFDB-11D4-4E84-9E89-E286497206C7",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 13,
+      "timeShanghai": "2026-11-23T11:59:47.386000+08:00",
+      "seq": 13,
+      "tsMs": 1795406387386,
+      "domain": "auth",
+      "event": "authRestoreSucceeded",
+      "payload": {
+        "elapsedMs": 6307,
+        "operationId": "207D359F-CFB5-4F78-A34B-EA0865E7B41B",
+        "platform": "ios",
+        "result": "signedIn"
+      }
+    },
+    {
+      "line": 18,
+      "timeShanghai": "2026-11-23T11:59:47.405000+08:00",
+      "seq": 18,
+      "tsMs": 1795406387405,
+      "domain": "cloud-library",
+      "event": "cacheDiskLoadSucceeded",
+      "payload": {
+        "cacheState": "fresh",
+        "elapsedMs": 18,
+        "games": 2865,
+        "hasBase": true,
+        "operationId": "39EC8A67-F8EA-4C25-AFAF-2DF1624A7DCA",
+        "platform": "ios",
+        "successfulImages": 0
+      }
+    },
+    {
+      "line": 19,
+      "timeShanghai": "2026-11-23T11:59:47.406000+08:00",
+      "seq": 19,
+      "tsMs": 1795406387406,
+      "domain": "cloud-library",
+      "event": "cacheRestoreHit",
+      "payload": {
+        "cacheState": "fresh",
+        "elapsedMs": 19,
+        "games": 2865,
+        "generation": 2,
+        "operationId": "1FA3A04E-DCAD-4BE3-8D84-BA5F19B8C4FA",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 20,
+      "timeShanghai": "2026-11-23T11:59:49.406000+08:00",
+      "seq": 20,
+      "tsMs": 1795406389406,
+      "domain": "xbox-data",
+      "event": "hostsRefreshSucceeded",
+      "payload": {
+        "elapsedMs": 2018,
+        "hosts": 1,
+        "operationId": "E1975CBD-976B-41E3-8403-43612A6E574D",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 28,
+      "timeShanghai": "2026-11-23T11:59:51.720000+08:00",
+      "seq": 28,
+      "tsMs": 1795406391720,
+      "domain": "auth",
+      "event": "cloudAccessBoundaryStarted",
+      "payload": {
+        "operationId": "12B179EB-C2B8-4029-AC10-B31E924F0B96",
+        "ownerGeneration": 1,
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 29,
+      "timeShanghai": "2026-11-23T11:59:51.763000+08:00",
+      "seq": 29,
+      "tsMs": 1795406391763,
+      "domain": "auth",
+      "event": "cloudAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "8FFB6675-A3E9-4A72-AD8C-8680EA5BCC6A",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 30,
+      "timeShanghai": "2026-11-23T12:00:05.508000+08:00",
+      "seq": 30,
+      "tsMs": 1795406405508,
+      "domain": "auth",
+      "event": "cloudAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 13743,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "8FFB6675-A3E9-4A72-AD8C-8680EA5BCC6A",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 31,
+      "timeShanghai": "2026-11-23T12:00:05.509000+08:00",
+      "seq": 31,
+      "tsMs": 1795406405509,
+      "domain": "auth",
+      "event": "cloudAccessBoundaryFailed",
+      "payload": {
+        "elapsedMs": 13787,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "operationId": "12B179EB-C2B8-4029-AC10-B31E924F0B96",
+        "ownerGeneration": 1,
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 32,
+      "timeShanghai": "2026-11-23T12:00:05.510000+08:00",
+      "seq": 32,
+      "tsMs": 1795406405510,
+      "domain": "cloud-library",
+      "event": "catalogRefreshFailed",
+      "payload": {
+        "cachedGames": 2865,
+        "elapsedMs": 13789,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "timeout",
+        "errorType": "XboxBridgeError",
+        "generation": 2,
+        "operationId": "FEDC6618-61D7-4CE4-94E3-85427F5D6131",
+        "phase": "loaded",
+        "platform": "ios",
+        "retriable": true,
+        "timeout": true
+      }
+    },
+    {
+      "line": 36,
+      "timeShanghai": "2026-11-23T12:00:33.584000+08:00",
+      "seq": 36,
+      "tsMs": 1795406433584,
+      "domain": "xbox-data",
+      "event": "libraryContentCommitted",
+      "payload": {
+        "elapsedMs": 6884,
+        "games": 189,
+        "operationId": "D12052C5-FB34-4D2E-BF1D-CA6C13F095F2",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 60,
+      "timeShanghai": "2026-11-23T12:10:46.980000+08:00",
+      "seq": 60,
+      "tsMs": 1795407046980,
+      "domain": "ios-app",
+      "event": "scenePhaseChanged",
+      "payload": {
+        "from": "active",
+        "platform": "ios",
+        "to": "inactive"
+      }
+    },
+    {
+      "line": 61,
+      "timeShanghai": "2026-11-23T12:10:47.034000+08:00",
+      "seq": 61,
+      "tsMs": 1795407047034,
+      "domain": "ios-app",
+      "event": "scenePhaseChanged",
+      "payload": {
+        "from": "inactive",
+        "platform": "ios",
+        "to": "active"
+      }
+    },
+    {
+      "line": 85,
+      "timeShanghai": "2026-11-23T12:17:56.999000+08:00",
+      "seq": 85,
+      "tsMs": 1795407476999,
+      "domain": "ios-streaming",
+      "event": "streamingStateChanged",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "hasVideoTrack": false,
+        "platform": "ios",
+        "retryable": null,
+        "state": "preparingAccess",
+        "target": "home"
+      }
+    },
+    {
+      "line": 86,
+      "timeShanghai": "2026-11-23T12:17:56.999000+08:00",
+      "seq": 86,
+      "tsMs": 1795407476999,
+      "domain": "ios-streaming",
+      "event": "streamLaunchStarted",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "operationId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "platform": "ios",
+        "target": "home"
+      }
+    },
+    {
+      "line": 87,
+      "timeShanghai": "2026-11-23T12:17:57.331000+08:00",
+      "seq": 87,
+      "tsMs": 1795407477331,
+      "domain": "ios-streaming",
+      "event": "accessPrepareStarted",
+      "payload": {
+        "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "generation": 1,
+        "operationId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 88,
+      "timeShanghai": "2026-11-23T12:17:57.331000+08:00",
+      "seq": 88,
+      "tsMs": 1795407477331,
+      "domain": "auth",
+      "event": "homeAccessBoundaryStarted",
+      "payload": {
+        "operationId": "84CC9DF0-0FC3-4BD3-BFA1-83B26CA8B9F8",
+        "ownerGeneration": 1,
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 89,
+      "timeShanghai": "2026-11-23T12:17:57.332000+08:00",
+      "seq": 89,
+      "tsMs": 1795407477332,
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryStarted",
+      "payload": {
+        "operationId": "54D802CA-D12D-450C-836C-152160DBF53E",
+        "platform": "ios"
+      }
+    },
+    {
+      "line": 90,
+      "timeShanghai": "2026-11-23T12:17:58.516000+08:00",
+      "seq": 90,
+      "tsMs": 1795407478516,
+      "domain": "auth",
+      "event": "homeAccessUniFFIBoundaryFailed",
+      "payload": {
+        "elapsedMs": 1182,
+        "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: connection failed\")",
+        "errorCode": 1,
+        "errorDomain": "XBXRC.XboxBridgeError",
+        "errorKind": "requestFailed",
+        "errorType": "XboxBridgeError",
+        "operationId": "54D802CA-D12D-450C-836C-152160DBF53E",
+        "platform": "ios",
+        "retriable": false,
+        "timeout": false
+      }
+    }
+  ],
+  "sourceHashes": {
+    "iosapp/XBXRC/Platform/RustBridge/XboxCloudDataClient.swift": "431fb177474d55972710b964824255e1928bb3a8bfdd6e65436679bd62bb940f",
+    "iosapp/XBXRC/Features/Authentication/AuthStore.swift": "6ee4a380a20ab28c0fb68c286e272c72451ce296c098f2d1c2764bf511ec4e02",
+    "iosapp/XBXRC/Shared/State/CloudLibraryDiagnostics.swift": "16f787d84e509070555fe5648ca3841cfedb97dcd683d967dd22e0d9e9187f3b",
+    "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift": "76a2e4e5b5838fbb11cbd8abc03f4b4b2776e5388be1bb4781130da5732a23fc",
+    "crates/xbox-ios-bridge/src/cloud_access.rs": "529267998790f1d45805e578bfbba462cb4877b83cfde691e0dca5ca39dea0ff",
+    "crates/xbox-ios-bridge/src/lib.rs": "f6ffc16b3e62bc6af77b844dd498cfbb1154a2f73d2ea821a222dfc4c3e9e74b",
+    "crates/xbox-auth-flow/src/flow.rs": "004dcbddbcb9e9c6ad9153863c6c7be734c42829b38bd8c11014c334bb4b942a",
+    "crates/xbox-auth-flow/src/error.rs": "c8279f3430a5263193ed4b69a903cd9c9afa97ca3b793c1f452fec8ec0f318fa",
+    "crates/xbox-webapi/src/error.rs": "59f4bda08ed47587f0d68b3249452cb0a598e1350287587ac671d2e6166bf957"
+  },
+  "temporaryArtifacts": [],
+  "cleanup": {
+    "status": "completed",
+    "createdTemporaryPaths": [],
+    "removedPaths": [],
+    "retainedInput": "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl",
+    "reclaimedBytes": 0
+  },
+  "findings": {
+    "cause": {
+      "confidence": "high",
+      "stage": "home streaming access preparation / authentication",
+      "error": "Network error: connection failed",
+      "rustErrorVariant": "RetryableAuthentication",
+      "networkErrorKindFromCurrentSource": "connect",
+      "boundaryElapsedMs": 1182,
+      "launchToLastObservedFailureMs": 1517,
+      "sourceAnchor": {
+        "line": 90,
+        "seq": 90,
+        "tsMs": 1795407478516
+      },
+      "interpretation": "主机串流访问凭据准备期间，上游认证网络请求返回连接失败；Swift 将错误向外抛出。"
+    },
+    "priorFailures": [
+      {
+        "line": 10,
+        "seq": 10,
+        "operation": "renewLogin",
+        "kind": "timeout",
+        "elapsedMs": 6196
+      },
+      {
+        "line": 30,
+        "seq": 30,
+        "operation": "prepareCloudAccess",
+        "kind": "timeout",
+        "elapsedMs": 13743
+      }
+    ],
+    "successfulData": [
+      {
+        "line": 12,
+        "event": "authSessionFallbackSucceeded",
+        "source": "storedCredentials"
+      },
+      {
+        "line": 19,
+        "event": "cacheRestoreHit",
+        "games": 2865
+      },
+      {
+        "line": 20,
+        "event": "hostsRefreshSucceeded",
+        "hosts": 1
+      },
+      {
+        "line": 36,
+        "event": "libraryContentCommitted",
+        "games": 189
+      }
+    ],
+    "coverage": {
+      "network": "认证请求先后出现两次超时和一次连接失败；主机列表与个人游戏库请求成功，显示出不同请求路径的可用性差异。",
+      "recoveryChain": "记录覆盖授权准备阶段；ReferenceChain、RecoveryLedger 与 DisplayStable 指标适用阶段尚待成功建连。",
+      "mediaSupply": "记录覆盖授权准备阶段；音视频供给指标待媒体接入。",
+      "steadySupply": "记录覆盖授权准备阶段；steady supply 指标待播放窗口。",
+      "submitPresentTail": "记录覆盖授权准备阶段；submit/present 长尾指标待渲染窗口。",
+      "frameSupplyDelta": "记录覆盖授权准备阶段；帧供给 delta 指标待首帧及连续供给。",
+      "missingTerminalAnchors": [
+        "homeAccessBoundaryFailed",
+        "accessPrepareFailed",
+        "terminalSelected",
+        "streamingStateChanged:failed"
+      ],
+      "exportEnding": "最后一条完整 JSONL 为 homeAccessUniFFIBoundaryFailed；外层收口事件是否随后写入原始滚动文件需要后续证据。"
+    },
+    "retryMetadata": {
+      "rustVariant": "RetryableAuthentication",
+      "exportedRetriable": false,
+      "swiftDiagnosticMethod": "isRetriable 根据错误文本、NSURLErrorDomain、超时与 HTTP 状态推断；该连接错误走到 false。",
+      "currentStreamingRuntimeBehavior": "授权准备阶段通用错误转为 failed(retryable: true)，支持用户主动重试。",
+      "confidenceLimit": "源码为当前工作区；导出仅包含 appVersion/buildNumber/buildConfiguration，具体二进制源码身份待后续记录。"
+    },
+    "nextAction": "先切换手机网络并验证 Xbox 认证服务连通性后重试；下一次 trace 补充脱敏的认证步骤、端点类别、networkErrorKind 与外层失败收口。",
+    "validation": {
+      "baseGate": "PASS",
+      "streamingGate": "FAIL",
+      "streamingViolationCount": 8,
+      "streamingGateInterpretation": "成功串流合同要求的 sessionReady、完整 peer epoch、playing 与 cleanup 锚点缺失。授权前置失败会导致会话建立锚点缺失；资源生命周期结论以实际创建与终态记录为依据。",
+      "privacyViolationCount": 0,
+      "pressureNotices": 0,
+      "malformedCompleteRows": 0,
+      "truncatedTails": 0,
+      "physicalFileBytes": 42046,
+      "writerLimitBytes": 8388608,
+      "writerRetentionFiles": 4,
+      "physicalWriterRetentionAudit": "提供文件为聚合诊断导出；原始滚动文件目录待提供，物理保留数待核验。"
+    }
+  },
+  "baseAnalysis": {
+    "budget": {
+      "aggregateExports": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl"
+      ],
+      "pressureNotices": 0,
+      "rawFiles": [],
+      "retention": [],
+      "violations": []
+    },
+    "coverage": {
+      "flows": {
+        "library": {
+          "checks": [
+            {
+              "alternatives": [
+                "libraryPageAppeared"
+              ],
+              "label": "library page",
+              "observed": [
+                "libraryPageAppeared"
+              ]
+            },
+            {
+              "alternatives": [
+                "cacheRestoreStarted"
+              ],
+              "label": "cache restore start",
+              "observed": [
+                "cacheRestoreStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "cacheRestoreFailed",
+                "cacheRestoreHit",
+                "cacheRestoreMiss",
+                "cacheRestoreRejected",
+                "cacheRestoreSkipped"
+              ],
+              "label": "cache restore outcome",
+              "observed": [
+                "cacheRestoreHit"
+              ]
+            },
+            {
+              "alternatives": [
+                "catalogActivationSkipped",
+                "catalogRefreshStarted"
+              ],
+              "label": "catalog activation decision",
+              "observed": [
+                "catalogActivationSkipped",
+                "catalogRefreshStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "contentPresented",
+                "skeletonPresented"
+              ],
+              "label": "library presentation",
+              "observed": [
+                "contentPresented"
+              ]
+            }
+          ],
+          "required": true
+        },
+        "startup": {
+          "checks": [
+            {
+              "alternatives": [
+                "appLaunchStarted"
+              ],
+              "label": "app launch",
+              "observed": [
+                "appLaunchStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "authRestoreStarted"
+              ],
+              "label": "auth restore start",
+              "observed": [
+                "authRestoreStarted"
+              ]
+            },
+            {
+              "alternatives": [
+                "authRestoreFailed",
+                "authRestoreSucceeded"
+              ],
+              "label": "auth restore outcome",
+              "observed": [
+                "authRestoreSucceeded"
+              ]
+            }
+          ],
+          "required": true
+        }
+      },
+      "missingRequiredAnchors": []
+    },
+    "failures": {
+      "budgetViolations": 0,
+      "coverageViolations": 0,
+      "invalidRows": 0,
+      "noRows": 0,
+      "pairingViolations": 0,
+      "privacyViolations": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0
+    },
+    "gate": "PASS",
+    "pairing": {
+      "evaluatedStarts": 3,
+      "violations": []
+    },
+    "privacy": {
+      "violations": []
+    },
+    "schema": {
+      "invalidRows": [],
+      "truncatedTails": [],
+      "violations": []
+    },
+    "scope": {
+      "categories": {
+        "decision": 8,
+        "event": 35,
+        "snapshot": 7,
+        "state": 40
+      },
+      "dimensions": {
+        "core": 22,
+        "frontend": 16,
+        "lifecycle": 37,
+        "network": 15
+      },
+      "domains": {
+        "auth": 14,
+        "cloud-library": 27,
+        "ios-app": 21,
+        "ios-streaming": 3,
+        "library-ui": 16,
+        "trace": 1,
+        "xbox-data": 8
+      },
+      "events": {
+        "accessPrepareStarted": 1,
+        "activityOverlayCommitted": 3,
+        "appLaunchStarted": 1,
+        "authRestoreSessionFound": 1,
+        "authRestoreStarted": 1,
+        "authRestoreSucceeded": 1,
+        "authSessionFallbackSucceeded": 1,
+        "authSessionRenewFailed": 1,
+        "authSessionRenewStarted": 1,
+        "cacheDiskLoadSucceeded": 1,
+        "cacheRestoreHit": 1,
+        "cacheRestoreScopeChanged": 1,
+        "cacheRestoreStarted": 6,
+        "catalogActivationRefreshRequired": 1,
+        "catalogActivationSkipped": 4,
+        "catalogActivationStarted": 5,
+        "catalogRefreshFailed": 1,
+        "catalogRefreshStarted": 1,
+        "cloudAccessBoundaryFailed": 1,
+        "cloudAccessBoundaryStarted": 1,
+        "cloudAccessUniFFIBoundaryFailed": 1,
+        "cloudAccessUniFFIBoundaryStarted": 1,
+        "contentPresented": 5,
+        "dataSessionBound": 1,
+        "dataStoreCleared": 1,
+        "fileOpened": 1,
+        "homeAccessBoundaryStarted": 1,
+        "homeAccessUniFFIBoundaryFailed": 1,
+        "homeAccessUniFFIBoundaryStarted": 1,
+        "hostsRefreshStarted": 2,
+        "hostsRefreshSucceeded": 2,
+        "libraryActivationCompleted": 5,
+        "libraryActivationRequested": 5,
+        "libraryClearStarted": 1,
+        "libraryContentCommitted": 1,
+        "libraryPageAppeared": 1,
+        "libraryRefreshStarted": 1,
+        "libraryStateChanged": 2,
+        "scenePhaseChanged": 20,
+        "streamLaunchStarted": 1,
+        "streamingStateChanged": 1,
+        "uniffiBoundaryFailed": 1
+      },
+      "files": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl"
+      ],
+      "firstTsMs": 1795406381035,
+      "importance": {
+        "essential": 8,
+        "key": 82
+      },
+      "lastTsMs": 1795407478516,
+      "profiles": {
+        "production": 90
+      },
+      "rows": 90,
+      "sessions": [
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22"
+      ]
+    },
+    "sequence": {
+      "sessions": {
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22": {
+          "duplicates": 0,
+          "firstSeq": 1,
+          "lastSeq": 90,
+          "regressions": 0,
+          "rows": 90
+        }
+      },
+      "violations": []
+    }
+  },
+  "streamingCoreAnalysis": {
+    "budget": {
+      "aggregateExports": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl"
+      ],
+      "pressureNotices": 0,
+      "rawFiles": [],
+      "retention": [],
+      "violations": []
+    },
+    "failures": {
+      "budgetViolations": 0,
+      "invalidRows": 0,
+      "noRows": 0,
+      "privacyViolations": 0,
+      "schemaViolations": 0,
+      "sequenceViolations": 0,
+      "streamingCoreViolations": 8
+    },
+    "gate": "FAIL",
+    "privacy": {
+      "violations": []
+    },
+    "schema": {
+      "invalidRows": [],
+      "truncatedTails": [],
+      "violations": []
+    },
+    "scope": {
+      "files": [
+        "/Users/guo.xu/Downloads/XBXRC-Diagnostic-01B7BE96-21B2-47D5-8A3D-5B65F95CF37B.jsonl"
+      ],
+      "firstTsMs": 1795406381035,
+      "lastTsMs": 1795407478516,
+      "profiles": {
+        "production": 90
+      },
+      "rows": 90,
+      "sessions": [
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22"
+      ]
+    },
+    "sequence": {
+      "sessions": {
+        "AA96F61C-33DE-4F31-8B03-456E9C495B22": {
+          "duplicates": 0,
+          "firstSeq": 1,
+          "lastSeq": 90,
+          "regressions": 0,
+          "rows": 90
+        }
+      },
+      "violations": []
+    },
+    "streamingCore": {
+      "attempts": [
+        {
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "cleanup": {
+            "accessReleased": [],
+            "iceTasksCancelled": [],
+            "peerClosed": [],
+            "remoteSessionClosed": []
+          },
+          "completePeerEpochs": [],
+          "contextViolations": [],
+          "generation": 1,
+          "passed": false,
+          "peerEpochs": [],
+          "playingStates": [],
+          "rows": 3,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "sessionReady": [],
+          "targets": [
+            "home"
+          ],
+          "terminal": [],
+          "toleratedReorders": [],
+          "violations": [
+            {
+              "anchor": "sessionReady",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "peerEpochs": [],
+              "type": "no-complete-peer-epoch"
+            },
+            {
+              "anchor": "streamingStateChanged:playing",
+              "expected": "at least 1",
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "terminalSelected",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-anchor-count"
+            },
+            {
+              "anchor": "iceTasksCancelled",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "peerClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "remoteSessionClosed",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            },
+            {
+              "anchor": "accessReleased",
+              "expected": 1,
+              "observed": 0,
+              "type": "streaming-cleanup-count"
+            }
+          ]
+        }
+      ],
+      "contextViolations": [],
+      "gate": "FAIL",
+      "generationViolations": [],
+      "rows": 3,
+      "violations": [
+        {
+          "anchor": "sessionReady",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "generation": 1,
+          "peerEpochs": [],
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "no-complete-peer-epoch"
+        },
+        {
+          "anchor": "streamingStateChanged:playing",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": "at least 1",
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "terminalSelected",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-anchor-count"
+        },
+        {
+          "anchor": "iceTasksCancelled",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "peerClosed",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "remoteSessionClosed",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        },
+        {
+          "anchor": "accessReleased",
+          "attemptId": "E6745030-6EB4-4EF7-93CE-855A91A4E0B1",
+          "expected": 1,
+          "generation": 1,
+          "observed": 0,
+          "sessionId": "AA96F61C-33DE-4F31-8B03-456E9C495B22",
+          "type": "streaming-cleanup-count"
+        }
+      ]
+    }
+  }
+}

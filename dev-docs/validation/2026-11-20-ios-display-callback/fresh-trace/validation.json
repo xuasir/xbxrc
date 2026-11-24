@@ -1,0 +1,80 @@
+{
+  "checks": {
+    "completeTimingRows": true,
+    "uniqueSubmittedFrames": true,
+    "uniqueCompletedFrames": true,
+    "queuePlusMainWorkEqualsTotal": true,
+    "slotReleasedBeforeMainActor": true,
+    "workPhasesFitMainWork": true,
+    "allTimingValuesNonNegative": true,
+    "rawSourceCopyHashMatches": true
+  },
+  "baseAllGate": "FAIL",
+  "baseAllFailures": {
+    "budgetViolations": 0,
+    "coverageViolations": 3,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "baseStartupGate": "PASS",
+  "streamingCoreGate": "FAIL",
+  "streamingCoreViolations": [
+    {
+      "attemptId": "A6F53936-7BE7-4CB4-97F4-5A81CC69AD0A",
+      "generation": 1,
+      "peerEpochs": [
+        {
+          "failedChecks": [],
+          "orderingViolations": 1,
+          "peerEpoch": 1
+        }
+      ],
+      "sessionId": "F24103DB-2D96-4617-9974-EEB0BE9EAFCD",
+      "type": "no-complete-peer-epoch"
+    },
+    {
+      "anchor": "streamingStateChanged:playing",
+      "attemptId": "A6F53936-7BE7-4CB4-97F4-5A81CC69AD0A",
+      "expected": "at least 1",
+      "generation": 1,
+      "observed": 0,
+      "sessionId": "F24103DB-2D96-4617-9974-EEB0BE9EAFCD",
+      "type": "streaming-anchor-count"
+    }
+  ],
+  "foregroundSupply": [
+    {
+      "attempt": 1,
+      "matchedForegroundSamples": 36,
+      "decodedFrames": 2163,
+      "completedFrames": 2112,
+      "drawableFrames": 2084,
+      "sampledSeconds": 36.082854083359244,
+      "decodedToCompletionDeficitPercent": 2.3578363384188625,
+      "completionToDrawableDeficitPercent": 1.3257575757575757
+    },
+    {
+      "attempt": 2,
+      "matchedForegroundSamples": 69,
+      "decodedFrames": 4012,
+      "completedFrames": 3924,
+      "drawableFrames": 3905,
+      "sampledSeconds": 69.19566887503862,
+      "decodedToCompletionDeficitPercent": 2.193419740777667,
+      "completionToDrawableDeficitPercent": 0.4841997961264016
+    }
+  ],
+  "allRtcLossSamplesZero": true,
+  "allRtcFreezeSamplesZero": true,
+  "firstTimeLocal": "2026-11-20T23:19:11.399000+08:00",
+  "lastTimeLocal": "2026-11-20T23:24:07.993000+08:00",
+  "terminalTimeLocal": "2026-11-20T23:23:56.384000+08:00",
+  "completionToTerminalMs": 3149.1634999513626,
+  "rendererNames": {
+    "metalZeroCopy": 199
+  }
+}

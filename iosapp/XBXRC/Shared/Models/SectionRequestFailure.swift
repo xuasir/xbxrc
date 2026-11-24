@@ -6,9 +6,15 @@ struct SectionRequestFailure: Error, Equatable, Sendable {
     enum Kind: String, Sendable {
         case network, timeout, authentication, accessRestricted, rateLimited, serviceUnavailable
         case invalidResponse, repeatedContinuation, unknown
+        case mediaExpired, mediaTooLarge, mediaEmpty, mediaInvalidFormat, storage
     }
     let kind: Kind
     var retryAt: Date? = nil
+    var statusCode: UInt16? = nil
+    var retriable: Bool? = nil
+    var networkErrorKind: String? = nil
+    var serviceCode: String? = nil
+    var protocolErrorCode: String? = nil
 
     init(kind: Kind, retryAt: Date? = nil) {
         self.kind = kind
@@ -26,10 +32,41 @@ struct SectionRequestFailure: Error, Equatable, Sendable {
         case .unknown: kind = .unknown
         }
         retryAt = failure.retryAfterSeconds.map { Date().addingTimeInterval(Double($0)) }
+        statusCode = failure.statusCode
+        retriable = failure.retriable
+        networkErrorKind = failure.networkErrorKind
+        serviceCode = failure.serviceCode
+        protocolErrorCode = failure.protocolErrorCode
     }
     init(error: any Error) {
+        defer {
+            if kind != .authentication && kind != .accessRestricted {
+                retryAt = max(retryAt ?? .distantPast, Date().addingTimeInterval(15))
+            }
+        }
         if let failure = error as? SectionRequestFailure {
             self = failure
+            return
+        }
+        if let media = error as? AlbumDownloadFailure {
+            switch media {
+            case .expired: self.init(kind: .mediaExpired)
+            case .tooLarge: self.init(kind: .mediaTooLarge)
+            case .empty: self.init(kind: .mediaEmpty)
+            case .invalidFormat: self.init(kind: .mediaInvalidFormat)
+            case .storage: self.init(kind: .storage)
+            case .http(let status, let retryAfter):
+                switch status {
+                case 401, 404, 410: self.init(kind: .mediaExpired)
+                case 403: self.init(kind: .accessRestricted)
+                case 408, 504: self.init(kind: .timeout)
+                case 429: self.init(kind: .rateLimited)
+                case 500...599: self.init(kind: .serviceUnavailable)
+                default: self.init(kind: .invalidResponse)
+                }
+                statusCode = UInt16(exactly: status)
+                retryAt = retryAfter.map { Date().addingTimeInterval($0) }
+            }
             return
         }
         if let bridge = error as? XboxBridgeError, case .Query(let failure) = bridge {
@@ -51,12 +88,22 @@ struct SectionRequestFailure: Error, Equatable, Sendable {
         }
         if let url = error as? URLError {
             self.init(kind: url.code == .timedOut ? .timeout : .network)
+            switch url.code {
+            case .timedOut: networkErrorKind = "timeout"
+            case .cannotFindHost, .dnsLookupFailed: networkErrorKind = "dns"
+            case .cannotConnectToHost, .notConnectedToInternet: networkErrorKind = "connect"
+            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+                .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid: networkErrorKind = "tls"
+            case .networkConnectionLost: networkErrorKind = "body"
+            default: networkErrorKind = "unknown"
+            }
             return
         }
+        if (error as NSError).domain == NSCocoaErrorDomain { self.init(kind: .storage); return }
         self.init(kind: .unknown)
     }
     static func isCancellation(_ error: any Error) -> Bool {
-        error is CancellationError || (error as? URLError)?.code == .cancelled
+        AuthStoreError.isCancelled(error) || (error as? URLError)?.code == .cancelled
             || AuthStoreError.isStale(error)
     }
     var message: String {
@@ -69,6 +116,11 @@ struct SectionRequestFailure: Error, Equatable, Sendable {
         case .serviceUnavailable: "Xbox 服务暂时无法提供这部分资料，请稍后重试。"
         case .invalidResponse, .unknown: "这部分资料暂时无法载入，请稍后重试。"
         case .repeatedContinuation: "这份列表暂时无法继续加载，请刷新列表后重试。"
+        case .mediaExpired: "媒体链接已失效，请重试以更新下载地址。"
+        case .mediaTooLarge: "媒体超过 2 GB 保存上限。"
+        case .mediaEmpty: "媒体文件为空，请更新下载地址后重试。"
+        case .mediaInvalidFormat: "下载内容的媒体格式无效，请稍后重试。"
+        case .storage: "媒体保存失败，请检查可用存储空间后重试。"
         }
     }
     var actionTitle: String {
@@ -78,6 +130,10 @@ struct SectionRequestFailure: Error, Equatable, Sendable {
         case .repeatedContinuation: "刷新列表"
         default: "重试"
         }
+    }
+    func allowsActivation(at now: Date = .now) -> Bool {
+        kind != .authentication && kind != .accessRestricted
+            && (retryAt.map { now >= $0 } ?? true)
     }
 }
 
@@ -91,6 +147,9 @@ struct SectionRequestStatus: Sendable {
 }
 
 extension XboxNativeDataState {
+    var needsActivation: Bool {
+        phase == .idle || (failure?.allowsActivation() ?? false)
+    }
     var hasSnapshot: Bool { updatedAt != nil || phase == .loaded || !items.isEmpty }
     var requestStatus: SectionRequestStatus {
         SectionRequestStatus(
@@ -116,6 +175,9 @@ extension XboxNativeDataState {
 }
 
 extension XboxSingleDataState {
+    var needsActivation: Bool {
+        phase == .idle || (failure?.allowsActivation() ?? false)
+    }
     var hasSnapshot: Bool { updatedAt != nil || phase == .loaded || value != nil }
     var requestStatus: SectionRequestStatus {
         SectionRequestStatus(

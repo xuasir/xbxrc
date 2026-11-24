@@ -1,0 +1,119 @@
+{
+  "date": "2026-11-23",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123",
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-touch-workspace-refresh",
+  "rounds": [
+    "r1",
+    "r2",
+    "r3",
+    "r4-ipad",
+    "r4-device",
+    "r5-build",
+    "r5-phone",
+    "r5-ipad",
+    "r5-device",
+    "r6-build",
+    "r6-phone",
+    "r6-ipad",
+    "r6-device"
+  ],
+  "ownedSources": [
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "iosapp/XBXRC/Features/Controllers/ControllerView.swift",
+    "iosapp/XBXRC/App/AppOrientation.swift",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings",
+    "iosapp/DESIGN.md",
+    "docs/project-task.md",
+    "docs/rfcs/2026-11-20-ios-touch-layout-customization.md",
+    "docs/reports/2026-11-20-ios-touch-layout-customization.md"
+  ],
+  "baselineHashes": {
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1",
+    "iosapp/XBXRC/Features/Controllers/ControllerView.swift": "481be153c0685cddc18dc825bc5d32ab8b9e25f3d593f9243380aa99a9c151b7",
+    "iosapp/XBXRC/App/AppOrientation.swift": "5cc2f8d104e14f15dc6aac50ba8769a84e319312e3be4f6c1dd973f6e838f7f0",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "83b953e796ace04fd598b3d67ccd75947fbffd71eabdb93f2606e11286afbb24",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "406d54231e401f411e758062f27e9d5cee066c33a6cd4f13a447bd411f590fee",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "90ee3232a071d1577e3a3a2a7a9dcae3b415e94a1d701f0ff24de5cf9e77aa31",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "d2aeef52741ba7ff9098811a6ea9637ec3ffc92c8efc3c1b61c034a60bb3c0e7",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": "5f0733f84879157b7a74bfd4043dc9680a4b87d1dd99a504c04461ac0a7a11f1",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": "b481dcc1f375212d00cc8eafb12c6750fdf37d112dd3e05ee82d001141b1e71a",
+    "iosapp/DESIGN.md": "0fcf8e48b8e1006a9b76f52bd3a39a388ecbbf9f45bf5be0275dcaec269dfb45",
+    "docs/project-task.md": "a28a701d99f761abb131a76af1cb5b2cce1788feac476e451dbae1d3481a0436",
+    "docs/rfcs/2026-11-20-ios-touch-layout-customization.md": "76fc67bd7f122bb3597c45d647e729ba6e2eebe1f3270f4f477f6e8f90365a85",
+    "docs/reports/2026-11-20-ios-touch-layout-customization.md": "4223b274166defd573c7c56a2ca000c3e48f2a19998b36cb6ceafd950d894366"
+  },
+  "stagingHashBefore": "5834c38813c83922612b1797279cbb82002decd985dad992392b828166f95146",
+  "temporarySourceEdits": [
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+      "backup": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123/r1/CapabilityMigrationTests.baseline.swift",
+      "baselineSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+      "begin": "// BEGIN 20261123 Scoped full viewport render probe",
+      "end": "// END 20261123 Scoped full viewport render probe",
+      "restoredSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+      "restoredBaselineMatches": true,
+      "probeRemoved": true,
+      "reinsertedForRound": "r5",
+      "finalRestorationRound": "r6"
+    }
+  ],
+  "acceptedAppSourceHashes": {
+    "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift": "855ef6be39dc613f83fdcf272a27fe63fd6b4663ea60f6a69c8acd2ba8420c85",
+    "iosapp/XBXRC/Features/Controllers/ControllerView.swift": "155ec63230422d5dce79b4d93a464fcaf3f559b4b7a8b3c350f2f2fc4fd8e27e",
+    "iosapp/XBXRC/App/AppOrientation.swift": "0e48ea93e792ce44743ed15762e13ac3a953fcd77ec3de51b0822f4aa44abe8a",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "7afe7925ec74df3c76f03cb611b5f4e7336f5beb5bc2fe74225cf675e9e3de26",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "51bfe8d21022fb83ec20777aad0e14289e24a2914cf0d6b7b7222b5fcea10e06",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "6678a1a0c100944347c0e12fa3117f25b3fa34756fb7bc3dd232a5c00be1fbab",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": "569a236f261c6c364ee7095da755495db93775125404454f5785bae011e53e31"
+  },
+  "r5TestSourceHashes": {
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "668aa0a1bf7bd05840fea1422924ddde380fc48e393db76dd866af4ef02440c4",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": "aa1a9b74d131bac2db89fbd3b0bec76752b99ef5bc7d292afdda25a25b71f9c0"
+  },
+  "finalVisualFollowup": "320pt 窄屏大字号标题、操作和方向分行排列，沿公共胶囊保留完整阅读空间。",
+  "state": "Completed; temporary artifacts cleaned",
+  "sharedLedgerScope": [
+    "2026-11-23-ios-touch-full-viewport",
+    "2026-11-23-ios-pull-refresh-entry"
+  ],
+  "taskDiffScope": "指定源码、设计说明、RFC 与触屏报告；共享账本按 task-ledger-rows.md 记录本轮两行。",
+  "cleanup": {
+    "result": "Completed",
+    "temporaryRoot": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123",
+    "removedRounds": [
+      "r1",
+      "r2",
+      "r3",
+      "r4-ipad",
+      "r4-device",
+      "r5-build",
+      "r5-phone",
+      "r5-ipad",
+      "r5-device",
+      "r6-build",
+      "r6-phone",
+      "r6-ipad",
+      "r6-device"
+    ],
+    "removedOccupiedKiB": 1339904,
+    "removedOccupiedMiB": 1308.5,
+    "freeBytesBefore": 44482818048,
+    "freeBytesAfter": 45810524160,
+    "netFreeBytesChange": 1327706112,
+    "pathAbsent": true,
+    "processesEndedBeforeRemoval": true,
+    "preserved": [
+      "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+      "共享 Rust 与 WebRTC 缓存",
+      "模拟器",
+      "其他任务产物"
+    ],
+    "retainedScreenshots": 27,
+    "completedAt": "2026-11-23T06:43:37.351059+00:00"
+  }
+}

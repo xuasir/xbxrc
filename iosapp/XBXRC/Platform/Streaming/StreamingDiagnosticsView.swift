@@ -124,13 +124,9 @@ struct StreamingDiagnosticsPanel: View {
 
     var body: some View {
         VStack(spacing: compact ? 6 : 12) {
-            Picker("诊断分组", selection: $group) {
-                ForEach(StreamingDiagnosticGroup.allCases) { tab in
-                    Text(LocalizedStringKey(tab.title)).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("stream-diagnostic-groups")
+            AppSegmentedFilter(
+                selection: $group, values: StreamingDiagnosticGroup.allCases,
+                title: { $0.title }, identifier: "stream-diagnostic-groups", label: "诊断分组")
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(model.rows(group)) { row in
@@ -148,14 +144,21 @@ struct StreamingDiagnosticsPanel: View {
                         .accessibilityIdentifier("stream-diagnostic-\(row.id)")
                         Divider().opacity(0.35)
                     }
+                    if compact {
+                        Text(LocalizedStringKey(group.hint))
+                            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                    }
                 }
                 .padding(.horizontal, 12)
             }
             .appSurface(radius: 10)
             .accessibilityIdentifier("stream-diagnostic-rows")
-            Text(LocalizedStringKey(group.hint))
-                .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if !compact {
+                Text(LocalizedStringKey(group.hint))
+                    .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack {
                 Button {
                     UIPasteboard.general.string = model.clipboardSummary
@@ -191,7 +194,7 @@ struct StreamingDiagnosticsFloatingPanel: View {
             .foregroundStyle(.white)
             .environment(\.colorScheme, .dark)
             .frame(width: size.width, height: size.height)
-            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+            .appSurface(radius: 12, prominent: true, forceDark: true)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
             .accessibilityElement(children: .contain)
@@ -214,14 +217,9 @@ private struct StreamingDiagnosticsCloseButton: View {
 
 enum StreamingDiagnosticsPlacement {
     static func size(in available: CGSize) -> CGSize {
-        let portrait = available.height > available.width
         return CGSize(
             width: max(1, min(420, available.width - 28)),
-            height: max(
-                1,
-                min(
-                    420, available.height - 28, max(280, available.height * (portrait ? 0.46 : 0.8))
-                )))
+            height: max(1, min(available.height - 28, available.height * 2 / 3)))
     }
 }
 
@@ -231,6 +229,7 @@ enum StreamingDiagnosticsPlacement {
         @EnvironmentObject private var settings: AppSettingsStore
         @EnvironmentObject private var store: StreamingFeatureStore
         @State private var revealToken = 0
+        @State private var revealSource: StreamingControlsRevealSource = .twoFingerInward
 
         var body: some View {
             ZStack(alignment: .top) {
@@ -238,7 +237,12 @@ enum StreamingDiagnosticsPlacement {
                     colors: [.blue.opacity(0.65), .green.opacity(0.45), .black],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 ).ignoresSafeArea()
-                TouchGamepadOverlay(input: store.input)
+                TouchGamepadOverlay(input: store.input, layout: store.touchLayout)
+                if ProcessInfo.processInfo.arguments.contains("--official-touch-layouts-ui-test") {
+                    StreamingTouchLayoutUITestMarker(
+                        controller: store.touchLayout, session: store.input
+                    ).padding(.top, 50)
+                }
                 if settings.mobile.compactPerformanceOverlay {
                     StreamingRuntimeMetricsBar(
                         model: StreamingDiagnosticsModel(
@@ -248,13 +252,61 @@ enum StreamingDiagnosticsPlacement {
                     .padding(.horizontal, 64)
                 }
                 StreamingControlsOverlay(
-                    store: store, revealToken: revealToken, revealSource: .twoFingerInward,
-                    autoHideAfter: nil)
+                    store: store, revealToken: revealToken, revealSource: revealSource,
+                    autoHideAfter: ProcessInfo.processInfo.arguments.contains(
+                        "--streaming-quick-autohide-ui-test") ? .seconds(5) : nil
+                )
+                .zIndex(1)
             }
+            .background { StreamingSafeAreaUITestMarker().allowsHitTesting(false) }
+            .statusBarHidden(true)
             .onAppear { store.prepareControlsUITestPreview() }
             .background {
-                StreamingControlsGestureLayer { revealToken += 1 }
+                StreamingControlsGestureLayer(onBlankTap: {
+                    revealSource = .blankTap
+                    revealToken += 1
+                }) {
+                    revealSource = .twoFingerInward
+                    revealToken += 1
+                }
             }
+        }
+    }
+
+    private struct StreamingSafeAreaUITestMarker: UIViewRepresentable {
+        func makeUIView(context: Context) -> StreamingSafeAreaUITestMarkerView {
+            let view = StreamingSafeAreaUITestMarkerView()
+            view.isAccessibilityElement = true
+            view.accessibilityLabel = "系统安全区域"
+            view.accessibilityIdentifier = "streaming-safe-area"
+            return view
+        }
+
+        func updateUIView(_ view: StreamingSafeAreaUITestMarkerView, context: Context) {
+            view.updateSafeFrame()
+        }
+    }
+
+    private final class StreamingSafeAreaUITestMarkerView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            updateSafeFrame()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            updateSafeFrame()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            updateSafeFrame()
+        }
+
+        func updateSafeFrame() {
+            guard let window else { return }
+            let safe = window.bounds.inset(by: window.safeAreaInsets)
+            accessibilityValue = "\(safe.minX),\(safe.minY),\(safe.width),\(safe.height)"
         }
     }
 #endif

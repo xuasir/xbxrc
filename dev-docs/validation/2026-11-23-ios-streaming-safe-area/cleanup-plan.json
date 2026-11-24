@@ -1,0 +1,188 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-streaming-safe-area-20261123",
+  "rounds": [
+    "r6-popup",
+    "r1",
+    "r4-final",
+    "r2-ipad",
+    "r2-device",
+    "r2-phone",
+    "r3-menu",
+    "r5-opacity"
+  ],
+  "completedSessions": [
+    19803,
+    93592,
+    99346,
+    63702,
+    49798,
+    15894,
+    98154,
+    39601
+  ],
+  "activeBuildTestExportProcesses": [],
+  "supersededEvidence": [
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "streaming-diagnostics-portrait.png",
+      "sha256": "3d5afe7ed869cbc2eaad3d2ea09f066a284b0a0ce576ef0e0a75abc2b684c6fa",
+      "bytes": 2619084
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "streaming-two-rails-portrait.png",
+      "sha256": "6954d50607da9431689ded2c6571548403e54f9d97631cccbcae8566a4442cd6",
+      "bytes": 2941597
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "streaming-safe-region-1.txt",
+      "sha256": "4fd236e7d60f60d628f2a19cf9ec21916eb2392d942a17750c8ce27d844afbf8",
+      "bytes": 79
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-diagnostics-landscape-right.png",
+      "sha256": "5a44539295e13b2207f425143a22a0f19180ce6566df8ca0a32c3912f6177485",
+      "bytes": 2670026
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-menu-landscape-right.png",
+      "sha256": "8ba319244aecc8514566566ecd361846b0b7f9956e1a8917ed96f1fe9a36bd8d",
+      "bytes": 2962376
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-touch-landscape-right.png",
+      "sha256": "e682be93795dabd0556d157dba3de16ad6b5499ff779a630e028ce9138cb7ec4",
+      "bytes": 2937568
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-region-4.txt",
+      "sha256": "8fbd92d2accb5933c1554bbd20843a1efdc2aa933e7d188659c06914ca43df81",
+      "bytes": 79
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-diagnostics-landscape-left.png",
+      "sha256": "8b5cf29ec3e4d37992d0102e187f13d470530e1db34d99f3ef05f68931fd3ef3",
+      "bytes": 2665955
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-menu-landscape-left.png",
+      "sha256": "225e8f9e82ad864ee36a6c65d7f31a6841146cbe95947028ded5b2c6ed4a4b3d",
+      "bytes": 2957610
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-touch-landscape-left.png",
+      "sha256": "27ba67413e125366aa9100b95f759974ce5bf1076c6bcf2ee751219630506924",
+      "bytes": 2934235
+    },
+    {
+      "round": "r2-phone",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "streaming-safe-region-3.txt",
+      "sha256": "a3a415bd483537ce8a8b45a40392a9945a385c426f961564328a6127e0736b73",
+      "bytes": 79
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "ipad-streaming-diagnostics-portrait.png",
+      "sha256": "5f5a4b74089cdfa3e81d7bfbb2979499542310812d3e125231c8f41cdebc8f59",
+      "bytes": 5081509
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "ipad-streaming-two-rails-portrait.png",
+      "sha256": "bf1cf2aa2b09507a5b0918d90889e48adb55f47183ddc7cd929aba2f189657b4",
+      "bytes": 5217131
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testPortraitStreamingControlsStayBelowMidpointAndDiagnosticsRemainPartial()",
+      "archiveFile": "ipad-streaming-safe-region-1.txt",
+      "sha256": "4d48b61e1fb8e61afcc5145c29900a69d70794625c165acb1c4ce98978dd747f",
+      "bytes": 82
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-diagnostics-landscape-right.png",
+      "sha256": "e96ed1157595adbb74bd2534e479c7b1a4726bbd7b7e81d7ae5b7d4ab43c6882",
+      "bytes": 5085843
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-menu-landscape-right.png",
+      "sha256": "f0a13a041af03bf1b08761ee59f73ed6efbaf100cd53d06c4a88159acd301136",
+      "bytes": 5194526
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-touch-landscape-right.png",
+      "sha256": "fd3c295ed476303097a9a924010fd2441a1308b1f3ace3e2d155dbfb9ae4758f",
+      "bytes": 5173930
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-region-4.txt",
+      "sha256": "d2517f17e8b172f14ed32340d02263a9b1785c3929f618ebad3b800410585a1a",
+      "bytes": 82
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-diagnostics-landscape-left.png",
+      "sha256": "bcccba5d350131d2710dc05fbdac4ab6375e521c5b480823675082a2d4e221c8",
+      "bytes": 5083811
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-menu-landscape-left.png",
+      "sha256": "b84a90deb5ba9d171cff93b6477fcf7e4e933c6d9987e08e89d24bb1e56c325d",
+      "bytes": 5182823
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-touch-landscape-left.png",
+      "sha256": "e653c0890b64c95032bebe384c0fdcbebcd8b2830c0f3c4cb049d5bab901a46d",
+      "bytes": 5162081
+    },
+    {
+      "round": "r2-ipad",
+      "test": "TouchLayoutInteractionTests/testStreamingMenuAndTouchHitAreasAvoidSafeAreaInBothLandscapeDirections()",
+      "archiveFile": "ipad-streaming-safe-region-3.txt",
+      "sha256": "a1d8fd57b14da9ff426465f2865f46c28c35bb5432b050e0a442164f8fec1f21",
+      "bytes": 82
+    }
+  ],
+  "retainedDependencies": [
+    "target/ios-webrtc",
+    "target/ios-rust"
+  ],
+  "retainedEvidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-streaming-safe-area",
+  "createdAt": "2026-11-23T20:57:30.816933+08:00",
+  "activeBuildTestExportProcessesBeforeCleanup": [],
+  "temporaryAllocatedKiBBeforeCleanup": 1656280
+}

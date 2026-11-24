@@ -1,0 +1,15 @@
+{
+  "removed_root": "/private/tmp/xbxrc-ios-root-top-20261124-nbeq6cio",
+  "root_exists_after_cleanup": false,
+  "files_removed": 5401,
+  "logical_bytes_removed": 948915000,
+  "allocated_bytes_estimate": 967196672,
+  "allocated_mib_estimate": 922.39,
+  "disk_free_bytes_before": 48742400000,
+  "disk_free_bytes_after": 49971200000,
+  "disk_free_delta_bytes": 1228800000,
+  "disk_free_gib_after": 46.54,
+  "shared_packages_preserved": true,
+  "temporary_probe_restored": true,
+  "completed_at": "2026-11-24T14:49:26.720077+08:00"
+}

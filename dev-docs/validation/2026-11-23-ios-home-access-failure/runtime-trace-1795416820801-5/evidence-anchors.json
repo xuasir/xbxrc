@@ -1,0 +1,737 @@
+[
+  {
+    "line": 1,
+    "seq": 41307,
+    "tsMs": 1795416820804,
+    "timeShanghai": "2026-11-23T14:53:40.804000+08:00",
+    "domain": "trace",
+    "event": "fileOpened",
+    "payload": {
+      "debugDroppedTotal": 0,
+      "durabilityUncertainRows": 0,
+      "essentialDroppedTotal": 0,
+      "keyDroppedTotal": 0,
+      "maxFileBytes": 8388608,
+      "maxFiles": 4,
+      "maxRowBytes": 65536,
+      "pendingRowLimit": 4096,
+      "platform": "ios",
+      "queueDroppedRowsTotal": 0,
+      "rawDroppedTotal": 0,
+      "reason": "budgetRotate",
+      "sourceMonotonicMs": 821260091.6760417,
+      "storageDroppedRows": 0,
+      "storageFailures": 0
+    }
+  },
+  {
+    "line": 2,
+    "seq": 41308,
+    "tsMs": 1795416820800,
+    "timeShanghai": "2026-11-23T14:53:40.800000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "payload": {
+      "operationId": "2C46E164-9625-49E8-9433-85DF3C84447D",
+      "platform": "ios",
+      "sourceMonotonicMs": 821260087.0395,
+      "writerQueueDelayMs": 0.15154170989990234
+    }
+  },
+  {
+    "line": 7,
+    "seq": 41313,
+    "tsMs": 1795416834456,
+    "timeShanghai": "2026-11-23T14:53:54.456000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "payload": {
+      "elapsedMs": 13655,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "2C46E164-9625-49E8-9433-85DF3C84447D",
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821273743.4335418,
+      "timeout": true,
+      "writerQueueDelayMs": 1.072624921798706
+    }
+  },
+  {
+    "line": 8,
+    "seq": 41314,
+    "tsMs": 1795416834457,
+    "timeShanghai": "2026-11-23T14:53:54.457000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "payload": {
+      "elapsedMs": 13658,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "6ECE63CC-AC99-4719-AEFC-C76BD7FD8649",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821273744.3929584,
+      "timeout": true,
+      "writerQueueDelayMs": 16.121416687965393
+    }
+  },
+  {
+    "line": 9,
+    "seq": 41315,
+    "tsMs": 1795416834457,
+    "timeShanghai": "2026-11-23T14:53:54.457000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareFailed",
+    "payload": {
+      "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "generation": 11,
+      "operationId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+      "platform": "ios",
+      "sourceMonotonicMs": 821273744.5342084,
+      "writerQueueDelayMs": 16.23187494277954
+    }
+  },
+  {
+    "line": 10,
+    "seq": 41316,
+    "tsMs": 1795416834457,
+    "timeShanghai": "2026-11-23T14:53:54.457000+08:00",
+    "domain": "ios-streaming",
+    "event": "terminalSelected",
+    "payload": {
+      "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+      "generation": 11,
+      "operationId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+      "platform": "ios",
+      "reason": "runtime.failed",
+      "retryable": true,
+      "sourceMonotonicMs": 821273744.5552083,
+      "writerQueueDelayMs": 16.395041704177856
+    }
+  },
+  {
+    "line": 13,
+    "seq": 41319,
+    "tsMs": 1795416836041,
+    "timeShanghai": "2026-11-23T14:53:56.041000+08:00",
+    "domain": "ios-streaming",
+    "event": "streamLaunchStarted",
+    "payload": {
+      "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "generation": 12,
+      "operationId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "platform": "ios",
+      "sourceMonotonicMs": 821275328.7452917,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.6488749980926514
+    }
+  },
+  {
+    "line": 14,
+    "seq": 41320,
+    "tsMs": 1795416836103,
+    "timeShanghai": "2026-11-23T14:53:56.103000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareStarted",
+    "payload": {
+      "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "generation": 12,
+      "operationId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "platform": "ios",
+      "sourceMonotonicMs": 821275390.3805417,
+      "writerQueueDelayMs": 0.17354166507720947
+    }
+  },
+  {
+    "line": 15,
+    "seq": 41321,
+    "tsMs": 1795416836103,
+    "timeShanghai": "2026-11-23T14:53:56.103000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "payload": {
+      "operationId": "58A2E87C-6DF5-4F8D-9635-0BECA23680B8",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 821275390.402375,
+      "writerQueueDelayMs": 0.27350008487701416
+    }
+  },
+  {
+    "line": 16,
+    "seq": 41322,
+    "tsMs": 1795416836104,
+    "timeShanghai": "2026-11-23T14:53:56.104000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "payload": {
+      "operationId": "8DB02D60-B1E8-4F11-97DC-968BC89F64EC",
+      "platform": "ios",
+      "sourceMonotonicMs": 821275391.1013751,
+      "writerQueueDelayMs": 0.05095827579498291
+    }
+  },
+  {
+    "line": 21,
+    "seq": 41327,
+    "tsMs": 1795416843602,
+    "timeShanghai": "2026-11-23T14:54:03.602000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "payload": {
+      "elapsedMs": 7498,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "8DB02D60-B1E8-4F11-97DC-968BC89F64EC",
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821282889.5348334,
+      "timeout": true,
+      "writerQueueDelayMs": 0.21937501430511475
+    }
+  },
+  {
+    "line": 22,
+    "seq": 41328,
+    "tsMs": 1795416843639,
+    "timeShanghai": "2026-11-23T14:54:03.639000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "payload": {
+      "elapsedMs": 7536,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "58A2E87C-6DF5-4F8D-9635-0BECA23680B8",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821282926.9077084,
+      "timeout": true,
+      "writerQueueDelayMs": 0.20866668224334717
+    }
+  },
+  {
+    "line": 23,
+    "seq": 41329,
+    "tsMs": 1795416843639,
+    "timeShanghai": "2026-11-23T14:54:03.639000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareFailed",
+    "payload": {
+      "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "generation": 12,
+      "operationId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "platform": "ios",
+      "sourceMonotonicMs": 821282926.92725,
+      "writerQueueDelayMs": 0.33904170989990234
+    }
+  },
+  {
+    "line": 24,
+    "seq": 41330,
+    "tsMs": 1795416843639,
+    "timeShanghai": "2026-11-23T14:54:03.639000+08:00",
+    "domain": "ios-streaming",
+    "event": "terminalSelected",
+    "payload": {
+      "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "generation": 12,
+      "operationId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "platform": "ios",
+      "reason": "runtime.failed",
+      "retryable": true,
+      "sourceMonotonicMs": 821282926.9310001,
+      "writerQueueDelayMs": 0.4557915925979614
+    }
+  },
+  {
+    "line": 27,
+    "seq": 41333,
+    "tsMs": 1795416845209,
+    "timeShanghai": "2026-11-23T14:54:05.209000+08:00",
+    "domain": "ios-streaming",
+    "event": "streamLaunchStarted",
+    "payload": {
+      "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "generation": 13,
+      "operationId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "platform": "ios",
+      "sourceMonotonicMs": 821284496.297875,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.6778333187103271
+    }
+  },
+  {
+    "line": 28,
+    "seq": 41334,
+    "tsMs": 1795416845267,
+    "timeShanghai": "2026-11-23T14:54:05.267000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareStarted",
+    "payload": {
+      "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "generation": 13,
+      "operationId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "platform": "ios",
+      "sourceMonotonicMs": 821284554.1994584,
+      "writerQueueDelayMs": 0.10949993133544922
+    }
+  },
+  {
+    "line": 29,
+    "seq": 41335,
+    "tsMs": 1795416845267,
+    "timeShanghai": "2026-11-23T14:54:05.267000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "payload": {
+      "operationId": "8F042EC5-8BA7-4BB9-B6E0-7A7E5F304CBA",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 821284554.2192917,
+      "writerQueueDelayMs": 0.22404170036315918
+    }
+  },
+  {
+    "line": 30,
+    "seq": 41336,
+    "tsMs": 1795416845267,
+    "timeShanghai": "2026-11-23T14:54:05.267000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "payload": {
+      "operationId": "0E537ADF-4E4E-4C76-A305-1C3D0ED22FC0",
+      "platform": "ios",
+      "sourceMonotonicMs": 821284554.5278333,
+      "writerQueueDelayMs": 0.0414583683013916
+    }
+  },
+  {
+    "line": 33,
+    "seq": 41339,
+    "tsMs": 1795416859301,
+    "timeShanghai": "2026-11-23T14:54:19.301000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "payload": {
+      "elapsedMs": 14032,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "0E537ADF-4E4E-4C76-A305-1C3D0ED22FC0",
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821298588.4785417,
+      "timeout": true,
+      "writerQueueDelayMs": 0.7485415935516357
+    }
+  },
+  {
+    "line": 34,
+    "seq": 41340,
+    "tsMs": 1795416859302,
+    "timeShanghai": "2026-11-23T14:54:19.302000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "payload": {
+      "elapsedMs": 14034,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "8F042EC5-8BA7-4BB9-B6E0-7A7E5F304CBA",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821298589.2192917,
+      "timeout": true,
+      "writerQueueDelayMs": 1.1594167947769165
+    }
+  },
+  {
+    "line": 35,
+    "seq": 41341,
+    "tsMs": 1795416859302,
+    "timeShanghai": "2026-11-23T14:54:19.302000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareFailed",
+    "payload": {
+      "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "generation": 13,
+      "operationId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "platform": "ios",
+      "sourceMonotonicMs": 821298589.3411251,
+      "writerQueueDelayMs": 1.4690415859222412
+    }
+  },
+  {
+    "line": 36,
+    "seq": 41342,
+    "tsMs": 1795416859302,
+    "timeShanghai": "2026-11-23T14:54:19.302000+08:00",
+    "domain": "ios-streaming",
+    "event": "terminalSelected",
+    "payload": {
+      "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "generation": 13,
+      "operationId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "platform": "ios",
+      "reason": "runtime.failed",
+      "retryable": true,
+      "sourceMonotonicMs": 821298589.3615416,
+      "writerQueueDelayMs": 1.8148751258850098
+    }
+  },
+  {
+    "line": 43,
+    "seq": 41349,
+    "tsMs": 1795416861450,
+    "timeShanghai": "2026-11-23T14:54:21.450000+08:00",
+    "domain": "cloud-library",
+    "event": "cacheRestoreStarted",
+    "payload": {
+      "generation": 2,
+      "hasCloudScope": true,
+      "hasSession": true,
+      "operationId": "113224DC-98BB-4DD4-83DD-5EA59DCDC4C5",
+      "platform": "ios",
+      "source": "libraryActivate",
+      "sourceMonotonicMs": 821300737.7791667,
+      "writerQueueDelayMs": 0.3073333501815796
+    }
+  },
+  {
+    "line": 44,
+    "seq": 41350,
+    "tsMs": 1795416861450,
+    "timeShanghai": "2026-11-23T14:54:21.450000+08:00",
+    "domain": "cloud-library",
+    "event": "catalogActivationSkipped",
+    "payload": {
+      "cacheState": "fresh",
+      "games": 2865,
+      "platform": "ios",
+      "reason": "alreadyActivated",
+      "sourceMonotonicMs": 821300737.7845417,
+      "writerQueueDelayMs": 0.40120840072631836
+    }
+  },
+  {
+    "line": 55,
+    "seq": 41361,
+    "tsMs": 1795416866082,
+    "timeShanghai": "2026-11-23T14:54:26.082000+08:00",
+    "domain": "ios-streaming",
+    "event": "streamLaunchStarted",
+    "payload": {
+      "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "generation": 15,
+      "operationId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "platform": "ios",
+      "sourceMonotonicMs": 821305369.2358334,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.6425000429153442
+    }
+  },
+  {
+    "line": 56,
+    "seq": 41362,
+    "tsMs": 1795416866190,
+    "timeShanghai": "2026-11-23T14:54:26.190000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareStarted",
+    "payload": {
+      "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "generation": 15,
+      "operationId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "platform": "ios",
+      "sourceMonotonicMs": 821305477.2037084,
+      "writerQueueDelayMs": 1.1289582252502441
+    }
+  },
+  {
+    "line": 57,
+    "seq": 41363,
+    "tsMs": 1795416866190,
+    "timeShanghai": "2026-11-23T14:54:26.190000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "payload": {
+      "operationId": "18420B9B-EF66-43E5-A444-DE96FFCA005F",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 821305477.2169168,
+      "writerQueueDelayMs": 1.241416573524475
+    }
+  },
+  {
+    "line": 58,
+    "seq": 41364,
+    "tsMs": 1795416866191,
+    "timeShanghai": "2026-11-23T14:54:26.191000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "payload": {
+      "operationId": "343A0085-37C2-4AB6-9C7F-3F0B19C26411",
+      "platform": "ios",
+      "sourceMonotonicMs": 821305478.2337501,
+      "writerQueueDelayMs": 0.30774998664855957
+    }
+  },
+  {
+    "line": 60,
+    "seq": 41366,
+    "tsMs": 1795416872534,
+    "timeShanghai": "2026-11-23T14:54:32.534000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryFailed",
+    "payload": {
+      "elapsedMs": 6342,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "343A0085-37C2-4AB6-9C7F-3F0B19C26411",
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821311821.9193751,
+      "timeout": true,
+      "writerQueueDelayMs": 0.7848333120346069
+    }
+  },
+  {
+    "line": 61,
+    "seq": 41367,
+    "tsMs": 1795416872535,
+    "timeShanghai": "2026-11-23T14:54:32.535000+08:00",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "payload": {
+      "elapsedMs": 6344,
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "errorCode": 1,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "timeout",
+      "errorType": "XboxBridgeError",
+      "operationId": "18420B9B-EF66-43E5-A444-DE96FFCA005F",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "retriable": true,
+      "sourceMonotonicMs": 821311822.8411251,
+      "timeout": true,
+      "writerQueueDelayMs": 0.7966665029525757
+    }
+  },
+  {
+    "line": 62,
+    "seq": 41368,
+    "tsMs": 1795416872535,
+    "timeShanghai": "2026-11-23T14:54:32.535000+08:00",
+    "domain": "ios-streaming",
+    "event": "accessPrepareFailed",
+    "payload": {
+      "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "error": "XBXRC.XboxBridgeError#1: XBXRC.XboxBridgeError.RetryableAuthentication(\"Network error: request timed out\")",
+      "generation": 15,
+      "operationId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "platform": "ios",
+      "sourceMonotonicMs": 821311823.0593333,
+      "writerQueueDelayMs": 1.138875126838684
+    }
+  },
+  {
+    "line": 63,
+    "seq": 41369,
+    "tsMs": 1795416872535,
+    "timeShanghai": "2026-11-23T14:54:32.535000+08:00",
+    "domain": "ios-streaming",
+    "event": "terminalSelected",
+    "payload": {
+      "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "generation": 15,
+      "operationId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "platform": "ios",
+      "reason": "runtime.failed",
+      "retryable": true,
+      "sourceMonotonicMs": 821311823.0875417,
+      "writerQueueDelayMs": 1.777916669845581
+    }
+  },
+  {
+    "line": 70,
+    "seq": 41376,
+    "tsMs": 1795416874369,
+    "timeShanghai": "2026-11-23T14:54:34.369000+08:00",
+    "domain": "cloud-library",
+    "event": "cacheRestoreStarted",
+    "payload": {
+      "generation": 2,
+      "hasCloudScope": true,
+      "hasSession": true,
+      "operationId": "8DEDAAAE-29FD-464E-ADC3-6A9258CDB703",
+      "platform": "ios",
+      "source": "libraryActivate",
+      "sourceMonotonicMs": 821313656.5046667,
+      "writerQueueDelayMs": 0.31583333015441895
+    }
+  },
+  {
+    "line": 71,
+    "seq": 41377,
+    "tsMs": 1795416874369,
+    "timeShanghai": "2026-11-23T14:54:34.369000+08:00",
+    "domain": "cloud-library",
+    "event": "catalogActivationSkipped",
+    "payload": {
+      "cacheState": "fresh",
+      "games": 2865,
+      "platform": "ios",
+      "reason": "alreadyActivated",
+      "sourceMonotonicMs": 821313656.5099584,
+      "writerQueueDelayMs": 0.41220831871032715
+    }
+  },
+  {
+    "line": 80,
+    "seq": 41386,
+    "tsMs": 1795416891483,
+    "timeShanghai": "2026-11-23T14:54:51.483000+08:00",
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "payload": {
+      "from": "active",
+      "platform": "ios",
+      "sourceMonotonicMs": 821330771.0673751,
+      "to": "inactive",
+      "writerQueueDelayMs": 0.29783332347869873
+    }
+  },
+  {
+    "line": 82,
+    "seq": 41388,
+    "tsMs": 1795416891956,
+    "timeShanghai": "2026-11-23T14:54:51.956000+08:00",
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "payload": {
+      "from": "inactive",
+      "platform": "ios",
+      "sourceMonotonicMs": 821331243.2062917,
+      "to": "background",
+      "writerQueueDelayMs": 0.2875833511352539
+    }
+  },
+  {
+    "line": 83,
+    "seq": 41389,
+    "tsMs": 1795417528091,
+    "timeShanghai": "2026-11-23T15:05:28.091000+08:00",
+    "domain": "cloud-library",
+    "event": "metadataPageBoundaryFailed",
+    "payload": {
+      "elapsedMs": 636453,
+      "error": "XBXRC.XboxBridgeError#5: XBXRC.XboxBridgeError.Data(\"catalog metadata page hydration failed\")",
+      "errorCode": 5,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "operationId": "02735ECF-F831-4ACD-B657-DE07FEF4341A",
+      "platform": "ios",
+      "products": 75,
+      "retriable": false,
+      "sourceMonotonicMs": 821961632.1712501,
+      "timeout": false,
+      "writerQueueDelayMs": 5.0177083015441895
+    }
+  },
+  {
+    "line": 84,
+    "seq": 41390,
+    "tsMs": 1795417528122,
+    "timeShanghai": "2026-11-23T15:05:28.122000+08:00",
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "payload": {
+      "from": "background",
+      "platform": "ios",
+      "sourceMonotonicMs": 821961663.0304583,
+      "to": "inactive",
+      "writerQueueDelayMs": 0.17904174327850342
+    }
+  },
+  {
+    "line": 85,
+    "seq": 41391,
+    "tsMs": 1795417528166,
+    "timeShanghai": "2026-11-23T15:05:28.166000+08:00",
+    "domain": "cloud-library",
+    "event": "metadataPageFailed",
+    "payload": {
+      "elapsedMs": 636529,
+      "error": "XBXRC.XboxBridgeError#5: XBXRC.XboxBridgeError.Data(\"catalog metadata page hydration failed\")",
+      "errorCode": 5,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "operationId": "8273E7A6-5F41-4690-87AD-4B5303C6E968",
+      "pageCount": 38,
+      "pageIndex": 25,
+      "platform": "ios",
+      "requested": 75,
+      "retriable": false,
+      "sourceMonotonicMs": 821961707.472375,
+      "timeout": false,
+      "writerQueueDelayMs": 0.30525004863739014
+    }
+  },
+  {
+    "line": 86,
+    "seq": 41392,
+    "tsMs": 1795417528399,
+    "timeShanghai": "2026-11-23T15:05:28.399000+08:00",
+    "domain": "ios-app",
+    "event": "scenePhaseChanged",
+    "payload": {
+      "from": "inactive",
+      "platform": "ios",
+      "sourceMonotonicMs": 821961940.0185001,
+      "to": "active",
+      "writerQueueDelayMs": 0.1331249475479126
+    }
+  },
+  {
+    "line": 88,
+    "seq": 41394,
+    "tsMs": 1795417530211,
+    "timeShanghai": "2026-11-23T15:05:30.211000+08:00",
+    "domain": "trace",
+    "event": "exportRequested",
+    "payload": {
+      "allFiles": false,
+      "platform": "ios",
+      "sourceMonotonicMs": 821963752.1151251,
+      "writerQueueDelayMs": 0.10175001621246338
+    }
+  }
+]

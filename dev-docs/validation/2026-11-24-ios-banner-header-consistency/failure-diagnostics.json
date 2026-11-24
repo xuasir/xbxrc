@@ -1,0 +1,18 @@
+{
+  "initial_probe": {
+    "status": "failed",
+    "observed": "进入详情的原生转场期间，正文已使用蓝色游戏图片，导航头部仍显示红色玩家图片。",
+    "image": "initial-navigation-transition.png"
+  },
+  "implementation_adjustment": "标题背景以窗口挂载、当前活动状态和返回栈顶部页面归属决定更新时机；UIViewController 的进入、布局与出现回调共同提交背景。",
+  "sampling_adjustment": "原生绘制探针等待 navigation.transitionCoordinator 完成，再采样标题图片；最终背景状态检查通过。",
+  "result_finalization": {
+    "observed": "首轮测试结束后 Xcode 自动调用 simctl diagnose，命令设置 timeout=600；一秒进程采样定位到 collectSimulatorDiagnostics 等待。",
+    "driver_pid": 91801,
+    "diagnose_pid": 92177,
+    "action": "测试结束后精确发送 SIGTERM 给诊断子进程，Xcode 正常产出结果包并以65退出。",
+    "diagnostic_output": "banner-smoke.xcresult/Staging/1_Test/Diagnostics/simctl_diagnostics",
+    "final_run_option": "-collect-test-diagnostics never",
+    "excerpt": "xcode-finalization-excerpt.txt"
+  }
+}

@@ -1,20 +1,32 @@
 import SwiftUI
 
-/// 云游戏和主机串流共用通用 Xbox 布局、绘制与多指输入。
+/// 云游戏和主机串流共用会话布局、绘制与多指输入。
 struct TouchGamepadOverlay: View {
-    @ObservedObject var input: StreamInputSession
+    let input: StreamInputSession
     @EnvironmentObject private var settings: AppSettingsStore
-    @StateObject private var layout = StreamingTouchLayoutController()
+    @ObservedObject private var layout: StreamingTouchLayoutController
+    @State private var isSuppressed: Bool
+
+    init(
+        input: StreamInputSession,
+        layout: StreamingTouchLayoutController = StreamingTouchLayoutController()
+    ) {
+        self.input = input
+        self.layout = layout
+        _isSuppressed = State(initialValue: input.isSuppressed)
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             GeometryReader { geometry in
                 let frame = StreamingTouchViewportPolicy.frame(in: geometry.size)
                 TouchLayoutSurface(
-                    input: layout.input, opacity: settings.mobile.selectedTouchAppearance.opacity,
+                    input: layout.input, opacity: layout.opacity(preferences: settings.mobile),
+                    assets: layout.assets,
                     capturesEmptySpace: false,
-                    configuration: settings.mobile.touchConfiguration(
-                        for: TouchLayoutOrientation(size: geometry.size)),
+                    configuration: layout.configuration(
+                        preferences: settings.mobile,
+                        orientation: TouchLayoutOrientation(size: geometry.size)),
                     onPress: { MobileInteractionFeedback.play(settings.mobile) }
                 )
                 .frame(width: frame.width, height: frame.height)
@@ -24,12 +36,14 @@ struct TouchGamepadOverlay: View {
                 Text(error).font(.caption).foregroundStyle(.white).padding(.top, 56)
             }
         }
-        .allowsHitTesting(!input.isSuppressed)
+        .ignoresSafeArea()
+        .allowsHitTesting(!isSuppressed)
         .onAppear { layout.bind(to: input) }
-        .onChange(of: input.isSuppressed) { _, suppressed in
+        .onReceive(input.$isSuppressed.removeDuplicates()) { suppressed in
+            isSuppressed = suppressed
             if suppressed { layout.input.cancelAll(reason: "inputSuppressed") }
         }
-        .onDisappear { layout.unbind(from: input) }
+        .onDisappear { layout.surfaceClosed() }
     }
 }
 
@@ -42,29 +56,3 @@ enum StreamingTouchViewportPolicy {
     }
 }
 
-@MainActor
-final class StreamingTouchLayoutController: ObservableObject {
-    let input = TouchInputAccumulator()
-    let loadError: String?
-
-    init(bundle: Bundle = .main) {
-        do {
-            input.load(try TouchLayoutCatalog.standard(bundle: bundle))
-            loadError = nil
-        } catch {
-            loadError = error.localizedDescription
-        }
-    }
-
-    func bind(to session: StreamInputSession) {
-        input.onInput = { [weak session] frame in
-            session?.setTouchLayoutState(frame.gamepad, active: frame.pointerCount > 0)
-        }
-    }
-
-    func unbind(from session: StreamInputSession) {
-        input.cancelAll(reason: "streamLayoutClosed")
-        input.onInput = nil
-        session.releaseTouches()
-    }
-}

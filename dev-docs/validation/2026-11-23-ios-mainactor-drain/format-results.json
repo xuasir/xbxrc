@@ -1,0 +1,26 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "scope": "139:166",
+    "exitCode": 0,
+    "diagnostics": ""
+  }
+]

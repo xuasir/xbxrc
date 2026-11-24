@@ -1,0 +1,26 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-touch-workspace-refresh-20261123",
+  "rounds": [
+    "r1",
+    "r2",
+    "r3",
+    "r4-ipad",
+    "r4-device",
+    "r5-build",
+    "r5-phone",
+    "r5-ipad",
+    "r5-device",
+    "r6-build",
+    "r6-phone",
+    "r6-ipad",
+    "r6-device"
+  ],
+  "mustConfirmProcessesEnded": true,
+  "mustConfirmRetainedArtifacts": true,
+  "preserve": [
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "共享 Rust 与 WebRTC 缓存",
+    "模拟器",
+    "其他任务产物"
+  ]
+}

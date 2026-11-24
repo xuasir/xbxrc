@@ -1,0 +1,26 @@
+{
+  "highestPriorityTasks": 4,
+  "periodicHealthPriority": "utility",
+  "boundedFramesPerDrain": 2,
+  "ticketLifetime": "全生命周期递增；reset撤销当前ticket",
+  "queueFields": [
+    "ingressQueueMs",
+    "ingressDrainQueueMs",
+    "ingressDrainWorkBeforeFrameMs"
+  ],
+  "acceptedWorkField": "frameAcceptWorkMs",
+  "coalescedDropQueueFacts": true,
+  "touchObservation": "isSuppressed.removeDuplicates；设备可用性按值更新",
+  "supplementalBuildFix": {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "baselineSha256": "a8d849c2c6e6dd83a22842275c2fb2c31d510f805ebf6cb18fc79a6a72aabf4f",
+    "scope": "仅orientationPicker函数添加MainActor隔离；保留现有方向胶囊改动",
+    "trigger": "模拟器首轮Swift6 RegionIsolation编译错误"
+  },
+  "supplementalTestBuildFix": {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "baselineSha256": "be5731bde7aa2c5d4c62e0e321267cbfba94db5c3c40728f8822c3983f84c7b1",
+    "scope": "截图capture以关闭本地动画替代写入只读accessibilityReduceMotion环境；保留当前截图探针",
+    "trigger": "测试目标编译中WritableKeyPath不匹配"
+  }
+}

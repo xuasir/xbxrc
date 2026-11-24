@@ -1,0 +1,48 @@
+{
+  "observedAt": "2026-11-20T23:33:31.347399+08:00",
+  "beforeFile": "runtime-logs/ios/runtime-trace-ios-1795166210528-1.jsonl",
+  "afterFile": "runtime-logs/ios/runtime-trace-ios-1795187951399-1.jsonl",
+  "before": {
+    "weightedDrawableFps": 18.046,
+    "gpuToMainTraceP50Ms": 51.747,
+    "gpuToMainTraceP95Ms": 71.874,
+    "decodeToSubmitLossPercent": 69.2,
+    "playingStateRecords": 15926,
+    "networkPath": "srflx→srflx",
+    "surfaceBoundsPoints": [
+      669,
+      880
+    ]
+  },
+  "after": {
+    "normalCompletedSegmentFps": [
+      58.26360892967061,
+      58.855618894311164,
+      57.469523582385044,
+      58.39167127881393
+    ],
+    "weightedDrawableFpsIncludingTail": 56.43416796869312,
+    "gpuToMainTraceP50Ms": 0.3290417194366455,
+    "gpuToMainTraceP95Ms": 1.5572083592414856,
+    "decodeToCompletionCountDeficitPercent": 2.193419740777667,
+    "playingStateRecords": 7,
+    "networkPath": "host→host",
+    "surfaceBoundsPoints": [
+      1330,
+      998
+    ],
+    "weightedDrawableFpsNormalSupply": 58.32157087748299
+  },
+  "fixedResolution": [
+    2560,
+    1440
+  ],
+  "comparisonScope": "真实前后运行；窗口、网络路径、内容及码率有变化；独立计时与状态计数验证修复目标",
+  "pending": [
+    "后台启动一次性displayPipelineReady事实送达与前台重送",
+    "恢复验证期间playing发布与waiting回退顺序",
+    "连续前台至少60秒验收"
+  ],
+  "userTerminalContext": "2026-11-21用户确认：主动关闭主机或会话；尾部终止归为主动结束情境。",
+  "userConfirmationArtifact": "user-confirmation.json"
+}

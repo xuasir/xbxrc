@@ -1,0 +1,23 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r1",
+  "files": {
+    "crates/xbox-touch-layouts/src/catalog.rs": "01d2b661cfe2c8ba212be0ec6e0f911658d1cdc5663ebb16bcaa538cf1055158",
+    "crates/xbox-touch-layouts/src/bundle.rs": "6fac870d0223699bfc5e7db4d547857050f2c9600ebb8a411184a280ac661c96",
+    "crates/xbox-touch-layouts/src/lib.rs": "3e94af6410d73a027d9e6e8950ded1520950b04ec654d4f472c226e917b59cda",
+    "crates/xbox-ios-bridge/src/touch_layouts/mod.rs": "e0a4969cdda5aa03e96c019e193ecd832cd3c33e7942037471200d277f05e745",
+    "crates/xbox-ios-bridge/src/touch_layouts/storage_repository.rs": "d7030b20b3a0da76b3eb4b32f4abd17df755e187eeabb0e9cdeaf1fbd58287e5",
+    "crates/xbox-webapi/src/lib.rs": "1f08d02d570a1a7de769096803d2ad1e815ee96e89269d6d22cce4632cdfa1ce",
+    "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift": "54458ef409cdc2145b4e25207cfe3b701eae92dffe699032309a7ab81ff06180",
+    "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutModels.swift": "e97033de2e1d866b4e91025d4e1a368873b527c0f1aac067d8685162fb9aa407",
+    "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift": "d1f53dff7e0103f5fc6e450e7bedf954d15248ecf7f90b64d8584e4688c3a735",
+    "iosapp/XBXRC/Features/TouchControls/SavedTouchLayoutsView.swift": "919e41b5972eb764f354ddf05fbcda809dc6b8f05d1e3465c5072dffa684a011",
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift": "8b47e05e1945599fae334e57e0b06baebb13a6f1e54bdea334393b9c56a34edb",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings": "6edac6d5407e13b47a5e94c940d257e3f3205c074dada74b775573195f4a99ef",
+    "docs/project-task.md": "d8b35413e1e22e6ef6fb918630c5aeade2d54618d40195b4a72a08d160b66e4f",
+    "docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md": "fa2ad478d5f628a45e25e2521aca02a1aecf51bdbbfcb1b87ccdc2f725a50d47",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": "a960dbd3463fe0d3ca0f508d811285b90adc94358d965dc2bd8b1e95f539efdf",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "cc3d73d1a447eed273a817f657839750a813a1bfca7358e9997f1785d2f888f5"
+  }
+}

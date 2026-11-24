@@ -1,0 +1,29 @@
+{
+  "resolved": [
+    {
+      "round": "r1",
+      "case": "本机删除按钮无法命中、行尾对齐偏位",
+      "cause": "设置页整行按钮样式和行容器覆盖子按钮可访问性身份",
+      "fix": "图标按钮使用 plain 样式，行容器使用 children: .contain，删除按钮置于 Spacer 后；默认标记置于标题右侧"
+    },
+    {
+      "round": "r1",
+      "case": "44pt 命中断言",
+      "cause": "浮点结果为 43.999999999999886",
+      "fix": "断言容差 0.001pt"
+    },
+    {
+      "round": "r2",
+      "case": "删除确认按钮查询重复、搜索框身份被容器覆盖",
+      "fix": "确认按钮使用 firstMatch，搜索面板显式保留子控件身份"
+    }
+  ],
+  "liveSample": {
+    "keychainStatus": -34018,
+    "meaning": "临时命令行程序缺少应用 Keychain entitlement",
+    "approvalReview": "rejected-before-execution",
+    "rejectedAction": "向临时程序复制应用签名身份与 Keychain 访问组",
+    "reviewReason": "该程序会跨越会话凭据的访问边界，需要明确授权",
+    "safeRoute": "用户在已登录应用内正常保存官方布局；验证只读取布局资源"
+  }
+}

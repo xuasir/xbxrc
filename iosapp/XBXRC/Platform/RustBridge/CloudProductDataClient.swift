@@ -1,6 +1,6 @@
 import Foundation
 
-struct CloudLanguageSupport: Hashable, Identifiable, Sendable {
+struct CloudLanguageSupport: Codable, Hashable, Identifiable, Sendable {
     let locale: String
     let interface: UInt64?
     let audio: UInt64?
@@ -8,7 +8,7 @@ struct CloudLanguageSupport: Hashable, Identifiable, Sendable {
     var id: String { locale }
 }
 
-struct CloudProductDetails: Hashable, Sendable {
+struct CloudProductDetails: Codable, Hashable, Sendable {
     let productID: String
     let name: String
     let publisherName: String

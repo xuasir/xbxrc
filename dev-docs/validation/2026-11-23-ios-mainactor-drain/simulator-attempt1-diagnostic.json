@@ -1,0 +1,34 @@
+{
+  "exitCode": 65,
+  "result": "BUILD FAILED before tests",
+  "location": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift:177",
+  "diagnosis": "orientationPicker为同步全局函数，调用MainActor隔离的SwiftUI API；补齐函数MainActor隔离",
+  "excerpts": [
+    {
+      "logLine": 1534,
+      "lines": [
+        "569 |   @Binding var selection: Selection",
+        "",
+        "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift:177:6: error: non-Sendable 'some View'-typed result can not be returned from main actor-isolated instance method 'appSettingsInformation(ownsPadding:)' to nonisolated context [#RegionIsolation]",
+        "175 |         title: { $0.title }, identifier: \"touch-preview-orientation\", label: \"预览方向\"",
+        "176 |     )",
+        "177 |     .appSettingsInformation()",
+        "    |      `- error: non-Sendable 'some View'-typed result can not be returned from main actor-isolated instance method 'appSettingsInformation(ownsPadding:)' to nonisolated context [#RegionIsolation]",
+        "178 | }"
+      ]
+    },
+    {
+      "logLine": 1538,
+      "lines": [
+        "176 |     )",
+        "177 |     .appSettingsInformation()",
+        "    |      `- error: non-Sendable 'some View'-typed result can not be returned from main actor-isolated instance method 'appSettingsInformation(ownsPadding:)' to nonisolated context [#RegionIsolation]",
+        "178 | }",
+        "179 | ",
+        "",
+        "[#ActorIsolatedCall]: <https://docs.swift.org/compiler/documentation/diagnostics/actor-isolated-call>",
+        "[#RegionIsolation]: <https://docs.swift.org/compiler/documentation/diagnostics/region-isolation>"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+[
+  {
+    "file": "iosapp/XBXRC/Features/Profile/AlbumFileDownload.swift",
+    "lines": [
+      [
+        72,
+        78
+      ]
+    ],
+    "result": "Passed",
+    "diagnostics": "",
+    "formatted": false
+  },
+  {
+    "file": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+    "lines": [
+      [
+        212,
+        520
+      ]
+    ],
+    "result": "Passed",
+    "diagnostics": "",
+    "formatted": false
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "lines": [
+      [
+        50,
+        90
+      ],
+      [
+        391,
+        445
+      ]
+    ],
+    "result": "Passed",
+    "diagnostics": "",
+    "formatted": true
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "lines": [
+      [
+        146,
+        164
+      ],
+      [
+        218,
+        224
+      ]
+    ],
+    "result": "Passed",
+    "diagnostics": "",
+    "formatted": false
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+    "lines": [
+      [
+        14,
+        17
+      ]
+    ],
+    "result": "Passed",
+    "diagnostics": "",
+    "formatted": false
+  }
+]

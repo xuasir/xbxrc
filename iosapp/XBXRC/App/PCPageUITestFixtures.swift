@@ -238,7 +238,11 @@
     }
 
     struct PCPageCloudClient: XboxCloudDataClient {
-        func prepareAccess(refreshToken: String, seedJSON: String, forceRegionIP: String)
+        func prepareAccess(
+            session: StoredAuthSession, forceRegionIP: String,
+            checkpoint: @escaping AuthCredentialCheckpoint,
+            authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
+        )
             async throws -> PreparedCloudAccess
         {
             PreparedCloudAccess(
@@ -247,7 +251,11 @@
                 regionHost: "uswest.gssv-play-prod.xboxlive.com",
                 expiresAtMs: UInt64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000))
         }
-        func prepareHomeAccess(refreshToken: String, seedJSON: String, forceRegionIP: String)
+        func prepareHomeAccess(
+            session: StoredAuthSession, forceRegionIP: String,
+            checkpoint: @escaping AuthCredentialCheckpoint,
+            authProvider: (any XboxStreamingAuthProvider)?, startup: XboxStreamStartup?
+        )
             async throws -> PreparedHomeAccess
         { throw XboxNativeQueryError.unavailable }
         func loadCatalog(accessHandle: String, market: String, language: String) async throws
@@ -282,7 +290,7 @@
                 ?? PCPageFixtures.cloudGames()[0]
             return CloudProductDetails(
                 productID: productID, name: game.name, publisherName: game.publisherName,
-                description: "完整云游戏商品资料",
+        description: game.description ?? "完整云游戏商品资料",
                 tileURL: nil, posterURL: nil, heroURL: nil, categories: game.categories,
                 developer: "Xbox Game Studios",
                 releaseDate: "2025-01-01", rating: "12+", attributes: ["单人游戏", "在线多人"],
@@ -305,7 +313,11 @@
         func finishLogin(
             callbackURL: URL, pendingJSON: String, seedJSON: String, forceRegionIP: String
         ) async throws -> AuthSession { PCPageFixtures.bridgeSession }
-        func renewLogin(refreshToken: String, seedJSON: String, forceRegionIP: String) async throws
+        func renewLogin(
+            session: StoredAuthSession, forceRegionIP: String, scope: XboxAuthScope,
+            forceCoreRefresh: Bool, rejectedToken: String?,
+            checkpoint: @escaping AuthCredentialCheckpoint
+        ) async throws
             -> AuthSession
         { PCPageFixtures.bridgeSession }
         func loadProfile(webTokenJSON: String) async throws -> XboxProfile {

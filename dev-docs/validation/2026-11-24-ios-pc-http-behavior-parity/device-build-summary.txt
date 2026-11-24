@@ -1,0 +1,14 @@
+CopySwiftLibs /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app (in target 'XBXRC' from project 'XBXRC')
+    cd /Users/guo.xu/Documents/code/games/xbxrc/iosapp
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/XBXRC.debug.dylib --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/Frameworks --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/PlugIns --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/SystemExtensions --scan-folder /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/Extensions --platform iphoneos --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Products/Debug-iphoneos/XBXRC.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Intermediates.noindex/XBXRC.build/Debug-iphoneos/XBXRC.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+Ignoring --strip-bitcode because --sign was not passed
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/xbxrc-ios-pc-http-behavior-parity-r2/device/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+note: Run script build phase 'Build Rust bridge' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'XBXRC' from project 'XBXRC')
+** BUILD SUCCEEDED **
+

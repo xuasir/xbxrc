@@ -19,6 +19,7 @@ final class StreamingFeatureStore: ObservableObject {
     @Published private(set) var startupProgress: StreamingStartupProgress?
 
     let input: StreamInputSession
+    let touchLayout = StreamingTouchLayoutController()
     weak var authentication: AuthStore?
     private let sessionActor: StreamSessionActor
     private let settingsProvider: any StreamingSessionSettingsProviding
@@ -26,6 +27,7 @@ final class StreamingFeatureStore: ObservableObject {
     private var generation: UInt64 = 0
     private var attemptID: String?
     private var launchTask: Task<Void, Never>?
+    private var startupContext: XboxStreamStartup?
     private var retryLaunch: (@MainActor () -> Void)?
     private var microphoneOperationRevision: UInt64 = 0
     private var previousIdleTimerDisabled: Bool?
@@ -44,10 +46,12 @@ final class StreamingFeatureStore: ObservableObject {
             (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
         }
         self.input = input
+        touchLayout.bind(to: input)
         sessionActor = StreamSessionActor(
             controlFactory: RustStreamingControlSessionFactory(),
             peerFactory: LibWebRTCPeerRuntimeFactory(inputSession: input)
         )
+        configureTouchLayoutPreferences()
     }
 
     init(
@@ -64,16 +68,29 @@ final class StreamingFeatureStore: ObservableObject {
             (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
         }
         self.input = input
+        touchLayout.bind(to: input)
         sessionActor = StreamSessionActor(
             controlFactory: controlFactory,
             peerFactory: peerFactory,
             remoteAnswerApplyTimeout: remoteAnswerApplyTimeout,
             initialConnectionTimeout: initialConnectionTimeout
         )
+        configureTouchLayoutPreferences()
+    }
+
+    private func configureTouchLayoutPreferences() {
+        touchLayout.restoreRecentSelection(preferences: input.preferences)
+        let settings = settingsProvider as? AppSettingsStore
+        touchLayout.onRecentSelectionChanged = { [weak settings] id in
+            if settings?.mobile.recentCustomTouchLayoutID != id {
+                settings?.mobile.recentCustomTouchLayoutID = id
+            }
+        }
     }
 
     #if DEBUG
     func prepareControlsUITestPreview() {
+            touchLayout.beginSession(generation: 1, preferences: input.preferences)
         state = .playing
         streamTarget = .home
         diagnostics = StreamingSessionDiagnostics(
@@ -95,26 +112,30 @@ final class StreamingFeatureStore: ObservableObject {
 
     func startCloudGame(
         productID: String,
-        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
+        prepareAccess: @escaping @MainActor (XboxStreamStartup?) async throws -> PreparedCloudAccess
     ) {
         let region = settingsProvider.streamingSessionSettings.cloudServerRegion
         let resolutionGeneration = generation &+ 1
-        start(target: .cloud, targetID: productID) { [weak self] in
-            let access = try await prepareAccess()
+        start(target: .cloud, targetID: productID) { [weak self] startup in
+            let access = try await prepareAccess(startup)
             do {
                 guard let self, !Task.isCancelled, self.generation == resolutionGeneration else {
                     throw StreamingRuntimeError.superseded
                 }
                 self.startupProgress = StreamingStartupProgress(phase: "checkingGame")
                 let identity = try await self.cloudLaunchResolver.resolve(
-                    accessHandle: access.handle, productID: productID, serverRegion: region)
+                    accessHandle: access.handle, productID: productID, serverRegion: region,
+                    startup: startup)
                 guard !Task.isCancelled, self.generation == resolutionGeneration else {
                     throw StreamingRuntimeError.superseded
                 }
                 guard identity.productID.caseInsensitiveCompare(productID) == .orderedSame,
                     !identity.streamTitleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 else { throw StreamingRuntimeError.cloudGameUnavailable }
-                guard identity.hasEntitlement != false else {
+                guard let entitled = identity.hasEntitlement else {
+                    throw StreamingRuntimeError.cloudEntitlementUnconfirmed
+                }
+                guard entitled else {
                     throw StreamingRuntimeError.cloudEntitlementRequired
                 }
                 return PreparedStreamingAccess(
@@ -136,13 +157,16 @@ final class StreamingFeatureStore: ObservableObject {
         }
     }
 
-    func start(
-        streamTitleID rawStreamTitleID: String,
-        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
-    ) {
-        start(target: .cloud, targetID: rawStreamTitleID) {
-            let access = try await prepareAccess()
-            return PreparedStreamingAccess(
+    #if DEBUG
+        // 测试夹具直达 title；生产 Cloud 入口统一经过商品身份与资格复核。
+        func start(
+            streamTitleID rawStreamTitleID: String,
+            prepareAccess:
+                @escaping @MainActor (XboxStreamStartup?) async throws -> PreparedCloudAccess
+        ) {
+            start(target: .cloud, targetID: rawStreamTitleID) { startup in
+                let access = try await prepareAccess(startup)
+                return PreparedStreamingAccess(
                 handle: access.handle,
                 accountID: access.accountID,
                 regionHost: access.regionHost,
@@ -150,14 +174,15 @@ final class StreamingFeatureStore: ObservableObject {
                 expiresAtMs: access.expiresAtMs
             )
         }
-    }
+        }
+    #endif
 
     func startHome(
         targetID rawTargetID: String,
-        prepareAccess: @escaping @MainActor () async throws -> PreparedHomeAccess
+        prepareAccess: @escaping @MainActor (XboxStreamStartup?) async throws -> PreparedHomeAccess
     ) {
-        start(target: .home, targetID: rawTargetID) {
-            let access = try await prepareAccess()
+        start(target: .home, targetID: rawTargetID) { startup in
+            let access = try await prepareAccess(startup)
             return PreparedStreamingAccess(
                 handle: access.handle,
                 accountID: access.accountID,
@@ -171,7 +196,8 @@ final class StreamingFeatureStore: ObservableObject {
     private func start(
         target: StreamingLaunchTarget,
         targetID rawTargetID: String,
-        prepareAccess: @escaping @MainActor () async throws -> PreparedStreamingAccess
+        prepareAccess:
+            @escaping @MainActor (XboxStreamStartup?) async throws -> PreparedStreamingAccess
     ) {
         let targetID = rawTargetID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !targetID.isEmpty else {
@@ -190,6 +216,13 @@ final class StreamingFeatureStore: ObservableObject {
         let requestAttemptID = UUID().uuidString
         let sessionSettings = settingsProvider.streamingSessionSettings
         attemptID = requestAttemptID
+        startupContext?.cancel()
+        let context: XboxStreamStartup
+        do { context = try createStreamStartup(targetType: target.rawValue) } catch {
+            state = .failed(message: "串流启动上下文创建失败", retryable: true)
+            return
+        }
+        startupContext = context
         launchTask?.cancel()
         streamTitleID = targetID
         streamTarget = target
@@ -200,6 +233,7 @@ final class StreamingFeatureStore: ObservableObject {
         connectedElapsedMilliseconds = nil
         mediaReadyElapsedMilliseconds = nil
         input.reset()
+        touchLayout.beginSession(generation: requestGeneration, preferences: input.preferences)
         audioMuted = sessionSettings.startMuted
         enablesAudioControl = sessionSettings.enableAudioControl
         picture =
@@ -236,7 +270,7 @@ final class StreamingFeatureStore: ObservableObject {
                 )
                 let access: PreparedStreamingAccess
                 do {
-                    access = try await prepareAccess()
+                    access = try await prepareAccess(context)
                 } catch {
                     self.traceAttempt(
                         "accessPrepareFailed",
@@ -296,7 +330,8 @@ final class StreamingFeatureStore: ObservableObject {
                         settings: sessionSettings,
                         attemptID: requestAttemptID,
                         accountID: access.accountID,
-                        ownerGeneration: access.ownerGeneration
+                        ownerGeneration: access.ownerGeneration,
+                        startup: context
                     ),
                     stateSink: { [weak self] generation, state in
                         self?.apply(state: state, generation: generation)
@@ -370,10 +405,10 @@ final class StreamingFeatureStore: ObservableObject {
                 }
                 return
             } catch {
-                let wasSuperseded = Task.isCancelled || requestGeneration != self.generation
-                let permissionDenied =
-                    (error as? StreamingRuntimeError)
-                    == .microphonePermissionDenied
+                let wasSuperseded =
+                    Task.isCancelled || requestGeneration != self.generation
+                    || AuthStoreError.isCancelled(error) || AuthStoreError.isStale(error)
+                let retryable = StreamingStartupDiagnostics.isRetryable(error, fallback: true)
                 if !sessionActorOwnsTerminal {
                     let reason: StreamingTerminalReason =
                         wasSuperseded
@@ -385,7 +420,7 @@ final class StreamingFeatureStore: ObservableObject {
                         generation: requestGeneration,
                         payload: [
                             "reason": .string(reason.code),
-                            "retryable": .bool(permissionDenied ? false : reason.retryable),
+                            "retryable": .bool(retryable),
                         ],
                         dimension: .lifecycle,
                         importance: .essential
@@ -395,10 +430,13 @@ final class StreamingFeatureStore: ObservableObject {
                 // 会话 actor 负责已启动会话的终态与重试属性；准备授权阶段由当前 Store 收口。
                 guard !sessionActorOwnsTerminal else { return }
                 self.state = .failed(
-                    message: CloudLibraryDiagnostics.safeError(error),
-                    retryable: !permissionDenied
+                    message: StreamingStartupDiagnostics.userMessage(
+                        error,
+                        fallback: CloudLibraryDiagnostics.safeError(error)),
+                    retryable: retryable
                 )
                 self.input.setSuppressed(true, reason: .terminal)
+                self.touchLayout.endSession()
                 restoreIdleTimer()
                 self.traceState(self.state, generation: requestGeneration)
             }
@@ -553,12 +591,15 @@ final class StreamingFeatureStore: ObservableObject {
         let sessionGeneration = generation
         videoTrack = nil
         input.setSuppressed(true, reason: .terminal)
+        touchLayout.endSession()
         microphoneOperationRevision &+= 1
         microphoneEnabled = false
         microphonePending = false
         restoreIdleTimer()
         generation &+= 1
         let stoppedGeneration = generation
+        startupContext?.cancel()
+        startupContext = nil
         launchTask?.cancel()
         launchTask = nil
         retryLaunch = nil
@@ -638,6 +679,7 @@ final class StreamingFeatureStore: ObservableObject {
             microphoneEnabled = false
             microphonePending = false
             input.setSuppressed(true, reason: .terminal)
+            touchLayout.endSession()
             restoreIdleTimer()
         }
         traceState(state, generation: generation)
@@ -750,7 +792,8 @@ struct RustStreamingControlSessionFactory: StreamingControlSessionFactory {
                 },
                 preventResolutionDrops: request.settings.preventResolutionDrops,
                 powerOn: request.settings.powerOn
-            )
+            ),
+            startup: request.startup
         )
         return RustStreamingControlSession(session: session)
     }

@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-23T11:10:42.739084+08:00",
+  "analysisAndArchive": "PASS",
+  "csvCounterRecalculation": "PASS",
+  "sourceAndRawTraceFingerprint": "PASS",
+  "workingTreeDiffCheck": "PASS",
+  "cachedCodeAndDocsDiffCheck": "PASS",
+  "cachedEvidenceWhitespace": {
+    "exitCode": 2,
+    "warningCountsByFile": {
+      "dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/source-excerpts.txt": 23,
+      "dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery/task-changes.diff": 40
+    },
+    "interpretation": "已有暂存源码摘录的编号空行和归档patch的空白上下文行触发完整暂存检查；其字节内容及暂存状态保留。"
+  },
+  "generatedEvidenceTextWhitespace": "PASS",
+  "cleanupTemporaryRootAbsent": true,
+  "scope": "当前轮新增分析证据、文档与归档指纹；工作区其他并行编辑保留。"
+}

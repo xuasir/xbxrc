@@ -1,0 +1,8 @@
+{
+  "date": "2026-11-23",
+  "target": "generic/platform=iOS",
+  "configuration": "Debug",
+  "result": "BUILD SUCCEEDED",
+  "codeSigningAllowed": false,
+  "logExcerpts": "logs/verification-excerpts.txt"
+}

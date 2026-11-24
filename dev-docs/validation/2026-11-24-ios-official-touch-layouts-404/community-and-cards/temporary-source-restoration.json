@@ -1,0 +1,6 @@
+{
+  "removedExactProbe": true,
+  "scope": "UI r5只执行卡片前缀；正式完整流程已恢复",
+  "file": "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+  "sha256": "86e9c660605bfa4575f1cbda24e32599e1f7dc4fa31b185b827ff13c85bf0251"
+}

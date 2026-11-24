@@ -1,0 +1,119 @@
+{
+  "media": {
+    "result": "Passed",
+    "test": "PCPageInteractionTests/testMediaHalfPanelSmoke",
+    "duration_seconds": 62.413,
+    "source_bundle": "media-verified.xcresult",
+    "source_summary": {
+      "devicesAndConfigurations": [
+        {
+          "device": {
+            "architecture": "arm64",
+            "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+            "deviceName": "iPhone 18 Pro",
+            "modelName": "iPhone 18 Pro",
+            "osBuildNumber": "24A434",
+            "osVersion": "27.0",
+            "platform": "iOS Simulator"
+          },
+          "expectedFailures": 0,
+          "failedTests": 0,
+          "passedTests": 1,
+          "skippedTests": 0,
+          "testPlanConfiguration": {
+            "configurationId": "1",
+            "configurationName": "Test Scheme Action"
+          }
+        }
+      ],
+      "environmentDescription": "XBXRC · Built with macOS 27.0",
+      "expectedFailures": 0,
+      "failedTests": 0,
+      "finishTime": 1795512668.835,
+      "passedTests": 1,
+      "result": "Passed",
+      "runtimeWarnings": [],
+      "skippedTests": 0,
+      "startTime": 1795512545.791,
+      "statistics": [],
+      "testFailures": [],
+      "title": "Test - XBXRC",
+      "topInsights": [],
+      "totalTestCount": 1
+    },
+    "checks": [
+      "字节和百分比进度增长",
+      "下载浮窗约1/3屏与右上取消",
+      "下拖及页面返回手势后继续显示",
+      "明确取消回到详情",
+      "视频左右贴边及16:9比例",
+      "原生全屏进入和返回"
+    ]
+  },
+  "streaming": {
+    "result": "Passed",
+    "test": "TouchLayoutInteractionTests/testStreamingHalfPanelSmoke",
+    "duration_seconds": 20.29,
+    "source_bundle": "completed-smoke.xcresult",
+    "source_lines": [
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' started.",
+      "Test Case '-[XBXRCUITests.TouchLayoutInteractionTests testStreamingHalfPanelSmoke]' passed (20.290 seconds)."
+    ],
+    "checks": [
+      "快捷窄栏半屏高度上限",
+      "画面调节半屏高度并贴底",
+      "触屏布局选择半屏高度",
+      "诊断浮窗横竖屏2/3高度上限",
+      "各面板关闭按钮可达"
+    ]
+  },
+  "source_run_context": {
+    "completed_smoke": {
+      "devicesAndConfigurations": [
+        {
+          "device": {
+            "architecture": "arm64",
+            "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+            "deviceName": "iPhone 18 Pro",
+            "modelName": "iPhone 18 Pro",
+            "osBuildNumber": "24A434",
+            "osVersion": "27.0",
+            "platform": "iOS Simulator"
+          },
+          "expectedFailures": 0,
+          "failedTests": 1,
+          "passedTests": 1,
+          "skippedTests": 0,
+          "testPlanConfiguration": {
+            "configurationId": "1",
+            "configurationName": "Test Scheme Action"
+          }
+        }
+      ],
+      "environmentDescription": "XBXRC · Built with macOS 27.0",
+      "expectedFailures": 0,
+      "failedTests": 1,
+      "finishTime": 1795511852.895,
+      "passedTests": 1,
+      "result": "Failed",
+      "runtimeWarnings": [],
+      "skippedTests": 0,
+      "startTime": 1795511757.604,
+      "statistics": [],
+      "testFailures": [
+        {
+          "failureText": "XCTAssertTrue failed",
+          "targetName": "XBXRCUITests",
+          "testIdentifier": 1,
+          "testIdentifierString": "PCPageInteractionTests/testMediaHalfPanelSmoke()",
+          "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/PCPageInteractionTests/testMediaHalfPanelSmoke",
+          "testName": "testMediaHalfPanelSmoke()"
+        }
+      ],
+      "title": "Test - XBXRC",
+      "topInsights": [],
+      "totalTestCount": 2
+    },
+    "media_failure_resolution": "completed-smoke 中相册全屏断言失败，随后 media-verified 单独相册定向冒烟通过。"
+  }
+}

@@ -1,0 +1,19 @@
+   Compiling xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+   Compiling xbox-touch-layouts v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-touch-layouts)
+   Compiling xbox-cloud-catalog-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-cloud-catalog-flow)
+   Compiling xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+   Compiling xbox-auth-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-auth-flow)
+   Compiling xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.62s
+   Compiling xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+   Compiling xbox-touch-layouts v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-touch-layouts)
+   Compiling xbox-cloud-catalog-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-cloud-catalog-flow)
+   Compiling xbox-streaming v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-streaming)
+   Compiling xbox-auth-flow v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-auth-flow)
+   Compiling xbox-ios-bridge v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-ios-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.37s
+     Running `target/ios-bindgen/debug/examples/uniffi-bindgen --metadata-no-deps --swift-sources /Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/libxbox_ios_bridge.a /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running `target/ios-bindgen/debug/examples/uniffi-bindgen --metadata-no-deps --headers /Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/libxbox_ios_bridge.a /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/ios-bindgen/debug/examples/uniffi-bindgen --metadata-no-deps --modulemap --module-name xbox_ios_bridgeFFI --modulemap-filename xbox_ios_bridge.modulemap /Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/libxbox_ios_bridge.a /Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/RustBridge/Generated`

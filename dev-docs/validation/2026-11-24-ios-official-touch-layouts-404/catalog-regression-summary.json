@@ -1,0 +1,13 @@
+{
+  "passed": 4,
+  "failed": 0,
+  "seconds": 0.0,
+  "command": "cargo test -p xbox-touch-layouts catalog::tests",
+  "coverage": [
+    "nested cloud identity and product matching",
+    "numeric-string Xbox title identity and stream-title separation",
+    "null/absent tabs for native touch titles",
+    "numeric version selection and malformed bundle rejection"
+  ],
+  "liveServiceRequests": 0
+}

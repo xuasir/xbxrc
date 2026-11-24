@@ -1,0 +1,376 @@
+{
+  "task": "2026-11-23-ios-launch-dark-mode",
+  "date": "2026-11-23",
+  "result": "Passed",
+  "implementation": {
+    "systemLaunchScreen": "UILaunchScreen.UIColorName = LaunchBackground，按系统外观选择",
+    "swiftUIRestoringOverlay": "Color(\"LaunchBackground\")，按应用有效外观选择，包含preferredColorScheme覆盖",
+    "lightBackground": "#FFFFFF",
+    "darkBackground": "#202E27",
+    "darkBackgroundMatchesAppCanvas": true
+  },
+  "build": {
+    "scope": "直接编译生产LaunchExperienceView.swift及原启动颜色/矢量资产，使用隔离SwiftUI验收应用",
+    "configuration": "Swift 6 / arm64 iOS Simulator / minimum iOS 26.0 / SDK 27.0",
+    "swiftCompilationExitCode": 0,
+    "actoolExitCode": 0,
+    "machOBuildPlatform": 7,
+    "machOBuildPlatformName": "iOS Simulator",
+    "diagnostics": "clang: warning: using sysroot for 'macOS 27.0' but targeting 'arm64-apple-ios26.0.0-simulator' [-Wincompatible-sysroot]"
+  },
+  "staticChecks": {
+    "swiftFormatStrict": "Passed",
+    "swiftParse": "Passed",
+    "infoPlistLint": "Passed",
+    "assetJSON": "Passed",
+    "scopedDiffCheck": "Passed"
+  },
+  "simulators": [
+    {
+      "id": "79FF2297-6C93-409D-8E53-59A51F8B62AD",
+      "name": "iPhone 17e",
+      "originalAppearance": "light"
+    },
+    {
+      "id": "754F69D9-2451-47ED-95AB-69596D404F2D",
+      "name": "iPad Pro 11-inch (M5)",
+      "originalAppearance": "light"
+    }
+  ],
+  "visualChecks": [
+    {
+      "name": "phone-app-dark",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        32,
+        46,
+        39
+      ],
+      "sRGB": [
+        32,
+        46,
+        39
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        32,
+        46,
+        39
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        169,
+        509,
+        416,
+        751
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -3.0
+      ]
+    },
+    {
+      "name": "phone-app-light",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        255,
+        255,
+        255
+      ],
+      "sRGB": [
+        255,
+        255,
+        255
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        255,
+        255,
+        255
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        169,
+        509,
+        416,
+        751
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -3.0
+      ]
+    },
+    {
+      "name": "phone-forced-dark-system-light",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        32,
+        46,
+        39
+      ],
+      "sRGB": [
+        32,
+        46,
+        39
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        32,
+        46,
+        39
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        169,
+        509,
+        416,
+        751
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -3.0
+      ]
+    },
+    {
+      "name": "phone-forced-light-system-dark",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        255,
+        255,
+        255
+      ],
+      "sRGB": [
+        255,
+        255,
+        255
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        255,
+        255,
+        255
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        169,
+        509,
+        416,
+        751
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -3.0
+      ]
+    },
+    {
+      "name": "phone-system-dark",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        28,
+        46,
+        38
+      ],
+      "sRGB": [
+        28,
+        46,
+        38
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        32,
+        46,
+        39
+      ],
+      "maxChannelDelta": 4,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        140,
+        483,
+        444,
+        779
+      ],
+      "iconCenterOffsetPixels": [
+        -0.5,
+        -2.0
+      ]
+    },
+    {
+      "name": "phone-system-light",
+      "size": [
+        1170,
+        2532
+      ],
+      "rawRGB": [
+        255,
+        255,
+        255
+      ],
+      "sRGB": [
+        255,
+        255,
+        255
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        255,
+        255,
+        255
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        143,
+        483,
+        442,
+        776
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -3.5
+      ]
+    },
+    {
+      "name": "tablet-app-dark",
+      "size": [
+        1668,
+        2420
+      ],
+      "rawRGB": [
+        32,
+        46,
+        39
+      ],
+      "sRGB": [
+        32,
+        46,
+        39
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        32,
+        46,
+        39
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        307,
+        495,
+        527,
+        710
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -2.5
+      ]
+    },
+    {
+      "name": "tablet-app-light",
+      "size": [
+        1668,
+        2420
+      ],
+      "rawRGB": [
+        255,
+        255,
+        255
+      ],
+      "sRGB": [
+        255,
+        255,
+        255
+      ],
+      "profile": "untagged",
+      "metadataKeys": [
+        "srgb",
+        "exif"
+      ],
+      "expectedRGB": [
+        255,
+        255,
+        255
+      ],
+      "maxChannelDelta": 0,
+      "passed": true,
+      "centeredIconBoundsInMiddleHalf": [
+        307,
+        495,
+        527,
+        710
+      ],
+      "iconCenterOffsetPixels": [
+        0.0,
+        -2.5
+      ]
+    }
+  ],
+  "visualReview": "六张主截图人工核对通过，深浅色背景和图标居中；两张应用外观覆盖截图的像素与对应主截图一致",
+  "colorConversionObservation": "系统暗色静态截图RGB为28/46/38，SwiftUI为32/46/39；同源颜色资产的观测通道最大差4/255，两帧均显示深色",
+  "retainedScreenshots": [
+    "phone-system-dark.png",
+    "phone-system-light.png",
+    "phone-app-dark.png",
+    "phone-app-light.png",
+    "tablet-app-dark.png",
+    "tablet-app-light.png"
+  ],
+  "sourceSHA256": {
+    "iosapp/XBXRC/App/LaunchExperienceView.swift": "6247a209ab31eff9ae61fdf122da08f9fdc2350d4d8d45a7143afcf6ac28d1da",
+    "iosapp/XBXRC/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json": "77f3456aac573efd6994cd8f8e912ce51fd411299412f0de2f0fde5cd7c2e138",
+    "iosapp/XBXRC/Resources/Info.plist": "dd5ac8b112124eb30a052dfc56d6ac800e9a62aabd7460a549c78590c56e37f5",
+    "iosapp/XBXRC/Resources/Assets.xcassets/LaunchIcon.imageset/Contents.json": "45226a3e796ca6e60bf1a90842c736722c9ca6d9db706b6d5d5be5b06ce596c3",
+    "iosapp/XBXRC/Resources/Assets.xcassets/LaunchIcon.imageset/launch-icon.svg": "83799bc28fda696549b7bd5fec14c191ec396c586cd5022c9a0fbd422ee177e8"
+  },
+  "stagedDiffSha256Before": "edfd61b2f93ee40a782aa1a3c93d133d39272255d0d662dda3cb69ca7ff2e3ab",
+  "stagedDiffSha256After": "edfd61b2f93ee40a782aa1a3c93d133d39272255d0d662dda3cb69ca7ff2e3ab",
+  "stagingPreserved": true,
+  "manualAcceptance": "在实机使用同一系统/应用深色外观冷启动，确认系统静态画面与恢复层过渡",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-launch-dark-20261123.0QDDC6"
+}

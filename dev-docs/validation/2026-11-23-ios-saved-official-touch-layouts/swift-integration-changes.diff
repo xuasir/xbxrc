@@ -1,0 +1,2046 @@
+--- a/iosapp/XBXRCTests/StreamingControlsStateTests.swift
++++ b/iosapp/XBXRCTests/StreamingControlsStateTests.swift
+@@ -333,7 +333,8 @@
+                     TouchGamepadOverlay(input: session)
+                     StreamingRuntimeMetricsBar(model: model).padding(.horizontal, 64).padding(
+                         .top, 8)
+-                }.environmentObject(settings).environment(\.locale, Locale(identifier: locale)),
++                }.environmentObject(settings).environmentObject(SavedTouchLayoutsStore())
++                    .environment(\.locale, Locale(identifier: locale)),
+                 size: size, name: "\(name)-streaming-standard-touch")
+         }
+         for group in StreamingDiagnosticGroup.allCases {
+@@ -341,7 +342,8 @@
+                 StreamingDiagnosticsPanel(
+                     model: model, group: .constant(group), copied: .constant(false)
+                 )
+-                .environmentObject(settings).appThemeCanvas().environment(
++                .environmentObject(settings).environmentObject(SavedTouchLayoutsStore())
++                .appThemeCanvas().environment(
+                     \.locale, Locale(identifier: "zh-Hans")),
+                 size: CGSize(width: 390, height: 700), name: "phone-diagnostics-\(group.rawValue)")
+         }
+--- a/iosapp/XBXRCTests/CapabilityMigrationTests.swift
++++ b/iosapp/XBXRCTests/CapabilityMigrationTests.swift
+@@ -427,6 +427,7 @@
+                     let root = content.environmentObject(settings).environmentObject(auth)
+                         .environmentObject(data).environmentObject(cloud)
+                         .environmentObject(streaming).environmentObject(favorites)
++            .environmentObject(SavedTouchLayoutsStore())
+                         .environment(\.locale, Locale(identifier: language))
+                         .environment(\.dynamicTypeSize, textSize)
+                         .environment(\.colorScheme, theme).preferredColorScheme(theme)
+@@ -876,3 +877,100 @@
+         []
+     }
+ }
++
++// BEGIN 20261124 Scoped UI style smoke
++extension CapabilityMigrationTests {
++    @MainActor
++    func testScopedUIStyleSmoke() async throws {
++        let suite = "XBXRC.UIStyleSmoke.\(UUID().uuidString)"
++        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
++        defer { defaults.removePersistentDomain(forName: suite) }
++        let settings = AppSettingsStore(defaults: defaults)
++        for (name, size, theme, language, textSize, selected) in [
++            (
++                "styles-phone-dark", CGSize(width: 390, height: 844), ColorScheme.dark,
++                "zh-Hans", DynamicTypeSize.large, false
++            ),
++            (
++                "styles-phone-light", CGSize(width: 390, height: 844), ColorScheme.light,
++                "zh-Hans", DynamicTypeSize.large, true
++            ),
++            (
++                "styles-narrow-accessibility", CGSize(width: 320, height: 1_000), ColorScheme.dark,
++                "en", DynamicTypeSize.accessibility3, true
++            ),
++            (
++                "styles-tablet-light", CGSize(width: 1_024, height: 768), ColorScheme.light,
++                "en", DynamicTypeSize.large, false
++            ),
++        ] {
++            let root = ScopedUIStyleShowcase(selected: selected)
++                .environmentObject(settings)
++                .environment(\.colorScheme, theme).preferredColorScheme(theme)
++                .environment(\.locale, Locale(identifier: language))
++                .environment(\.dynamicTypeSize, textSize)
++                .transaction { $0.disablesAnimations = true }
++                .appInformationTypography()
++            try await attachLayoutSnapshot(root: root, size: size, name: name)
++        }
++    }
++}
++
++private struct ScopedUIStyleShowcase: View {
++    @State private var touchOnly: Bool
++    @State private var tab = "概览"
++    @State private var group = 0
++    private let groups = ["网络", "显示", "恢复", "会话"]
++
++    init(selected: Bool) { _touchOnly = State(initialValue: selected) }
++
++    var body: some View {
++        ScrollView {
++            VStack(alignment: .leading, spacing: 16) {
++                Text("图标与文字").appFont(.section, weight: .semibold)
++                Label {
++                    Text("正在游玩 Halo Infinite").appFont(.bodySmall)
++                } icon: {
++                    AppIconView(.controller, size: 14)
++                }
++                .labelStyle(AppIconLabelStyle())
++                AppInlineHint("旋转设备或调整窗口以切换方向")
++                AppNavigationRow(
++                    title: "触屏手柄", subtitle: "布局 · 大小 · 透明度", icon: .touch,
++                    compact: true)
++                Text("筛选与工具").appFont(.section, weight: .semibold)
++                AppContentToolbar {
++                    AppSegmentedFilter(
++                        selection: $touchOnly, values: [false, true],
++                        title: { $0 ? "官方触控" : "全部" },
++                        identifier: "style-input-filter", label: "控制方式", fillsWidth: false)
++                    AppInformationPicker(
++                        "排序", selection: .constant("recent"), selectedTitle: "最近游玩"
++                    ) {
++                        Text("最近游玩").tag("recent")
++                    }
++                    Button("重置筛选") { touchOnly = false }
++                        .buttonStyle(AppContentCapsuleButtonStyle())
++                }
++                AppSegmentedFilter(
++                    selection: $group, values: Array(groups.indices),
++                    title: { groups[$0] }, identifier: "style-diagnostic-groups", label: "诊断分组")
++                HStack {
++                    AppSegmentedFilter(
++                        selection: .constant(TouchLayoutOrientation.portrait),
++                        values: TouchLayoutOrientation.allCases, title: { $0.title },
++                        identifier: "style-orientation", label: "预览方向", fillsWidth: false)
++                    Spacer(minLength: 0)
++                    Button("保存") {}.buttonStyle(AppContentCapsuleButtonStyle())
++                }
++                Text("内容分类").appFont(.section, weight: .semibold)
++                AppTextTabs(
++                    selection: $tab, values: ["概览", "成就", "Xbox 相册", "游玩统计"],
++                    title: { $0 }, identifier: "style-content-tabs", inset: 0)
++            }
++            .foregroundStyle(AppThemePalette.textPrimary)
++            .padding(AppLayoutPolicy.pageInset)
++        }
++    }
++}
++// END 20261124 Scoped UI style smoke
+--- a/iosapp/XBXRC.xcodeproj/project.pbxproj
++++ b/iosapp/XBXRC.xcodeproj/project.pbxproj
+@@ -7,6 +7,18 @@
+ 	objects = {
+ 
+ /* Begin PBXBuildFile section */
++		BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */; };
++		5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */; };
++		4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */; };
++		3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */; };
++		C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */; };
++		17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */; };
++		495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */; };
++		E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */; };
++		7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */; };
++		907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */; };
++		DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */; };
++		09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */; };
+ 		C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */; };
+ 		5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */; };
+ 		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
+@@ -139,6 +151,18 @@
+ /* End PBXContainerItemProxy section */
+ 
+ /* Begin PBXFileReference section */
++		744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchQuickSwitch.swift; sourceTree = "<group>"; };
++		B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutInteractionTests.swift; sourceTree = "<group>"; };
++		74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutTests.swift; sourceTree = "<group>"; };
++		6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsUITestFixtures.swift; sourceTree = "<group>"; };
++		414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutPickerPanel.swift; sourceTree = "<group>"; };
++		4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsView.swift; sourceTree = "<group>"; };
++		A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutPreviewView.swift; sourceTree = "<group>"; };
++		2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsView.swift; sourceTree = "<group>"; };
++		1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutController.swift; sourceTree = "<group>"; };
++		0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsStore.swift; sourceTree = "<group>"; };
++		6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxTouchLayoutClient.swift; sourceTree = "<group>"; };
++		78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutModels.swift; sourceTree = "<group>"; };
+ 		384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnostics.swift; sourceTree = "<group>"; };
+ 		2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnosticsTests.swift; sourceTree = "<group>"; };
+ 		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
+@@ -313,6 +337,7 @@
+ 		C00000000000000000000003 /* App */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */,
+ 				B40000000000000000000001 /* PCPageUITestFixtures.swift */,
+ 				B00000000000000000000001 /* XBXRCApp.swift */,
+ 				B00000000000000000000002 /* AppRootView.swift */,
+@@ -417,6 +442,7 @@
+ 		C00000000000000000000011 /* RustBridge */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */,
+ 				B40000000000000000000006 /* XboxPersonalDataClient.swift */,
+ 				B40000000000000000000005 /* CloudProductDataClient.swift */,
+ 				B00000000000000000000011 /* XboxAuthClient.swift */,
+@@ -449,6 +475,9 @@
+ 		C00000000000000000000009 /* Streaming */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */,
++				414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */,
++				1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */,
+ 				B9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift */,
+ 				B99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift */,
+ 				B00000000000000000000006 /* StreamingRuntime.swift */,
+@@ -521,6 +550,7 @@
+ 		C00000000000000000000015 /* State */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */,
+ 				B40000000000000000000008 /* XboxPlayerData.swift */,
+ 				B40000000000000000000007 /* CloudFavoritesStore.swift */,
+ 				B9BC5E82238132BB99913E9D /* XboxPersonalData.swift */,
+@@ -560,6 +590,7 @@
+ 		C0000000000000000000000D /* XBXRCTests */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
+ 				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
+ 				B6000000000000000000060A /* TouchLayoutTests.swift */,
+ 				B40000000000000000000009 /* PCDataParityTests.swift */,
+@@ -603,10 +634,15 @@
+ 			path = Controllers;
+ 			sourceTree = "<group>";
+ 		};
+-        C30000000000000000000001 = {isa = PBXGroup; children = (B6000000000000000000060B, B4000000000000000000000A, B30000000000000000000001,); path = XBXRCUITests; sourceTree = "<group>"; };
++        C30000000000000000000001 = {isa = PBXGroup; children = (
++				B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */,B6000000000000000000060B, B4000000000000000000000A, B30000000000000000000001,); path = XBXRCUITests; sourceTree = "<group>"; };
+ 		C60000000000000000000001 /* TouchControls */ = {
+ 			isa = PBXGroup;
+ 			children = (
++				4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */,
++				A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */,
++				2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */,
++				78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */,
+ 				B60000000000000000000600 /* TouchControlRuntime.swift */,
+ 				B60000000000000000000601 /* TouchInputAccumulator.swift */,
+ 				B60000000000000000000620 /* TouchLayoutTemplate.swift */,
+@@ -768,6 +804,16 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */,
++				3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */,
++				C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */,
++				17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */,
++				495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */,
++				E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */,
++				7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */,
++				907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */,
++				DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */,
++				09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */,
+ 				A60000000000000000000608 /* TouchLayoutSurface.swift in Sources */,
+ 				A6000000000000000000060F /* TouchLayoutRecorder.swift in Sources */,
+ 				A6000000000000000000060E /* TouchSampleBatch.swift in Sources */,
+@@ -873,6 +919,7 @@
+ 			isa = PBXSourcesBuildPhase;
+ 			buildActionMask = 2147483647;
+ 			files = (
++				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
+ 				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,
+ 				A6000000000000000000060A /* TouchLayoutTests.swift in Sources */,
+ 				A40000000000000000000009 /* PCDataParityTests.swift in Sources */,
+@@ -890,6 +937,7 @@
+ 			runOnlyForDeploymentPostprocessing = 0;
+ 		};
+         D30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
++				5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */,
+ 				A6000000000000000000060B /* TouchLayoutInteractionTests.swift in Sources */,A4000000000000000000000A, A30000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
+ /* End PBXSourcesBuildPhase section */
+ 
+--- a/iosapp/XBXRC/App/XBXRCApp.swift
++++ b/iosapp/XBXRC/App/XBXRCApp.swift
+@@ -15,6 +15,7 @@
+     @StateObject private var cloudStore: CloudLibraryStore
+     @StateObject private var favorites: CloudFavoritesStore
+     @StateObject private var streamingStore: StreamingFeatureStore
++    @StateObject private var savedTouchLayouts: SavedTouchLayoutsStore
+ 
+     init() {
+         let settingsStore: AppSettingsStore
+@@ -84,6 +85,18 @@
+         _streamingStore = StateObject(
+             wrappedValue: StreamingFeatureStore(settingsProvider: settingsStore)
+         )
++        #if DEBUG
++            if ProcessInfo.processInfo.arguments.contains("--official-touch-layouts-ui-test") {
++                _savedTouchLayouts = StateObject(
++                    wrappedValue: SavedTouchLayoutsStore(
++                        client: OfficialTouchLayoutsUITestFixtures.client()))
++                OfficialTouchLayoutsUITestFixtures.addTemplate(to: settingsStore)
++            } else {
++                _savedTouchLayouts = StateObject(wrappedValue: SavedTouchLayoutsStore())
++            }
++        #else
++            _savedTouchLayouts = StateObject(wrappedValue: SavedTouchLayoutsStore())
++        #endif
+         IOSRuntimeTrace.event(
+             domain: "ios-app",
+             event: "appLaunchStarted",
+@@ -132,11 +145,23 @@
+                 .environmentObject(settingsStore)
+                 .environmentObject(streamingStore)
+                 .environmentObject(favorites)
++                .environmentObject(savedTouchLayouts)
+                 .environment(\.locale, settingsStore.mobile.appLanguage.locale)
+                 .preferredColorScheme(settingsStore.appearanceMode.colorScheme)
+                 .onChange(of: settingsStore.mobile) { _, preferences in
+                     MobileInteractionFeedback.play(preferences)
+-                }
++                    streamingStore.touchLayout.reconcile(
++                        preferences: preferences, library: savedTouchLayouts)
++                }
++                .onChange(of: savedTouchLayouts.layouts) { _, _ in
++                    streamingStore.touchLayout.reconcile(
++                        preferences: settingsStore.mobile, library: savedTouchLayouts)
++                }
++                .onChange(of: savedTouchLayouts.hasLoadedLayouts) { _, _ in
++                    streamingStore.touchLayout.reconcile(
++                        preferences: settingsStore.mobile, library: savedTouchLayouts)
++                }
++                .task { await savedTouchLayouts.reload() }
+                 .task {
+                     #if DEBUG
+                         if ProcessInfo.processInfo.arguments.contains("--settings-ui-test")
+--- a/iosapp/XBXRC/Resources/Localizable.xcstrings
++++ b/iosapp/XBXRC/Resources/Localizable.xcstrings
+@@ -2007,6 +2007,55 @@
+         }
+       }
+     },
++    "保存到本机" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Save to this device"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "保存到本机"
++          }
++        }
++      }
++    },
++    "保存后可在 Home 串流菜单中切换布局。" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Saved layouts can be selected from the Home streaming menu."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "保存后可在 Home 串流菜单中切换布局。"
++          }
++        }
++      }
++    },
++    "保存游戏适配布局，用于 Home 串流" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Save game layouts for Home streaming"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "保存游戏适配布局，用于 Home 串流"
++          }
++        }
++      }
++    },
+     "保存的游戏信息" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -2092,6 +2141,22 @@
+         }
+       }
+     },
++    "全屏预览" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Full screen preview"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "全屏预览"
++          }
++        }
++      }
++    },
+     "全强" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -2377,6 +2442,22 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "Power off the console and end the stream?"
++          }
++        }
++      }
++    },
++    "关闭布局选择" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Close layout picker"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "关闭布局选择"
+           }
+         }
+       }
+@@ -2404,6 +2485,22 @@
+     "关闭诊断指标" : {
+ 
+     },
++    "关闭预览" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Close preview"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "关闭预览"
++          }
++        }
++      }
++    },
+     "兼容显示" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -2507,6 +2604,23 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "Latest submit age"
++          }
++        }
++      }
++    },
++    "最近" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Recent"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "最近"
+           }
+         }
+       }
+@@ -2743,6 +2857,56 @@
+         }
+       }
+     },
++    "切换最近自定义布局" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Switch to recent custom layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "切换最近自定义布局"
++          }
++        }
++      }
++    },
++    "切换标准布局" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Switch to standard layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "切换标准布局"
++          }
++        }
++      }
++    },
++    "切换触屏布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Switch touch layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "切换触屏布局"
++          }
++        }
++      }
++    },
+     "创建 WebRTC 连接失败" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -2794,6 +2958,39 @@
+         }
+       }
+     },
++    "删除 %@" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Delete %@"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "删除 %@"
++          }
++        }
++      }
++    },
++    "删除布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Delete layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "删除布局"
++          }
++        }
++      }
++    },
+     "删除模板" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -2828,6 +3025,22 @@
+         }
+       }
+     },
++    "删除此游戏布局？" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Delete this game layout?"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "删除此游戏布局？"
++          }
++        }
++      }
++    },
+     "刷新" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -3036,6 +3249,22 @@
+         }
+       }
+     },
++    "包内布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "包内布局"
++          }
++        }
++      }
++    },
+     "午夜黑" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -3478,6 +3707,22 @@
+         }
+       }
+     },
++    "可用于 Home 串流" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Compatible with Home streaming"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "可用于 Home 串流"
++          }
++        }
++      }
++    },
+     "右扳机" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -3715,6 +3960,22 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "图示选择、死区与方向反转"
++          }
++        }
++      }
++    },
++    "在云游戏详情中保存官方布局，随后可在 Home 串流中切换。" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Save official layouts from a cloud game’s details, then select them during Home streaming."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "在云游戏详情中保存官方布局，随后可在 Home 串流中切换。"
+           }
+         }
+       }
+@@ -4436,6 +4697,55 @@
+         }
+       }
+     },
++    "官方包中暂无可用布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "This bundle has no available layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "官方包中暂无可用布局"
++          }
++        }
++      }
++    },
++    "官方版本" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Official version"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "官方版本"
++          }
++        }
++      }
++    },
++    "官方触屏布局" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Official touch layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "官方触屏布局"
++          }
++        }
++      }
++    },
+     "官方触控" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -4826,6 +5136,23 @@
+         }
+       }
+     },
++    "已保存 · 版本 %@" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Saved · Version %@"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "已保存 · 版本 %@"
++          }
++        }
++      }
++    },
+     "已保存，录入完成。" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -4833,6 +5160,38 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "Saved. Recording complete."
++          }
++        }
++      }
++    },
++    "已保存到本机" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Saved on this device"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "已保存到本机"
++          }
++        }
++      }
++    },
++    "已保存的游戏布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Saved game layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "已保存的游戏布局"
+           }
+         }
+       }
+@@ -5228,6 +5587,22 @@
+         }
+       }
+     },
++    "布局等待适配" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Layout support is pending"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "布局等待适配"
++          }
++        }
++      }
++    },
+     "带宽状态" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -7095,6 +7470,22 @@
+         }
+       }
+     },
++    "搜索游戏或布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Search games or layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "搜索游戏或布局"
++          }
++        }
++      }
++    },
+     "搜索游玩记录" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -7367,6 +7758,22 @@
+         }
+       }
+     },
++    "新会话使用触屏设置中的默认布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "New sessions use the default layout from Touch settings"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "新会话使用触屏设置中的默认布局"
++          }
++        }
++      }
++    },
+     "新入库" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -7824,6 +8231,23 @@
+         }
+       }
+     },
++    "暂无最近布局" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "No recent layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "暂无最近布局"
++          }
++        }
++      }
++    },
+     "暂无可用主机" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -8096,6 +8520,23 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "更新于 %@"
++          }
++        }
++      }
++    },
++    "更新布局" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Update layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "更新布局"
+           }
+         }
+       }
+@@ -8413,6 +8854,22 @@
+         }
+       }
+     },
++    "查看官方布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "View official layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "查看官方布局"
++          }
++        }
++      }
++    },
+     "查看延迟、丢包、码率与控制通道。" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -8819,6 +9276,38 @@
+         }
+       }
+     },
++    "正在下载布局包" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Downloading layout bundle"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在下载布局包"
++          }
++        }
++      }
++    },
++    "正在使用的布局会切换为通用 Xbox。" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "An active layout will switch to the standard Xbox layout."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在使用的布局会切换为通用 Xbox。"
++          }
++        }
++      }
++    },
+     "正在准备 Xbox 串流访问权限" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -8887,6 +9376,22 @@
+         }
+       }
+     },
++    "正在准备布局预览" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Preparing layout preview"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在准备布局预览"
++          }
++        }
++      }
++    },
+     "正在创建串流会话" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -9089,6 +9594,22 @@
+         }
+       }
+     },
++    "正在查询官方布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Finding official layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在查询官方布局"
++          }
++        }
++      }
++    },
+     "正在查询游玩时长" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -9187,6 +9708,22 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "正在结束串流"
++          }
++        }
++      }
++    },
++    "正在读取已保存布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Loading saved layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "正在读取已保存布局"
+           }
+         }
+       }
+@@ -9530,6 +10067,22 @@
+         }
+       }
+     },
++    "此游戏暂无可用的官方手柄布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "This game has no compatible official controller layouts yet"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "此游戏暂无可用的官方手柄布局"
++          }
++        }
++      }
++    },
+     "此项数据暂缺" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -10149,6 +10702,22 @@
+         }
+       }
+     },
++    "游戏提供原生触屏操作，本机布局库使用手柄映射布局。" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "This game supports native touch. Saved layouts use controller mappings."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "游戏提供原生触屏操作，本机布局库使用手柄映射布局。"
++          }
++        }
++      }
++    },
+     "游戏操作" : {
+       "extractionState" : "manual",
+       "localizations" : {
+@@ -10732,6 +11301,23 @@
+         }
+       }
+     },
++    "版本 %@" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Version %@"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "版本 %@"
++          }
++        }
++      }
++    },
+     "版本与应用信息" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -11153,6 +11739,22 @@
+         }
+       }
+     },
++    "登录后查看官方触屏布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Sign in to view official touch layouts"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "登录后查看官方触屏布局"
++          }
++        }
++      }
++    },
+     "登录状态需要更新" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -12663,6 +13265,22 @@
+     "触控透明度" : {
+ 
+     },
++    "触摸按键体验布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Try the layout by touching its controls"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "触摸按键体验布局"
++          }
++        }
++      }
++    },
+     "触点 %lld" : {
+ 
+     },
+@@ -14271,6 +14889,23 @@
+     "重复 / 乱序 / 异常" : {
+ 
+     },
++    "重新保存" : {
++      "extractionState" : "stale",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Save again"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "重新保存"
++          }
++        }
++      }
++    },
+     "重新加载" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -14316,6 +14951,22 @@
+         }
+       }
+     },
++    "重新查询" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Search again"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "重新查询"
++          }
++        }
++      }
++    },
+     "重新登录" : {
+       "extractionState" : "stale",
+       "localizations" : {
+@@ -14378,7 +15029,6 @@
+       }
+     },
+     "重试" : {
+-      "extractionState" : "stale",
+       "localizations" : {
+         "en" : {
+           "stringUnit" : {
+@@ -14893,10 +15543,26 @@
+           "stringUnit" : {
+             "state" : "translated",
+             "value" : "默认"
++          }
++        }
++      }
++    },
++    "默认布局" : {
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Default layout"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "默认布局"
+           }
+         }
+       }
+     }
+   },
+   "version" : "1.0"
+-}
++}--- a/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift
++++ b/iosapp/XBXRC/Shared/State/CloudLibraryStore.swift
+@@ -1221,6 +1221,47 @@
+         productRequestIDs[identity] = nil
+     }
+ 
++    /// 低频官方资源查询复用目录的云授权，异步结果按账户和范围代次提交。
++    func withCloudAccess<Value: Sendable>(
++        prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess,
++        operation: @Sendable (PreparedCloudAccess) async throws -> Value
++    ) async throws -> Value {
++        let requestGeneration = generation
++        let owner = authentication?.ownerGeneration
++        let scopeID = productScopeID
++        func checkCurrent() throws {
++            try Task.checkCancellation()
++            guard requestGeneration == generation, owner == authentication?.ownerGeneration,
++                scopeID == productScopeID
++            else { throw CancellationError() }
++        }
++        var access: PreparedCloudAccess
++        if let saved = activeAccess,
++            saved.expiresAtMs > UInt64(Date().timeIntervalSince1970 * 1000) + 30_000,
++            authentication == nil || authentication?.session?.cloudAccountID == saved.accountID
++        {
++            access = saved
++        } else {
++            access = try await prepareAccess()
++        }
++        try checkCurrent()
++        activeAccess = access
++        do {
++            let result = try await operation(access)
++            try checkCurrent()
++            return result
++        } catch {
++            try checkCurrent()
++            guard SectionRequestFailure(error: error).kind == .authentication else { throw error }
++            access = try await prepareAccess()
++            try checkCurrent()
++            activeAccess = access
++            let result = try await operation(access)
++            try checkCurrent()
++            return result
++        }
++    }
++
+     func loadWaitTime(
+         productID: String, streamTitleID: String, refresh: Bool = false,
+         prepareAccess: @escaping @MainActor () async throws -> PreparedCloudAccess
+--- a/iosapp/XBXRC/Features/Settings/MobilePreferences.swift
++++ b/iosapp/XBXRC/Features/Settings/MobilePreferences.swift
+@@ -56,6 +56,7 @@
+     var touchLayoutID = "classic"
+     var touchScale = 1.0
+     var touchLayoutTemplates: [TouchLayoutTemplate] = []
++    var recentCustomTouchLayoutID: String?
+     var picture = MobilePicturePreferences()
+     var menuShortcut: MobileMenuShortcut = .menuView
+     var customMenuButtons: [MobileShortcutButton]?
+@@ -101,6 +102,17 @@
+         // 旧测试目录身份继续回到标准布局，本地模板按有效身份恢复。
+         if !value.touchLayoutTemplates.contains(where: { $0.id == value.touchLayoutID }) {
+             value.touchLayoutID = TouchLayoutTemplate.standardID
++        }
++        if let recent = TouchLayoutSelection.fromPersistentID(recentCustomTouchLayoutID) {
++            if case .template(let id) = recent,
++                !value.touchLayoutTemplates.contains(where: { $0.id == id })
++            {
++                value.recentCustomTouchLayoutID = nil
++            } else {
++                value.recentCustomTouchLayoutID = recent.persistentID
++            }
++        } else {
++            value.recentCustomTouchLayoutID = nil
+         }
+         value.touchOpacity = clamp(touchOpacity, 0.2...1, fallback: 0.65)
+         value.touchScale = clamp(touchScale, 0.75...1.5, fallback: 1)
+@@ -158,6 +170,7 @@
+         compactPerformanceOverlay = value(.compactPerformanceOverlay, compactPerformanceOverlay)
+         gamepadBindings = value(.gamepadBindings, gamepadBindings)
+         touchLayoutID = value(.touchLayoutID, touchLayoutID)
++        recentCustomTouchLayoutID = value(.recentCustomTouchLayoutID, recentCustomTouchLayoutID)
+         touchScale = value(.touchScale, touchScale)
+         touchLayoutTemplates =
+             (try? c.decode(
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift
+@@ -23,7 +23,9 @@
+         "gamepadA", "gamepadB", "gamepadX", "gamepadY",
+     ]
+ 
+-    static func decode(_ data: Data, defaultID: String = "layout") throws -> [TouchLayout] {
++    static func decode(
++        _ data: Data, defaultID: String = "layout", availableAssets: Set<String> = []
++    ) throws -> [TouchLayout] {
+         guard data.count <= 2_000_000 else { throw TouchLayoutError.invalid("文件超过 2 MB") }
+         let root = try JSONDecoder().decode(TouchJSON.self, from: data)
+         guard root.object != nil else { throw TouchLayoutError.invalid("根节点需要为对象") }
+@@ -32,13 +34,15 @@
+                 throw TouchLayoutError.invalid("社区包装版本需要为 1")
+             }
+             return try layouts.keys.sorted().map {
+-                try normalize(layouts[$0]!, id: $0, format: "community")
+-            }
+-        }
+-        return [try normalize(root, id: defaultID, format: "official")]
+-    }
+-
+-    private static func normalize(_ document: TouchJSON, id: String, format: String) throws
++                try normalize(layouts[$0]!, id: $0, format: "community", assets: availableAssets)
++            }
++        }
++        return [try normalize(root, id: defaultID, format: "official", assets: availableAssets)]
++    }
++
++    private static func normalize(
++        _ document: TouchJSON, id: String, format: String, assets: Set<String>
++    ) throws
+         -> TouchLayout
+     {
+         guard let content = document["content"], content.object != nil else {
+@@ -47,17 +51,35 @@
+         var report = TouchCapabilityReport(
+             format: format, schema: document["$schema"]?.string ?? "runtime-v1")
+         if let schema = document["$schema"]?.string,
+-            !schema.contains("/layout/latest/") && !schema.contains("/layout/3.5/")
++            !supportsSchema(schema)
+         {
+             report.add(.unsupported, "/$schema", "此布局版本等待转换器支持")
+         }
+         let value = normalizeNode(content, path: "/content", depth: 0, report: &report)
+-        scanContent(value, path: "/content", report: &report)
++        scanContent(value, path: "/content", assets: assets, report: &report)
++        validateLayerTargets(
++            value, path: "/content", layers: Set(value["layers"]?.object?.keys.map { $0 } ?? []),
++            report: &report)
+         report.controlTypes = Array(Set(report.controlTypes)).sorted()
+         report.behaviors = Array(Set(report.behaviors)).sorted()
+         return TouchLayout(
+             id: id, name: document["name"]?.string ?? document["displayName"]?.string ?? id,
+             author: document["author"]?.string, content: value, report: report)
++    }
++
++    private static func supportsSchema(_ schema: String) -> Bool {
++        guard let url = URL(string: schema),
++            url.host == "schema.play.xbox.com"
++                || (url.host == "raw.githubusercontent.com"
++                    && url.path.hasPrefix("/microsoft/xbox-game-streaming-tools/"))
++        else { return false }
++        let parts = url.pathComponents
++        guard let layout = parts.firstIndex(of: "layout"), parts.count > layout + 1 else {
++            return false
++        }
++        let version = parts[layout + 1]
++        return ["latest", "1.0", "2.0", "3.0", "3.1", "3.2", "3.3", "3.4", "3.5", "4.0", "4.1"]
++            .contains(version)
+     }
+ 
+     private static func normalizeNode(
+@@ -98,7 +120,7 @@
+     }
+ 
+     private static func scanContent(
+-        _ content: TouchJSON, path: String, report: inout TouchCapabilityReport
++        _ content: TouchJSON, path: String, assets: Set<String>, report: inout TouchCapabilityReport
+     ) {
+         let regions: Set<String> = [
+             "left", "right", "center", "upper", "lower", "layers", "sensors",
+@@ -127,7 +149,9 @@
+                     if ring == "inner", slot.array != nil {
+                         report.add(.unsupported, "\(path)/\(side)/\(ring)/\(index)", "内环控件组等待支持")
+                     }
+-                    scanSlot(slot, path: "\(path)/\(side)/\(ring)/\(index)", report: &report)
++                    scanSlot(
++                        slot, path: "\(path)/\(side)/\(ring)/\(index)", assets: assets,
++                        report: &report)
+                 }
+                 if physicalCount > (ring == "inner" ? 4 : 8) {
+                     report.add(.unsupported, "\(path)/\(side)/\(ring)", "控件超过可用物理槽位")
+@@ -135,20 +159,39 @@
+             }
+         }
+         for (index, slot) in (content["upper"]?["right"]?.array ?? []).enumerated() {
+-            scanSlot(slot, path: "\(path)/upper/right/\(index)", report: &report)
++            scanSlot(slot, path: "\(path)/upper/right/\(index)", assets: assets, report: &report)
++        }
++        for (region, fields) in [
++            ("upper", Set(["right"])), ("lower", Set(["leftCenter", "rightCenter", "center"])),
++        ] {
++            guard let edge = content[region], edge != .null else { continue }
++            guard let object = edge.object else {
++                report.add(.unsupported, "\(path)/\(region)", "边缘控件区域需要为对象")
++                continue
++            }
++            for key in object.keys where !fields.contains(key) {
++                report.add(.unsupported, "\(path)/\(region)/\(key)", "此边缘控件区域等待支持")
++            }
++            for key in object.keys where fields.contains(key) && key != "center" {
++                if object[key]?.array == nil {
++                    report.add(.unsupported, "\(path)/\(region)/\(key)", "槽位需要为数组")
++                }
++            }
+         }
+         for key in ["leftCenter", "rightCenter"] {
+             for (index, slot) in (content["lower"]?[key]?.array ?? []).enumerated() {
+-                scanSlot(slot, path: "\(path)/lower/\(key)/\(index)", report: &report)
++                scanSlot(
++                    slot, path: "\(path)/lower/\(key)/\(index)", assets: assets, report: &report)
+             }
+         }
+         if let slot = content["lower"]?["center"] {
+-            scanSlot(slot, path: "\(path)/lower/center", report: &report)
++            scanSlot(slot, path: "\(path)/lower/center", assets: assets, report: &report)
+         }
+         if let layers = content["layers"]?.object {
+             report.behaviors.append("layer")
+             for name in layers.keys.sorted() {
+-                scanContent(layers[name]!, path: "\(path)/layers/\(name)", report: &report)
++                scanContent(
++                    layers[name]!, path: "\(path)/layers/\(name)", assets: assets, report: &report)
+             }
+         }
+         if !(content["sensors"]?.array ?? []).isEmpty {
+@@ -157,13 +200,13 @@
+     }
+ 
+     private static func scanSlot(
+-        _ slot: TouchJSON, path: String, report: inout TouchCapabilityReport
++        _ slot: TouchJSON, path: String, assets: Set<String>, report: inout TouchCapabilityReport
+     ) {
+         if slot == .null { return }
+         if let items = slot.array {
+             report.behaviors.append("cluster")
+             for (index, item) in items.enumerated() {
+-                scanSlot(item, path: "\(path)/\(index)", report: &report)
++                scanSlot(item, path: "\(path)/\(index)", assets: assets, report: &report)
+             }
+             if items.count > 4 { report.add(.unsupported, path, "控件组最多支持四项") }
+             return
+@@ -214,7 +257,7 @@
+                 scanAxis(axis, path: "\(path)/\(field)", report: &report)
+             }
+         }
+-        scanImages(slot["styles"], path: "\(path)/styles", report: &report)
++        scanImages(slot["styles"], path: "\(path)/styles", assets: assets, report: &report)
+         let fields: Set<String> = [
+             "type", "action", "pullAction", "axis", "axisUp", "axisDown", "relative", "expand",
+             "sticky", "toggle", "scale", "interaction", "styles", "visible", "enabled",
+@@ -233,17 +276,35 @@
+                 report.add(.unsupported, path, "动作 \(name) 等待支持")
+             }
+         } else if let items = action.array {
++            if items.isEmpty { report.add(.unsupported, path, "动作组需要有效映射") }
+             for (index, item) in items.enumerated() {
+                 scanAction(item, path: "\(path)/\(index)", report: &report)
+             }
+         } else if action["type"]?.string == "layer", action["target"]?.string != nil {
+             return
+         } else if action["type"]?.string == "segmented", let items = action["items"]?.array {
++            if items.isEmpty { report.add(.unsupported, path, "分段动作需要有效映射") }
+             for (index, item) in items.enumerated() {
+                 scanAction(item, path: "\(path)/items/\(index)", report: &report)
+             }
+         } else {
+             report.add(.unsupported, path, "此动作对象等待支持")
++        }
++    }
++
++    private static func validateLayerTargets(
++        _ value: TouchJSON, path: String, layers: Set<String>, report: inout TouchCapabilityReport
++    ) {
++        if value["type"]?.string == "layer", let target = value["target"]?.string,
++            !layers.contains(target)
++        {
++            report.add(.unsupported, path, "布局切换目标暂缺")
++        }
++        for (key, item) in value.object ?? [:] {
++            validateLayerTargets(item, path: "\(path)/\(key)", layers: layers, report: &report)
++        }
++        for (index, item) in (value.array ?? []).enumerated() {
++            validateLayerTargets(item, path: "\(path)/\(index)", layers: layers, report: &report)
+         }
+     }
+ 
+@@ -276,11 +337,17 @@
+     }
+ 
+     private static func scanImages(
+-        _ value: TouchJSON?, path: String, report: inout TouchCapabilityReport
++        _ value: TouchJSON?, path: String, assets: Set<String>, report: inout TouchCapabilityReport
+     ) {
+         guard let value else { return }
+         if value["type"]?.string == "asset" {
+-            report.add(.unsupported, path, "图片资源等待布局包加载")
++            if let id = value["value"]?.string, assets.contains(id) {
++                if !path.hasSuffix("/faceImage") {
++                    report.add(.unsupported, path, "此图片位置等待绘制支持")
++                }
++            } else {
++                report.add(.unsupported, path, "图片资源等待布局包加载")
++            }
+         }
+         if value["type"]?.string == "icon", let name = value["value"]?.string,
+             !supportedIcons.contains(name)
+@@ -288,7 +355,10 @@
+             report.add(.warning, path, "图标 \(name) 使用动作符号回退")
+         }
+         for (key, item) in value.object ?? [:] {
+-            scanImages(item, path: "\(path)/\(key)", report: &report)
++            scanImages(item, path: "\(path)/\(key)", assets: assets, report: &report)
++        }
++        for (index, item) in (value.array ?? []).enumerated() {
++            scanImages(item, path: "\(path)/\(index)", assets: assets, report: &report)
+         }
+     }
+ }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutTemplate.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutTemplate.swift
+@@ -161,6 +161,9 @@
+     mutating func deleteTouchTemplate(_ id: String) {
+         touchLayoutTemplates.removeAll { $0.id == id }
+         if touchLayoutID == id { touchLayoutID = TouchLayoutTemplate.standardID }
++        if recentCustomTouchLayoutID == TouchLayoutSelection.template(id).persistentID {
++            recentCustomTouchLayoutID = nil
++        }
+     }
+ 
+     mutating func saveTouchAppearance(_ appearance: TouchLayoutAppearance, for id: String) {
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift
+@@ -38,6 +38,7 @@
+     @Environment(\.locale) private var locale
+     let input: TouchInputAccumulator
+     let opacity: Double
++    var assets: TouchLayoutAssets = .empty
+     var capturesEmptySpace = true
+     var configuration: TouchLayoutConfiguration? = nil
+     var onMoveControl: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)? = nil
+@@ -51,6 +52,7 @@
+     func updateUIView(_ view: TouchLayoutSurfaceView, context: Context) {
+         view.locale = locale
+         view.controlOpacity = Float(opacity)
++        view.assets = assets
+         view.capturesEmptySpace = capturesEmptySpace
+         view.onMoveControl = onMoveControl
+         view.onEditingChanged = onEditingChanged
+@@ -71,6 +73,7 @@
+     let input: TouchInputAccumulator
+     var locale = Locale.current
+     var controlOpacity: Float = 0.65
++    var assets: TouchLayoutAssets = .empty
+     var capturesEmptySpace = true
+     var onMoveControl: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)?
+     var onEditingChanged: ((Bool) -> Void)?
+@@ -192,6 +195,7 @@
+             drawing.update(
+                 socket: socket, runtime: input.runtimes[socket.id],
+                 opacity: controlOpacity, traits: traitCollection,
++                assets: assets,
+                 highlighted: feedback.isHighlighted(socket.id, now: now)
+                     || (onMoveControl != nil && selectedControlID == socket.id))
+             let element = UIAccessibilityElement(accessibilityContainer: self)
+@@ -336,7 +340,7 @@
+ 
+     func update(
+         socket: TouchControlSocket, runtime: TouchControlRuntime?, opacity: Float,
+-        traits: UITraitCollection, highlighted: Bool
++        traits: UITraitCollection, assets: TouchLayoutAssets, highlighted: Bool
+     ) {
+         let diameter = socket.diameter
+         let bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+@@ -395,9 +399,9 @@
+             }
+             face = face.insetBy(dx: face.width * 0.22, dy: face.height * 0.22)
+         }
+-        let icon =
+-            style["faceImage"]?["value"]?.string
+-            ?? style["knob"]?["faceImage"]?["value"]?.string ?? socket.control.icon
++        let faceImage = style["faceImage"] ?? style["knob"]?["faceImage"]
++        let icon = faceImage?["value"]?.string ?? socket.control.icon
++        let asset = faceImage?["type"]?.string == "asset" ? icon.flatMap { assets.images[$0] } : nil
+         let systemName = symbolName(icon: icon, control: socket.control)
+         symbol.frame = face
+         symbol.contentsScale = traits.displayScale
+@@ -405,7 +409,7 @@
+         let isXboxGuide = socket.control.action == .gamepad("guide")
+         let symbolIdentity = isXboxGuide ? "XboxLogo" : systemName ?? ""
+         let cacheKey = "\(symbolIdentity): \(face.size): \(strokeColor): \(traits.displayScale)"
+-        if cacheKey != symbolCacheKey {
++        if asset == nil, cacheKey != symbolCacheKey {
+             symbolCacheKey = cacheKey
+             let artwork =
+                 isXboxGuide
+@@ -426,8 +430,8 @@
+                 }.cgImage
+             }
+         }
+-        symbol.contents = symbolCache
+-        text.isHidden = systemName != nil
++        symbol.contents = asset ?? symbolCache
++        text.isHidden = asset != nil || systemName != nil
+         text.contentsScale = traits.displayScale
+         text.frame = CGRect(
+             x: 0, y: diameter / 2 - min(20, diameter * 0.38) * 0.62,
+--- a/iosapp/XBXRC/Features/Library/GameDetailView.swift
++++ b/iosapp/XBXRC/Features/Library/GameDetailView.swift
+@@ -7,6 +7,7 @@
+   @EnvironmentObject private var streamingStore: StreamingFeatureStore
+   @EnvironmentObject private var settings: AppSettingsStore
+   @EnvironmentObject private var favorites: CloudFavoritesStore
++  @EnvironmentObject private var touchLayouts: SavedTouchLayoutsStore
+   @Environment(\.appPageIsActive) private var isActive
+   @Environment(\.locale) private var locale
+   private let initialGame: CloudLibraryGame
+@@ -60,6 +61,7 @@
+       VStack(alignment: .leading, spacing: 32) {
+         AppAccountRequestNotice()
+         header
++        touchLayoutsSection
+         personalSection
+         productSection
+         screenshots
+@@ -167,6 +169,29 @@
+       maxWidth: .infinity, minHeight: artworkCandidates.isEmpty ? 0 : 216,
+       alignment: .bottomLeading
+     )
++  }
++
++  private var touchLayoutsSection: some View {
++    NavigationLink {
++      OfficialTouchLayoutsView(game: game)
++    } label: {
++      HStack(spacing: 12) {
++        AppIconView(.touch).foregroundStyle(AppThemePalette.brand)
++        VStack(alignment: .leading, spacing: 4) {
++          Text("查看官方布局").appFont(.body, weight: .semibold)
++          Text("保存游戏适配布局，用于 Home 串流")
++            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++          if touchLayouts.layouts.contains(where: { $0.productId == game.productID }) {
++            Text("已保存到本机").appFont(.caption).foregroundStyle(AppThemePalette.brand)
++          }
++        }
++        Spacer(minLength: 8)
++        AppIconView(.chevron, size: 16).foregroundStyle(AppThemePalette.brand)
++      }
++      .padding(16).frame(minHeight: 44).contentShape(Rectangle())
++      .appSurface(radius: AppLayoutPolicy.cardRadius)
++    }
++    .buttonStyle(.plain).accessibilityIdentifier("cloud-official-touch-layouts")
+   }
+ 
+   private var recordState: XboxSingleDataState<GameSummary> {
+--- a/iosapp/XBXRC/Features/Controllers/ControllerView.swift
++++ b/iosapp/XBXRC/Features/Controllers/ControllerView.swift
+@@ -297,6 +297,12 @@
+           .accessibilityIdentifier("controller-touch-customize")
+         AppSettingsActionButton("触屏手柄调整") { present(.adjustment) }
+           .accessibilityIdentifier("controller-touch-adjust")
++        NavigationLink {
++          SavedTouchLayoutsView()
++        } label: {
++          Text("已保存的游戏布局")
++        }
++        .frame(minHeight: 44).accessibilityIdentifier("controller-saved-touch-layouts")
+       }
+     }
+     .appThemeCanvas()
+--- a/iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift
+@@ -15,7 +15,7 @@
+ }
+ 
+ enum StreamInputSuppressionReason: Hashable {
+-    case menu, lifecycle, terminal, settingsCapture, settingsTest
++    case menu, lifecycle, terminal, settingsCapture, settingsTest, layoutSwitch
+ }
+ 
+ enum IOSStreamStickTransform {
+@@ -69,6 +69,7 @@
+     private var virtualState = IOSStreamGamepadState.neutral
+     private var activeTouches: Set<String> = []
+     private var requiresNeutral = false
++    private var pendingTouchNeutralFrame = false
+     private var suppressionReasons: Set<StreamInputSuppressionReason> = []
+     private var shortcuts = MobileShortcutMatcher()
+     private var lastShortcutPreferences: MobilePreferences?
+@@ -259,12 +260,15 @@
+         let mapped = snapshot.mapped(using: preferences)
+         let physical = IOSStreamStickTransform.apply(mapped, preferences: preferences)
+         guard !isSuppressed else { return .neutral }
++        if pendingTouchNeutralFrame {
++            pendingTouchNeutralFrame = false
++            return .neutral
++        }
+         if requiresNeutral {
+             guard snapshot.buttons.values.allSatisfy({ $0 <= 0.5 }),
+                 MobileShortcutButton.allCases.allSatisfy({ !$0.isPressed(in: mapped) }),
+                 MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: rawPhysical)) <= 0.15 }),
+-                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: mapped)) <= 0.15 }),
+-                activeTouches.isEmpty
++                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: mapped)) <= 0.15 })
+             else { return .neutral }
+             requiresNeutral = false
+         }
+@@ -302,6 +306,7 @@
+         isSuppressed = suppressed
+         releaseTouches()
+         requiresNeutral = true
++        pendingTouchNeutralFrame = true
+         shortcuts.reset()
+     }
+ 
+@@ -345,6 +350,12 @@
+         activeTouches.removeAll()
+     }
+ 
++    func releaseTouchesForLayoutChange() {
++        releaseTouches()
++        // 唯一采样出口先发 neutral，紧接着的新触点保持自己的完整生命周期。
++        pendingTouchNeutralFrame = true
++    }
++
+     func setTouchLayoutState(_ state: IOSStreamGamepadState, active: Bool) {
+         guard !isSuppressed else { return }
+         virtualState = state
+@@ -357,6 +368,7 @@
+ 
+     func reset() {
+         releaseTouches()
++        pendingTouchNeutralFrame = false
+         suppressionReasons.removeAll()
+         isSuppressed = false
+         requiresNeutral = true
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift
+@@ -38,7 +38,9 @@
+                             reveal(source: .button)
+                         }
+                         .appSurface(radius: 14, prominent: true, forceDark: true)
+-                        Spacer()
++                        Spacer(minLength: 8)
++                        StreamingTouchQuickSwitch(
++                            controller: store.touchLayout, session: store.input)
+                     }
+                     Spacer()
+                 }
+@@ -58,7 +60,7 @@
+                     HStack(alignment: .center) {
+                         rail(
+                             height: min(
+-                                geometry.size.height - 24, capabilities.canPowerOff ? 324 : 280)
++                                geometry.size.height - 24, capabilities.canPowerOff ? 368 : 324)
+                         ) {
+                             operationButtons
+                         }
+@@ -76,6 +78,9 @@
+             }
+             if controls.surface == .debugSheet {
+                 StreamingDiagnosticsFloatingPanel(store: store, onClose: resumeDock)
++            }
++            if controls.surface == .touchLayoutPicker {
++                StreamingTouchLayoutPickerPanel(controller: store.touchLayout, onClose: resumeDock)
+             }
+         }
+         .frame(maxWidth: .infinity, maxHeight: .infinity)
+@@ -156,6 +161,13 @@
+ 
+     private var operationButtons: some View {
+         Group {
++            dockButton(
++                systemName: "gamecontroller", label: "切换触屏布局",
++                identifier: "stream-touch-layout-open"
++            ) {
++                cancelAutoHide()
++                controls.present(.touchLayoutPicker)
++            }
+             dockButton(
+                 systemName: "slider.horizontal.3", label: "画面设置",
+                 identifier: "stream-picture-settings"
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift
+@@ -19,6 +19,7 @@
+     @Published private(set) var startupProgress: StreamingStartupProgress?
+ 
+     let input: StreamInputSession
++    let touchLayout = StreamingTouchLayoutController()
+     weak var authentication: AuthStore?
+     private let sessionActor: StreamSessionActor
+     private let settingsProvider: any StreamingSessionSettingsProviding
+@@ -45,10 +46,12 @@
+             (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
+         }
+         self.input = input
++        touchLayout.bind(to: input)
+         sessionActor = StreamSessionActor(
+             controlFactory: RustStreamingControlSessionFactory(),
+             peerFactory: LibWebRTCPeerRuntimeFactory(inputSession: input)
+         )
++        configureTouchLayoutPreferences()
+     }
+ 
+     init(
+@@ -65,16 +68,29 @@
+             (settingsProvider as? AppSettingsStore)?.mobile ?? MobilePreferences()
+         }
+         self.input = input
++        touchLayout.bind(to: input)
+         sessionActor = StreamSessionActor(
+             controlFactory: controlFactory,
+             peerFactory: peerFactory,
+             remoteAnswerApplyTimeout: remoteAnswerApplyTimeout,
+             initialConnectionTimeout: initialConnectionTimeout
+         )
++        configureTouchLayoutPreferences()
++    }
++
++    private func configureTouchLayoutPreferences() {
++        touchLayout.restoreRecentSelection(preferences: input.preferences)
++        let settings = settingsProvider as? AppSettingsStore
++        touchLayout.onRecentSelectionChanged = { [weak settings] id in
++            if settings?.mobile.recentCustomTouchLayoutID != id {
++                settings?.mobile.recentCustomTouchLayoutID = id
++            }
++        }
+     }
+ 
+     #if DEBUG
+     func prepareControlsUITestPreview() {
++            touchLayout.beginSession(generation: 1, preferences: input.preferences)
+         state = .playing
+         streamTarget = .home
+         diagnostics = StreamingSessionDiagnostics(
+@@ -217,6 +233,7 @@
+         connectedElapsedMilliseconds = nil
+         mediaReadyElapsedMilliseconds = nil
+         input.reset()
++        touchLayout.beginSession(generation: requestGeneration, preferences: input.preferences)
+         audioMuted = sessionSettings.startMuted
+         enablesAudioControl = sessionSettings.enableAudioControl
+         picture =
+@@ -419,6 +436,7 @@
+                     retryable: retryable
+                 )
+                 self.input.setSuppressed(true, reason: .terminal)
++                self.touchLayout.endSession()
+                 restoreIdleTimer()
+                 self.traceState(self.state, generation: requestGeneration)
+             }
+@@ -573,6 +591,7 @@
+         let sessionGeneration = generation
+         videoTrack = nil
+         input.setSuppressed(true, reason: .terminal)
++        touchLayout.endSession()
+         microphoneOperationRevision &+= 1
+         microphoneEnabled = false
+         microphonePending = false
+@@ -660,6 +679,7 @@
+             microphoneEnabled = false
+             microphonePending = false
+             input.setSuppressed(true, reason: .terminal)
++            touchLayout.endSession()
+             restoreIdleTimer()
+         }
+         traceState(state, generation: generation)
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+@@ -48,7 +48,7 @@
+             .frame(maxWidth: .infinity, maxHeight: .infinity)
+             .ignoresSafeArea()
+             if playerState == .playing {
+-                StreamingTouchInputLayer(input: store.input)
++                StreamingTouchInputLayer(input: store.input, layout: store.touchLayout)
+             }
+             if playerState != .playing {
+                 VStack(spacing: 16) {
+@@ -140,11 +140,13 @@
+ 
+ private struct StreamingTouchInputLayer: View {
+     let input: StreamInputSession
++    let layout: StreamingTouchLayoutController
+     @EnvironmentObject private var settings: AppSettingsStore
+     @State private var hasController: Bool
+ 
+-    init(input: StreamInputSession) {
++    init(input: StreamInputSession, layout: StreamingTouchLayoutController) {
+         self.input = input
++        self.layout = layout
+         _hasController = State(initialValue: input.hasController)
+     }
+ 
+@@ -153,7 +155,7 @@
+             if settings.mobile.touchControllerMode == .always
+                 || (settings.mobile.touchControllerMode == .automatic && !hasController)
+             {
+-                TouchGamepadOverlay(input: input)
++                TouchGamepadOverlay(input: input, layout: layout)
+             }
+         }
+         .task(id: ObjectIdentifier(input)) {
+--- a/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift
+@@ -1,14 +1,18 @@
+ import SwiftUI
+ 
+-/// 云游戏和主机串流共用通用 Xbox 布局、绘制与多指输入。
++/// 云游戏和主机串流共用会话布局、绘制与多指输入。
+ struct TouchGamepadOverlay: View {
+     let input: StreamInputSession
+     @EnvironmentObject private var settings: AppSettingsStore
+-    @StateObject private var layout = StreamingTouchLayoutController()
++    @ObservedObject private var layout: StreamingTouchLayoutController
+     @State private var isSuppressed: Bool
+ 
+-    init(input: StreamInputSession) {
++    init(
++        input: StreamInputSession,
++        layout: StreamingTouchLayoutController = StreamingTouchLayoutController()
++    ) {
+         self.input = input
++        self.layout = layout
+         _isSuppressed = State(initialValue: input.isSuppressed)
+     }
+ 
+@@ -17,10 +21,12 @@
+             GeometryReader { geometry in
+                 let frame = StreamingTouchViewportPolicy.frame(in: geometry.size)
+                 TouchLayoutSurface(
+-                    input: layout.input, opacity: settings.mobile.selectedTouchAppearance.opacity,
++                    input: layout.input, opacity: layout.opacity(preferences: settings.mobile),
++                    assets: layout.assets,
+                     capturesEmptySpace: false,
+-                    configuration: settings.mobile.touchConfiguration(
+-                        for: TouchLayoutOrientation(size: geometry.size)),
++                    configuration: layout.configuration(
++                        preferences: settings.mobile,
++                        orientation: TouchLayoutOrientation(size: geometry.size)),
+                     onPress: { MobileInteractionFeedback.play(settings.mobile) }
+                 )
+                 .frame(width: frame.width, height: frame.height)
+@@ -37,7 +43,7 @@
+             isSuppressed = suppressed
+             if suppressed { layout.input.cancelAll(reason: "inputSuppressed") }
+         }
+-        .onDisappear { layout.unbind(from: input) }
++        .onDisappear { layout.surfaceClosed() }
+     }
+ }
+ 
+@@ -50,29 +56,3 @@
+     }
+ }
+ 
+-@MainActor
+-final class StreamingTouchLayoutController: ObservableObject {
+-    let input = TouchInputAccumulator()
+-    let loadError: String?
+-
+-    init(bundle: Bundle = .main) {
+-        do {
+-            input.load(try TouchLayoutCatalog.standard(bundle: bundle))
+-            loadError = nil
+-        } catch {
+-            loadError = error.localizedDescription
+-        }
+-    }
+-
+-    func bind(to session: StreamInputSession) {
+-        input.onInput = { [weak session] frame in
+-            session?.setTouchLayoutState(frame.gamepad, active: frame.pointerCount > 0)
+-        }
+-    }
+-
+-    func unbind(from session: StreamInputSession) {
+-        input.cancelAll(reason: "streamLayoutClosed")
+-        input.onInput = nil
+-        session.releaseTouches()
+-    }
+-}
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift
+@@ -124,13 +124,9 @@
+ 
+     var body: some View {
+         VStack(spacing: compact ? 6 : 12) {
+-            Picker("诊断分组", selection: $group) {
+-                ForEach(StreamingDiagnosticGroup.allCases) { tab in
+-                    Text(LocalizedStringKey(tab.title)).tag(tab)
+-                }
+-            }
+-            .pickerStyle(.segmented)
+-            .accessibilityIdentifier("stream-diagnostic-groups")
++            AppSegmentedFilter(
++                selection: $group, values: StreamingDiagnosticGroup.allCases,
++                title: { $0.title }, identifier: "stream-diagnostic-groups", label: "诊断分组")
+             ScrollView {
+                 LazyVStack(spacing: 0) {
+                     ForEach(model.rows(group)) { row in
+@@ -238,7 +234,12 @@
+                     colors: [.blue.opacity(0.65), .green.opacity(0.45), .black],
+                     startPoint: .topLeading, endPoint: .bottomTrailing
+                 ).ignoresSafeArea()
+-                TouchGamepadOverlay(input: store.input)
++                TouchGamepadOverlay(input: store.input, layout: store.touchLayout)
++                if ProcessInfo.processInfo.arguments.contains("--official-touch-layouts-ui-test") {
++                    StreamingTouchLayoutUITestMarker(
++                        controller: store.touchLayout, session: store.input
++                    ).padding(.top, 50)
++                }
+                 if settings.mobile.compactPerformanceOverlay {
+                     StreamingRuntimeMetricsBar(
+                         model: StreamingDiagnosticsModel(
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift
+@@ -100,6 +100,7 @@
+     case dock
+     case pictureSheet
+     case debugSheet
++    case touchLayoutPicker
+     case sharing
+     case confirmingExit
+     case confirmingPowerOff

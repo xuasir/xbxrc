@@ -1,0 +1,118 @@
+{
+  "checkedAt": "2026-11-23T10:59:56.861694+08:00",
+  "scope": {
+    "path": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+    "sha256": "f69a6c7c02ff27ba2526b40c80bc14abed557cacc7708f7373bd8b86bd3b151d",
+    "bytes": 16504239,
+    "rows": 26163,
+    "firstTsMs": 1795401150206,
+    "lastTsMs": 1795401588672
+  },
+  "streamingCoreGate": "PASS",
+  "allFlowsGate": "FAIL",
+  "allFlowsFailures": {
+    "budgetViolations": 0,
+    "coverageViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 2,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "privacySchemaSequenceBudget": "PASS",
+  "readinessSupplement": {
+    "backgroundReadySeq": 425,
+    "foregroundSeq": 434,
+    "deliveredSeq": 435,
+    "peerEpoch": 1,
+    "latencyMs": 3.087375044822693
+  },
+  "bindingCountsByPeer": {
+    "1": 1,
+    "2": 1
+  },
+  "foreground": {
+    "windows": 95,
+    "windowSeconds": 95.24096108335256,
+    "counts": {
+      "framesReceivedDelta": 5709,
+      "framesDecodedDelta": 5709,
+      "submitCountDelta": 5002,
+      "presentCountDelta": 5002,
+      "drawablePresentCountDelta": 4998
+    },
+    "weightedFps": {
+      "framesReceivedDelta": 59.94269624183677,
+      "framesDecodedDelta": 59.94269624183677,
+      "submitCountDelta": 52.519419618438874,
+      "presentCountDelta": 52.519419618438874,
+      "drawablePresentCountDelta": 52.477420882238604
+    },
+    "decodeToGpuGapPercent": 12.383955158521632,
+    "decodeToDrawableGapPercent": 12.454019968470835
+  },
+  "normalSupply": {
+    "windows": 94,
+    "windowSeconds": 94.23864625006914,
+    "counts": {
+      "framesReceivedDelta": 5708,
+      "framesDecodedDelta": 5708,
+      "submitCountDelta": 4998,
+      "presentCountDelta": 4998,
+      "drawablePresentCountDelta": 4992
+    },
+    "weightedFps": {
+      "framesReceivedDelta": 60.569630689021196,
+      "framesDecodedDelta": 60.569630689021196,
+      "submitCountDelta": 53.035566605418346,
+      "presentCountDelta": 53.035566605418346,
+      "drawablePresentCountDelta": 52.97189845823297
+    },
+    "decodeToGpuGapPercent": 12.438682550805886,
+    "decodeToDrawableGapPercent": 12.543798177995795
+  },
+  "frameDelivery": {
+    "accepted": 5047,
+    "submitted": 5042,
+    "gpuCompleted": 5042,
+    "mailboxOverwriteEvents": 5,
+    "acceptedMinusOverwriteMatchesSubmit": true,
+    "everySubmitHasMatchingGpuCompletion": true,
+    "submittedWithoutAcceptance": 0,
+    "entryFrameCountFromAcceptedPlusIngressDrops": 5777
+  },
+  "applicationDrops": {
+    "ingressCoalesced": 730
+  },
+  "sourceHashesMatchPreviousValidation": true,
+  "coverage": {
+    "backgroundPipelineCreationAndForegroundSupplement": true,
+    "playingAfterFallbackRebuild": true,
+    "repeatedResumeDuringPlaying": "pending",
+    "samePeerBackgroundSteadySupplyResume": "pending"
+  },
+  "taskStatus": "Validation Pending",
+  "nextAction": "定位MainActor长任务与入口drain排队，覆盖播放期间多次恢复；完整门禁的图片候选取消终结回报单独记录",
+  "cleanup": {
+    "result": "PASS",
+    "removedAllocatedMiB": 4.89,
+    "temporaryRootAbsent": true
+  },
+  "verification": {
+    "sourceHashChecks": "PASS",
+    "analyzerPythonParse": "PASS",
+    "alignedCsvRecalculation": "PASS",
+    "currentAcceptedSubmitGpuPairing": "PASS",
+    "fullCoreReportMatchesOriginal": "PASS",
+    "rawSourceMatchesRepositoryCopy": "PASS",
+    "workingTreeDiffCheck": "PASS",
+    "cachedCodeAndDocsDiffCheck": "PASS",
+    "fullCachedEvidenceWhitespaceAudit": "archive-audit.json"
+  },
+  "fullCoreReport": {
+    "artifact": "core-analysis.full.json.gz",
+    "uncompressedSha256": "992fc28506b90203c860c7e9c1e8453091e58ddc5308453390302d782521a3ec",
+    "matchesOriginal": true
+  }
+}

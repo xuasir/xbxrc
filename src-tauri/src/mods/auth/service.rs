@@ -16,10 +16,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
-use xbox_auth_flow::{
-    AuthFlow, BuildDownstreamTokensInput, CompleteOAuthLoginInput, StartOAuthLoginInput,
-    TransferTokenInput,
-};
+use xbox_auth_flow::{AuthFlow, CompleteOAuthLoginInput, StartOAuthLoginInput, TransferTokenInput};
 
 const CHECK_AUTH_COOLDOWN: Duration = Duration::from_secs(15);
 pub const AUTH_WINDOW_LABEL: &str = "auth-oauth-window";

@@ -1,0 +1,31 @@
+   Compiling xbox-touch-layouts v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-touch-layouts)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running unittests src/lib.rs (target/ios-bindgen/debug/deps/xbox_touch_layouts-9ee2dc2fb99163e8)
+
+running 17 tests
+test catalog::tests::requires_nested_cloud_identity_and_accepts_numeric_strings ... ok
+test catalog::tests::chooses_only_requested_title_and_latest_numeric_version ... ok
+test tests::content_identity_is_stable_and_changes_with_bytes ... ok
+test catalog::tests::native_touch_titles_have_an_empty_catalog ... ok
+test tests::bad_reference_keeps_other_layouts_available ... ok
+test tests::decodes_manifest_with_short_service_version ... ok
+test catalog::tests::unknown_format_version_is_filtered_and_bad_identity_rejected ... ok
+test catalog::tests::accepts_short_service_versions_and_preserves_display_values ... ok
+test tests::decodes_official_manifest_default_and_multiple_layouts ... ok
+test tests::rejects_invalid_manifest_and_missing_context ... ok
+test tests::expands_context_default_and_internal_definitions ... ok
+test community::tests::merges_real_community_layouts_with_default_and_author ... ok
+test tests::circular_and_external_references_are_diagnosed ... ok
+test tests::selects_localized_assets_at_nearest_display_density ... ok
+test tests::archive_rejects_traversal_absolute_and_conflicting_paths ... ok
+test tests::locale_overrides_neutral_and_falls_back_between_regions ... ok
+test tests::rejects_json_and_archive_budgets ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests xbox_touch_layouts
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

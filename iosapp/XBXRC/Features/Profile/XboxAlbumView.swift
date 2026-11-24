@@ -65,7 +65,7 @@ struct XboxAlbumView: View {
       guard isActive else { return }
       await load()
     }
-    .refreshable { await load(refresh: true) }
+    .appRefreshable { await load(refresh: true) }
     .onChange(of: auth.ownerGeneration) { _, _ in
       selectedMedia = nil
       gameFilter = "all"
@@ -209,15 +209,19 @@ private struct AlbumExport: Identifiable {
   let url: URL
 }
 
+private struct AlbumSaveRequest: Identifiable {
+  let id = UUID()
+  let item: XboxAlbumMedia
+}
+
 private struct AlbumMediaDetailView: View {
   @EnvironmentObject private var auth: AuthStore
   @EnvironmentObject private var data: XboxDataStore
+  @Environment(\.appFloatingNavigationInset) private var navigationInset
   @State private var item: XboxAlbumMedia
   @State private var failure: SectionRequestFailure?
-  @State private var failedDownload = false
   @State private var busy = false
-  @State private var export: AlbumExport?
-  @State private var exportedURL: URL?
+  @State private var saveRequest: AlbumSaveRequest?
   @State private var operation: Task<Void, Never>?
   init(item: XboxAlbumMedia) { _item = State(initialValue: item) }
 
@@ -226,15 +230,16 @@ private struct AlbumMediaDetailView: View {
       preview.frame(maxWidth: .infinity, maxHeight: .infinity)
       if let failure {
         AppSectionRequestState(
-          title: failedDownload ? "媒体下载" : "媒体预览",
+          title: "媒体预览",
           status: SectionRequestStatus(phase: .failed, isBusy: busy, failure: failure),
           identifier: "album-preview"
         ) {
-          if failedDownload { await save() } else { await renew() }
+          await renew()
         }.padding(.horizontal, AppLayoutPolicy.pageInset)
       }
       if busy { ProgressView("正在处理媒体").padding(.bottom, AppLayoutPolicy.pageInset) }
     }
+    .padding(.bottom, navigationInset)
     .appThemeCanvas().appPageToolbar(item.titleName.isEmpty ? item.kind.title : item.titleName)
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
@@ -242,8 +247,10 @@ private struct AlbumMediaDetailView: View {
       }.sharedBackgroundVisibility(.hidden)
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
-          Button("保存与分享文件", systemImage: "square.and.arrow.up") { run { await save() } }
-            .disabled(item.url == nil)
+          Button("保存与分享文件", systemImage: "square.and.arrow.up") {
+            saveRequest = AlbumSaveRequest(item: item)
+          }
+          .disabled(item.url == nil)
         } label: {
           AppIconView(.share, size: 22).foregroundStyle(AppThemePalette.textPrimary)
         }
@@ -255,7 +262,7 @@ private struct AlbumMediaDetailView: View {
       operation?.cancel()
       operation = nil
     }
-    .sheet(item: $export, onDismiss: cleanExport) { AlbumFileShareSheet(url: $0.url) }
+    .sheet(item: $saveRequest) { AlbumSaveSheet(item: $0.item) }
   }
 
   @ViewBuilder
@@ -266,7 +273,6 @@ private struct AlbumMediaDetailView: View {
       if item.kind == .clip {
         AlbumVideoPlayer(url: url) {
           failure = SectionRequestFailure(kind: .network)
-          failedDownload = false
         }
       } else {
         AsyncImage(url: url) { phase in
@@ -303,7 +309,6 @@ private struct AlbumMediaDetailView: View {
     guard !busy else { return }
     busy = true
     failure = nil
-    failedDownload = false
     let owner = auth.ownerGeneration
     defer { busy = false }
     do {
@@ -314,41 +319,116 @@ private struct AlbumMediaDetailView: View {
     } catch {
       if !SectionRequestFailure.isCancellation(error) {
         failure = SectionRequestFailure(error: error)
-        failedDownload = false
       }
     }
   }
 
+}
+
+private struct AlbumSaveSheet: View {
+  @EnvironmentObject private var auth: AuthStore
+  @EnvironmentObject private var data: XboxDataStore
+  @Environment(\.dismiss) private var dismiss
+  @State private var item: XboxAlbumMedia
+  @State private var busy = true
+  @State private var receivedBytes: Int64 = 0
+  @State private var expectedBytes: Int64 = 0
+  @State private var failure: SectionRequestFailure?
+  @State private var attempt = 0
+  @State private var export: AlbumExport?
+  @State private var exportedURL: URL?
+
+  init(item: XboxAlbumMedia) { _item = State(initialValue: item) }
+
+  private var progress: Double? {
+    expectedBytes > 0 ? min(1, Double(receivedBytes) / Double(expectedBytes)) : nil
+  }
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        HStack {
+          Text("媒体下载").appFont(.title, weight: .semibold)
+          Spacer()
+          Button(busy ? "取消下载" : "关闭") { dismiss() }
+            .appFont(.body).buttonStyle(.plain).frame(minWidth: 44, minHeight: 44)
+            .accessibilityIdentifier("album-download-cancel")
+        }
+        Text(verbatim: item.titleName).appFont(.body).foregroundStyle(AppThemePalette.textSecondary)
+        if let failure {
+          AppSectionRequestState(
+            title: "媒体下载",
+            status: SectionRequestStatus(phase: .failed, failure: failure),
+            identifier: "album-download"
+          ) {
+            busy = true
+            attempt += 1
+          }
+        } else {
+          ProgressView(value: progress) {
+            Text(item.isExpired ? "正在更新媒体链接" : "正在下载媒体")
+          }
+          .progressViewStyle(.linear).tint(AppThemePalette.brand)
+          .accessibilityIdentifier("album-download-progress")
+          .accessibilityValue(
+            progress.map { $0.formatted(.percent.precision(.fractionLength(0))) }
+              ?? ByteCountFormatter.string(fromByteCount: receivedBytes, countStyle: .file))
+          HStack {
+            Text(
+              verbatim: ByteCountFormatter.string(fromByteCount: receivedBytes, countStyle: .file))
+            Spacer()
+            if let progress { Text(progress, format: .percent.precision(.fractionLength(0))) }
+          }
+          .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+        }
+      }
+      .padding(AppLayoutPolicy.pageInset)
+    }
+    .appThemeCanvas().appInformationTypography()
+    .presentationDetents([.fraction(0.33)])
+    .presentationDragIndicator(.hidden)
+    // 下载期间由浮窗阻挡页面返回，取消操作明确结束当前下载。
+    .interactiveDismissDisabled(busy || export != nil)
+    .task(id: attempt) { await save() }
+    .sheet(
+      item: $export,
+      onDismiss: {
+        cleanExport()
+        dismiss()
+      }
+    ) { AlbumFileShareSheet(url: $0.url) }
+    .onDisappear { if export == nil { cleanExport() } }
+  }
+
   private func save() async {
-    guard !busy else { return }
-    if item.isExpired { await renew() }
-    guard let url = item.url, !item.isExpired, !Task.isCancelled else { return }
     busy = true
     failure = nil
+    receivedBytes = 0
+    expectedBytes = 0
     let owner = auth.ownerGeneration
     defer { busy = false }
     do {
-      let (download, response) = try await URLSession.shared.download(from: url)
-      guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
-      else {
-        try? FileManager.default.removeItem(at: download)
-        throw XboxNativeQueryError.unavailable
+      item = try await data.renewAlbumMedia(item)
+      guard !Task.isCancelled, owner == auth.ownerGeneration else { return }
+      guard let url = item.url, !item.isExpired else { throw AlbumDownloadFailure.expired }
+      let downloadAttempt = attempt
+      let downloader = AlbumFileDownload(kind: item.kind) { received, expected in
+        guard busy, attempt == downloadAttempt else { return }
+        receivedBytes = received
+        expectedBytes = expected
       }
-      guard !Task.isCancelled, owner == auth.ownerGeneration else {
-        try? FileManager.default.removeItem(at: download)
-        return
-      }
+      let (download, _) = try await downloader.download(from: url)
+      var published = false
+      defer { if !published { try? FileManager.default.removeItem(at: download) } }
+      try Task.checkCancellation()
+      guard owner == auth.ownerGeneration else { return }
       cleanExport()
-      let suffix = item.kind == .clip ? "mp4" : http.mimeType == "image/png" ? "png" : "jpg"
-      let destination = FileManager.default.temporaryDirectory.appendingPathComponent(
-        "xbxrc-media-\(UUID().uuidString).\(suffix)")
-      try FileManager.default.moveItem(at: download, to: destination)
-      exportedURL = destination
-      export = AlbumExport(url: destination)
+      exportedURL = download
+      export = AlbumExport(url: download)
+      published = true
     } catch {
       if !SectionRequestFailure.isCancellation(error), owner == auth.ownerGeneration {
         failure = SectionRequestFailure(error: error)
-        failedDownload = true
       }
     }
   }
@@ -372,24 +452,55 @@ private struct AlbumVideoPlayer: View {
   let onFailure: () -> Void
   @Environment(\.scenePhase) private var scenePhase
   @State private var player: AVPlayer?
+  @State private var aspectRatio: CGFloat = 16 / 9
   var body: some View {
-    VideoPlayer(player: player)
-      .task(id: url) {
-        let activePlayer = AVPlayer(url: url)
-        player = activePlayer
-        activePlayer.play()
-        while !Task.isCancelled {
-          if activePlayer.currentItem?.status == .failed {
-            onFailure()
-            return
-          }
-          do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+    GeometryReader { geometry in
+      let width = min(geometry.size.width, geometry.size.height * aspectRatio)
+      AlbumNativeVideoPlayer(player: player)
+        .frame(width: width, height: width / aspectRatio)
+        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        .accessibilityIdentifier("album-video-player")
+    }
+    .task(id: url) {
+      player?.pause()
+      let activePlayer = AVPlayer(url: url)
+      player = activePlayer
+      aspectRatio = 16 / 9
+      activePlayer.play()
+      while !Task.isCancelled {
+        if let size = activePlayer.currentItem?.presentationSize, size.width > 0, size.height > 0 {
+          aspectRatio = size.width / size.height
         }
+        if activePlayer.currentItem?.status == .failed {
+          onFailure()
+          return
+        }
+        do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
       }
-      .onChange(of: scenePhase) { _, phase in if phase != .active { player?.pause() } }
-      .onDisappear {
-        player?.pause()
-        player = nil
-      }
+    }
+    .onChange(of: scenePhase) { _, phase in if phase != .active { player?.pause() } }
+  }
+}
+
+private struct AlbumNativeVideoPlayer: UIViewControllerRepresentable {
+  let player: AVPlayer?
+
+  func makeUIViewController(context: Context) -> AVPlayerViewController {
+    let controller = AVPlayerViewController()
+    controller.player = player
+    controller.showsPlaybackControls = true
+    controller.entersFullScreenWhenPlaybackBegins = false
+    controller.videoGravity = .resizeAspect
+    controller.view.backgroundColor = .clear
+    return controller
+  }
+
+  func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+    if controller.player !== player { controller.player = player }
+  }
+
+  static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
+    controller.player?.pause()
+    controller.player = nil
   }
 }

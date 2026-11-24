@@ -1,0 +1,13 @@
+   Compiling xbox-webapi v0.1.0 (/Users/guo.xu/Documents/code/games/xbxrc/crates/xbox-webapi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.95s
+     Running unittests src/lib.rs (target/browser/debug/deps/xbox_webapi-e5361a5e4f4240c0)
+
+running 5 tests
+test xcloud_api::tests::product_identity_query_matches_official_sdk_contract ... ok
+test xcloud_api::tests::normalizes_supported_origin_and_builds_only_https_requests ... ok
+test xcloud_api::tests::builds_xcloud_catalog_urls ... ok
+test xcloud_api::tests::rejects_invalid_region_hosts ... ok
+test xcloud_api::tests::official_touch_bundle_uses_authenticated_address_then_signed_resource ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s
+

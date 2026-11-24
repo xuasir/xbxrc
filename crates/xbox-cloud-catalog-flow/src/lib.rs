@@ -90,8 +90,13 @@ pub struct XboxCloudCatalogFlow {
 
 impl XboxCloudCatalogFlow {
     pub fn new(region_host: String, bearer_token: String) -> Self {
+        Self::with_xcloud_api(XcloudApi::new(region_host, bearer_token))
+    }
+
+    /// 宿主可注入 owner-bound 查询 API，目录编排和公共商品读取保持共用。
+    pub fn with_xcloud_api(xcloud_api: XcloudApi) -> Self {
         Self {
-            xcloud_api: XcloudApi::new(region_host, bearer_token),
+            xcloud_api,
             gamepass_api: GamePassApi::new(),
         }
     }

@@ -230,6 +230,28 @@ struct StreamingGpuCompletionTiming: Sendable {
     }
 }
 
+struct StreamingFrameIngressTiming: Sendable {
+    let receivedAtMs: Double
+    let drainScheduledAtMs: Double
+    let drainStartedAtMs: Double
+    let mainActorEnteredAtMs: Double
+
+    func queueTracePayload() -> [String: IOSRuntimeTraceValue] {
+        [
+            "ingressQueueMs": .double(max(0, mainActorEnteredAtMs - receivedAtMs)),
+            "ingressDrainQueueMs": .double(max(0, drainStartedAtMs - drainScheduledAtMs)),
+            "ingressDrainWorkBeforeFrameMs": .double(
+                max(0, mainActorEnteredAtMs - drainStartedAtMs)),
+        ]
+    }
+
+    func tracePayload(acceptedAtMs: Double) -> [String: IOSRuntimeTraceValue] {
+        var payload = queueTracePayload()
+        payload["frameAcceptWorkMs"] = .double(max(0, acceptedAtMs - mainActorEnteredAtMs))
+        return payload
+    }
+}
+
 func streamingPresentationTracePayload(
     _ payload: [String: IOSRuntimeTraceValue],
     context: StreamingPresentationTraceContext?
@@ -754,26 +776,33 @@ struct StreamingLatestIngressDelivery<Value>: @unchecked Sendable {
     let replacedCount: Int64
 }
 
+struct StreamingIngressDrainTicket: Equatable, Sendable {
+    let identifier: UInt64
+    let scheduledAtMs: Double
+}
+
 final class StreamingLatestIngressSlot<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var pendingValue: Value?
-    private var deliveryScheduled = false
+    private var scheduledDrain: StreamingIngressDrainTicket?
+    private var nextDrainIdentifier: UInt64 = 0
     private var replacedCount: Int64 = 0
 
-    func submit(_ value: Value) -> Bool {
-        lock.lock()
-        if pendingValue != nil { replacedCount += 1 }
-        pendingValue = value
-        let shouldSchedule = !deliveryScheduled
-        deliveryScheduled = true
-        lock.unlock()
-        return shouldSchedule
-    }
-
-    func take() -> StreamingLatestIngressDelivery<Value>? {
+    func submit(
+        _ value: Value, scheduledAtMs: Double = StreamingFrameFeedbackClock.nowMilliseconds
+    ) -> StreamingIngressDrainTicket? {
         lock.lock()
         defer { lock.unlock() }
-        guard let pendingValue else { return nil }
+        if pendingValue != nil { replacedCount += 1 }
+        pendingValue = value
+        guard scheduledDrain == nil else { return nil }
+        return makeDrainTicket(scheduledAtMs: scheduledAtMs)
+    }
+
+    func take(_ ticket: StreamingIngressDrainTicket) -> StreamingLatestIngressDelivery<Value>? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard scheduledDrain?.identifier == ticket.identifier, let pendingValue else { return nil }
         let delivery = StreamingLatestIngressDelivery(
             value: pendingValue,
             replacedCount: replacedCount
@@ -783,64 +812,112 @@ final class StreamingLatestIngressSlot<Value>: @unchecked Sendable {
         return delivery
     }
 
-    func finishDelivery() -> Bool {
+    func finishDelivery(
+        _ ticket: StreamingIngressDrainTicket,
+        scheduledAtMs: Double = StreamingFrameFeedbackClock.nowMilliseconds
+    ) -> StreamingIngressDrainTicket? {
         lock.lock()
         defer { lock.unlock() }
-        guard pendingValue == nil else { return true }
-        deliveryScheduled = false
-        return false
+        guard scheduledDrain?.identifier == ticket.identifier else { return nil }
+        guard pendingValue != nil else {
+            scheduledDrain = nil
+            return nil
+        }
+        return makeDrainTicket(scheduledAtMs: scheduledAtMs)
+    }
+
+    func drain(
+        _ ticket: StreamingIngressDrainTicket,
+        consume: (StreamingLatestIngressDelivery<Value>) -> Void
+    ) -> StreamingIngressDrainTicket? {
+        // 同次处理接续最多两帧，减少补送排队并保留 UI 的执行机会。
+        for _ in 0..<2 {
+            guard let delivery = take(ticket) else { break }
+            consume(delivery)
+        }
+        return finishDelivery(ticket)
+    }
+
+    // 调用方持锁；每次续排都换 ticket，隔离 reset 和重复投递的旧任务。
+    private func makeDrainTicket(scheduledAtMs: Double) -> StreamingIngressDrainTicket {
+        nextDrainIdentifier &+= 1
+        let ticket = StreamingIngressDrainTicket(
+            identifier: nextDrainIdentifier, scheduledAtMs: scheduledAtMs)
+        scheduledDrain = ticket
+        return ticket
     }
 
     func reset() {
         lock.lock()
         pendingValue = nil
-        deliveryScheduled = false
+        scheduledDrain = nil
         replacedCount = 0
         lock.unlock()
     }
 }
 
+private struct StreamingQueuedVideoFrame: @unchecked Sendable {
+    let frame: RTCVideoFrame
+    let receivedAtMs: Double
+}
+
 private final class StreamingVideoFrameIngress: NSObject, RTCVideoRenderer, @unchecked Sendable {
-    private let frameSlot = StreamingLatestIngressSlot<RTCVideoFrame>()
-    @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64) -> Void)?
+    private let frameSlot = StreamingLatestIngressSlot<StreamingQueuedVideoFrame>()
+    @MainActor var frameSink:
+        (@MainActor (RTCVideoFrame, Int64, StreamingFrameIngressTiming) -> Void)?
     @MainActor var sizeSink: (@MainActor (CGSize) -> Void)?
 
     func setSize(_ size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
-        Task { @MainActor [weak self] in
+        Task(priority: .userInitiated) { @MainActor [weak self] in
             self?.sizeSink?(size)
         }
     }
 
     func renderFrame(_ frame: RTCVideoFrame?) {
         guard let frame else { return }
-        if frameSlot.submit(frame) { scheduleDrain() }
+        let queued = StreamingQueuedVideoFrame(
+            frame: frame, receivedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
+        if let ticket = frameSlot.submit(queued, scheduledAtMs: queued.receivedAtMs) {
+            scheduleDrain(ticket)
+        }
     }
 
     func reset() {
         frameSlot.reset()
     }
 
-    private func scheduleDrain() {
-        Task { @MainActor [weak self] in
-            self?.drainLatestFrame()
+    private func scheduleDrain(_ ticket: StreamingIngressDrainTicket) {
+        Task(priority: .userInitiated) { @MainActor [weak self] in
+            self?.drainLatestFrame(ticket)
         }
     }
 
     @MainActor
-    private func drainLatestFrame() {
-        guard let delivery = frameSlot.take() else {
-            _ = frameSlot.finishDelivery()
-            return
+    private func drainLatestFrame(_ ticket: StreamingIngressDrainTicket) {
+        let drainStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
+        let nextTicket = frameSlot.drain(ticket) { delivery in
+            frameSink?(
+                delivery.value.frame, delivery.replacedCount,
+                StreamingFrameIngressTiming(
+                    receivedAtMs: delivery.value.receivedAtMs,
+                    drainScheduledAtMs: ticket.scheduledAtMs,
+                    drainStartedAtMs: drainStartedAtMs,
+                    mainActorEnteredAtMs: StreamingFrameFeedbackClock.nowMilliseconds))
         }
-        frameSink?(delivery.value, delivery.replacedCount)
-        if frameSlot.finishDelivery() { scheduleDrain() }
+        if let nextTicket { scheduleDrain(nextTicket) }
     }
 }
 
 final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked Sendable {
     @MainActor var presentationEventSink:
         (@MainActor (StreamingPresentationLifecycleEvent) -> Void)?
+    {
+        didSet {
+            if presentationEventSink == nil { didDeliverDisplayPipelineReady = false }
+            deliverDisplayPipelineReadyIfNeeded(reason: "sinkAttached")
+        }
+    }
     private let frameIngress = StreamingVideoFrameIngress()
 
     var renderer: RTCVideoRenderer { frameIngress }
@@ -867,6 +944,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
     private var lastReportedSurfaceSize: CGSize = .zero
     private var lastReportedFrameSize: CGSize = .zero
     private var didReportDisplayPipelineReady = false
+    private var didDeliverDisplayPipelineReady = false
     private var didReportFirstFrameAccepted = false
     private var didReportFirstFrameSubmitted = false
     private var didReportFirstFramePresented = false
@@ -894,8 +972,9 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         bgraPipelineState = compiledPipelines?.bgra
         super.init(frame: frameRect, device: device)
         scheduler.attach(self)
-        frameIngress.frameSink = { [weak self] frame, replacedCount in
-            self?.consumeFrame(frame, ingressReplacedCount: replacedCount)
+        frameIngress.frameSink = { [weak self] frame, replacedCount, ingressTiming in
+            self?.consumeFrame(
+                frame, ingressReplacedCount: replacedCount, ingressTiming: ingressTiming)
         }
         frameIngress.sizeSink = { [weak self] size in
             self?.consumeFrameSize(size)
@@ -944,6 +1023,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         lastReportedSurfaceSize = .zero
         lastReportedFrameSize = .zero
         didReportDisplayPipelineReady = false
+        didDeliverDisplayPipelineReady = false
         didReportFirstFrameAccepted = false
         didReportFirstFrameSubmitted = false
         didReportFirstFramePresented = false
@@ -971,11 +1051,15 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         flushDisplayHealth(reset: true)
         presentationActive = active
         presentationRevision &+= 1
+        didDeliverDisplayPipelineReady = false
         mailbox.reset()
         telemetry.cancelPendingSubmissions()
         frameIngress.reset()
         scheduler.setActive(active && window != nil)
-        if active { scheduler.requestTick() }
+        if active {
+            deliverDisplayPipelineReadyIfNeeded(reason: "foreground")
+            scheduler.requestTick()
+        }
     }
 
     func shutdown() {
@@ -1013,14 +1097,19 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
         reportDisplayPipelineReadyIfNeeded(frameSize: size)
     }
 
-    private func consumeFrame(_ frame: RTCVideoFrame, ingressReplacedCount: Int64) {
-        guard presentationActive else { return }
+    private func consumeFrame(
+        _ frame: RTCVideoFrame, ingressReplacedCount: Int64,
+        ingressTiming: StreamingFrameIngressTiming
+    ) {
+        // 后台首帧只补齐管线能力事实；后续后台帧在入口释放。
+        guard presentationActive || !didReportDisplayPipelineReady else { return }
         let ingressContext = currentTraceContext()
-        if ingressReplacedCount > 0 {
+        if presentationActive, ingressReplacedCount > 0 {
             recordDrop(
                 reason: .ingressCoalesced,
                 count: ingressReplacedCount,
-                context: ingressContext
+                context: ingressContext,
+                ingressTiming: ingressTiming
             )
         }
         let decodedStorage: StreamingDecodedFrameStorage
@@ -1061,6 +1150,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             ),
             storage: decodedStorage
         )
+        guard presentationActive else { return }
 
         stateLock.lock()
         let feedbackSession = frameFeedbackSession
@@ -1097,6 +1187,10 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             if let compatibilityPath {
                 acceptedPayload["compatibilityPath"] = .string(compatibilityPath)
             }
+            acceptedPayload.merge(
+                ingressTiming.tracePayload(
+                    acceptedAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
+            ) { _, new in new }
             IOSRuntimeTrace.state(
                 domain: "ios-streaming",
                 event: "videoFrameAcceptedToMailbox",
@@ -1144,6 +1238,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
 
     func draw(in _: MTKView) {
         guard presentationActive else { return }
+        let drawStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
         let drain = mailbox.beginRender()
         if drain.drawableBusy { return }
         guard let frame = drain.frame else { return }
@@ -1151,6 +1246,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             _ = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
             return
         }
+        let drawableAcquireStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
         guard let commandQueue,
             let descriptor = currentRenderPassDescriptor,
             let drawable = currentDrawable
@@ -1162,6 +1258,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             )
             return
         }
+        let drawableAcquiredAtMs = StreamingFrameFeedbackClock.nowMilliseconds
 
         guard let renderResources = makeRenderResources(for: frame) else {
             handleSkippedPresent(
@@ -1213,6 +1310,9 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             "submittedAtMonotonicMs": .double(submitTimestamp),
             "frameWidth": .integer(Int64(frame.width)),
             "frameHeight": .integer(Int64(frame.height)),
+            "drawToSubmitMs": .double(max(0, submitTimestamp - drawStartedAtMs)),
+            "drawableAcquireMs": .double(
+                max(0, drawableAcquiredAtMs - drawableAcquireStartedAtMs)),
         ]
         if let compatibilityPath = frame.storage.compatibilityPath {
             submitPayload["compatibilityPath"] = .string(compatibilityPath)
@@ -1261,7 +1361,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
                 _ = mailbox.finishRender(identifier: frame.identifier, requeueAsLatest: false)
             }
             let slotReleasedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
-            Task { @MainActor in
+            Task(priority: .userInitiated) { @MainActor in
                 self?.handleCompletedCommandBuffer(
                     completedSuccessfully: completedSuccessfully,
                     frame: frame,
@@ -1277,7 +1377,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             drawable.addPresentedHandler { [weak self] presentedDrawable in
                 let presentedAt = presentedDrawable.presentedTime * 1_000
                 guard presentedAt > 0 else { return }
-                Task { @MainActor in
+                Task(priority: .userInitiated) { @MainActor in
                     guard let self, self.presentationActive,
                         self.presentationRevision == revision,
                         self.currentTraceContext() == traceContext
@@ -1411,6 +1511,8 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             hasPendingFrame: hasPending
         ) {
             scheduler.requestTick()
+        } else {
+            scheduler.scheduleDisplayTickIfNeeded()
         }
     }
 
@@ -1772,17 +1874,22 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
     private func recordDrop(
         reason: StreamingVideoFrameDropReason,
         count: Int64 = 1,
-        context: StreamingPresentationTraceContext?
+        context: StreamingPresentationTraceContext?,
+        ingressTiming: StreamingFrameIngressTiming? = nil
     ) {
         guard let context else { return }
+        var payload: [String: IOSRuntimeTraceValue] = [
+            "count": .integer(max(count, 1)),
+            "reason": .string(reason.rawValue),
+        ]
+        if let ingressTiming {
+            payload.merge(ingressTiming.queueTracePayload()) { _, new in new }
+        }
         IOSRuntimeTrace.state(
             domain: "ios-streaming",
             event: "videoFrameDropped",
             payload: streamingPresentationTracePayload(
-                [
-                    "count": .integer(max(count, 1)),
-                    "reason": .string(reason.rawValue),
-                ],
+                payload,
                 context: context
             ),
             dimension: .presentation,
@@ -1887,8 +1994,8 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
                 importance: .essential,
                 operationID: context.attemptID
             )
-            emitPresentationEvent(.displayPipelineReady(context))
         }
+        deliverDisplayPipelineReadyIfNeeded(reason: "observed")
 
         if shouldReportRendererReady {
             IOSRuntimeTrace.state(
@@ -1908,6 +2015,28 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
             )
         }
     }
+
+    private func deliverDisplayPipelineReadyIfNeeded(reason: String) {
+        guard presentationActive, let context = currentTraceContext(),
+            let presentationEventSink
+        else { return }
+        stateLock.lock()
+        let shouldDeliver = didReportDisplayPipelineReady && !didDeliverDisplayPipelineReady
+        if shouldDeliver { didDeliverDisplayPipelineReady = true }
+        stateLock.unlock()
+        guard shouldDeliver else { return }
+        IOSRuntimeTrace.state(
+            domain: "ios-streaming", event: "displayPipelineReadyDelivered",
+            payload: streamingPresentationTracePayload(
+                [
+                    "reason": .string(reason),
+                    "presentationRevision": .integer(Int64(clamping: presentationRevision)),
+                ], context: context),
+            dimension: .presentation, importance: .essential, operationID: context.attemptID)
+        presentationEventSink(.displayPipelineReady(context))
+    }
+
+    fileprivate var hasPendingVideoFrame: Bool { mailbox.hasPendingFrame() }
 
     private func didReportFirstFrameAcceptedForCurrentContext() -> Bool {
         stateLock.lock()
@@ -1949,7 +2078,7 @@ final class StreamingMetalVideoSurfaceView: MTKView, MTKViewDelegate, @unchecked
                 presentationEventSink?(immediate)
             }
             guard healthCoalescer.pending != nil, healthReportTask == nil else { return }
-            healthReportTask = Task { @MainActor [weak self] in
+            healthReportTask = Task(priority: .utility) { @MainActor [weak self] in
                 do { try await Task.sleep(for: StreamingDisplayHealthCoalescer.interval) } catch {
                     return
                 }
@@ -2036,12 +2165,17 @@ private final class StreamingMetalRenderScheduler: NSObject {
 
     func setActive(_ active: Bool) {
         isActive = active
-        displayLink?.isPaused = !active
+        scheduleDisplayTickIfNeeded()
     }
 
     func requestTick() {
-        guard isActive else { return }
-        target?.draw()
+        guard isActive, let target else { return }
+        if target.hasPendingVideoFrame { target.draw() }
+        scheduleDisplayTickIfNeeded()
+    }
+
+    func scheduleDisplayTickIfNeeded() {
+        displayLink?.isPaused = !(isActive && target?.hasPendingVideoFrame == true)
     }
 
     func invalidate() {
@@ -2053,7 +2187,6 @@ private final class StreamingMetalRenderScheduler: NSObject {
 
     @objc
     private func handleDisplayTick() {
-        guard isActive else { return }
-        target?.draw()
+        requestTick()
     }
 }

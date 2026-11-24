@@ -1,0 +1,39 @@
+{
+  "scope": "同sampleId且完全前台、首次呈现后的解码>=50FPS窗口；尾部零供给单独完整报告",
+  "attempts": [
+    {
+      "attempt": 1,
+      "normalSupplyWindows": 36,
+      "windowSeconds": 36.082854083359244,
+      "counts": {
+        "framesDecodedDelta": 2163.0,
+        "submitCountDelta": 2112.0,
+        "presentCountDelta": 2112.0,
+        "drawablePresentCountDelta": 2084.0
+      },
+      "weightedFps": {
+        "framesDecodedDelta": 59.94536892794011,
+        "submitCountDelta": 58.531955236157884,
+        "presentCountDelta": 58.531955236157884,
+        "drawablePresentCountDelta": 57.75596340537549
+      }
+    },
+    {
+      "attempt": 2,
+      "normalSupplyWindows": 66,
+      "windowSeconds": 66.18477420830726,
+      "counts": {
+        "framesDecodedDelta": 3967.0,
+        "submitCountDelta": 3880.0,
+        "presentCountDelta": 3880.0,
+        "drawablePresentCountDelta": 3860.0
+      },
+      "weightedFps": {
+        "framesDecodedDelta": 59.93825690957902,
+        "submitCountDelta": 58.62375518254767,
+        "presentCountDelta": 58.62375518254767,
+        "drawablePresentCountDelta": 58.32157087748299
+      }
+    }
+  ]
+}

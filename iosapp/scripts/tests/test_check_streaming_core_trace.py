@@ -192,6 +192,22 @@ def write_trace(path: Path, rows: list[dict]) -> None:
     )
 
 
+def early_steady_rows(presentation_active: object = None) -> list[dict]:
+    rows = healthy_rows()
+    steady = next(row for row in rows if row["event"] == "steadyMediaObserved")
+    rows.remove(steady)
+    if presentation_active is not None:
+        steady["payload"]["presentationActive"] = presentation_active
+    first_video = next(
+        i for i, row in enumerate(rows) if row["event"] == "firstVideoFrame"
+    )
+    rows.insert(first_video + 1, steady)
+    for seq, row in enumerate(rows, start=1):
+        row["seq"] = seq
+        row["tsMs"] = 1_000 + seq
+    return rows
+
+
 class CheckStreamingCoreTraceTests(unittest.TestCase):
     def run_gate(self, path: Path, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -217,6 +233,53 @@ class CheckStreamingCoreTraceTests(unittest.TestCase):
             control = attempt["peerEpochs"][0]["checks"]["controlReady"]
             self.assertFalse(control["details"]["legacyFallback"])
             self.assertEqual(control["details"]["ignoredLegacyCount"], 1)
+
+    def test_background_supply_before_first_present_preserves_complete_core_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+            write_trace(path, early_steady_rows(False))
+            result = self.run_gate(path, "--strict")
+            report = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
+            self.assertTrue(peer["passed"])
+            self.assertEqual(len(peer["backgroundSupplyBeforeFirstPresent"]), 1)
+            self.assertFalse(
+                peer["backgroundSupplyBeforeFirstPresent"][0]["presentationActive"]
+            )
+
+    def test_early_foreground_or_unknown_supply_keeps_original_order_gate(self) -> None:
+        for presentation_active in [True, None, "false", 0]:
+            with (
+                self.subTest(presentationActive=presentation_active),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+                write_trace(path, early_steady_rows(presentation_active))
+                result = self.run_gate(path, "--strict")
+                report = json.loads(result.stdout)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
+                self.assertEqual(peer["backgroundSupplyBeforeFirstPresent"], [])
+                self.assertIn(
+                    "displayFirstPresent < steadyMediaObserved",
+                    json.dumps(peer["orderingViolations"]),
+                )
+
+    def test_background_supply_still_requires_first_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runtime-trace-ios-1000-1.jsonl"
+            rows = [
+                row
+                for row in early_steady_rows(False)
+                if row["event"] != "displayFirstPresent"
+            ]
+            write_trace(path, rows)
+            result = self.run_gate(path, "--strict")
+            report = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 2, result.stdout)
+            peer = report["streamingCore"]["attempts"][0]["peerEpochs"][0]
+            self.assertIn("displayFirstPresent", peer["failedChecks"])
 
     def test_selected_remote_candidate_is_application_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

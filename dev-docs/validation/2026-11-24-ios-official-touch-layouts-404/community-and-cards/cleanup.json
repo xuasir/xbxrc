@@ -1,0 +1,90 @@
+{
+  "records": [
+    {
+      "path": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r1",
+      "logicalBytes": 938594557,
+      "allocatedBytes": 954392576,
+      "files": 5195
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r2",
+      "logicalBytes": 22535459,
+      "allocatedBytes": 22757376,
+      "files": 70
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r3",
+      "logicalBytes": 42282534,
+      "allocatedBytes": 42930176,
+      "files": 169
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r4",
+      "logicalBytes": 21416868,
+      "allocatedBytes": 21647360,
+      "files": 68
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-game-touch-layouts-20261124/r5",
+      "logicalBytes": 10260018,
+      "allocatedBytes": 10444800,
+      "files": 56
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-touch-layouts-404-20261124/r3",
+      "logicalBytes": 278110,
+      "allocatedBytes": 307200,
+      "files": 14
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/.fingerprint/xbox-touch-layouts-377bba8bfa81765f",
+      "logicalBytes": 1135,
+      "allocatedBytes": 16384,
+      "files": 4
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community-smoke",
+      "logicalBytes": 2721904,
+      "allocatedBytes": 2723840,
+      "files": 1
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community-smoke.d",
+      "logicalBytes": 679,
+      "allocatedBytes": 4096,
+      "files": 1
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f",
+      "logicalBytes": 2721904,
+      "allocatedBytes": 2723840,
+      "files": 1
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f.community_smoke.150f0547114026eb-cgu.0.rcgu.o",
+      "logicalBytes": 133720,
+      "allocatedBytes": 135168,
+      "files": 1
+    },
+    {
+      "path": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-bindgen/debug/examples/community_smoke-377bba8bfa81765f.d",
+      "logicalBytes": 385,
+      "allocatedBytes": 4096,
+      "files": 1
+    }
+  ],
+  "removedFiles": 5581,
+  "logicalBytesRemoved": 1040947273,
+  "allocatedBytesRemoved": 1058086912,
+  "freeBeforeBytes": 51496300544,
+  "freeAfterBytes": 52525703168,
+  "observedFreeDeltaBytes": 1029402624,
+  "allRegisteredPathsAbsent": true,
+  "temporaryProbeRestored": true,
+  "retained": [
+    "最终证据",
+    "用户原始诊断",
+    "共享缓存",
+    "已安装应用、登录和本机布局库"
+  ]
+}

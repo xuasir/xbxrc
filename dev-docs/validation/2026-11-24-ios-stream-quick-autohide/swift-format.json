@@ -1,0 +1,187 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift",
+    "lines": [
+      [
+        6,
+        6
+      ],
+      [
+        11,
+        11
+      ],
+      [
+        13,
+        13
+      ],
+      [
+        20,
+        20
+      ],
+      [
+        24,
+        27
+      ],
+      [
+        33,
+        33
+      ],
+      [
+        37,
+        38
+      ],
+      [
+        47,
+        51
+      ],
+      [
+        57,
+        57
+      ],
+      [
+        61,
+        79
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+    "lines": [
+      [
+        111,
+        111
+      ],
+      [
+        114,
+        114
+      ],
+      [
+        120,
+        120
+      ],
+      [
+        131,
+        144
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "lines": [
+      [
+        24,
+        24
+      ],
+      [
+        32,
+        32
+      ],
+      [
+        91,
+        94
+      ],
+      [
+        96,
+        100
+      ],
+      [
+        165,
+        165
+      ],
+      [
+        323,
+        333
+      ],
+      [
+        345,
+        345
+      ],
+      [
+        372,
+        374
+      ],
+      [
+        377,
+        378
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "lines": [
+      [
+        115,
+        117
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "lines": [
+      [
+        230,
+        230
+      ],
+      [
+        253,
+        255
+      ],
+      [
+        263,
+        269
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+    "lines": [
+      [
+        65,
+        65
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift",
+    "lines": [
+      [
+        469,
+        469
+      ],
+      [
+        474,
+        497
+      ],
+      [
+        499,
+        500
+      ],
+      [
+        502,
+        504
+      ],
+      [
+        507,
+        508
+      ],
+      [
+        511,
+        523
+      ]
+    ],
+    "exit_code": 0,
+    "diagnostics": ""
+  }
+]

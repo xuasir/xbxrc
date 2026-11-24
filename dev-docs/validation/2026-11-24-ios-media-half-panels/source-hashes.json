@@ -1,0 +1,22 @@
+[
+  {
+    "path": "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift",
+    "sha256": "a5fa089d6cbab6d04afb68d058e373d7bee0b0947ca60d724ee1adc59b6f5b35"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/Profile/AlbumFileDownload.swift",
+    "sha256": "bd07b28701bf9cc8942619c1ef7cf2452ed16f94e469d835ea29878dfdc3de4f"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "sha256": "bb00070aa266f96c0bf7189314896088201940c26b5304dccbe9dfc635e783f2"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "sha256": "cd1dea411c1c6edad0c6a913bdf3887c2978164b5424b924d94a9e3a5469709f"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+    "sha256": "0f2aa9644079b263c272392e5abfab0e287cd5cfde396f9f17ef4f57dd9b8b39"
+  }
+]

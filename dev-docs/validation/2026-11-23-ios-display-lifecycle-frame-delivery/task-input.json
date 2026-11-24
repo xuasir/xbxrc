@@ -1,0 +1,58 @@
+{
+  "startedAt": "2026-11-23T09:25:09.155960+08:00",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-display-lifecycle-20261123",
+  "roundDirectory": "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1",
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-23-ios-display-lifecycle-frame-delivery",
+  "baselineFiles": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "470325b954ab6271de004aed2b247ae64942e2b6d8048a3882a343c09c2fc353"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "70814a8254591db7e22a6f8d73e094b21dc0ea94d15f0505618ca8cbe9d078c9"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "14b75d356bbd20024216f03e8780564cfc1e00f0928e138d4255caa5ba938b50"
+    },
+    {
+      "path": "docs/rfcs/2026-11-20-ios-display-callback.md",
+      "sha256": "b64d24017cc2b299fd98658fb319c562312ef36cc4aae0ba526b48ed8dfc8b53"
+    },
+    {
+      "path": "docs/reports/2026-11-20-ios-display-callback.md",
+      "sha256": "3f5668818cea525e3b3fcbf13100c5e4c5de79d506ee5eef2933e0e5d44013d4"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "843e0a4f9bf3679131afc135f347a851a87e32f774243601bad336aa7b3c43fd"
+    },
+    {
+      "path": "iosapp/scripts/check-streaming-core-trace.py",
+      "sha256": "af42e0ade52e5ae776072ffa470a47e814e589f73b5835a037c377b149dbfc8a"
+    },
+    {
+      "path": "iosapp/scripts/tests/test_check_streaming_core_trace.py",
+      "sha256": "6b7a422700f86a8d15e87ab250403ccf68eaf5c4a70e714c68d2e56b01464f5d"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "457c4c9710b6d196479c557feb8ced61d67cd882f9e3500704ec4c219f712611"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "sha256": "8384fe192f31d8481d30eb8db47038d18ed9fedba373e0f0117552601303c3c5"
+    }
+  ],
+  "inputTrace": {
+    "path": "runtime-logs/ios/runtime-trace-ios-1795187951399-1.jsonl",
+    "sha256": "24ac24de981cf9c15a1eafb558b6d14a8f28fb91fbfbe5a01e35afffbc90612d"
+  },
+  "initialGitStatus": "## main...origin/main [ahead 2]\n M dev-docs/validation/2026-11-20-ios-display-callback/README.md\n M dev-docs/validation/2026-11-20-ios-display-callback/artifact-manifest.json\n M docs/project-task.md\n M docs/reports/2026-11-20-ios-display-callback.md\n M docs/rfcs/2026-11-20-ios-display-callback.md\n?? dev-docs/validation/2026-11-20-ios-display-callback/fresh-trace/\n",
+  "head": "b6ac29c0599b7651ff9db84395bbbb6fdc7da748",
+  "temporaryArtifacts": [
+    "/private/tmp/xbxrc-ios-display-lifecycle-20261123/r1/baseline"
+  ],
+  "freeGiBBefore": 57.983
+}

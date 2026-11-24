@@ -1,0 +1,237 @@
+{
+  "recordedAt": "2026-11-23T15:20:48.558404+08:00",
+  "source": "/Users/guo.xu/Downloads/runtime-trace-ios-1795416820801-5.jsonl",
+  "archivedRaw": "runtime-trace-ios-1795416820801-5.jsonl",
+  "sourceBytes": 47468,
+  "sourceSha256": "7a5f72542f664c629e90305518359eceaf89259cd059057953e8d693e91a2cef",
+  "rows": 90,
+  "sessions": 1,
+  "seqRange": [
+    41307,
+    41396
+  ],
+  "timeRangeShanghai": [
+    "2026-11-23T14:53:40.800000+08:00",
+    "2026-11-23T15:05:34.096000+08:00"
+  ],
+  "profile": "production",
+  "fileOpenedReason": "budgetRotate",
+  "exportAllFiles": false,
+  "gates": {
+    "segmentStructure": "PASS",
+    "requiredAllFlows": "FAIL",
+    "requiredAllMissingAnchors": [
+      {
+        "anchor": "app launch",
+        "flow": "startup"
+      },
+      {
+        "anchor": "auth restore start",
+        "flow": "startup"
+      },
+      {
+        "anchor": "auth restore outcome",
+        "flow": "startup"
+      },
+      {
+        "anchor": "library page",
+        "flow": "library"
+      },
+      {
+        "anchor": "cache restore outcome",
+        "flow": "library"
+      }
+    ],
+    "streamingCore": "FAIL",
+    "streamingCoreViolations": 28,
+    "interpretation": "4项全流程锚点需前面轮转分片；缓存恢复结果另有记录缺口。串流成功合同在授权前失败样本缺少成功锚点，清理按已创建资源判断。"
+  },
+  "attempts": [
+    {
+      "generation": 11,
+      "attemptId": "DB14CF50-4590-40F3-A144-639E67CCD0A0",
+      "target": "cloud",
+      "authOperationId": "2C46E164-9625-49E8-9433-85DF3C84447D",
+      "outerAuthOperationId": "6ECE63CC-AC99-4719-AEFC-C76BD7FD8649",
+      "startSeq": 41308,
+      "failureSeq": 41313,
+      "accessFailureSeq": 41315,
+      "terminalSeq": 41316,
+      "startTsMs": 1795416820800,
+      "failureTsMs": 1795416834456,
+      "startTimeShanghai": "2026-11-23T14:53:40.800000+08:00",
+      "failureTimeShanghai": "2026-11-23T14:53:54.456000+08:00",
+      "elapsedMs": 13655,
+      "sourceMonotonicElapsedMs": 13656.394,
+      "outerElapsedMs": 13658,
+      "outerDeltaMs": 3,
+      "errorType": "XboxBridgeError",
+      "bridgeErrorVariant": "RetryableAuthentication",
+      "errorKind": "timeout",
+      "timeout": true,
+      "retriable": true,
+      "state": "failed",
+      "terminalReason": "runtime.failed"
+    },
+    {
+      "generation": 12,
+      "attemptId": "4B29E731-43AF-4B29-B8F8-16BCF2AC852D",
+      "target": "cloud",
+      "authOperationId": "8DB02D60-B1E8-4F11-97DC-968BC89F64EC",
+      "outerAuthOperationId": "58A2E87C-6DF5-4F8D-9635-0BECA23680B8",
+      "startSeq": 41322,
+      "failureSeq": 41327,
+      "accessFailureSeq": 41329,
+      "terminalSeq": 41330,
+      "startTsMs": 1795416836104,
+      "failureTsMs": 1795416843602,
+      "startTimeShanghai": "2026-11-23T14:53:56.104000+08:00",
+      "failureTimeShanghai": "2026-11-23T14:54:03.602000+08:00",
+      "elapsedMs": 7498,
+      "sourceMonotonicElapsedMs": 7498.433,
+      "outerElapsedMs": 7536,
+      "outerDeltaMs": 38,
+      "errorType": "XboxBridgeError",
+      "bridgeErrorVariant": "RetryableAuthentication",
+      "errorKind": "timeout",
+      "timeout": true,
+      "retriable": true,
+      "state": "failed",
+      "terminalReason": "runtime.failed"
+    },
+    {
+      "generation": 13,
+      "attemptId": "84EBD43B-EACC-49AC-B28C-BF2C7D08A3EA",
+      "target": "cloud",
+      "authOperationId": "0E537ADF-4E4E-4C76-A305-1C3D0ED22FC0",
+      "outerAuthOperationId": "8F042EC5-8BA7-4BB9-B6E0-7A7E5F304CBA",
+      "startSeq": 41336,
+      "failureSeq": 41339,
+      "accessFailureSeq": 41341,
+      "terminalSeq": 41342,
+      "startTsMs": 1795416845267,
+      "failureTsMs": 1795416859301,
+      "startTimeShanghai": "2026-11-23T14:54:05.267000+08:00",
+      "failureTimeShanghai": "2026-11-23T14:54:19.301000+08:00",
+      "elapsedMs": 14032,
+      "sourceMonotonicElapsedMs": 14033.951,
+      "outerElapsedMs": 14034,
+      "outerDeltaMs": 2,
+      "errorType": "XboxBridgeError",
+      "bridgeErrorVariant": "RetryableAuthentication",
+      "errorKind": "timeout",
+      "timeout": true,
+      "retriable": true,
+      "state": "failed",
+      "terminalReason": "runtime.failed"
+    },
+    {
+      "generation": 15,
+      "attemptId": "29903D76-26F7-4F45-8EC5-F9BCB1F1A11B",
+      "target": "cloud",
+      "authOperationId": "343A0085-37C2-4AB6-9C7F-3F0B19C26411",
+      "outerAuthOperationId": "18420B9B-EF66-43E5-A444-DE96FFCA005F",
+      "startSeq": 41364,
+      "failureSeq": 41366,
+      "accessFailureSeq": 41368,
+      "terminalSeq": 41369,
+      "startTsMs": 1795416866191,
+      "failureTsMs": 1795416872534,
+      "startTimeShanghai": "2026-11-23T14:54:26.191000+08:00",
+      "failureTimeShanghai": "2026-11-23T14:54:32.534000+08:00",
+      "elapsedMs": 6342,
+      "sourceMonotonicElapsedMs": 6343.686,
+      "outerElapsedMs": 6344,
+      "outerDeltaMs": 2,
+      "errorType": "XboxBridgeError",
+      "bridgeErrorVariant": "RetryableAuthentication",
+      "errorKind": "timeout",
+      "timeout": true,
+      "retriable": true,
+      "state": "failed",
+      "terminalReason": "runtime.failed"
+    }
+  ],
+  "httpPolicy": {
+    "connectTimeoutSeconds": 5,
+    "requestTimeoutSeconds": 12,
+    "perCallBoundedTotalSeconds": 18,
+    "authRetryMode": "Never",
+    "recordedElapsedScope": "完整prepare_cloud_access调用，包含多个串行步骤；各请求分别使用固定预算"
+  },
+  "cause": {
+    "directEvidence": "4次失败均为Cloud访问授权准备中的网络请求超时，发生在进入后台之前",
+    "currentSourceInference": "错误保留普通Upstream格式；OAuth refresh grant失败有专用前缀，因此按当前源码可缩小到OAuth续期之后的下游授权",
+    "candidateRequestGroups": [
+      "设备令牌",
+      "SISU授权",
+      "Web XSTS",
+      "Streaming XSTS",
+      "xHome凭据"
+    ],
+    "amplification": "iOS每轮完整刷新并选择All范围，必需请求按步骤串行，Home请求也可终止Cloud准备；PC复用有效快照并支持SISU复用和目标范围续期",
+    "retrySemantics": "retriable标记表示可重试类型；AuthApi使用命令通道，该轮网络失败直接返回，后续点击重新执行流程",
+    "specificEndpoint": "认证子阶段、端点类别和连接/读取阶段待诊断确认",
+    "rateInterpretation": "本文件覆盖4个失败样本；同一会话的成功尝试需其他轮转分片以形成对照"
+  },
+  "backgroundMetadataFailure": {
+    "seq": 41389,
+    "elapsedMs": 636453,
+    "errorKind": "requestFailed",
+    "timeoutFlag": false,
+    "backgroundEnteredSeq": 41388,
+    "backgroundEnteredTime": "2026-11-23T14:54:51.956000+08:00",
+    "foregroundResumeSeq": 41390,
+    "foregroundResumeTime": "2026-11-23T15:05:28.122000+08:00",
+    "backgroundWallMs": 636166,
+    "interpretation": "约636秒的页处理壁钟耗时覆盖后台暂停区间；4次访问授权超时在该区间之前发生"
+  },
+  "previousComparison": {
+    "previousSource": "diagnostic-33399546/analysis.json",
+    "previousTarget": "home",
+    "previousHomeAuthSuccessMs": 17913,
+    "previousHomeSessionPrepareFailureMs": 54837,
+    "previousHomeAuthRetryTimeoutMs": 6782,
+    "newTarget": "cloud",
+    "newStage": "preparingAccess",
+    "assessment": "两个样本集合的目标、会话和失败阶段分别解释，实际成功率通过相同目标的完整分片对照"
+  },
+  "health": {
+    "network": {
+      "authentication": "4次Cloud访问准备返回可重试网络超时",
+      "metadataPageCommits": 26,
+      "metadataPageWorkElapsedMs": {
+        "min": 1515,
+        "median": 2585.5,
+        "max": 11804
+      },
+      "scope": "页面计时为页处理边界；单HTTP请求计时待补充"
+    },
+    "recoveryChain": {
+      "observedDimensionRows": 0,
+      "assessment": "这4次尝试停在授权准备；ReferenceChain、RecoveryLedger、cleanAnchorCommitted、DisplayStable按成功媒体窗口接续评估"
+    },
+    "mediaSupply": {
+      "observedDimensionRows": 0,
+      "assessment": "这4次尝试尚待会话准备与媒体接入"
+    },
+    "steadySupply": {
+      "assessment": "连续播放窗口位于当前分片之前或后续成功尝试中，需要相应分片"
+    },
+    "submitPresentTail": {
+      "assessment": "当前记录为库页面呈现；串流submit/present长尾需要播放器渲染计时"
+    },
+    "frameSupplyDelta": {
+      "assessment": "接收、解码与真实呈现帧供给delta需要媒体窗口"
+    }
+  },
+  "privacyViolations": 0,
+  "pressureNotices": 0,
+  "temporaryArtifacts": [],
+  "businessSourceEdits": 0,
+  "nextAction": {
+    "implementationPriority": "对齐PC的有效凭据复用和按目标范围续期；为下游授权步骤增加脱敏类别与计时",
+    "evidenceAction": "设置中选择导出全部 Trace，取得同一会话的成功与失败分片",
+    "keepBoundary": "复用公共Rust认证流程及既有作用域合同"
+  }
+}

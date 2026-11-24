@@ -1,0 +1,5336 @@
+[
+  {
+    "barSubviews" : {
+      "alpha" : 1,
+      "autoresizingMask" : 2,
+      "bounds" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 0
+      },
+      "clipsToBounds" : false,
+      "frame" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 62
+      },
+      "isHidden" : false,
+      "layerMask" : {
+
+      },
+      "safeArea" : {
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "top" : 0
+      },
+      "subviews" : [
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIBarBackground",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 18,
+              "bounds" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 62
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.HostedViewContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 62
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI._UIInheritedView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIKit.(unknown context at $1c5763a3c).PlatterContainerHostingView<UIKit.(unknown context at $1c5763c10).NavigationBarPlatterContent>",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "_UIPointerInteractionAssistantEffectContainerView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "UIKit.NavigationBarPlatterContainer_v2",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "UIKit.NavigationBarTransitionContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIKit.NavigationBarContentView",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIPointerInteractionAssistantEffectContainerView",
+          "zPosition" : 0
+        }
+      ],
+      "type" : "SwiftUI.UIKitNavigationBar",
+      "zPosition" : 0
+    },
+    "navigation" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "page" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "pageSafeArea" : {
+      "bottom" : 4,
+      "left" : 0,
+      "right" : 0,
+      "top" : 116
+    },
+    "scrolls" : [
+      {
+        "adjustedContentInset" : {
+          "bottom" : 92,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 88,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "contentOffsetY" : -116,
+        "contentOriginY" : 116,
+        "contentSize" : {
+          "height" : 359.66666666666663,
+          "width" : 390
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 4,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "topEdgeHidden" : true,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : -116
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 4,
+            "left" : 0,
+            "right" : 0,
+            "top" : 116
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView.BackdropView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 2,
+              "bounds" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : true,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 2,
+                  "bounds" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 116
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 145,
+                        "y" : 96
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 145,
+                            "y" : 96
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+                            {
+                              "alpha" : 1,
+                              "autoresizingMask" : 0,
+                              "bounds" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666665,
+                                "x" : 0,
+                                "y" : 0
+                              },
+                              "clipsToBounds" : false,
+                              "frame" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666572,
+                                "x" : 193.33333333333334,
+                                "y" : 131
+                              },
+                              "isHidden" : false,
+                              "layerMask" : {
+
+                              },
+                              "safeArea" : {
+                                "bottom" : 0,
+                                "left" : 0,
+                                "right" : 0,
+                                "top" : 0
+                              },
+                              "subviews" : [
+
+                              ],
+                              "type" : "_UIRefreshControlSeedView",
+                              "zPosition" : 0
+                            }
+                          ],
+                          "type" : "_UIRefreshControlModernReplicatorView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIView",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 0,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 10,
+                        "y" : 164.66666666666666
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "UILabel",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "_UIRefreshControlModernContentView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "SwiftUI.PlatformRefreshControlProxy",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 359.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 359.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 0,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 844,
+          "width" : 390,
+          "x" : 0,
+          "y" : 0
+        }
+      }
+    ],
+    "section" : "主机",
+    "toolbar" : {
+      "height" : 54,
+      "width" : 390,
+      "x" : 0,
+      "y" : 62
+    },
+    "window" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  {
+    "barSubviews" : {
+      "alpha" : 1,
+      "autoresizingMask" : 2,
+      "bounds" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 0
+      },
+      "clipsToBounds" : false,
+      "frame" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 62
+      },
+      "isHidden" : false,
+      "layerMask" : {
+
+      },
+      "safeArea" : {
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "top" : 0
+      },
+      "subviews" : [
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIBarBackground",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 18,
+              "bounds" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 62
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.HostedViewContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 62
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI._UIInheritedView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIKit.(unknown context at $1c5763a3c).PlatterContainerHostingView<UIKit.(unknown context at $1c5763c10).NavigationBarPlatterContent>",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "_UIPointerInteractionAssistantEffectContainerView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "UIKit.NavigationBarPlatterContainer_v2",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "UIKit.NavigationBarTransitionContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIKit.NavigationBarContentView",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI._UIHostingView<SwiftUI.AnyView>",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIView",
+          "zPosition" : -1
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIPointerInteractionAssistantEffectContainerView",
+          "zPosition" : 0
+        }
+      ],
+      "type" : "SwiftUI.UIKitNavigationBar",
+      "zPosition" : 0
+    },
+    "navigation" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "page" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "pageSafeArea" : {
+      "bottom" : 4,
+      "left" : 0,
+      "right" : 0,
+      "top" : 116
+    },
+    "scrolls" : [
+      {
+        "adjustedContentInset" : {
+          "bottom" : 92,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 88,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "contentOffsetY" : -116,
+        "contentOriginY" : 116,
+        "contentSize" : {
+          "height" : 1524,
+          "width" : 390
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 4,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "topEdgeHidden" : true,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : -116
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 4,
+            "left" : 0,
+            "right" : 0,
+            "top" : 116
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView.BackdropView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 2,
+              "bounds" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : true,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 2,
+                  "bounds" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 116
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 145,
+                        "y" : 96
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 145,
+                            "y" : 96
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+                            {
+                              "alpha" : 1,
+                              "autoresizingMask" : 0,
+                              "bounds" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666665,
+                                "x" : 0,
+                                "y" : 0
+                              },
+                              "clipsToBounds" : false,
+                              "frame" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666572,
+                                "x" : 193.33333333333334,
+                                "y" : 131
+                              },
+                              "isHidden" : false,
+                              "layerMask" : {
+
+                              },
+                              "safeArea" : {
+                                "bottom" : 0,
+                                "left" : 0,
+                                "right" : 0,
+                                "top" : 0
+                              },
+                              "subviews" : [
+
+                              ],
+                              "type" : "_UIRefreshControlSeedView",
+                              "zPosition" : 0
+                            }
+                          ],
+                          "type" : "_UIRefreshControlModernReplicatorView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIView",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 0,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 10,
+                        "y" : 164.66666666666666
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "UILabel",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "_UIRefreshControlModernContentView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "SwiftUI.PlatformRefreshControlProxy",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 1524,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 1524,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 200
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : -24,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : true,
+                      "frame" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 200
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 198,
+                            "width" : 152,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 198,
+                            "width" : 152,
+                            "x" : 24,
+                            "y" : 200
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "SwiftUI.HostingScrollView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "SwiftUI.HostingScrollView.PlatformContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 490
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : -24,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : true,
+                      "frame" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 490
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 198,
+                            "width" : 152,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 198,
+                            "width" : 152,
+                            "x" : 24,
+                            "y" : 490
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "SwiftUI.HostingScrollView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "SwiftUI.HostingScrollView.PlatformContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 198,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 780
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : -24,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : true,
+                      "frame" : {
+                        "height" : 198,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 780
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 198,
+                            "width" : 488,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 198,
+                            "width" : 488,
+                            "x" : 24,
+                            "y" : 780
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "SwiftUI.HostingScrollView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "SwiftUI.HostingScrollView.PlatformContainer",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 0,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 0,
+              "autoresizingMask" : 1,
+              "bounds" : {
+                "height" : 341.33333333333331,
+                "width" : 3,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 341.33333333333331,
+                "width" : 3,
+                "x" : 384,
+                "y" : 119
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 341.33333333333331,
+                    "width" : 3,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 341.33333333333331,
+                    "width" : 3,
+                    "x" : 384,
+                    "y" : 119
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UIScrollViewScrollIndicator",
+              "zPosition" : 1000
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 844,
+          "width" : 390,
+          "x" : 0,
+          "y" : 0
+        }
+      },
+      {
+        "adjustedContentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 198,
+              "width" : 390,
+              "x" : 0,
+              "y" : 200
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "contentOffsetY" : 0,
+        "contentOriginY" : 200,
+        "contentSize" : {
+          "height" : 198,
+          "width" : 152
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 0,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "topEdgeHidden" : false,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : -24,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : 0,
+            "y" : 200
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 198,
+                "width" : 152,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 198,
+                "width" : 152,
+                "x" : 24,
+                "y" : 200
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 198,
+          "width" : 390,
+          "x" : 0,
+          "y" : 200
+        }
+      },
+      {
+        "adjustedContentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 198,
+              "width" : 390,
+              "x" : 0,
+              "y" : 490
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "contentOffsetY" : 0,
+        "contentOriginY" : 490,
+        "contentSize" : {
+          "height" : 198,
+          "width" : 152
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 0,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "topEdgeHidden" : false,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : -24,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : 0,
+            "y" : 490
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 198,
+                "width" : 152,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 198,
+                "width" : 152,
+                "x" : 24,
+                "y" : 490
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 198,
+          "width" : 390,
+          "x" : 0,
+          "y" : 490
+        }
+      },
+      {
+        "adjustedContentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 198,
+              "width" : 390,
+              "x" : 0,
+              "y" : 780
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 0,
+          "left" : 24,
+          "right" : 24,
+          "top" : 0
+        },
+        "contentOffsetY" : 0,
+        "contentOriginY" : 780,
+        "contentSize" : {
+          "height" : 198,
+          "width" : 488
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 0,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "topEdgeHidden" : false,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : -24,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 198,
+            "width" : 390,
+            "x" : 0,
+            "y" : 780
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 198,
+                "width" : 488,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 198,
+                "width" : 488,
+                "x" : 24,
+                "y" : 780
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 198,
+          "width" : 390,
+          "x" : 0,
+          "y" : 780
+        }
+      }
+    ],
+    "section" : "云游戏",
+    "toolbar" : {
+      "height" : 54,
+      "width" : 390,
+      "x" : 0,
+      "y" : 62
+    },
+    "window" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  {
+    "barSubviews" : {
+      "alpha" : 1,
+      "autoresizingMask" : 2,
+      "bounds" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 0
+      },
+      "clipsToBounds" : false,
+      "frame" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 62
+      },
+      "isHidden" : false,
+      "layerMask" : {
+
+      },
+      "safeArea" : {
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "top" : 0
+      },
+      "subviews" : [
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIBarBackground",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 18,
+              "bounds" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 62
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.HostedViewContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 62
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI._UIInheritedView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIKit.(unknown context at $1c5763a3c).PlatterContainerHostingView<UIKit.(unknown context at $1c5763c10).NavigationBarPlatterContent>",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "_UIPointerInteractionAssistantEffectContainerView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "UIKit.NavigationBarPlatterContainer_v2",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "UIKit.NavigationBarTransitionContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIKit.NavigationBarContentView",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI._UIHostingView<SwiftUI.AnyView>",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIView",
+          "zPosition" : -1
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIPointerInteractionAssistantEffectContainerView",
+          "zPosition" : 0
+        }
+      ],
+      "type" : "SwiftUI.UIKitNavigationBar",
+      "zPosition" : 0
+    },
+    "navigation" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "page" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "pageSafeArea" : {
+      "bottom" : 4,
+      "left" : 0,
+      "right" : 0,
+      "top" : 116
+    },
+    "scrolls" : [
+      {
+        "adjustedContentInset" : {
+          "bottom" : 92,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 88,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "contentOffsetY" : -116,
+        "contentOriginY" : 116,
+        "contentSize" : {
+          "height" : 657.66666666666663,
+          "width" : 390
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 4,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "topEdgeHidden" : true,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : -116
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 4,
+            "left" : 0,
+            "right" : 0,
+            "top" : 116
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView.BackdropView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 2,
+              "bounds" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 60,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : true,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 2,
+                  "bounds" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 60,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 116
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 100,
+                        "width" : 100,
+                        "x" : 145,
+                        "y" : 96
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 100,
+                            "width" : 100,
+                            "x" : 145,
+                            "y" : 96
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+                            {
+                              "alpha" : 1,
+                              "autoresizingMask" : 0,
+                              "bounds" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666665,
+                                "x" : 0,
+                                "y" : 0
+                              },
+                              "clipsToBounds" : false,
+                              "frame" : {
+                                "height" : 10,
+                                "width" : 3.6666666666666572,
+                                "x" : 193.33333333333334,
+                                "y" : 131
+                              },
+                              "isHidden" : false,
+                              "layerMask" : {
+
+                              },
+                              "safeArea" : {
+                                "bottom" : 0,
+                                "left" : 0,
+                                "right" : 0,
+                                "top" : 0
+                              },
+                              "subviews" : [
+
+                              ],
+                              "type" : "_UIRefreshControlSeedView",
+                              "zPosition" : 0
+                            }
+                          ],
+                          "type" : "_UIRefreshControlModernReplicatorView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIView",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 0,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 370,
+                        "x" : 10,
+                        "y" : 164.66666666666666
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "UILabel",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "_UIRefreshControlModernContentView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "SwiftUI.PlatformRefreshControlProxy",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 657.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 657.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 0,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 0,
+              "autoresizingMask" : 1,
+              "bounds" : {
+                "height" : 672.66666666666663,
+                "width" : 3,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 672.66666666666663,
+                "width" : 3,
+                "x" : 384,
+                "y" : 119
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 672.66666666666663,
+                    "width" : 3,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 672.66666666666663,
+                    "width" : 3,
+                    "x" : 384,
+                    "y" : 119
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UIScrollViewScrollIndicator",
+              "zPosition" : 1000
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 844,
+          "width" : 390,
+          "x" : 0,
+          "y" : 0
+        }
+      }
+    ],
+    "section" : "我的",
+    "toolbar" : {
+      "height" : 54,
+      "width" : 390,
+      "x" : 0,
+      "y" : 62
+    },
+    "window" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  {
+    "barSubviews" : {
+      "alpha" : 1,
+      "autoresizingMask" : 2,
+      "bounds" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 0
+      },
+      "clipsToBounds" : false,
+      "frame" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 62
+      },
+      "isHidden" : false,
+      "layerMask" : {
+
+      },
+      "safeArea" : {
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "top" : 0
+      },
+      "subviews" : [
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIBarBackground",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 18,
+              "bounds" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 62
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.HostedViewContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 62
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI._UIInheritedView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIKit.(unknown context at $1c5763a3c).PlatterContainerHostingView<UIKit.(unknown context at $1c5763c10).NavigationBarPlatterContent>",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "_UIPointerInteractionAssistantEffectContainerView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "UIKit.NavigationBarPlatterContainer_v2",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "UIKit.NavigationBarTransitionContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIKit.NavigationBarContentView",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI._UIHostingView<SwiftUI.AnyView>",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIView",
+          "zPosition" : -1
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIPointerInteractionAssistantEffectContainerView",
+          "zPosition" : 0
+        }
+      ],
+      "type" : "SwiftUI.UIKitNavigationBar",
+      "zPosition" : 0
+    },
+    "navigation" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "page" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "pageSafeArea" : {
+      "bottom" : 4,
+      "left" : 0,
+      "right" : 0,
+      "top" : 116
+    },
+    "scrolls" : [
+      {
+        "adjustedContentInset" : {
+          "bottom" : 92,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 88,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "contentOffsetY" : -116,
+        "contentOriginY" : 116,
+        "contentSize" : {
+          "height" : 610,
+          "width" : 390
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 4,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "topEdgeHidden" : true,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : -116
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 4,
+            "left" : 0,
+            "right" : 0,
+            "top" : 116
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView.BackdropView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 610,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 610,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 0,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 0,
+              "autoresizingMask" : 1,
+              "bounds" : {
+                "height" : 664,
+                "width" : 3,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 664,
+                "width" : 3,
+                "x" : 384,
+                "y" : 145
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 664,
+                    "width" : 3,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 664,
+                    "width" : 3,
+                    "x" : 384,
+                    "y" : 145
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UIScrollViewScrollIndicator",
+              "zPosition" : 1000
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 844,
+          "width" : 390,
+          "x" : 0,
+          "y" : 0
+        }
+      }
+    ],
+    "section" : "控制器",
+    "toolbar" : {
+      "height" : 54,
+      "width" : 390,
+      "x" : 0,
+      "y" : 62
+    },
+    "window" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  {
+    "barSubviews" : {
+      "alpha" : 1,
+      "autoresizingMask" : 2,
+      "bounds" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 0
+      },
+      "clipsToBounds" : false,
+      "frame" : {
+        "height" : 54,
+        "width" : 390,
+        "x" : 0,
+        "y" : 62
+      },
+      "isHidden" : false,
+      "layerMask" : {
+
+      },
+      "safeArea" : {
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "top" : 0
+      },
+      "subviews" : [
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIBarBackground",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 54,
+            "width" : 390,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 18,
+              "bounds" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 54,
+                "width" : 390,
+                "x" : 0,
+                "y" : 62
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.HostedViewContainer",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                },
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 54,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 62
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 54,
+                        "width" : 390,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+                        {
+                          "alpha" : 1,
+                          "autoresizingMask" : 0,
+                          "bounds" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 0
+                          },
+                          "clipsToBounds" : false,
+                          "frame" : {
+                            "height" : 54,
+                            "width" : 390,
+                            "x" : 0,
+                            "y" : 62
+                          },
+                          "isHidden" : false,
+                          "layerMask" : {
+
+                          },
+                          "safeArea" : {
+                            "bottom" : 0,
+                            "left" : 0,
+                            "right" : 0,
+                            "top" : 0
+                          },
+                          "subviews" : [
+
+                          ],
+                          "type" : "SwiftUI._UIInheritedView",
+                          "zPosition" : 0
+                        }
+                      ],
+                      "type" : "UIKit.(unknown context at $1c5763a3c).PlatterContainerHostingView<UIKit.(unknown context at $1c5763c10).NavigationBarPlatterContent>",
+                      "zPosition" : 0
+                    },
+                    {
+                      "alpha" : 1,
+                      "autoresizingMask" : 0,
+                      "bounds" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 0
+                      },
+                      "clipsToBounds" : false,
+                      "frame" : {
+                        "height" : 0,
+                        "width" : 0,
+                        "x" : 0,
+                        "y" : 62
+                      },
+                      "isHidden" : false,
+                      "layerMask" : {
+
+                      },
+                      "safeArea" : {
+                        "bottom" : 0,
+                        "left" : 0,
+                        "right" : 0,
+                        "top" : 0
+                      },
+                      "subviews" : [
+
+                      ],
+                      "type" : "_UIPointerInteractionAssistantEffectContainerView",
+                      "zPosition" : 0
+                    }
+                  ],
+                  "type" : "UIKit.NavigationBarPlatterContainer_v2",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "UIKit.NavigationBarTransitionContainer",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIKit.NavigationBarContentView",
+          "zPosition" : 0
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 116,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 116,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI._UIHostingView<SwiftUI.AnyView>",
+              "zPosition" : 0
+            }
+          ],
+          "type" : "UIView",
+          "zPosition" : -1
+        },
+        {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 0
+          },
+          "clipsToBounds" : false,
+          "frame" : {
+            "height" : 0,
+            "width" : 0,
+            "x" : 0,
+            "y" : 62
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 0,
+            "left" : 0,
+            "right" : 0,
+            "top" : 0
+          },
+          "subviews" : [
+
+          ],
+          "type" : "_UIPointerInteractionAssistantEffectContainerView",
+          "zPosition" : 0
+        }
+      ],
+      "type" : "SwiftUI.UIKitNavigationBar",
+      "zPosition" : 0
+    },
+    "navigation" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "page" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "pageSafeArea" : {
+      "bottom" : 4,
+      "left" : 0,
+      "right" : 0,
+      "top" : 116
+    },
+    "scrolls" : [
+      {
+        "adjustedContentInset" : {
+          "bottom" : 92,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "clipAncestors" : [
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.HostingScrollView"
+          },
+          {
+            "frame" : {
+              "height" : 724,
+              "width" : 390,
+              "x" : 0,
+              "y" : 116
+            },
+            "safeArea" : {
+              "bottom" : 0,
+              "left" : 0,
+              "right" : 0,
+              "top" : 0
+            },
+            "type" : "SwiftUI._UIInheritedView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 116
+            },
+            "type" : "SwiftUI.NavigationStackHostingController<SwiftUI.AnyView>.(unknown context at $1ca66e02c).HostingView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UILayoutContainerView"
+          },
+          {
+            "frame" : {
+              "height" : 844,
+              "width" : 390,
+              "x" : 0,
+              "y" : 0
+            },
+            "safeArea" : {
+              "bottom" : 4,
+              "left" : 0,
+              "right" : 0,
+              "top" : 62
+            },
+            "type" : "UITransitionView"
+          }
+        ],
+        "contentInset" : {
+          "bottom" : 88,
+          "left" : 0,
+          "right" : 0,
+          "top" : 0
+        },
+        "contentOffsetY" : -116,
+        "contentOriginY" : 116,
+        "contentSize" : {
+          "height" : 449.66666666666663,
+          "width" : 390
+        },
+        "identifier" : "",
+        "safeArea" : {
+          "bottom" : 4,
+          "left" : 0,
+          "right" : 0,
+          "top" : 116
+        },
+        "topEdgeHidden" : true,
+        "type" : "SwiftUI.HostingScrollView",
+        "viewHierarchy" : {
+          "alpha" : 1,
+          "autoresizingMask" : 0,
+          "bounds" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : -116
+          },
+          "clipsToBounds" : true,
+          "frame" : {
+            "height" : 844,
+            "width" : 390,
+            "x" : 0,
+            "y" : 0
+          },
+          "isHidden" : false,
+          "layerMask" : {
+
+          },
+          "safeArea" : {
+            "bottom" : 4,
+            "left" : 0,
+            "right" : 0,
+            "top" : 116
+          },
+          "subviews" : [
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView.BackdropView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 449.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 449.66666666666663,
+                "width" : 390,
+                "x" : 0,
+                "y" : 116
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+
+              ],
+              "type" : "SwiftUI.HostingScrollView.PlatformGroupContainer",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 1,
+              "autoresizingMask" : 0,
+              "bounds" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 844,
+                "width" : 390,
+                "x" : 0,
+                "y" : 0
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 0,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 156,
+                    "width" : 390,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIKit.ScrollEdgeEffectView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UITouchPassthroughView",
+              "zPosition" : 0
+            },
+            {
+              "alpha" : 0,
+              "autoresizingMask" : 1,
+              "bounds" : {
+                "height" : 503.66666666666663,
+                "width" : 3,
+                "x" : 0,
+                "y" : 0
+              },
+              "clipsToBounds" : false,
+              "frame" : {
+                "height" : 503.66666666666663,
+                "width" : 3,
+                "x" : 384,
+                "y" : 305.33333333333337
+              },
+              "isHidden" : false,
+              "layerMask" : {
+
+              },
+              "safeArea" : {
+                "bottom" : 0,
+                "left" : 0,
+                "right" : 0,
+                "top" : 0
+              },
+              "subviews" : [
+                {
+                  "alpha" : 1,
+                  "autoresizingMask" : 0,
+                  "bounds" : {
+                    "height" : 503.66666666666663,
+                    "width" : 3,
+                    "x" : 0,
+                    "y" : 0
+                  },
+                  "clipsToBounds" : false,
+                  "frame" : {
+                    "height" : 503.66666666666663,
+                    "width" : 3,
+                    "x" : 384,
+                    "y" : 305.33333333333337
+                  },
+                  "isHidden" : false,
+                  "layerMask" : {
+
+                  },
+                  "safeArea" : {
+                    "bottom" : 0,
+                    "left" : 0,
+                    "right" : 0,
+                    "top" : 0
+                  },
+                  "subviews" : [
+
+                  ],
+                  "type" : "UIView",
+                  "zPosition" : 0
+                }
+              ],
+              "type" : "_UIScrollViewScrollIndicator",
+              "zPosition" : 1000
+            }
+          ],
+          "type" : "SwiftUI.HostingScrollView",
+          "zPosition" : 0
+        },
+        "viewport" : {
+          "height" : 844,
+          "width" : 390,
+          "x" : 0,
+          "y" : 0
+        }
+      }
+    ],
+    "section" : "设置",
+    "toolbar" : {
+      "height" : 54,
+      "width" : 390,
+      "x" : 0,
+      "y" : 62
+    },
+    "window" : {
+      "height" : 844,
+      "width" : 390,
+      "x" : 0,
+      "y" : 0
+    }
+  }
+]

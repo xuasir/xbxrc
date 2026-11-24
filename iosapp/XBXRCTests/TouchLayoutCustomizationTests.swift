@@ -184,4 +184,143 @@ final class TouchLayoutCustomizationTests: XCTestCase {
                 scale: .nan))
         XCTAssertEqual(invalid, defaultSockets)
     }
+
+    func testControlDrawingAndHitAreasAvoidSafeAreaAcrossViewportSizesAndScales() throws {
+        let layout = try TouchLayoutCatalog.standard()
+        for (size, windowInsets, surfaceInsets) in [
+            (
+                CGSize(width: 390, height: 844),
+                UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0),
+                TouchSurfaceInsets(bottom: 34)
+            ),
+            (
+                CGSize(width: 844, height: 390),
+                UIEdgeInsets(top: 0, left: 62, bottom: 21, right: 0),
+                TouchSurfaceInsets(left: 62, bottom: 21)
+            ),
+            (
+                CGSize(width: 844, height: 390),
+                UIEdgeInsets(top: 0, left: 0, bottom: 21, right: 62),
+                TouchSurfaceInsets(bottom: 21, right: 62)
+            ),
+            (
+                CGSize(width: 1024, height: 768),
+                UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0),
+                TouchSurfaceInsets(top: 24, bottom: 20)
+            ),
+            (
+                CGSize(width: 768, height: 1024),
+                UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0),
+                TouchSurfaceInsets(bottom: 20)
+            ),
+        ] {
+            let viewport = StreamingTouchViewportPolicy.frame(in: size)
+            let safe = CGRect(origin: .zero, size: size).inset(by: windowInsets)
+            let base = TouchLayoutGeometry.sockets(
+                content: layout.content, size: viewport.size, insets: surfaceInsets)
+            for scale in [0.75, 1.0, 1.5] {
+                for edge in [nil, CGPoint.zero, CGPoint(x: 1, y: 1)] as [CGPoint?] {
+                    let positions =
+                        edge.map { point in
+                            Dictionary(
+                                uniqueKeysWithValues: base.map { ($0.id, TouchPoint(point)) })
+                        } ?? [:]
+                    let sockets = TouchLayoutGeometry.configured(
+                        base, size: viewport.size, insets: surfaceInsets,
+                        configuration: .init(positions: positions, scale: scale))
+                    for socket in sockets {
+                        XCTAssertTrue(
+                            safe.contains(
+                                socket.frame.offsetBy(
+                                    dx: viewport.minX, dy: viewport.minY)), "\(size) \(socket.id)")
+                        let hit = CGRect(
+                            x: socket.center.x - socket.collisionRadius + viewport.minX,
+                            y: socket.center.y - socket.collisionRadius + viewport.minY,
+                            width: socket.collisionRadius * 2, height: socket.collisionRadius * 2)
+                        XCTAssertTrue(safe.contains(hit), "hit \(size) \(socket.id)")
+                        XCTAssertGreaterThanOrEqual(hit.width, 44)
+                    }
+                }
+            }
+        }
+    }
+
+    func testNormalizedDragPositionRestoresPixelPositionWithSafeAreaInsets() throws {
+        let layout = try TouchLayoutCatalog.standard()
+        let size = CGSize(width: 844, height: 390)
+        let insets = TouchSurfaceInsets(left: 62, bottom: 21)
+        let available = TouchLayoutGeometry.availableRect(size: size, insets: insets)
+        let point = CGPoint(
+            x: available.minX + available.width * 0.68,
+            y: available.minY + available.height * 0.31)
+        let normalized = TouchLayoutGeometry.normalizedPosition(point, size: size, insets: insets)
+        XCTAssertEqual(normalized.x, 0.68, accuracy: 0.000_001)
+        XCTAssertEqual(normalized.y, 0.31, accuracy: 0.000_001)
+        let base = TouchLayoutGeometry.sockets(content: layout.content, size: size, insets: insets)
+        let restored = TouchLayoutGeometry.configured(
+            base, size: size, insets: insets,
+            configuration: .init(positions: ["right/inner/1": TouchPoint(normalized)]))
+        let a = try XCTUnwrap(restored.first { $0.id == "right/inner/1" })
+        XCTAssertEqual(a.center.x, point.x, accuracy: 0.000_001)
+        XCTAssertEqual(a.center.y, point.y, accuracy: 0.000_001)
+    }
+
+    func testInsetChangesReleaseHeldInputAndUnchangedInsetsKeepInput() throws {
+        let input = TouchInputAccumulator()
+        input.load(try TouchLayoutCatalog.standard())
+        input.setConfiguration(.init())
+        let size = CGSize(width: 844, height: 390)
+        input.setViewport(size: size, insets: .init(left: 62, bottom: 21))
+        let a = try XCTUnwrap(input.sockets.first { $0.id == "right/inner/1" })
+        input.process([.init(id: 1, phase: .began, position: a.center)])
+        XCTAssertEqual(input.gamepad.buttonMask, 16)
+        let nextInsets = TouchSurfaceInsets(bottom: 21, right: 62)
+        input.setViewport(size: size, insets: nextInsets)
+        XCTAssertEqual(input.gamepad, .neutral)
+        XCTAssertTrue(input.runtimes.values.allSatisfy { !$0.isActive })
+        let moved = try XCTUnwrap(input.sockets.first { $0.id == a.id })
+        XCTAssertNotEqual(moved.center, a.center)
+        input.process([.init(id: 2, phase: .began, position: moved.center)])
+        input.setViewport(size: size, insets: nextInsets)
+        XCTAssertEqual(input.gamepad.buttonMask, 16)
+        input.process([.init(id: 2, phase: .ended, position: moved.center)])
+        XCTAssertEqual(input.gamepad, .neutral)
+    }
+
+    func testSurfaceProjectsWindowSafetyIntoLowerHalfAndUpdatesFixedSizeInsets() throws {
+        let window = TouchSafeAreaTestWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.testInsets = UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
+        let input = TouchInputAccumulator()
+        input.load(try TouchLayoutCatalog.standard())
+        input.setConfiguration(.init())
+        let surface = TouchLayoutSurfaceView(input: input)
+        surface.frame = CGRect(x: 0, y: 422, width: 390, height: 422)
+        window.addSubview(surface)
+        defer {
+            surface.stop()
+            surface.removeFromSuperview()
+        }
+        surface.layoutIfNeeded()
+        surface.updateViewport()
+        XCTAssertEqual(surface.bounds.size, CGSize(width: 390, height: 422))
+        XCTAssertEqual(surface.viewportInsets, TouchSurfaceInsets(bottom: 34))
+        let a = try XCTUnwrap(input.sockets.first { $0.id == "right/inner/1" })
+        input.process([.init(id: 1, phase: .began, position: a.center)])
+        XCTAssertEqual(input.gamepad.buttonMask, 16)
+        window.testInsets.bottom = 20
+        surface.safeAreaInsetsDidChange()
+        XCTAssertEqual(surface.viewportInsets, TouchSurfaceInsets(bottom: 20))
+        XCTAssertEqual(surface.bounds.size, CGSize(width: 390, height: 422))
+        XCTAssertEqual(input.gamepad, .neutral)
+        let safe = window.bounds.inset(by: window.testInsets)
+        for socket in input.sockets {
+            XCTAssertTrue(safe.contains(surface.convert(socket.frame, to: window)), socket.id)
+        }
+    }
+}
+
+@MainActor
+private final class TouchSafeAreaTestWindow: UIWindow {
+    var testInsets = UIEdgeInsets.zero
+    override var safeAreaInsets: UIEdgeInsets { testInsets }
 }

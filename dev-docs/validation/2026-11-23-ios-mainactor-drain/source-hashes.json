@@ -1,0 +1,51 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "baselineSha256": "ef89c4dfd52701706eeb2b9f80d5fc4e77c46a1d8b464dbd6e6ebb125571b514",
+    "validatedSha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb",
+    "bytes": 86806,
+    "currentSha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb",
+    "matchesCurrentWorkspace": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "baselineSha256": "c507b26e029747259144581137c593b25a0e138a7a5d9f22ddca03a3d686d035",
+    "validatedSha256": "168dc0909e676938fcc34d237c8195ff389bb84819fe20ce8aaee863a4600a7d",
+    "bytes": 10259,
+    "currentSha256": "168dc0909e676938fcc34d237c8195ff389bb84819fe20ce8aaee863a4600a7d",
+    "matchesCurrentWorkspace": true
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "baselineSha256": "55572bfe2498a058d0fb7a3aa057835d667bd1cc5a494a9f744531c1d9f9eef3",
+    "validatedSha256": "b5cfa7e254a8472c02d385498a9fd3a8099e3a049747b81abcfe9cab64c15f9a",
+    "bytes": 2789,
+    "currentSha256": "b5cfa7e254a8472c02d385498a9fd3a8099e3a049747b81abcfe9cab64c15f9a",
+    "matchesCurrentWorkspace": true
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "baselineSha256": "29c0a11560dd5b3a487703c020b6c5a60af6aa133d1349482c456cff3ee8568c",
+    "validatedSha256": "9d3f227c57114561f7d3b63d818211a8e4d09645639c6cb3f6ed76be6c5bc2b2",
+    "bytes": 202429,
+    "currentSha256": "9d3f227c57114561f7d3b63d818211a8e4d09645639c6cb3f6ed76be6c5bc2b2",
+    "matchesCurrentWorkspace": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "baselineSha256": "a8d849c2c6e6dd83a22842275c2fb2c31d510f805ebf6cb18fc79a6a72aabf4f",
+    "validatedSha256": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1",
+    "bytes": 10296,
+    "currentSha256": "361c1825a40b25e4a5b04b0f0dc5720e68766c3f4dec62fb5becb63f521437d1",
+    "matchesCurrentWorkspace": true
+  },
+  {
+    "path": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "baselineSha256": "be5731bde7aa2c5d4c62e0e321267cbfba94db5c3c40728f8822c3983f84c7b1",
+    "validatedSha256": "05c7c66e0da4247c34d8d0b9c6dd8805fbbc42515c75df556d006176aa7e5842",
+    "bytes": 51800,
+    "currentSha256": "cbdd2223febdfa4a2d56bdb296b25489413e491423542618dfbf98302422f16a",
+    "matchesCurrentWorkspace": false,
+    "currentState": "临时UI截图探针在并行验收收尾中移除；验收前的既有文件前缀逐字节保持"
+  }
+]

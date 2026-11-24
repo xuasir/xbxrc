@@ -1,0 +1,19 @@
+{
+  "removed": [
+    "/private/tmp/xbxrc-ios-pc-http-behavior-parity-r2",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/scripts/__pycache__/patch-uniffi-swift-concurrency.cpython-313.pyc"
+  ],
+  "files": 8653,
+  "logical_bytes": 1336826780,
+  "allocated_file_bytes": 1366646784,
+  "free_bytes_before": 48332800000,
+  "free_bytes_after": 49561600000,
+  "free_bytes_delta": 1228800000,
+  "remaining_task_paths": [],
+  "preserved": [
+    "target/ios",
+    "target/ios-bindgen",
+    "target/ios-section-states-packages",
+    "other tasks and original staged changes"
+  ]
+}

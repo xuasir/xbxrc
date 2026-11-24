@@ -1,0 +1,33 @@
+{
+  "sha256": {
+    "docs/project-task.md": "4772272458deb83c5f93646121183cbdd03e392fbdd8cdc2c325ba84bc828c01",
+    "iosapp/DESIGN.md": "6850939983943f20192373c471a41a8a6df5e087067ad91eeb908c0634e9f923",
+    "iosapp/XBXRC/App/PCPageUITestFixtures.swift": "05f3612fce1bdb12979df698a51f9f73a578269646a6060edb1a508886e5e405",
+    "iosapp/XBXRC/Features/Achievements/AchievementComparisonView.swift": "03c1cb966f7e427b87b6392ecc103fa88ca32fa1b3bb1c3e2e6ec1b36f59cd16",
+    "iosapp/XBXRC/Features/Achievements/AchievementsView.swift": "89ef432120b3a38a9dea3bb9bef3a3457bfc9716fa9495d3d3c94e030a52ee66",
+    "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift": "a4196795e3172214fa2439a9dbaa06cbe1b025faa76ae8ddd872b8f581c53733",
+    "iosapp/XBXRC/Features/Hosts/HostListView.swift": "efa71b2fd80532c8e4d69bc7aa304099ea620f1fe5074ff71736f261dde42c69",
+    "iosapp/XBXRC/Features/Library/CloudLibraryBrowserView.swift": "8ad1f3ea8b2f00c1ad7b795651fa504cc28b0aaba9b14921e2cd39cef4aef7a8",
+    "iosapp/XBXRC/Features/Library/GameDetailView.swift": "7843df83f703cdf1f24d85147e891267a07700c4569dd63b123c8da181e5583a",
+    "iosapp/XBXRC/Features/Library/GameLibraryView.swift": "7882b36f45a44208a84a9d4455248391c195d3c33924f697fc8201c7c81bfb7f",
+    "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "80358098bec7a233eea59b3454700357374aa8f530ba64dd00e295ea93324650",
+    "iosapp/XBXRC/Features/Profile/PersonalPages.swift": "3bd1358bcfcfacf4440b14a62a2721c7228c4417ae28aee8f9101697da501b69",
+    "iosapp/XBXRC/Features/Profile/ProfileView.swift": "a581fb8e4696158682d92ac8085b8b023e8c1b7e63cedf3a646dfe95b77c62fc",
+    "iosapp/XBXRC/Features/Profile/XboxAlbumView.swift": "100ec0cf27c8317b12178f9da17eabda1435757ab154cfab729cba3627084d12",
+    "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift": "fe3cf8cc8af5e1f123dcd496099343855bbf3f28eb8f1505ccef5fdd33c928cc",
+    "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift": "177551f84194c2b98c6cecb37144785eaadb04dc3aeafffe9a2b3249e3d3b9e1",
+    "iosapp/XBXRC/Shared/Components/AppInformationPage.swift": "c19b4926df1a592be22ee7fa94f194472441eba1a86dec29b0711d4cfcf6f985",
+    "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift": "4c9e18a0e6ff7677ac4932a1df5ae6c97a0c2451a917c04fe9daa9598646d3b5",
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift": "fd2893f732158c3487d72097f63faa5afa6ba0762349e9c74531f8ad6e290c02",
+    "iosapp/XBXRCTests/PCDataParityTests.swift": "be32e5dc59340bdf066c40aa179b4479d00358c88eed3aaed81e9b07370f0337",
+    "iosapp/XBXRCUITests/PCPageInteractionTests.swift": "20adeaad4e7d02fc9e2fd18e96bf063247bce224229efff88fe55ba08649d27b",
+    "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift": "6157fedb67acd6d30c54b36efccf436292678d82458693cd7e261caf89537b46",
+    "iosapp/XBXRC/Shared/Components/SkeletonPulse.swift": "7566b7e28b46de6677b3f20e5193a28be6bbd41bba2da227e0ca0c8180cec5c9",
+    "iosapp/XBXRCUITests/TouchLayoutInteractionTests.swift": "0112052c340012cb9f23a0ddb768a17a9fac8c9bdf0bf9d782c3417a430db1a2"
+  },
+  "unchanged_baseline_files": [
+    "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "iosapp/XBXRCTests/PCDataParityTests.swift",
+    "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift"
+  ]
+}

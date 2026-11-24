@@ -16,7 +16,6 @@ use xbox_streaming::{
     compile, CompilerInput, Config, Context, SessionFlowError, SessionStartupScope, StreamingToken,
     Target,
 };
-use xbox_webapi::SmartglassApi;
 
 struct HomeDiscoveryCache {
     scope: u64,
@@ -24,6 +23,18 @@ struct HomeDiscoveryCache {
     regions: BTreeMap<String, String>,
 }
 static HOME_DISCOVERY: OnceLock<Mutex<Option<HomeDiscoveryCache>>> = OnceLock::new();
+static FALLBACK_TURN: OnceLock<tokio::sync::Mutex<xbox_streaming::FallbackTurnProvider>> =
+    OnceLock::new();
+
+pub(super) async fn resolve_fallback_turn() -> Option<xbox_streaming::TurnServer> {
+    FALLBACK_TURN
+        .get_or_init(|| tokio::sync::Mutex::new(xbox_streaming::FallbackTurnProvider::new()))
+        .lock()
+        .await
+        .get_by_target_type(Target::Home.as_str())
+        .await
+        .unwrap_or(None)
+}
 
 fn discovery_scope(access: &StreamingAccessContext) -> u64 {
     let mut hash = std::collections::hash_map::DefaultHasher::new();
@@ -45,19 +56,7 @@ pub(super) async fn resolve_home_context(
     }
     scope
         .run("homeContext", None, async {
-            let refreshed = tokio::time::timeout(
-                std::time::Duration::from_secs(8),
-                SmartglassApi::new(access.web_uhs.clone(), access.web_token.clone())
-                    .get_consoles_list(),
-            )
-            .await;
-            if let Ok(Ok(response)) = refreshed {
-                ensure_current(credentials, &access, scope)?;
-                let facts = extract_home_host_facts(&response);
-                if !facts.is_empty() {
-                    replace_home_host_facts(&access.account_id, facts).map_err(bridge_error)?;
-                }
-            }
+            // 启动直接使用公共串流区域发现；Smartglass 电源事实在唤醒/就绪阶段更新。
             let cached =
                 find_home_host_facts(&access.account_id, target_id).map_err(bridge_error)?;
             let canonical_id = cached
@@ -118,7 +117,8 @@ pub(super) async fn resolve_home_context(
                 .access("home", None, Some(access.owner_generation))
                 .await?;
             if let Some((region, consoles)) = discovered {
-                let discovered = extract_home_host_facts(&serde_json::Value::Array(consoles));
+                let discovered = extract_home_host_facts(&serde_json::Value::Array(consoles))
+                    .map_err(SessionFlowError::from)?;
                 let mut facts = home_host_facts(&access.account_id).map_err(bridge_error)?;
                 for fresh in discovered {
                     let identity = fresh.canonical_target_id().unwrap_or_default();
@@ -212,10 +212,62 @@ fn merge_home_facts(cached: &HomeHostFacts, mut discovered: HomeHostFacts) -> Ho
     discovered
 }
 
+pub(super) fn smartglass_ready_candidates(
+    facts: Vec<HomeHostFacts>,
+) -> Vec<xbox_streaming::RemoteConsoleSnapshot> {
+    let mut index = BTreeMap::new();
+    for fact in facts {
+        let Some(identity) = fact.canonical_target_id().map(str::to_owned) else {
+            continue;
+        };
+        index.entry(identity).or_insert(fact.remote_console);
+    }
+    index
+        .into_iter()
+        .map(|(identity, mut console)| {
+            console.id = console.id.or_else(|| Some(identity.clone()));
+            console.server_id = console
+                .server_id
+                .or_else(|| console.id.clone())
+                .or(Some(identity));
+            console.ready_source = Some("smartglass".into());
+            console
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use xbox_streaming::{HostAddr, RemoteConsoleSnapshot};
+
+    #[test]
+    fn ready_candidates_follow_pc_identity_fallback_and_deduplication() {
+        let facts = vec![
+            HomeHostFacts {
+                remote_console: RemoteConsoleSnapshot {
+                    device_id: Some("device".into()),
+                    power_state: Some("On".into()),
+                    ..Default::default()
+                },
+                console_addrs: Vec::new(),
+            },
+            HomeHostFacts {
+                remote_console: RemoteConsoleSnapshot {
+                    device_id: Some("device".into()),
+                    power_state: Some("Standby".into()),
+                    ..Default::default()
+                },
+                console_addrs: Vec::new(),
+            },
+        ];
+        let ready = smartglass_ready_candidates(facts);
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id.as_deref(), Some("device"));
+        assert_eq!(ready[0].server_id.as_deref(), Some("device"));
+        assert_eq!(ready[0].power_state.as_deref(), Some("On"));
+        assert_eq!(ready[0].ready_source.as_deref(), Some("smartglass"));
+    }
 
     #[test]
     fn discovered_stream_identity_keeps_smartglass_command_and_power_facts() {

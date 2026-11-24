@@ -8,6 +8,7 @@ pub mod operation;
 pub mod recovery;
 pub mod scheduler;
 pub mod signaling;
+pub mod startup_error;
 pub mod store;
 
 pub use access::*;
@@ -15,7 +16,7 @@ pub use api::*;
 pub use flow::*;
 pub use lifecycle::*;
 pub use monitor::*;
-pub use operation::SessionStartupScope;
+pub use operation::{SessionStartupScope, RESOLVING_CONTEXT_TIMEOUT};
 pub use recovery::*;
 pub use signaling::*;
 pub use store::*;

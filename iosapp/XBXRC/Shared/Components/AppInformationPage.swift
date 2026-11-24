@@ -39,11 +39,51 @@ struct AppInformationPage<Content: View>: View {
   }
 }
 
-enum AppPageArtwork: Equatable {
+enum AppPageArtwork: Hashable {
   case avatar(URL?)
   case game(URL?)
   case cloudGame([URL])
   case console(String)
+}
+
+enum AppArtworkBackdropStyle {
+  static let height: CGFloat = 380
+
+  static func overlayStops(for colorScheme: ColorScheme) -> [Gradient.Stop] {
+    [
+      .init(
+        color: AppThemePalette.canvas.opacity(colorScheme == .dark ? 0.36 : 0.52), location: 0),
+      .init(
+        color: AppThemePalette.canvas.opacity(colorScheme == .dark ? 0.52 : 0.70), location: 0.45),
+      .init(color: AppThemePalette.canvas, location: 1),
+    ]
+  }
+}
+
+/// 页面和标题栏共用完整窗口的图片坐标，局部区域直接裁切同一张通顶背景。
+struct AppPageBackdrop: View {
+  @Environment(\.appCanvasBounds) private var canvasBounds
+  let artwork: AppPageArtwork?
+  var canvasRegion: CGRect? = nil
+  var onArtworkSuccess: ((URL) -> Void)? = nil
+
+  var body: some View {
+    GeometryReader { geometry in
+      let region = canvasRegion ?? geometry.frame(in: .global)
+      let bounds = canvasBounds ?? region
+      ZStack(alignment: .topLeading) {
+        AppThemeBackground(canvasRegion: region)
+        if let artwork {
+          AppArtworkBackdrop(artwork: artwork, onSuccess: onArtworkSuccess)
+            .frame(width: bounds.width, height: AppArtworkBackdropStyle.height)
+            .offset(x: bounds.minX - region.minX, y: bounds.minY - region.minY)
+        }
+      }
+      .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+    }
+    .ignoresSafeArea()
+    .allowsHitTesting(false).accessibilityHidden(true)
+  }
 }
 
 /// 图片与主题画布渐变融合，延伸至安全区；背景专门表达身份。
@@ -51,7 +91,7 @@ struct AppArtworkBackdrop: View {
   @Environment(\.colorScheme) private var colorScheme
   let artwork: AppPageArtwork
   var onSuccess: ((URL) -> Void)? = nil
-  var height: CGFloat = 380
+  var height: CGFloat = AppArtworkBackdropStyle.height
   var body: some View {
     GeometryReader { geometry in
       ZStack {
@@ -65,9 +105,9 @@ struct AppArtworkBackdrop: View {
               .frame(height: min(300, geometry.size.height), alignment: .bottom)
               .frame(maxHeight: .infinity, alignment: .bottom)
           case .avatar(let url), .game(let url):
-            AsyncImage(url: url) { image in
+            SharedRemoteImage(url: url, onSuccess: onSuccess) { image in
               image.resizable().scaledToFill()
-            } placeholder: {
+            } placeholder: { _ in
               Image(
                 systemName: isAvatar
                   ? "person.crop.circle.fill" : "gamecontroller.fill"
@@ -81,18 +121,12 @@ struct AppArtworkBackdrop: View {
               candidates: candidates, contentMode: .fill, onSuccess: onSuccess)
           }
         }
+        .id(artwork)
         .frame(width: geometry.size.width, height: geometry.size.height)
         .clipped()
         LinearGradient(
-          stops: [
-            .init(
-              color: AppThemePalette.canvas.opacity(
-                colorScheme == .dark ? 0.36 : 0.68), location: 0),
-            .init(
-              color: AppThemePalette.canvas.opacity(
-                colorScheme == .dark ? 0.52 : 0.78), location: 0.45),
-            .init(color: AppThemePalette.canvas, location: 1),
-          ], startPoint: .top, endPoint: .bottom)
+          stops: AppArtworkBackdropStyle.overlayStops(for: colorScheme),
+          startPoint: .top, endPoint: .bottom)
       }
     }
     .frame(height: height)
@@ -123,15 +157,15 @@ struct AppInlineHint: View {
   }
 
   var body: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Image(systemName: "info.circle")
-        .font(.system(size: 11))
-        .accessibilityHidden(true)
+    Label {
       Text(LocalizedStringKey(text))
         .appFont(.caption)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("settings-hint-\(identifier)")
+    } icon: {
+      Image(systemName: "info.circle").appFont(.caption)
     }
+    .labelStyle(AppIconLabelStyle())
     .foregroundStyle(AppThemePalette.textSecondary)
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -206,6 +240,7 @@ struct AppMetricGrid<Content: View>: View {
 }
 
 struct AppRefreshButton: View {
+  @Environment(\.appIsPullRefreshing) private var isPullRefreshing
   let title: String
   var isRefreshing: Bool
   let action: @MainActor () async -> Void
@@ -219,7 +254,7 @@ struct AppRefreshButton: View {
 
   var body: some View {
     Button {
-      guard !running && !isRefreshing else { return }
+      guard !running && !isRefreshing && !isPullRefreshing else { return }
       running = true
       Task {
         await action()
@@ -227,14 +262,14 @@ struct AppRefreshButton: View {
       }
     } label: {
       Group {
-        if running || isRefreshing {
+        if (running || isRefreshing) && !isPullRefreshing {
           ProgressView()
         } else {
           AppIconView(.refresh, size: 22)
         }
       }.frame(width: 44, height: 44)
     }
-    .buttonStyle(.plain).disabled(running || isRefreshing)
+    .buttonStyle(.plain).disabled(running || isRefreshing || isPullRefreshing)
     .foregroundStyle(AppThemePalette.textPrimary)
     .accessibilityLabel(Text(LocalizedStringKey(title)))
   }
@@ -335,8 +370,29 @@ struct AppContentToolbar<Content: View>: View {
   }
 }
 
+/// 预留选中字重的宽度，切换时保持文字与相邻控件的位置稳定。
+private struct AppSelectionText: View {
+  let title: String
+  let selected: Bool
+  let style: AppTextStyle
+
+  var body: some View {
+    ZStack {
+      Text(LocalizedStringKey(title)).appFont(style, weight: .semibold)
+        .hidden().accessibilityHidden(true)
+      Text(LocalizedStringKey(title))
+        .appFont(style, weight: selected ? .semibold : .regular)
+    }
+    .fixedSize(horizontal: true, vertical: false)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(LocalizedStringKey(title)))
+  }
+}
+
 /// 内容分类统一为透明文字Tab，选中下划线与完整无障碍名称共用。
 struct AppTextTabs<Selection: Hashable>: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Namespace private var selectionAnimation
   @Binding var selection: Selection
   let values: [Selection]
   let title: (Selection) -> String
@@ -347,22 +403,23 @@ struct AppTextTabs<Selection: Hashable>: View {
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView(.horizontal) {
-        HStack(spacing: 24) {
+        HStack(spacing: AppContentControlMetrics.tabSpacing) {
           ForEach(values, id: \.self) { value in
             Button {
               selection = value
             } label: {
-              Text(LocalizedStringKey(title(value)))
-                .appFont(.body, weight: selection == value ? .semibold : .regular)
+              AppSelectionText(title: title(value), selected: selection == value, style: .body)
                 .foregroundStyle(
                   selection == value
                     ? AppThemePalette.brand : AppThemePalette.textSecondary
                 )
-                .fixedSize(horizontal: true, vertical: false)
-                .frame(minWidth: 44, minHeight: 48, alignment: .leading)
+                .padding(.vertical, AppContentControlMetrics.verticalPadding)
+                .frame(minWidth: AppContentControlMetrics.minimumHitSize, minHeight: 48)
                 .overlay(alignment: .bottom) {
                   if selection == value {
-                    Capsule().fill(AppThemePalette.brand).frame(height: 3)
+                    Capsule().fill(AppThemePalette.brand)
+                      .frame(height: AppContentControlMetrics.underlineHeight)
+                      .matchedGeometryEffect(id: "content-selection", in: selectionAnimation)
                   }
                 }
                 .contentShape(Rectangle())
@@ -372,12 +429,17 @@ struct AppTextTabs<Selection: Hashable>: View {
             .accessibilityAddTraits(selection == value ? .isSelected : [])
           }
         }.padding(.horizontal, inset)
+          .animation(
+            AppContentControlMetrics.animation(reduceMotion: reduceMotion), value: selection)
       }
       .scrollIndicators(.hidden)
       .fixedSize(horizontal: false, vertical: true).frame(minHeight: 52)
       .accessibilityIdentifier(identifier)
+      .onAppear { proxy.scrollTo(selection, anchor: .center) }
       .onChange(of: selection) { _, value in
-        withAnimation { proxy.scrollTo(value, anchor: .center) }
+        withAnimation(AppContentControlMetrics.animation(reduceMotion: reduceMotion)) {
+          proxy.scrollTo(value, anchor: .center)
+        }
       }
     }
   }
@@ -466,6 +528,34 @@ struct AppPageScroll<Content: View>: View {
   }
 }
 
+extension EnvironmentValues {
+  @Entry var appIsPullRefreshing = false
+}
+
+/// 原生下拉负责这一轮刷新反馈，分区、重试和分页共享当前页面的刷新范围。
+private struct AppRefreshableModifier: ViewModifier {
+  @Environment(\.appIsPullRefreshing) private var parentIsRefreshing
+  @State private var isRefreshing = false
+  let action: @MainActor () async -> Void
+
+  func body(content: Content) -> some View {
+    content
+      .environment(\.appIsPullRefreshing, parentIsRefreshing || isRefreshing)
+      .refreshable {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await action()
+      }
+  }
+}
+
+extension View {
+  func appRefreshable(action: @escaping @MainActor () async -> Void) -> some View {
+    modifier(AppRefreshableModifier(action: action))
+  }
+}
+
 /// 搜索位于局部工具区，展开后的输入表面随实际字段宽度呈现。
 struct AppContentSearch: View {
   @Binding var text: String
@@ -546,13 +636,14 @@ struct AppInformationPicker<Selection: Hashable, Content: View>: View {
       // inline 将所有选项直接放在第一层菜单，点击即可切换。
       Picker(title, selection: $selection, content: content).pickerStyle(.inline)
     } label: {
-      HStack(spacing: 8) {
+      HStack(spacing: AppContentControlMetrics.labelSpacing) {
         Text(LocalizedStringKey(selectedTitle)).appFont(.bodySmall, weight: .semibold)
         AppIconView(.chevron, size: 10).rotationEffect(.degrees(90))
       }
       .foregroundStyle(AppThemePalette.textPrimary)
-      .padding(.horizontal, 12).padding(.vertical, 12)
-      .frame(minHeight: 44).contentShape(Rectangle())
+      .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
+      .padding(.vertical, AppContentControlMetrics.verticalPadding)
+      .frame(minHeight: AppContentControlMetrics.minimumHitSize).contentShape(Rectangle())
       .appFilterTrackSurface()
     }
     .fixedSize(horizontal: true, vertical: false).buttonStyle(.plain)
@@ -566,6 +657,8 @@ struct AppInformationPicker<Selection: Hashable, Content: View>: View {
 /// 互斥筛选共用底槽，选中胶囊内缩2pt；视觉表面与44pt触屏区分别确定。
 struct AppSegmentedFilter<Selection: Hashable>: View {
   @EnvironmentObject private var settings: AppSettingsStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Namespace private var selectionAnimation
   @Binding var selection: Selection
   let values: [Selection]
   let title: (Selection) -> String
@@ -583,9 +676,12 @@ struct AppSegmentedFilter<Selection: Hashable>: View {
       .accessibilityElement(children: .contain)
       .accessibilityLabel(Text(LocalizedStringKey(label)))
       .accessibilityIdentifier(identifier)
+      .onAppear { proxy.scrollTo(selection, anchor: .center) }
       .onChange(of: selection) { _, value in
         MobileInteractionFeedback.play(settings.mobile)
-        withAnimation { proxy.scrollTo(value, anchor: .center) }
+        withAnimation(AppContentControlMetrics.animation(reduceMotion: reduceMotion)) {
+          proxy.scrollTo(value, anchor: .center)
+        }
       }
     }
   }
@@ -596,20 +692,18 @@ struct AppSegmentedFilter<Selection: Hashable>: View {
         Button {
           selection = value
         } label: {
-          Text(LocalizedStringKey(title(value)))
-            .appFont(.bodySmall, weight: selection == value ? .semibold : .regular)
+          AppSelectionText(title: title(value), selected: selection == value, style: .bodySmall)
             .foregroundStyle(AppThemePalette.textPrimary)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .frame(minWidth: 44, maxWidth: fillsWidth ? .infinity : nil, minHeight: 44)
-            .background {
-              if selection == value {
-                Capsule()
-                  .fill(AppThemePalette.filterSelection)
-                  .padding(.vertical, 8)
-              }
-            }
+            .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
+            .padding(.vertical, AppContentControlMetrics.verticalPadding)
+            .frame(
+              minWidth: AppContentControlMetrics.minimumHitSize,
+              maxWidth: fillsWidth ? .infinity : nil,
+              minHeight: AppContentControlMetrics.minimumHitSize
+            )
+            .appFilterSelectionSurface(
+              isSelected: selection == value, namespace: selectionAnimation
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain).id(value)
@@ -617,13 +711,31 @@ struct AppSegmentedFilter<Selection: Hashable>: View {
         .accessibilityAddTraits(selection == value ? .isSelected : [])
       }
     }
-    .padding(.horizontal, 2)
+    .padding(.horizontal, AppContentControlMetrics.selectionInset)
     .appFilterTrackSurface()
+    .animation(AppContentControlMetrics.animation(reduceMotion: reduceMotion), value: selection)
+  }
+}
+
+/// 工具动作与选择器共用胶囊尺寸，品牌文字表达可执行操作。
+struct AppContentCapsuleButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.appFont(.bodySmall, weight: .semibold)
+      .foregroundStyle(AppThemePalette.brand)
+      .padding(.horizontal, AppContentControlMetrics.horizontalPadding)
+      .padding(.vertical, AppContentControlMetrics.verticalPadding)
+      .frame(
+        minWidth: AppContentControlMetrics.minimumHitSize,
+        minHeight: AppContentControlMetrics.minimumHitSize
+      )
+      .appFilterTrackSurface().contentShape(Rectangle())
+      .opacity(configuration.isPressed ? 0.7 : 1)
   }
 }
 
 /// 分页作为列表末尾动作居中，真实等待沿同一个按钮反馈。
 struct AppLoadMoreButton: View {
+  @Environment(\.appIsPullRefreshing) private var isPullRefreshing
   var title = "载入更多"
   let isLoading: Bool
   let action: @MainActor () async -> Void
@@ -631,7 +743,7 @@ struct AppLoadMoreButton: View {
 
   var body: some View {
     Button {
-      guard !running && !isLoading else { return }
+      guard !running && !isLoading && !isPullRefreshing else { return }
       running = true
       Task {
         await action()
@@ -639,14 +751,14 @@ struct AppLoadMoreButton: View {
       }
     } label: {
       HStack(spacing: 8) {
-        if isLoading || running { ProgressView().controlSize(.small) }
-        Text(LocalizedStringKey(isLoading || running ? "正在载入…" : title))
+        if (isLoading || running) && !isPullRefreshing { ProgressView().controlSize(.small) }
+        Text(LocalizedStringKey((isLoading || running) && !isPullRefreshing ? "正在载入…" : title))
       }
       .appFont(.bodySmall, weight: .semibold).foregroundStyle(AppThemePalette.brand)
       .padding(.horizontal, 16).frame(minHeight: 44)
       .appCapsuleSurface(verticalInset: 6).contentShape(Rectangle())
     }
-    .buttonStyle(.plain).disabled(isLoading || running)
+    .buttonStyle(.plain).disabled(isLoading || running || isPullRefreshing)
     .accessibilityIdentifier("content-load-more")
     .frame(maxWidth: .infinity)
   }

@@ -1,0 +1,987 @@
+{
+  "budget": {
+    "aggregateExports": [],
+    "pressureNotices": 0,
+    "rawFiles": [
+      {
+        "actualBytes": 16504239,
+        "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+        "maxFileBytes": 33554432,
+        "maxFiles": 6,
+        "profile": "dev",
+        "withinBudget": true
+      }
+    ],
+    "retention": [
+      {
+        "directory": "/Users/guo.xu/Downloads",
+        "files": 1,
+        "maxFiles": 6,
+        "withinBudget": true
+      }
+    ],
+    "violations": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0,
+    "streamingCoreViolations": 0
+  },
+  "gate": "PASS",
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "files": [
+      "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl"
+    ],
+    "firstTsMs": 1795401150206,
+    "lastTsMs": 1795401588672,
+    "profiles": {
+      "dev": 26163
+    },
+    "rows": 26163,
+    "sessions": [
+      "C4AB11DC-71F8-4F7E-A133-BE8700B857E7"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "C4AB11DC-71F8-4F7E-A133-BE8700B857E7": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 26163,
+        "regressions": 0,
+        "rows": 26163
+      }
+    },
+    "violations": []
+  },
+  "streamingCore": {
+    "contextViolations": [],
+    "gate": "PASS",
+    "generationViolations": [],
+    "rows": 25771,
+    "violations": [],
+    "attempts": [
+      {
+        "attemptId": "5E8B8AFD-EC3E-4995-A2AB-61B71D0682D0",
+        "cleanup": {
+          "accessReleased": [
+            {
+              "event": "accessReleased",
+              "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+              "line": 26159,
+              "seq": 26159,
+              "tsMs": 1795401582190
+            }
+          ],
+          "iceTasksCancelled": [
+            {
+              "event": "iceTasksCancelled",
+              "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+              "line": 26156,
+              "seq": 26156,
+              "tsMs": 1795401581593
+            }
+          ],
+          "peerClosed": [
+            {
+              "event": "peerClosed",
+              "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+              "line": 26157,
+              "seq": 26157,
+              "tsMs": 1795401581891
+            }
+          ],
+          "remoteSessionClosed": [
+            {
+              "event": "remoteSessionClosed",
+              "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+              "line": 26158,
+              "seq": 26158,
+              "tsMs": 1795401582188
+            }
+          ]
+        },
+        "completePeerEpochs": [
+          2
+        ],
+        "contextViolations": [],
+        "generation": 1,
+        "passed": true,
+        "playingStates": [
+          {
+            "evidence": {
+              "controlReady": {
+                "event": "controlReady",
+                "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                "line": 521,
+                "seq": 521,
+                "tsMs": 1795401484995
+              },
+              "displayFirstPresent": {
+                "event": "displayFirstPresent",
+                "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                "line": 543,
+                "seq": 543,
+                "tsMs": 1795401485326
+              },
+              "peerConnected": {
+                "event": "peerConnected",
+                "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                "line": 482,
+                "seq": 482,
+                "tsMs": 1795401484790
+              },
+              "videoFrameAcceptedToMailbox": {
+                "event": "videoFrameAcceptedToMailbox",
+                "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                "line": 538,
+                "seq": 538,
+                "tsMs": 1795401485305
+              }
+            },
+            "peerEpoch": 2,
+            "playing": {
+              "event": "streamingStateChanged",
+              "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+              "line": 545,
+              "seq": 545,
+              "tsMs": 1795401485328
+            },
+            "reorderRows": 0,
+            "reordered": false
+          }
+        ],
+        "rows": 15828,
+        "sessionId": "C4AB11DC-71F8-4F7E-A133-BE8700B857E7",
+        "sessionReady": [
+          {
+            "event": "sessionReady",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+            "line": 397,
+            "seq": 397,
+            "tsMs": 1795401473241
+          }
+        ],
+        "targets": [
+          "home"
+        ],
+        "terminal": [
+          {
+            "event": "terminalSelected",
+            "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+            "line": 26149,
+            "seq": 26149,
+            "tsMs": 1795401581540
+          }
+        ],
+        "toleratedReorders": [],
+        "violations": [],
+        "peerEpochs": [
+          {
+            "backgroundSupplyBeforeFirstPresent": [],
+            "failedChecks": [
+              "controlBootstrapCompleted",
+              "controlReady",
+              "displayFirstPresent",
+              "displayHealthSnapshot",
+              "displayPresent",
+              "displaySubmit",
+              "firstVideoFrame",
+              "fourChannelProfile",
+              "localIceCompleted",
+              "localIcePaired",
+              "messageHandshakeAcked",
+              "messageHandshakeSent",
+              "messagePostHandshakeCompleted",
+              "negotiationPaired",
+              "peerConnected",
+              "remoteIceCompleted",
+              "steadyMediaObserved",
+              "videoFrameAcceptedToMailbox",
+              "videoSurfaceRendererReady"
+            ],
+            "firstSeq": 398,
+            "lastSeq": 441,
+            "orderingViolations": [],
+            "passed": false,
+            "peerEpoch": 1,
+            "rows": 24,
+            "toleratedReorders": [],
+            "checks": {
+              "answerApplied": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 421,
+                  "seq": 421,
+                  "tsMs": 1795401476741
+                },
+                "lastObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 421,
+                  "seq": 421,
+                  "tsMs": 1795401476741
+                }
+              },
+              "controlBootstrapCompleted": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "controlReady": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "displayFirstPresent": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "displayHealthSnapshot": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "displayPipelineReady": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "displayPipelineReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 425,
+                  "seq": 425,
+                  "tsMs": 1795401476745
+                },
+                "lastObserved": {
+                  "event": "displayPipelineReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 425,
+                  "seq": 425,
+                  "tsMs": 1795401476745
+                }
+              },
+              "displayPresent": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "displaySubmit": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "firstVideoFrame": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "fourChannelProfile": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "localIceCompleted": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "localIcePaired": {
+                "passed": false,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 422,
+                  "seq": 422,
+                  "tsMs": 1795401476741
+                },
+                "lastObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 422,
+                  "seq": 422,
+                  "tsMs": 1795401476741
+                }
+              },
+              "localIceStarted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 422,
+                  "seq": 422,
+                  "tsMs": 1795401476741
+                },
+                "lastObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 422,
+                  "seq": 422,
+                  "tsMs": 1795401476741
+                }
+              },
+              "messageHandshakeAcked": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "messageHandshakeSent": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "messagePostHandshakeCompleted": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "negotiationPaired": {
+                "passed": false,
+                "observedCount": 2,
+                "firstObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 421,
+                  "seq": 421,
+                  "tsMs": 1795401476741
+                },
+                "lastObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 422,
+                  "seq": 422,
+                  "tsMs": 1795401476741
+                }
+              },
+              "peerConnected": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "remoteIceApplied": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "remoteIceBatchApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 431,
+                  "seq": 431,
+                  "tsMs": 1795401477825
+                },
+                "lastObserved": {
+                  "event": "remoteIceBatchApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 431,
+                  "seq": 431,
+                  "tsMs": 1795401477825
+                }
+              },
+              "remoteIceBatchReceived": {
+                "passed": true,
+                "observedCount": 2,
+                "firstObserved": {
+                  "event": "remoteIceBatchReceived",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 429,
+                  "seq": 429,
+                  "tsMs": 1795401477823
+                },
+                "lastObserved": {
+                  "event": "remoteIceBatchReceived",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 433,
+                  "seq": 433,
+                  "tsMs": 1795401479139
+                }
+              },
+              "remoteIceCompleted": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "simulatorI420Evidence": {
+                "passed": true,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "steadyMediaObserved": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "videoFrameAcceptedToMailbox": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "videoSurfaceAttached": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "videoSurfaceAttached",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 426,
+                  "seq": 426,
+                  "tsMs": 1795401476745
+                },
+                "lastObserved": {
+                  "event": "videoSurfaceAttached",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 426,
+                  "seq": 426,
+                  "tsMs": 1795401476745
+                }
+              },
+              "videoSurfaceRendererReady": {
+                "passed": false,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "videoSurfaceSized": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "videoSurfaceSized",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 424,
+                  "seq": 424,
+                  "tsMs": 1795401476745
+                },
+                "lastObserved": {
+                  "event": "videoSurfaceSized",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 424,
+                  "seq": 424,
+                  "tsMs": 1795401476745
+                }
+              }
+            }
+          },
+          {
+            "backgroundSupplyBeforeFirstPresent": [],
+            "failedChecks": [],
+            "firstSeq": 445,
+            "lastSeq": 26149,
+            "orderingViolations": [],
+            "passed": true,
+            "peerEpoch": 2,
+            "rows": 15782,
+            "toleratedReorders": [],
+            "checks": {
+              "answerApplied": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 468,
+                  "seq": 468,
+                  "tsMs": 1795401483952
+                },
+                "lastObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 468,
+                  "seq": 468,
+                  "tsMs": 1795401483952
+                }
+              },
+              "controlBootstrapCompleted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "controlBootstrapCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 520,
+                  "seq": 520,
+                  "tsMs": 1795401484995
+                },
+                "lastObserved": {
+                  "event": "controlBootstrapCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 520,
+                  "seq": 520,
+                  "tsMs": 1795401484995
+                }
+              },
+              "controlReady": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "controlReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 521,
+                  "seq": 521,
+                  "tsMs": 1795401484995
+                },
+                "lastObserved": {
+                  "event": "controlReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 521,
+                  "seq": 521,
+                  "tsMs": 1795401484995
+                }
+              },
+              "displayFirstPresent": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "displayFirstPresent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 543,
+                  "seq": 543,
+                  "tsMs": 1795401485326
+                },
+                "lastObserved": {
+                  "event": "displayFirstPresent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 543,
+                  "seq": 543,
+                  "tsMs": 1795401485326
+                }
+              },
+              "displayHealthSnapshot": {
+                "passed": true,
+                "observedCount": 97,
+                "firstObserved": {
+                  "event": "displayHealthSnapshot",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 523,
+                  "seq": 523,
+                  "tsMs": 1795401484995
+                },
+                "lastObserved": {
+                  "event": "displayHealthSnapshot",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 26074,
+                  "seq": 26074,
+                  "tsMs": 1795401581239
+                }
+              },
+              "displayPipelineReady": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "displayPipelineReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 472,
+                  "seq": 472,
+                  "tsMs": 1795401483953
+                },
+                "lastObserved": {
+                  "event": "displayPipelineReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 472,
+                  "seq": 472,
+                  "tsMs": 1795401483953
+                }
+              },
+              "displayPresent": {
+                "passed": true,
+                "observedCount": 5042,
+                "firstObserved": {
+                  "event": "displayPresent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 542,
+                  "seq": 542,
+                  "tsMs": 1795401485326
+                },
+                "lastObserved": {
+                  "event": "displayPresent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 26144,
+                  "seq": 26144,
+                  "tsMs": 1795401581511
+                }
+              },
+              "displaySubmit": {
+                "passed": true,
+                "observedCount": 5042,
+                "firstObserved": {
+                  "event": "displaySubmit",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 539,
+                  "seq": 539,
+                  "tsMs": 1795401485321
+                },
+                "lastObserved": {
+                  "event": "displaySubmit",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 26143,
+                  "seq": 26143,
+                  "tsMs": 1795401581510
+                }
+              },
+              "firstVideoFrame": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "firstVideoFrame",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 537,
+                  "seq": 537,
+                  "tsMs": 1795401485305
+                },
+                "lastObserved": {
+                  "event": "firstVideoFrame",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 537,
+                  "seq": 537,
+                  "tsMs": 1795401485305
+                }
+              },
+              "fourChannelProfile": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "dataChannelProfilesCreated",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 483,
+                  "seq": 483,
+                  "tsMs": 1795401484791
+                },
+                "lastObserved": {
+                  "event": "dataChannelProfilesCreated",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 483,
+                  "seq": 483,
+                  "tsMs": 1795401484791
+                }
+              },
+              "localIceCompleted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "localIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 533,
+                  "seq": 533,
+                  "tsMs": 1795401485162
+                },
+                "lastObserved": {
+                  "event": "localIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 533,
+                  "seq": 533,
+                  "tsMs": 1795401485162
+                }
+              },
+              "localIcePaired": {
+                "passed": true,
+                "observedCount": 2,
+                "firstObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 469,
+                  "seq": 469,
+                  "tsMs": 1795401483952
+                },
+                "lastObserved": {
+                  "event": "localIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 533,
+                  "seq": 533,
+                  "tsMs": 1795401485162
+                }
+              },
+              "localIceStarted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 469,
+                  "seq": 469,
+                  "tsMs": 1795401483952
+                },
+                "lastObserved": {
+                  "event": "localIceStarted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 469,
+                  "seq": 469,
+                  "tsMs": 1795401483952
+                }
+              },
+              "messageHandshakeAcked": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "messageHandshakeAcked",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 506,
+                  "seq": 506,
+                  "tsMs": 1795401484994
+                },
+                "lastObserved": {
+                  "event": "messageHandshakeAcked",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 506,
+                  "seq": 506,
+                  "tsMs": 1795401484994
+                }
+              },
+              "messageHandshakeSent": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "messageHandshakeSent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 500,
+                  "seq": 500,
+                  "tsMs": 1795401484878
+                },
+                "lastObserved": {
+                  "event": "messageHandshakeSent",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 500,
+                  "seq": 500,
+                  "tsMs": 1795401484878
+                }
+              },
+              "messagePostHandshakeCompleted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "messagePostHandshakeCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 514,
+                  "seq": 514,
+                  "tsMs": 1795401484994
+                },
+                "lastObserved": {
+                  "event": "messagePostHandshakeCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 514,
+                  "seq": 514,
+                  "tsMs": 1795401484994
+                }
+              },
+              "negotiationPaired": {
+                "passed": true,
+                "observedCount": 3,
+                "firstObserved": {
+                  "event": "answerApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 468,
+                  "seq": 468,
+                  "tsMs": 1795401483952
+                },
+                "lastObserved": {
+                  "event": "localIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 533,
+                  "seq": 533,
+                  "tsMs": 1795401485162
+                }
+              },
+              "peerConnected": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "peerConnected",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 482,
+                  "seq": 482,
+                  "tsMs": 1795401484790
+                },
+                "lastObserved": {
+                  "event": "peerConnected",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 482,
+                  "seq": 482,
+                  "tsMs": 1795401484790
+                }
+              },
+              "remoteIceApplied": {
+                "passed": true,
+                "observedCount": 98,
+                "firstObserved": {
+                  "event": "remoteIceBatchApplied",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 480,
+                  "seq": 480,
+                  "tsMs": 1795401484640
+                },
+                "lastObserved": {
+                  "event": "rtcHealthSnapshot",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 26073,
+                  "seq": 26073,
+                  "tsMs": 1795401581239
+                }
+              },
+              "remoteIceBatchReceived": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "remoteIceBatchReceived",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 478,
+                  "seq": 478,
+                  "tsMs": 1795401484635
+                },
+                "lastObserved": {
+                  "event": "remoteIceBatchReceived",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 478,
+                  "seq": 478,
+                  "tsMs": 1795401484635
+                }
+              },
+              "remoteIceCompleted": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "remoteIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 481,
+                  "seq": 481,
+                  "tsMs": 1795401484640
+                },
+                "lastObserved": {
+                  "event": "remoteIceCompleted",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 481,
+                  "seq": 481,
+                  "tsMs": 1795401484640
+                }
+              },
+              "simulatorI420Evidence": {
+                "passed": true,
+                "observedCount": 0,
+                "firstObserved": null,
+                "lastObserved": null
+              },
+              "steadyMediaObserved": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "steadyMediaObserved",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 677,
+                  "seq": 677,
+                  "tsMs": 1795401485999
+                },
+                "lastObserved": {
+                  "event": "steadyMediaObserved",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 677,
+                  "seq": 677,
+                  "tsMs": 1795401485999
+                }
+              },
+              "videoFrameAcceptedToMailbox": {
+                "passed": true,
+                "observedCount": 5047,
+                "firstObserved": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 538,
+                  "seq": 538,
+                  "tsMs": 1795401485305
+                },
+                "lastObserved": {
+                  "event": "videoFrameAcceptedToMailbox",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 26142,
+                  "seq": 26142,
+                  "tsMs": 1795401581510
+                }
+              },
+              "videoSurfaceAttached": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "videoSurfaceAttached",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 474,
+                  "seq": 474,
+                  "tsMs": 1795401483953
+                },
+                "lastObserved": {
+                  "event": "videoSurfaceAttached",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 474,
+                  "seq": 474,
+                  "tsMs": 1795401483953
+                }
+              },
+              "videoSurfaceRendererReady": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "videoSurfaceRendererReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 536,
+                  "seq": 536,
+                  "tsMs": 1795401485305
+                },
+                "lastObserved": {
+                  "event": "videoSurfaceRendererReady",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 536,
+                  "seq": 536,
+                  "tsMs": 1795401485305
+                }
+              },
+              "videoSurfaceSized": {
+                "passed": true,
+                "observedCount": 1,
+                "firstObserved": {
+                  "event": "videoSurfaceSized",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 471,
+                  "seq": 471,
+                  "tsMs": 1795401483953
+                },
+                "lastObserved": {
+                  "event": "videoSurfaceSized",
+                  "file": "/Users/guo.xu/Downloads/runtime-trace-ios-1795401150207-1.jsonl",
+                  "line": 471,
+                  "seq": 471,
+                  "tsMs": 1795401483953
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fullReportArtifact": "core-analysis.full.json.gz"
+}

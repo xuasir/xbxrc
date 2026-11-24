@@ -23,7 +23,9 @@ enum TouchLayoutNormalizer {
         "gamepadA", "gamepadB", "gamepadX", "gamepadY",
     ]
 
-    static func decode(_ data: Data, defaultID: String = "layout") throws -> [TouchLayout] {
+    static func decode(
+        _ data: Data, defaultID: String = "layout", availableAssets: Set<String> = []
+    ) throws -> [TouchLayout] {
         guard data.count <= 2_000_000 else { throw TouchLayoutError.invalid("文件超过 2 MB") }
         let root = try JSONDecoder().decode(TouchJSON.self, from: data)
         guard root.object != nil else { throw TouchLayoutError.invalid("根节点需要为对象") }
@@ -32,13 +34,15 @@ enum TouchLayoutNormalizer {
                 throw TouchLayoutError.invalid("社区包装版本需要为 1")
             }
             return try layouts.keys.sorted().map {
-                try normalize(layouts[$0]!, id: $0, format: "community")
+                try normalize(layouts[$0]!, id: $0, format: "community", assets: availableAssets)
             }
         }
-        return [try normalize(root, id: defaultID, format: "official")]
+        return [try normalize(root, id: defaultID, format: "official", assets: availableAssets)]
     }
 
-    private static func normalize(_ document: TouchJSON, id: String, format: String) throws
+    private static func normalize(
+        _ document: TouchJSON, id: String, format: String, assets: Set<String>
+    ) throws
         -> TouchLayout
     {
         guard let content = document["content"], content.object != nil else {
@@ -47,17 +51,35 @@ enum TouchLayoutNormalizer {
         var report = TouchCapabilityReport(
             format: format, schema: document["$schema"]?.string ?? "runtime-v1")
         if let schema = document["$schema"]?.string,
-            !schema.contains("/layout/latest/") && !schema.contains("/layout/3.5/")
+            !supportsSchema(schema)
         {
             report.add(.unsupported, "/$schema", "此布局版本等待转换器支持")
         }
         let value = normalizeNode(content, path: "/content", depth: 0, report: &report)
-        scanContent(value, path: "/content", report: &report)
+        scanContent(value, path: "/content", assets: assets, report: &report)
+        validateLayerTargets(
+            value, path: "/content", layers: Set(value["layers"]?.object?.keys.map { $0 } ?? []),
+            report: &report)
         report.controlTypes = Array(Set(report.controlTypes)).sorted()
         report.behaviors = Array(Set(report.behaviors)).sorted()
         return TouchLayout(
             id: id, name: document["name"]?.string ?? document["displayName"]?.string ?? id,
             author: document["author"]?.string, content: value, report: report)
+    }
+
+    private static func supportsSchema(_ schema: String) -> Bool {
+        guard let url = URL(string: schema),
+            url.host == "schema.play.xbox.com"
+                || (url.host == "raw.githubusercontent.com"
+                    && url.path.hasPrefix("/microsoft/xbox-game-streaming-tools/"))
+        else { return false }
+        let parts = url.pathComponents
+        guard let layout = parts.firstIndex(of: "layout"), parts.count > layout + 1 else {
+            return false
+        }
+        let version = parts[layout + 1]
+        return ["latest", "1.0", "2.0", "3.0", "3.1", "3.2", "3.3", "3.4", "3.5", "4.0", "4.1"]
+            .contains(version)
     }
 
     private static func normalizeNode(
@@ -98,7 +120,7 @@ enum TouchLayoutNormalizer {
     }
 
     private static func scanContent(
-        _ content: TouchJSON, path: String, report: inout TouchCapabilityReport
+        _ content: TouchJSON, path: String, assets: Set<String>, report: inout TouchCapabilityReport
     ) {
         let regions: Set<String> = [
             "left", "right", "center", "upper", "lower", "layers", "sensors",
@@ -127,7 +149,9 @@ enum TouchLayoutNormalizer {
                     if ring == "inner", slot.array != nil {
                         report.add(.unsupported, "\(path)/\(side)/\(ring)/\(index)", "内环控件组等待支持")
                     }
-                    scanSlot(slot, path: "\(path)/\(side)/\(ring)/\(index)", report: &report)
+                    scanSlot(
+                        slot, path: "\(path)/\(side)/\(ring)/\(index)", assets: assets,
+                        report: &report)
                 }
                 if physicalCount > (ring == "inner" ? 4 : 8) {
                     report.add(.unsupported, "\(path)/\(side)/\(ring)", "控件超过可用物理槽位")
@@ -135,20 +159,39 @@ enum TouchLayoutNormalizer {
             }
         }
         for (index, slot) in (content["upper"]?["right"]?.array ?? []).enumerated() {
-            scanSlot(slot, path: "\(path)/upper/right/\(index)", report: &report)
+            scanSlot(slot, path: "\(path)/upper/right/\(index)", assets: assets, report: &report)
+        }
+        for (region, fields) in [
+            ("upper", Set(["right"])), ("lower", Set(["leftCenter", "rightCenter", "center"])),
+        ] {
+            guard let edge = content[region], edge != .null else { continue }
+            guard let object = edge.object else {
+                report.add(.unsupported, "\(path)/\(region)", "边缘控件区域需要为对象")
+                continue
+            }
+            for key in object.keys where !fields.contains(key) {
+                report.add(.unsupported, "\(path)/\(region)/\(key)", "此边缘控件区域等待支持")
+            }
+            for key in object.keys where fields.contains(key) && key != "center" {
+                if object[key]?.array == nil {
+                    report.add(.unsupported, "\(path)/\(region)/\(key)", "槽位需要为数组")
+                }
+            }
         }
         for key in ["leftCenter", "rightCenter"] {
             for (index, slot) in (content["lower"]?[key]?.array ?? []).enumerated() {
-                scanSlot(slot, path: "\(path)/lower/\(key)/\(index)", report: &report)
+                scanSlot(
+                    slot, path: "\(path)/lower/\(key)/\(index)", assets: assets, report: &report)
             }
         }
         if let slot = content["lower"]?["center"] {
-            scanSlot(slot, path: "\(path)/lower/center", report: &report)
+            scanSlot(slot, path: "\(path)/lower/center", assets: assets, report: &report)
         }
         if let layers = content["layers"]?.object {
             report.behaviors.append("layer")
             for name in layers.keys.sorted() {
-                scanContent(layers[name]!, path: "\(path)/layers/\(name)", report: &report)
+                scanContent(
+                    layers[name]!, path: "\(path)/layers/\(name)", assets: assets, report: &report)
             }
         }
         if !(content["sensors"]?.array ?? []).isEmpty {
@@ -157,13 +200,13 @@ enum TouchLayoutNormalizer {
     }
 
     private static func scanSlot(
-        _ slot: TouchJSON, path: String, report: inout TouchCapabilityReport
+        _ slot: TouchJSON, path: String, assets: Set<String>, report: inout TouchCapabilityReport
     ) {
         if slot == .null { return }
         if let items = slot.array {
             report.behaviors.append("cluster")
             for (index, item) in items.enumerated() {
-                scanSlot(item, path: "\(path)/\(index)", report: &report)
+                scanSlot(item, path: "\(path)/\(index)", assets: assets, report: &report)
             }
             if items.count > 4 { report.add(.unsupported, path, "控件组最多支持四项") }
             return
@@ -214,7 +257,7 @@ enum TouchLayoutNormalizer {
                 scanAxis(axis, path: "\(path)/\(field)", report: &report)
             }
         }
-        scanImages(slot["styles"], path: "\(path)/styles", report: &report)
+        scanImages(slot["styles"], path: "\(path)/styles", assets: assets, report: &report)
         let fields: Set<String> = [
             "type", "action", "pullAction", "axis", "axisUp", "axisDown", "relative", "expand",
             "sticky", "toggle", "scale", "interaction", "styles", "visible", "enabled",
@@ -233,17 +276,35 @@ enum TouchLayoutNormalizer {
                 report.add(.unsupported, path, "动作 \(name) 等待支持")
             }
         } else if let items = action.array {
+            if items.isEmpty { report.add(.unsupported, path, "动作组需要有效映射") }
             for (index, item) in items.enumerated() {
                 scanAction(item, path: "\(path)/\(index)", report: &report)
             }
         } else if action["type"]?.string == "layer", action["target"]?.string != nil {
             return
         } else if action["type"]?.string == "segmented", let items = action["items"]?.array {
+            if items.isEmpty { report.add(.unsupported, path, "分段动作需要有效映射") }
             for (index, item) in items.enumerated() {
                 scanAction(item, path: "\(path)/items/\(index)", report: &report)
             }
         } else {
             report.add(.unsupported, path, "此动作对象等待支持")
+        }
+    }
+
+    private static func validateLayerTargets(
+        _ value: TouchJSON, path: String, layers: Set<String>, report: inout TouchCapabilityReport
+    ) {
+        if value["type"]?.string == "layer", let target = value["target"]?.string,
+            !layers.contains(target)
+        {
+            report.add(.unsupported, path, "布局切换目标暂缺")
+        }
+        for (key, item) in value.object ?? [:] {
+            validateLayerTargets(item, path: "\(path)/\(key)", layers: layers, report: &report)
+        }
+        for (index, item) in (value.array ?? []).enumerated() {
+            validateLayerTargets(item, path: "\(path)/\(index)", layers: layers, report: &report)
         }
     }
 
@@ -276,11 +337,17 @@ enum TouchLayoutNormalizer {
     }
 
     private static func scanImages(
-        _ value: TouchJSON?, path: String, report: inout TouchCapabilityReport
+        _ value: TouchJSON?, path: String, assets: Set<String>, report: inout TouchCapabilityReport
     ) {
         guard let value else { return }
         if value["type"]?.string == "asset" {
-            report.add(.unsupported, path, "图片资源等待布局包加载")
+            if let id = value["value"]?.string, assets.contains(id) {
+                if !path.hasSuffix("/faceImage") {
+                    report.add(.unsupported, path, "此图片位置等待绘制支持")
+                }
+            } else {
+                report.add(.unsupported, path, "图片资源等待布局包加载")
+            }
         }
         if value["type"]?.string == "icon", let name = value["value"]?.string,
             !supportedIcons.contains(name)
@@ -288,7 +355,10 @@ enum TouchLayoutNormalizer {
             report.add(.warning, path, "图标 \(name) 使用动作符号回退")
         }
         for (key, item) in value.object ?? [:] {
-            scanImages(item, path: "\(path)/\(key)", report: &report)
+            scanImages(item, path: "\(path)/\(key)", assets: assets, report: &report)
+        }
+        for (index, item) in (value.array ?? []).enumerated() {
+            scanImages(item, path: "\(path)/\(index)", assets: assets, report: &report)
         }
     }
 }

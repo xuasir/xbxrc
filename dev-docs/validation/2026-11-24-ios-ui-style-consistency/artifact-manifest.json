@@ -1,0 +1,130 @@
+{
+  "task": "2026-11-24-ios-ui-style-consistency",
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 2826,
+      "sha256": "73c66ec1b023ecc5397543fdc1d157e72efcaba717da8300785c861e51fbc955"
+    },
+    {
+      "name": "build-test-excerpts.txt",
+      "bytes": 1902,
+      "sha256": "6b4d067c7e826093cbd90be2cc0df8b08b79dd88bab205ff6477c49f644fcf76"
+    },
+    {
+      "name": "calibration-cloud-search-results.png",
+      "bytes": 2823093,
+      "sha256": "9f4620b915458ae2788dd49326ec9e507be9803552957853bf3cafb5feadcdcf"
+    },
+    {
+      "name": "calibration-cloud-tool-capsules.png",
+      "bytes": 2831513,
+      "sha256": "d4e5ec58a7ef2fef011ee0a481703d316fc341c016fa6a321832337d72ab8d36"
+    },
+    {
+      "name": "cleanup.json",
+      "bytes": 1600,
+      "sha256": "cf9f456e567ed4f07e2ddcad1c4fb4a4c5e72780decc89e019dc18b974553037"
+    },
+    {
+      "name": "execution-manifest.json",
+      "bytes": 2967,
+      "sha256": "2653cc7c00ac12400e150c020aa64feb5e6038813f930bd6ba0d6f9e366652a8"
+    },
+    {
+      "name": "failure-diagnostics.json",
+      "bytes": 1094,
+      "sha256": "80eaf3b4e3728a065ed352dd42d10d611c3413fefa1ddf5d3a7cc261d81e1782"
+    },
+    {
+      "name": "final-swift-format.json",
+      "bytes": 984,
+      "sha256": "3d7442530c665ca19c5a69a7110250f854808521b738559818461a194bb44b7f"
+    },
+    {
+      "name": "final-test-summary.json",
+      "bytes": 991,
+      "sha256": "4072c653356943857c89d2127a09cdcd6d99ccc1fdb17abcfd5be37bc6f550ba"
+    },
+    {
+      "name": "initial-test-summary.json",
+      "bytes": 1652,
+      "sha256": "e86c634a5cf485e8e5496d3895b453a7b3b350e44475178f5f22d0e60b1c9aa1"
+    },
+    {
+      "name": "native-style-smoke.swift",
+      "bytes": 4417,
+      "sha256": "2db06661ee210a150248e21ecbcf6664354764ce7eb25427a221e178ad69548f"
+    },
+    {
+      "name": "priority-game-album-empty.png",
+      "bytes": 2801995,
+      "sha256": "89073dc8df5bf738b905b246efe650314aaa84ff0ecb017e1b94684ba9ede66f"
+    },
+    {
+      "name": "priority-game-overview.png",
+      "bytes": 3049555,
+      "sha256": "daf4eade831003ee6c8ee2d8bf4cdd6ccb34e839938d59e670f9ea92148289ee"
+    },
+    {
+      "name": "retained-images.json",
+      "bytes": 2431,
+      "sha256": "eb072b59d879a5e5066d0391eeeb23ae693fda1d52fd2a704052dd9dc88cfe2d"
+    },
+    {
+      "name": "source-hashes.json",
+      "bytes": 3178,
+      "sha256": "e015c6f2de8a49b15eb9cd5416d3ddaafc31c6d3ba30c5091120748df962475e"
+    },
+    {
+      "name": "streaming-diagnostics-upper-right.png",
+      "bytes": 2988885,
+      "sha256": "d0e983108cf507eaaeedb3392dade073fb4f6aa5760c6306cc0e5f6bc1815db0"
+    },
+    {
+      "name": "styles-narrow-accessibility.png",
+      "bytes": 912647,
+      "sha256": "488d4ff76ad5dd531afdf1e8ba04ec46c16426e4b14e87d7f670d1f2d37ff9c2"
+    },
+    {
+      "name": "styles-phone-dark.png",
+      "bytes": 879273,
+      "sha256": "ecc921ec71befa9a1865ad9c2498582d0ee47e1dc31b1657366be918f90c887c"
+    },
+    {
+      "name": "styles-phone-light.png",
+      "bytes": 814282,
+      "sha256": "232fd04e7e576d16d22fa64137ea153aebef04a7ede25ccced3e2dd2e73882dc"
+    },
+    {
+      "name": "styles-tablet-light.png",
+      "bytes": 1799288,
+      "sha256": "bc3260142b20c99aa5484e246e8bc8cca8071f4d50009d0eb13e197a16cee55b"
+    },
+    {
+      "name": "swift-format.json",
+      "bytes": 3588,
+      "sha256": "4b54bd8f222ef10bd20d2018171dc7bdf152ec111591cc91239cd2256c4876b2"
+    },
+    {
+      "name": "tab-geometry-diagnostic-summary.json",
+      "bytes": 1496,
+      "sha256": "9932314bead04b52c0a2d480393f85f4be40b95bb6d88c24b864c2704cf1bc83"
+    },
+    {
+      "name": "task-changes.diff",
+      "bytes": 25613,
+      "sha256": "9195aa10c8de4b9f6c9e771906914174659a565faa567d6d065d47d1f556bf62"
+    },
+    {
+      "name": "temporary-source-restoration.json",
+      "bytes": 296,
+      "sha256": "139dc9875e58c9472c42933532fdc8ef5cfba146e53875da98e21923af023a02"
+    },
+    {
+      "name": "validation.json",
+      "bytes": 2135,
+      "sha256": "68097f8817afe3b82635c18bb8ad94d13abc694438a3e1ca65ad0dbab35ed45a"
+    }
+  ]
+}

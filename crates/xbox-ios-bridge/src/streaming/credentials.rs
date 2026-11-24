@@ -1,6 +1,7 @@
 //! 会话绑定凭据、单次续期与安全存储提交的宿主投影。
 use crate::cloud_access::{
-    renew_bound_stream_access, validate_bound_stream_access, StreamingAccessContext,
+    renew_bound_stream_access, renew_bound_web_access, validate_bound_stream_access,
+    StreamingAccessContext,
 };
 use crate::{AuthSession, XboxBridgeError};
 use std::future::Future;
@@ -62,6 +63,9 @@ mod tests {
             account_id: uuid::Uuid::new_v4().to_string(),
             refresh_token: "old-refresh".into(),
             auth_seed: None,
+            auth_session: None,
+            auth_provider: None,
+            auth_observer: None,
             target: Target::Cloud,
             session_access: SessionAccessContext::default(),
             force_region_ip: String::new(),
@@ -87,6 +91,7 @@ mod tests {
             seed_json: "seed".into(),
             web_token_json: "web".into(),
             app_level: 2,
+            token_cache_json: None,
         };
         (access, auth)
     }
@@ -95,7 +100,7 @@ mod tests {
     async fn concurrent_rejections_share_one_renewal_and_reuse_latest_bearer() {
         let credentials = fixture();
         let calls = AtomicUsize::new(0);
-        let renew = |access| async {
+        let renew = |access, _| async {
             calls.fetch_add(1, Ordering::Relaxed);
             tokio::task::yield_now().await;
             Ok(renewed(access, "new-token"))
@@ -113,10 +118,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retryable_failure_keeps_credentials_and_revocation_rejects_late_result() {
+    async fn retryable_failure_keeps_credentials_and_shares_pc_backoff() {
         let credentials = fixture();
         let error = credentials
-            .access_with("cloud", Some("old-token"), None, |_| async {
+            .access_with("cloud", Some("old-token"), None, |_, _| async {
                 Err(XboxBridgeError::RetryableAuthentication(
                     "private error".into(),
                 ))
@@ -126,8 +131,24 @@ mod tests {
         assert_eq!(error.to_status_code(), Some(503));
         assert!(!error.to_string().contains("private error"));
         assert!(credentials.pending_update().await.is_none());
+        let cached_error = credentials
+            .access_with("cloud", Some("old-token"), None, |_, _| async {
+                panic!("PC backoff must reuse the previous failure")
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(cached_error.safe_summary(), error.safe_summary());
+        assert_eq!(
+            credentials.state.lock().await.access.bearer_token,
+            "old-token"
+        );
+    }
+
+    #[tokio::test]
+    async fn revocation_rejects_late_renewal_before_commit() {
+        let credentials = fixture();
         let error = credentials
-            .access_with("cloud", Some("old-token"), None, |access| async {
+            .access_with("cloud", Some("old-token"), None, |access, _| async {
                 credentials.revoke();
                 Ok(renewed(access, "late-token"))
             })
@@ -142,14 +163,14 @@ mod tests {
         let credentials = fixture();
         for (target, generation) in [("home", None), ("cloud", Some(u64::MAX))] {
             assert!(credentials
-                .access_with(target, Some("old-token"), generation, |_| async {
+                .access_with(target, Some("old-token"), generation, |_, _| async {
                     panic!("scope must be checked before renewal")
                 })
                 .await
                 .is_err());
         }
         assert!(credentials
-            .access_with("cloud", Some("old-token"), None, |access| async {
+            .access_with("cloud", Some("old-token"), None, |access, _| async {
                 let (mut access, auth) = renewed(access, "new-token");
                 access.account_id = "other-account".into();
                 Ok((access, auth))
@@ -163,13 +184,13 @@ mod tests {
     async fn pending_update_preserves_persistence_base_until_exact_revision_ack() {
         let credentials = fixture();
         credentials
-            .access_with("cloud", Some("old-token"), None, |access| async {
+            .access_with("cloud", Some("old-token"), None, |access, _| async {
                 Ok(renewed(access, "first"))
             })
             .await
             .unwrap();
         credentials
-            .access_with("cloud", Some("first"), None, |access| async {
+            .access_with("cloud", Some("first"), None, |access, _| async {
                 Ok(renewed(access, "second"))
             })
             .await
@@ -187,14 +208,14 @@ mod tests {
     async fn acknowledgement_rebases_a_newer_update_created_during_host_save() {
         let credentials = fixture();
         credentials
-            .access_with("cloud", Some("old-token"), None, |access| async {
+            .access_with("cloud", Some("old-token"), None, |access, _| async {
                 Ok(renewed(access, "first"))
             })
             .await
             .unwrap();
         assert_eq!(credentials.pending_update().await.unwrap().revision, 1);
         credentials
-            .access_with("cloud", Some("first"), None, |access| async {
+            .access_with("cloud", Some("first"), None, |access, _| async {
                 Ok(renewed(access, "second"))
             })
             .await
@@ -211,7 +232,7 @@ mod tests {
         let credentials = fixture();
         credentials.state.lock().await.access.expires_at_ms = 0;
         credentials
-            .access_with("cloud", None, None, |access| async {
+            .access_with("cloud", None, None, |access, _| async {
                 Ok(renewed(access, "first"))
             })
             .await
@@ -219,14 +240,14 @@ mod tests {
         let update = credentials.pending_update().await.unwrap();
         let auth = AuthSession {
             refresh_token: "host-refresh".into(), seed_json: r#"{"private_jwk":{}}"#.into(),
-            web_token_json: serde_json::json!({"data":{"Token":"host-web","DisplayClaims":{"xui":[{"xid":update.account_id,"uhs":"uhs"}]}}}).to_string(), app_level: 2,
+            web_token_json: serde_json::json!({"data":{"Token":"host-web","DisplayClaims":{"xui":[{"xid":update.account_id,"uhs":"uhs"}]}}}).to_string(), app_level: 2, token_cache_json: None,
         };
         credentials
             .synchronize(update.revision, auth)
             .await
             .unwrap();
         let current = credentials
-            .access_with("cloud", None, None, |_| async {
+            .access_with("cloud", None, None, |_, _| async {
                 panic!("valid token should reuse synchronized host credentials")
             })
             .await
@@ -243,7 +264,7 @@ mod tests {
         credentials.begin_cleanup();
         credentials.revoke();
         let current = credentials
-            .access_with("cloud", None, None, |_| async {
+            .access_with("cloud", None, None, |_, _| async {
                 panic!("closed cleanup should reuse the last resource token")
             })
             .await
@@ -251,13 +272,13 @@ mod tests {
         assert_eq!(current.bearer_token, "old-token");
         assert!(credentials.pending_update().await.is_none());
         assert!(credentials
-            .access_with("home", None, None, |_| async {
+            .access_with("home", None, None, |_, _| async {
                 panic!("wrong cleanup target")
             })
             .await
             .is_err());
         assert!(credentials
-            .access_with("cloud", Some("old-token"), None, |_| async {
+            .access_with("cloud", Some("old-token"), None, |_, _| async {
                 panic!("closed cleanup cannot renew")
             })
             .await
@@ -270,6 +291,8 @@ struct CredentialState {
     revision: u64,
     pending: Option<XboxStreamingAuthUpdate>,
     delivered: Option<(u64, String)>,
+    rejected_token: Option<String>,
+    last_failure: Option<(std::time::Instant, WebApiError)>,
 }
 
 pub(super) struct SessionCredentials {
@@ -300,6 +323,8 @@ impl SessionCredentials {
                 revision: 0,
                 pending: None,
                 delivered: None,
+                rejected_token: None,
+                last_failure: None,
             }),
         }
     }
@@ -326,9 +351,12 @@ impl SessionCredentials {
         rejected: Option<&str>,
         generation: Option<u64>,
     ) -> Result<StreamingAccessContext, WebApiError> {
-        self.access_with(target, rejected, generation, |access| async move {
-            renew_bound_stream_access(&access).await
-        })
+        self.access_with(
+            target,
+            rejected,
+            generation,
+            |access, rejected| async move { renew_bound_stream_access(&access, rejected).await },
+        )
         .await
     }
 
@@ -340,7 +368,7 @@ impl SessionCredentials {
         renew: F,
     ) -> Result<StreamingAccessContext, WebApiError>
     where
-        F: FnOnce(StreamingAccessContext) -> Fut,
+        F: FnOnce(StreamingAccessContext, Option<String>) -> Fut,
         Fut: Future<Output = Result<(StreamingAccessContext, AuthSession), XboxBridgeError>>,
     {
         // 同一会话的401和主动续期共享锁，后到请求直接消费已更新凭据。
@@ -364,49 +392,109 @@ impl SessionCredentials {
         {
             return Err(WebApiError::http(401, "streaming credential scope changed"));
         }
+        if rejected.is_some_and(|token| token == state.access.bearer_token) {
+            state.rejected_token = Some(state.access.bearer_token.clone());
+        }
         let expired = state.access.expires_at_ms <= super::now_ms_f64() as u64 + 60_000;
         let needs_renewal = expired
+            || state.rejected_token.as_deref() == Some(state.access.bearer_token.as_str())
             || match rejected {
                 Some(token) => token == state.access.bearer_token,
                 None => expired,
             };
         if needs_renewal {
             let previous = state.access.clone();
-            let (renewed, auth_session) =
-                renew(previous.clone()).await.map_err(|error| match error {
-                    XboxBridgeError::RetryableAuthentication(_) => WebApiError::http(
-                        503,
-                        "streaming credential renewal temporarily unavailable",
-                    ),
-                    _ => WebApiError::http(401, "streaming credential renewal rejected"),
-                })?;
-            // 退出、替换访问句柄和迟到网络响应在提交前重新核验。
-            self.validate(&previous)?;
-            if renewed.account_id != previous.account_id
-                || renewed.target != previous.target
-                || renewed.owner_generation != previous.owner_generation
-            {
-                return Err(WebApiError::http(
-                    401,
-                    "streaming credential renewal owner changed",
-                ));
+            if let Some((recorded, error)) = &state.last_failure {
+                if recorded.elapsed() < std::time::Duration::from_secs(1) {
+                    return Err(error.clone());
+                }
             }
-            state.revision = state.revision.saturating_add(1);
-            let previous_refresh_token = state
-                .pending
-                .as_ref()
-                .map(|pending| pending.previous_refresh_token.clone())
-                .unwrap_or(previous.refresh_token);
-            state.pending = Some(XboxStreamingAuthUpdate {
-                revision: state.revision,
-                account_id: renewed.account_id.clone(),
-                owner_generation: renewed.owner_generation,
-                previous_refresh_token,
-                auth_session,
-            });
-            state.access = renewed;
+            let result = renew(previous.clone(), state.rejected_token.clone()).await;
+            let (renewed, auth_session) = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    let error = credential_error(error);
+                    state.last_failure = Some((std::time::Instant::now(), error.clone()));
+                    return Err(error);
+                }
+            };
+            self.commit_renewal(&mut state, previous, renewed, auth_session)?;
+            state.rejected_token = None;
+            state.last_failure = None;
         }
         Ok(state.access.clone())
+    }
+
+    fn commit_renewal(
+        &self,
+        state: &mut CredentialState,
+        previous: StreamingAccessContext,
+        renewed: StreamingAccessContext,
+        auth_session: AuthSession,
+    ) -> Result<(), WebApiError> {
+        // 退出、替换访问句柄和迟到网络响应在提交前重新核验。
+        self.validate(&previous)?;
+        if renewed.account_id != previous.account_id
+            || renewed.target != previous.target
+            || renewed.owner_generation != previous.owner_generation
+        {
+            return Err(WebApiError::http(
+                401,
+                "streaming credential renewal owner changed",
+            ));
+        }
+        state.revision = state.revision.saturating_add(1);
+        let previous_refresh_token = state
+            .pending
+            .as_ref()
+            .map(|pending| pending.previous_refresh_token.clone())
+            .unwrap_or(previous.refresh_token);
+        state.pending = Some(XboxStreamingAuthUpdate {
+            revision: state.revision,
+            account_id: renewed.account_id.clone(),
+            owner_generation: renewed.owner_generation,
+            previous_refresh_token,
+            auth_session,
+        });
+        state.access = renewed;
+        Ok(())
+    }
+
+    async fn recover_web_access(
+        &self,
+        rejected: &str,
+    ) -> Result<StreamingAccessContext, WebApiError> {
+        let mut state = self.state.lock().await;
+        self.validate(&state.access)?;
+        if state.access.web_token != rejected {
+            return Ok(state.access.clone());
+        }
+        let previous = state.access.clone();
+        let (renewed, auth) = Box::pin(renew_bound_web_access(&previous, rejected.into()))
+            .await
+            .map_err(credential_error)?;
+        self.commit_renewal(&mut state, previous, renewed, auth)?;
+        Ok(state.access.clone())
+    }
+
+    /// Smartglass/唤醒与 PC 的 Web 查询一致，401 回到同一 owner 恢复一次。
+    pub(super) async fn run_web_query<T, F, Fut>(&self, request: F) -> Result<T, WebApiError>
+    where
+        F: Fn(StreamingAccessContext) -> Fut,
+        Fut: Future<Output = Result<T, WebApiError>>,
+    {
+        let target = self.state.lock().await.access.target;
+        let mut access = self.access(target.as_str(), None, None).await?;
+        let mut result = request(access.clone()).await;
+        if result
+            .as_ref()
+            .is_err_and(|error| error.to_status_code() == Some(401))
+        {
+            access = Box::pin(self.recover_web_access(&access.web_token)).await?;
+            result = request(access.clone()).await;
+        }
+        self.validate(&access)?;
+        result
     }
 
     pub(super) async fn pending_update(&self) -> Option<XboxStreamingAuthUpdate> {
@@ -464,6 +552,7 @@ impl SessionCredentials {
                 return Ok(());
             }
         }
+        state.access.auth_session = Some(auth.clone());
         state.access.refresh_token = auth.refresh_token;
         state.access.auth_seed = Some(seed);
         state.access.web_uhs = claims.uhs;
@@ -471,5 +560,34 @@ impl SessionCredentials {
         state.pending = None;
         state.delivered = None;
         Ok(())
+    }
+}
+
+fn credential_error(error: XboxBridgeError) -> WebApiError {
+    match error {
+        XboxBridgeError::Query { failure } => match failure.kind {
+            crate::XboxQueryFailureKind::Timeout => {
+                WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Timeout)
+            }
+            crate::XboxQueryFailureKind::Network => {
+                WebApiError::network_kind(xbox_webapi::NetworkErrorKind::Connect)
+            }
+            _ if failure.status_code.is_some() => WebApiError::http(
+                failure.status_code.unwrap(),
+                "streaming credential renewal unavailable",
+            ),
+            crate::XboxQueryFailureKind::Authentication => {
+                WebApiError::http(401, "streaming credential renewal rejected")
+            }
+            _ => WebApiError::parse("streaming credential response unavailable"),
+        },
+        XboxBridgeError::RetryableAuthentication(_) => {
+            WebApiError::http(503, "streaming credential renewal temporarily unavailable")
+        }
+        XboxBridgeError::Authentication(_) => {
+            WebApiError::http(401, "streaming credential renewal rejected")
+        }
+        XboxBridgeError::Cancelled => WebApiError::parse("operationCancelled:stage=authRenewal"),
+        _ => WebApiError::parse("streaming credential response unavailable"),
     }
 }

@@ -1,0 +1,39 @@
+{
+  "configuration": "swift-format.json",
+  "actorRanges": [
+    [
+      453,
+      527
+    ],
+    [
+      2381,
+      2387
+    ],
+    [
+      808,
+      810
+    ]
+  ],
+  "preservedBaselineFormattingOutsideChangedFunctions": true,
+  "finalEventVisibilityField": true,
+  "additionalScopedFiles": {
+    "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift": [
+      [
+        641,
+        652
+      ],
+      [
+        1315,
+        1315
+      ]
+    ],
+    "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift": [
+      [
+        215,
+        219
+      ]
+    ]
+  },
+  "formatCorrectionOnly": true,
+  "finalSourcesVerifiedByTests": true
+}

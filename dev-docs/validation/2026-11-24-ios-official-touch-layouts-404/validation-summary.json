@@ -1,0 +1,48 @@
+{
+  "status": "implementationVerified_liveValidationPending",
+  "rustTests": {
+    "passed": 5,
+    "failed": 0
+  },
+  "uiTests": {
+    "passed": 1,
+    "failed": 0,
+    "seconds": 20.867
+  },
+  "simulatorBuild": "passed",
+  "macApplicationBuild": "passed",
+  "liveRequestStatus": "awaiting normal Xcode app catalog, preview and save outcome",
+  "liveRequests": 0,
+  "format": "passed",
+  "localization": "passed",
+  "finalFiles": [
+    "crates/xbox-ios-bridge/src/touch_layouts/mod.rs",
+    "crates/xbox-touch-layouts/src/catalog.rs",
+    "crates/xbox-webapi/src/xcloud_api.rs",
+    "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h",
+    "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "iosapp/XBXRC/Resources/Localizable.xcstrings",
+    "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift"
+  ],
+  "catalogRegressionR2": {
+    "passed": 4,
+    "failed": 0
+  },
+  "iPhoneOSBuildR2": "passed",
+  "bindingsR2": "passed",
+  "previousResultsReused": [
+    "5 Rust API contracts",
+    "1 iPad shared-retry UI smoke",
+    "r1 simulator and Mac compilation"
+  ],
+  "currentCatalogContract": "POST /v2/titles, productId -> details.supportedTabs",
+  "currentDiagnosticStages": [
+    "titleIdentity",
+    "cloudTitleDetails"
+  ],
+  "cleanupR2": "see cleanup-r2.json"
+}

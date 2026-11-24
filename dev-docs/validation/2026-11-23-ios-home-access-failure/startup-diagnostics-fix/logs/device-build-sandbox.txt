@@ -1,0 +1,8 @@
+xcodebuild: error: Could not resolve package dependencies:
+  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted
+<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'
+<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)
+  <unknown>:0: error: error opening '/Users/guo.xu/.cache/clang/ModuleCache/Swift-7JL1KBZ3A6V3.swiftmodule' for output: /Users/guo.xu/.cache/clang/ModuleCache: Operation not permitted
+<unknown>:0: error: unable to load standard library for target 'arm64-apple-macos14.0'
+<unknown>:0: error: cannot open file '/Users/guo.xu/Library/Caches/org.swift.swiftpm/manifests/ManifestLoading/webrtc.dia' for diagnostics emission (Operation not permitted)
+

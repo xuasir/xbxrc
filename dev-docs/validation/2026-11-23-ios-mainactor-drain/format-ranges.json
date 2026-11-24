@@ -1,0 +1,44 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "scope": "fullFile",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "scope": "139:166",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift",
+    "scope": "172:173",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/CapabilityMigrationTests.swift",
+    "scope": "919:919",
+    "exitCode": 0,
+    "unchanged": true,
+    "stderr": ""
+  }
+]

@@ -38,9 +38,10 @@ struct TouchLayoutSurface: UIViewRepresentable {
     @Environment(\.locale) private var locale
     let input: TouchInputAccumulator
     let opacity: Double
+    var assets: TouchLayoutAssets = .empty
     var capturesEmptySpace = true
     var configuration: TouchLayoutConfiguration? = nil
-    var onMoveControl: ((String, CGPoint, CGSize) -> Void)? = nil
+    var onMoveControl: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)? = nil
     var onEditingChanged: ((Bool) -> Void)? = nil
     var onPress: (() -> Void)? = nil
 
@@ -51,11 +52,13 @@ struct TouchLayoutSurface: UIViewRepresentable {
     func updateUIView(_ view: TouchLayoutSurfaceView, context: Context) {
         view.locale = locale
         view.controlOpacity = Float(opacity)
+        view.assets = assets
         view.capturesEmptySpace = capturesEmptySpace
         view.onMoveControl = onMoveControl
         view.onEditingChanged = onEditingChanged
         view.onPress = onPress
         input.setConfiguration(configuration)
+        view.updateViewport()
         view.requestRender()
     }
 
@@ -70,13 +73,15 @@ final class TouchLayoutSurfaceView: UIView {
     let input: TouchInputAccumulator
     var locale = Locale.current
     var controlOpacity: Float = 0.65
+    var assets: TouchLayoutAssets = .empty
     var capturesEmptySpace = true
-    var onMoveControl: ((String, CGPoint, CGSize) -> Void)?
+    var onMoveControl: ((String, CGPoint, CGSize, TouchSurfaceInsets) -> Void)?
     var onEditingChanged: ((Bool) -> Void)?
     var onPress: (() -> Void)?
     private var draggedControl: (pointer: ObjectIdentifier, id: String, offset: CGPoint)?
     private var selectedControlID: String?
     private var viewportSize = CGSize.zero
+    private(set) var viewportInsets = TouchSurfaceInsets()
     private var feedback = TouchPressFeedback()
     private var identifiers: [ObjectIdentifier: Int] = [:]
     private var nextPointerID = 0
@@ -119,20 +124,45 @@ final class TouchLayoutSurfaceView: UIView {
             displayLink = CADisplayLink(
                 target: target, selector: #selector(TouchDisplayTarget.tick))
             displayLink?.add(to: .main, forMode: .common)
+            updateViewport()
             requestRender()
         }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if viewportSize != bounds.size, draggedControl != nil {
+        updateViewport()
+        requestRender()
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        updateViewport()
+        requestRender()
+    }
+
+    func updateViewport() {
+        let insets: TouchSurfaceInsets
+        if let window {
+            // 全屏画布保留原始尺寸；把窗口安全区投影到触摸面的局部坐标。
+            let safe = convert(window.bounds.inset(by: window.safeAreaInsets), from: window)
+            insets = TouchSurfaceInsets(
+                top: max(0, safe.minY - bounds.minY),
+                left: max(0, safe.minX - bounds.minX),
+                bottom: max(0, bounds.maxY - safe.maxY),
+                right: max(0, bounds.maxX - safe.maxX))
+        } else {
+            insets = .init()
+        }
+        guard viewportSize != bounds.size || viewportInsets != insets else { return }
+        if draggedControl != nil {
             draggedControl = nil
             selectedControlID = nil
             onEditingChanged?(false)
         }
         viewportSize = bounds.size
-        input.setViewport(size: bounds.size)
-        requestRender()
+        viewportInsets = insets
+        input.setViewport(size: bounds.size, insets: insets)
     }
 
     func requestRender() {
@@ -165,6 +195,7 @@ final class TouchLayoutSurfaceView: UIView {
             drawing.update(
                 socket: socket, runtime: input.runtimes[socket.id],
                 opacity: controlOpacity, traits: traitCollection,
+                assets: assets,
                 highlighted: feedback.isHighlighted(socket.id, now: now)
                     || (onMoveControl != nil && selectedControlID == socket.id))
             let element = UIAccessibilityElement(accessibilityContainer: self)
@@ -268,7 +299,8 @@ final class TouchLayoutSurfaceView: UIView {
             if phase == .moved || phase == .ended {
                 onMoveControl?(
                     drag.id,
-                    CGPoint(x: point.x + drag.offset.x, y: point.y + drag.offset.y), bounds.size)
+                    CGPoint(x: point.x + drag.offset.x, y: point.y + drag.offset.y), bounds.size,
+                    viewportInsets)
             }
             if phase == .ended || phase == .cancelled {
                 draggedControl = nil
@@ -308,7 +340,7 @@ private final class TouchControlDrawing {
 
     func update(
         socket: TouchControlSocket, runtime: TouchControlRuntime?, opacity: Float,
-        traits: UITraitCollection, highlighted: Bool
+        traits: UITraitCollection, assets: TouchLayoutAssets, highlighted: Bool
     ) {
         let diameter = socket.diameter
         let bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
@@ -367,9 +399,9 @@ private final class TouchControlDrawing {
             }
             face = face.insetBy(dx: face.width * 0.22, dy: face.height * 0.22)
         }
-        let icon =
-            style["faceImage"]?["value"]?.string
-            ?? style["knob"]?["faceImage"]?["value"]?.string ?? socket.control.icon
+        let faceImage = style["faceImage"] ?? style["knob"]?["faceImage"]
+        let icon = faceImage?["value"]?.string ?? socket.control.icon
+        let asset = faceImage?["type"]?.string == "asset" ? icon.flatMap { assets.images[$0] } : nil
         let systemName = symbolName(icon: icon, control: socket.control)
         symbol.frame = face
         symbol.contentsScale = traits.displayScale
@@ -377,7 +409,7 @@ private final class TouchControlDrawing {
         let isXboxGuide = socket.control.action == .gamepad("guide")
         let symbolIdentity = isXboxGuide ? "XboxLogo" : systemName ?? ""
         let cacheKey = "\(symbolIdentity): \(face.size): \(strokeColor): \(traits.displayScale)"
-        if cacheKey != symbolCacheKey {
+        if asset == nil, cacheKey != symbolCacheKey {
             symbolCacheKey = cacheKey
             let artwork =
                 isXboxGuide
@@ -398,8 +430,8 @@ private final class TouchControlDrawing {
                 }.cgImage
             }
         }
-        symbol.contents = symbolCache
-        text.isHidden = systemName != nil
+        symbol.contents = asset ?? symbolCache
+        text.isHidden = asset != nil || systemName != nil
         text.contentsScale = traits.displayScale
         text.frame = CGRect(
             x: 0, y: diameter / 2 - min(20, diameter * 0.38) * 0.62,

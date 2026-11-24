@@ -1,0 +1,22 @@
+{
+  "ui_smoke_tests": {
+    "passed": 2,
+    "failed": 0,
+    "source": "test-summary.json"
+  },
+  "current_source_checks": [
+    {
+      "name": "swift_parse",
+      "result": "Passed",
+      "diagnostics": ""
+    },
+    {
+      "name": "diff_check",
+      "result": "Passed",
+      "diagnostics": ""
+    }
+  ],
+  "format": "swift-format.json",
+  "manual_scope": "真实Xbox媒体保存与实机串流由用户验收。",
+  "ui_runs_in_this_continuation": 0
+}

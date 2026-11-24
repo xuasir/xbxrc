@@ -1,0 +1,462 @@
+diff --git a/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift b/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift
+@@ -234,0 +235,2 @@
++    let drainScheduledAtMs: Double
++    let drainStartedAtMs: Double
+@@ -237 +239 @@
+-    func tracePayload(acceptedAtMs: Double) -> [String: IOSRuntimeTraceValue] {
++    func queueTracePayload() -> [String: IOSRuntimeTraceValue] {
+@@ -240 +242,3 @@
+-            "frameAcceptWorkMs": .double(max(0, acceptedAtMs - mainActorEnteredAtMs)),
++            "ingressDrainQueueMs": .double(max(0, drainStartedAtMs - drainScheduledAtMs)),
++            "ingressDrainWorkBeforeFrameMs": .double(
++                max(0, mainActorEnteredAtMs - drainStartedAtMs)),
+@@ -241,0 +246,6 @@
++    }
++
++    func tracePayload(acceptedAtMs: Double) -> [String: IOSRuntimeTraceValue] {
++        var payload = queueTracePayload()
++        payload["frameAcceptWorkMs"] = .double(max(0, acceptedAtMs - mainActorEnteredAtMs))
++        return payload
+@@ -768,0 +779,5 @@
++struct StreamingIngressDrainTicket: Equatable, Sendable {
++    let identifier: UInt64
++    let scheduledAtMs: Double
++}
++
+@@ -772 +787,2 @@
+-    private var deliveryScheduled = false
++    private var scheduledDrain: StreamingIngressDrainTicket?
++    private var nextDrainIdentifier: UInt64 = 0
+@@ -775 +791,3 @@
+-    func submit(_ value: Value) -> Bool {
++    func submit(
++        _ value: Value, scheduledAtMs: Double = StreamingFrameFeedbackClock.nowMilliseconds
++    ) -> StreamingIngressDrainTicket? {
+@@ -776,0 +795 @@
++        defer { lock.unlock() }
+@@ -779,7 +798,5 @@
+-        let shouldSchedule = !deliveryScheduled
+-        deliveryScheduled = true
+-        lock.unlock()
+-        return shouldSchedule
+-    }
+-
+-    func take() -> StreamingLatestIngressDelivery<Value>? {
++        guard scheduledDrain == nil else { return nil }
++        return makeDrainTicket(scheduledAtMs: scheduledAtMs)
++    }
++
++    func take(_ ticket: StreamingIngressDrainTicket) -> StreamingLatestIngressDelivery<Value>? {
+@@ -788 +805 @@
+-        guard let pendingValue else { return nil }
++        guard scheduledDrain?.identifier == ticket.identifier, let pendingValue else { return nil }
+@@ -798 +815,4 @@
+-    func finishDelivery() -> Bool {
++    func finishDelivery(
++        _ ticket: StreamingIngressDrainTicket,
++        scheduledAtMs: Double = StreamingFrameFeedbackClock.nowMilliseconds
++    ) -> StreamingIngressDrainTicket? {
+@@ -801,6 +821,12 @@
+-        guard pendingValue == nil else { return true }
+-        deliveryScheduled = false
+-        return false
+-    }
+-
+-    func drain(consume: (StreamingLatestIngressDelivery<Value>) -> Void) -> Bool {
++        guard scheduledDrain?.identifier == ticket.identifier else { return nil }
++        guard pendingValue != nil else {
++            scheduledDrain = nil
++            return nil
++        }
++        return makeDrainTicket(scheduledAtMs: scheduledAtMs)
++    }
++
++    func drain(
++        _ ticket: StreamingIngressDrainTicket,
++        consume: (StreamingLatestIngressDelivery<Value>) -> Void
++    ) -> StreamingIngressDrainTicket? {
+@@ -809 +835 @@
+-            guard let delivery = take() else { break }
++            guard let delivery = take(ticket) else { break }
+@@ -812 +838,10 @@
+-        return finishDelivery()
++        return finishDelivery(ticket)
++    }
++
++    // 调用方持锁；每次续排都换 ticket，隔离 reset 和重复投递的旧任务。
++    private func makeDrainTicket(scheduledAtMs: Double) -> StreamingIngressDrainTicket {
++        nextDrainIdentifier &+= 1
++        let ticket = StreamingIngressDrainTicket(
++            identifier: nextDrainIdentifier, scheduledAtMs: scheduledAtMs)
++        scheduledDrain = ticket
++        return ticket
+@@ -818 +853 @@
+-        deliveryScheduled = false
++        scheduledDrain = nil
+@@ -831 +866,2 @@
+-    @MainActor var frameSink: (@MainActor (RTCVideoFrame, Int64, Double) -> Void)?
++    @MainActor var frameSink:
++        (@MainActor (RTCVideoFrame, Int64, StreamingFrameIngressTiming) -> Void)?
+@@ -836 +872 @@
+-        Task { @MainActor [weak self] in
++        Task(priority: .userInitiated) { @MainActor [weak self] in
+@@ -845 +881,3 @@
+-        if frameSlot.submit(queued) { scheduleDrain() }
++        if let ticket = frameSlot.submit(queued, scheduledAtMs: queued.receivedAtMs) {
++            scheduleDrain(ticket)
++        }
+@@ -852,3 +890,3 @@
+-    private func scheduleDrain() {
+-        Task { @MainActor [weak self] in
+-            self?.drainLatestFrame()
++    private func scheduleDrain(_ ticket: StreamingIngressDrainTicket) {
++        Task(priority: .userInitiated) { @MainActor [weak self] in
++            self?.drainLatestFrame(ticket)
+@@ -859,2 +897,3 @@
+-    private func drainLatestFrame() {
+-        let hasPending = frameSlot.drain { delivery in
++    private func drainLatestFrame(_ ticket: StreamingIngressDrainTicket) {
++        let drainStartedAtMs = StreamingFrameFeedbackClock.nowMilliseconds
++        let nextTicket = frameSlot.drain(ticket) { delivery in
+@@ -862,3 +901,8 @@
+-                delivery.value.frame, delivery.replacedCount, delivery.value.receivedAtMs)
+-        }
+-        if hasPending { scheduleDrain() }
++                delivery.value.frame, delivery.replacedCount,
++                StreamingFrameIngressTiming(
++                    receivedAtMs: delivery.value.receivedAtMs,
++                    drainScheduledAtMs: ticket.scheduledAtMs,
++                    drainStartedAtMs: drainStartedAtMs,
++                    mainActorEnteredAtMs: StreamingFrameFeedbackClock.nowMilliseconds))
++        }
++        if let nextTicket { scheduleDrain(nextTicket) }
+@@ -931 +975 @@
+-        frameIngress.frameSink = { [weak self] frame, replacedCount, receivedAtMs in
++        frameIngress.frameSink = { [weak self] frame, replacedCount, ingressTiming in
+@@ -933 +977 @@
+-                frame, ingressReplacedCount: replacedCount, receivedAtMs: receivedAtMs)
++                frame, ingressReplacedCount: replacedCount, ingressTiming: ingressTiming)
+@@ -1057 +1101,2 @@
+-        _ frame: RTCVideoFrame, ingressReplacedCount: Int64, receivedAtMs: Double
++        _ frame: RTCVideoFrame, ingressReplacedCount: Int64,
++        ingressTiming: StreamingFrameIngressTiming
+@@ -1059,3 +1103,0 @@
+-        let ingressTiming = StreamingFrameIngressTiming(
+-            receivedAtMs: receivedAtMs,
+-            mainActorEnteredAtMs: StreamingFrameFeedbackClock.nowMilliseconds)
+@@ -1069 +1111,2 @@
+-                context: ingressContext
++                context: ingressContext,
++                ingressTiming: ingressTiming
+@@ -1321 +1364 @@
+-            Task { @MainActor in
++            Task(priority: .userInitiated) { @MainActor in
+@@ -1337 +1380 @@
+-                Task { @MainActor in
++                Task(priority: .userInitiated) { @MainActor in
+@@ -1834 +1877,2 @@
+-        context: StreamingPresentationTraceContext?
++        context: StreamingPresentationTraceContext?,
++        ingressTiming: StreamingFrameIngressTiming? = nil
+@@ -1836,0 +1881,7 @@
++        var payload: [String: IOSRuntimeTraceValue] = [
++            "count": .integer(max(count, 1)),
++            "reason": .string(reason.rawValue),
++        ]
++        if let ingressTiming {
++            payload.merge(ingressTiming.queueTracePayload()) { _, new in new }
++        }
+@@ -1841,4 +1892 @@
+-                [
+-                    "count": .integer(max(count, 1)),
+-                    "reason": .string(reason.rawValue),
+-                ],
++                payload,
+@@ -2033 +2081 @@
+-            healthReportTask = Task { @MainActor [weak self] in
++            healthReportTask = Task(priority: .utility) { @MainActor [weak self] in
+diff --git a/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift b/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift
+@@ -140 +140 @@
+-    @ObservedObject var input: StreamInputSession
++    let input: StreamInputSession
+@@ -142 +142,7 @@
+-    @State private var hasController = false
++    @State private var hasController: Bool
++
++    init(input: StreamInputSession) {
++        self.input = input
++        _hasController = State(initialValue: input.hasController)
++    }
++
+@@ -151 +157 @@
+-        .task {
++        .task(id: ObjectIdentifier(input)) {
+@@ -153 +159,2 @@
+-                hasController = input.hasController
++                let available = input.hasController
++                if hasController != available { hasController = available }
+diff --git a/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift b/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift
+--- a/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift
++++ b/iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift
+@@ -5 +5 @@
+-    @ObservedObject var input: StreamInputSession
++    let input: StreamInputSession
+@@ -7,0 +8,6 @@
++    @State private var isSuppressed: Bool
++
++    init(input: StreamInputSession) {
++        self.input = input
++        _isSuppressed = State(initialValue: input.isSuppressed)
++    }
+@@ -27 +33 @@
+-        .allowsHitTesting(!input.isSuppressed)
++        .allowsHitTesting(!isSuppressed)
+@@ -29 +35,2 @@
+-        .onChange(of: input.isSuppressed) { _, suppressed in
++        .onReceive(input.$isSuppressed.removeDuplicates()) { suppressed in
++            isSuppressed = suppressed
+diff --git a/iosapp/XBXRCTests/XBXRCTests.swift b/iosapp/XBXRCTests/XBXRCTests.swift
+--- a/iosapp/XBXRCTests/XBXRCTests.swift
++++ b/iosapp/XBXRCTests/XBXRCTests.swift
+@@ -4,0 +5 @@
++import SwiftUI
+@@ -170 +171 @@
+-    func testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames() {
++    func testIngressDrainContinuesWithinDeliveryAndYieldsAfterTwoFrames() throws {
+@@ -172 +173 @@
+-        XCTAssertTrue(slot.submit(1))
++        let firstTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
+@@ -174,4 +175,5 @@
+-        let hasPending = slot.drain { delivery in
+-            delivered.append(delivery.value)
+-            XCTAssertFalse(slot.submit(delivery.value + 1))
+-        }
++        let nextTicket = try XCTUnwrap(
++            slot.drain(firstTicket) { delivery in
++                delivered.append(delivery.value)
++                XCTAssertNil(slot.submit(delivery.value + 1))
++            })
+@@ -179,2 +181,3 @@
+-        XCTAssertTrue(hasPending)
+-        XCTAssertFalse(slot.drain { delivered.append($0.value) })
++        XCTAssertGreaterThan(nextTicket.identifier, firstTicket.identifier)
++        XCTAssertNil(slot.drain(firstTicket) { _ in XCTFail("旧任务应保持接续帧归属") })
++        XCTAssertNil(slot.drain(nextTicket) { delivered.append($0.value) })
+@@ -182,4 +185,4 @@
+-        XCTAssertTrue(slot.submit(4))
+-    }
+-
+-    func testIngressDrainKeepsLatestReplacementCountsAndResetBoundary() {
++        XCTAssertNotNil(slot.submit(4))
++    }
++
++    func testIngressDrainKeepsLatestReplacementCountsAndResetBoundary() throws {
+@@ -187 +190 @@
+-        _ = slot.submit(1)
++        let ticket = try XCTUnwrap(slot.submit(1))
+@@ -189,2 +192,2 @@
+-        XCTAssertFalse(
+-            slot.drain { delivery in
++        XCTAssertNil(
++            slot.drain(ticket) { delivery in
+@@ -199 +202 @@
+-        _ = slot.submit(4)
++        let oldTicket = try XCTUnwrap(slot.submit(4))
+@@ -201,2 +204,58 @@
+-        XCTAssertFalse(slot.drain { _ in XCTFail("旧入口帧应在reset边界释放") })
+-        XCTAssertTrue(slot.submit(5))
++        XCTAssertNil(slot.drain(oldTicket) { _ in XCTFail("旧入口帧应在reset边界释放") })
++        XCTAssertNotNil(slot.submit(5))
++    }
++
++    func testIngressReplacementKeepsOriginalDrainScheduleTime() throws {
++        let slot = StreamingLatestIngressSlot<Int>()
++        let ticket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
++        for value in 2...39 {
++            XCTAssertNil(slot.submit(value, scheduledAtMs: Double(100 + value)))
++        }
++        XCTAssertEqual(ticket.scheduledAtMs, 100)
++        var delivered: StreamingLatestIngressDelivery<Int>?
++        XCTAssertNil(slot.drain(ticket) { delivered = $0 })
++        XCTAssertEqual(delivered?.value, 39)
++        XCTAssertEqual(delivered?.replacedCount, 38)
++    }
++
++    func testIngressStaleAndDuplicateTasksKeepConcurrentResetFramesOwnedByNewTicket() async throws {
++        let slot = StreamingLatestIngressSlot<Int>()
++        let oldTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
++        let scheduledAfterReset = await Task.detached {
++            slot.reset()
++            return slot.submit(2, scheduledAtMs: 200)
++        }.value
++        let newTicket = try XCTUnwrap(scheduledAfterReset)
++        XCTAssertNil(slot.submit(3, scheduledAtMs: 201))
++        XCTAssertGreaterThan(newTicket.identifier, oldTicket.identifier)
++        for _ in 0..<2 {
++            XCTAssertNil(slot.drain(oldTicket) { _ in XCTFail("迟到任务应保持新代次帧归属") })
++            XCTAssertNil(slot.take(oldTicket))
++            XCTAssertNil(slot.finishDelivery(oldTicket))
++        }
++        var delivered: StreamingLatestIngressDelivery<Int>?
++        XCTAssertNil(slot.drain(newTicket) { delivered = $0 })
++        XCTAssertEqual(delivered?.value, 3)
++        XCTAssertEqual(delivered?.replacedCount, 1)
++        let latest = try XCTUnwrap(slot.submit(4))
++        XCTAssertNil(slot.drain(newTicket) { _ in XCTFail("重复任务应保持最新帧归属") })
++        XCTAssertEqual(slot.take(latest)?.value, 4)
++        XCTAssertNil(slot.finishDelivery(latest))
++    }
++
++    func testIngressResetDuringConsumptionKeepsNewScheduleAndReplacementCount() throws {
++        let slot = StreamingLatestIngressSlot<Int>()
++        let oldTicket = try XCTUnwrap(slot.submit(1))
++        var newTicket: StreamingIngressDrainTicket?
++        XCTAssertNil(
++            slot.drain(oldTicket) { delivery in
++                XCTAssertEqual(delivery.value, 1)
++                slot.reset()
++                newTicket = slot.submit(2)
++                XCTAssertNil(slot.submit(3))
++            })
++        let currentTicket = try XCTUnwrap(newTicket)
++        var delivered: StreamingLatestIngressDelivery<Int>?
++        XCTAssertNil(slot.drain(currentTicket) { delivered = $0 })
++        XCTAssertEqual(delivered?.value, 3)
++        XCTAssertEqual(delivered?.replacedCount, 1)
+@@ -206 +265,3 @@
+-        let timing = StreamingFrameIngressTiming(receivedAtMs: 100, mainActorEnteredAtMs: 120)
++        let timing = StreamingFrameIngressTiming(
++            receivedAtMs: 119, drainScheduledAtMs: 100, drainStartedAtMs: 120,
++            mainActorEnteredAtMs: 121)
+@@ -208,2 +269,10 @@
+-        XCTAssertEqual(payload["ingressQueueMs"], .double(20))
+-        XCTAssertEqual(payload["frameAcceptWorkMs"], .double(3))
++        XCTAssertEqual(payload["ingressQueueMs"], .double(2))
++        XCTAssertEqual(payload["ingressDrainQueueMs"], .double(20))
++        XCTAssertEqual(payload["ingressDrainWorkBeforeFrameMs"], .double(1))
++        XCTAssertEqual(payload["frameAcceptWorkMs"], .double(2))
++        var dropPayload = timing.queueTracePayload()
++        dropPayload["count"] = .integer(38)
++        dropPayload["reason"] = .string("ingressCoalesced")
++        for key in timing.queueTracePayload().keys {
++            XCTAssertEqual(payload[key], dropPayload[key])
++        }
+@@ -217 +286,73 @@
+-        }
++            XCTAssertEqual(
++                IOSRuntimeTraceRedactor.redact(
++                    payload: dropPayload, profile: profile, fingerprintSalt: "test"), dropPayload)
++        }
++    }
++
++    @MainActor
++    func testTouchOverlayKeepsBindingAcrossDiagnosticsAndReleasesOnSuppression() async throws {
++        let suite = "XBXRC.StreamingTouchSuppression.\(UUID().uuidString)"
++        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
++        let settings = AppSettingsStore(defaults: defaults)
++        let session = StreamInputSession(controller: { nil })
++        _ = session.outputState(now: 0)
++        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
++        let window = UIWindow(windowScene: scene)
++        window.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
++        let hosting = UIHostingController(
++            rootView: TouchGamepadOverlay(input: session).environmentObject(settings))
++        window.rootViewController = hosting
++        window.isHidden = false
++        defer {
++            window.isHidden = true
++            window.rootViewController = nil
++            defaults.removePersistentDomain(forName: suite)
++        }
++        func findSurface(_ view: UIView) -> TouchLayoutSurfaceView? {
++            if let surface = view as? TouchLayoutSurfaceView { return surface }
++            for child in view.subviews {
++                if let surface = findSurface(child) { return surface }
++            }
++            return nil
++        }
++        hosting.view.layoutIfNeeded()
++        for _ in 0..<50 {
++            if let surface = findSurface(hosting.view), surface.input.onInput != nil,
++                !surface.input.sockets.isEmpty
++            {
++                break
++            }
++            try await Task.sleep(for: .milliseconds(20))
++        }
++        let surface = try XCTUnwrap(findSurface(hosting.view))
++        let a = try XCTUnwrap(
++            surface.input.sockets.first { $0.control.action == .gamepad("gamepadA") })
++        surface.input.process([.init(id: 1, phase: .began, position: a.center)])
++        XCTAssertEqual(session.outputState(now: 1).buttonMask, 16)
++        for _ in 0..<20 { session.refreshDeviceStatus() }
++        try await Task.sleep(for: .milliseconds(30))
++        XCTAssertTrue(findSurface(hosting.view) === surface)
++        XCTAssertEqual(surface.input.gamepad.buttonMask, 16)
++        let point = surface.convert(a.center, to: window)
++        XCTAssertTrue(window.hitTest(point, with: nil) === surface)
++        session.setSuppressed(true)
++        for _ in 0..<50 {
++            if surface.input.gamepad == .neutral, window.hitTest(point, with: nil) !== surface {
++                break
++            }
++            try await Task.sleep(for: .milliseconds(10))
++        }
++        XCTAssertEqual(surface.input.gamepad, .neutral)
++        XCTAssertEqual(session.outputState(now: 2), .neutral)
++        XCTAssertFalse(window.hitTest(point, with: nil) === surface)
++        session.setSuppressed(false)
++        for _ in 0..<50 {
++            if window.hitTest(point, with: nil) === surface { break }
++            try await Task.sleep(for: .milliseconds(10))
++        }
++        XCTAssertTrue(window.hitTest(point, with: nil) === surface)
++        XCTAssertEqual(session.outputState(now: 3), .neutral)
++        surface.input.process([.init(id: 2, phase: .began, position: a.center)])
++        XCTAssertEqual(session.outputState(now: 4).buttonMask, 16)
++        surface.stop()
++        XCTAssertEqual(session.outputState(now: 5), .neutral)
+@@ -741 +882 @@
+-    func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() {
++    func testStreamingLatestIngressSlotCoalescesPendingFramesAndReschedules() throws {
+@@ -744,4 +885,4 @@
+-        XCTAssertTrue(slot.submit(1))
+-        XCTAssertFalse(slot.submit(2))
+-        XCTAssertFalse(slot.submit(3))
+-        let firstDelivery = slot.take()
++        let firstTicket = try XCTUnwrap(slot.submit(1, scheduledAtMs: 100))
++        XCTAssertNil(slot.submit(2, scheduledAtMs: 101))
++        XCTAssertNil(slot.submit(3, scheduledAtMs: 102))
++        let firstDelivery = slot.take(firstTicket)
+@@ -751,3 +892,7 @@
+-        XCTAssertFalse(slot.submit(4))
+-        XCTAssertTrue(slot.finishDelivery())
+-        let secondDelivery = slot.take()
++        XCTAssertNil(slot.submit(4, scheduledAtMs: 103))
++        let nextTicket = try XCTUnwrap(slot.finishDelivery(firstTicket, scheduledAtMs: 110))
++        XCTAssertGreaterThan(nextTicket.identifier, firstTicket.identifier)
++        XCTAssertEqual(nextTicket.scheduledAtMs, 110)
++        XCTAssertNil(slot.take(firstTicket))
++        XCTAssertNil(slot.finishDelivery(firstTicket))
++        let secondDelivery = slot.take(nextTicket)
+@@ -756,3 +901,3 @@
+-        XCTAssertFalse(slot.finishDelivery())
+-
+-        XCTAssertTrue(slot.submit(5))
++        XCTAssertNil(slot.finishDelivery(nextTicket))
++
++        let oldTicket = try XCTUnwrap(slot.submit(5))
+@@ -760,2 +905,2 @@
+-        XCTAssertNil(slot.take())
+-        XCTAssertTrue(slot.submit(6))
++        XCTAssertNil(slot.take(oldTicket))
++        XCTAssertNotNil(slot.submit(6))
+diff --git a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSettingsViews.swift
+@@ -171,0 +172 @@
++@MainActor

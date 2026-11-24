@@ -1,0 +1,170 @@
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -206,67 +206,73 @@
+     @State private var errorMessage: String?
+     @State private var saveTask: Task<Void, Never>?
+     @State private var previewContext: GameTouchLayoutContext?
++    @State private var saveButtonWidth: CGFloat = 110
+     private var saved: XboxSavedTouchLayout? { context.saved(in: library.layouts) }
+     var body: some View {
+-        VStack(alignment: .leading, spacing: 10) {
+-            VStack(alignment: .leading, spacing: 8) {
++        VStack(alignment: .leading, spacing: 8) {
++            ZStack(alignment: .bottomTrailing) {
+                 Button {
+                     previewContext = context
+                 } label: {
+-                    VStack(alignment: .leading, spacing: 8) {
++                    VStack(alignment: .leading, spacing: 4) {
+                         HStack(alignment: .firstTextBaseline, spacing: 8) {
+                             Text(verbatim: context.choice.name).appFont(.body, weight: .semibold)
++                                .lineLimit(1)
+                             if context.choice.isDefault {
+                                 Text("默认布局").appFont(.caption).foregroundStyle(
+-                                    AppThemePalette.brand)
++                                    AppThemePalette.brand
++                                )
++                                .fixedSize()
+                             }
+                             Spacer(minLength: 8)
+-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(
+-                                AppThemePalette.textSecondary
++                            Image(systemName: "chevron.right").font(.caption)
++                                .foregroundStyle(AppThemePalette.textSecondary)
++                                .accessibilityIdentifier("game-touch-arrow-\(context.id)")
++                        }
++                        VStack(alignment: .leading, spacing: 4) {
++                            GameTouchSourceVersion(
++                                descriptor: context.descriptor, version: context.bundle.version)
++                            Text(
++                                saved == nil
++                                    ? "尚未保存"
++                                    : saved?.bundleVersion == context.bundle.version
++                                        ? "已保存到本机" : "有新版本可更新"
+                             )
+-                            .accessibilityIdentifier("game-touch-arrow-\(context.id)")
++                            .appFont(.caption)
++                            .foregroundStyle(
++                                saved == nil ? AppThemePalette.textSecondary : AppThemePalette.brand
++                            )
++                            .accessibilityIdentifier("game-touch-saved-\(context.id)")
+                         }
+-                        GameTouchSourceVersion(
+-                            descriptor: context.descriptor, version: context.bundle.version)
+-                    }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+-                        .contentShape(Rectangle())
+-                }.buttonStyle(.plain).disabled(saving).accessibilityIdentifier(
+-                    "game-touch-preview-\(context.id)")
+-                HStack(spacing: 12) {
+-                    Button {
+-                        previewContext = context
+-                    } label: {
++                        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
++                        .padding(.trailing, saveButtonWidth + 12)
++                    }
++                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
++                    .contentShape(Rectangle())
++                }
++                .buttonStyle(.plain).disabled(saving)
++                .accessibilityIdentifier("game-touch-preview-\(context.id)")
++                Button(action: saveLayout) {
++                    if saving {
++                        ProgressView()
++                    } else {
+                         Text(
+                             saved == nil
+-                                ? "尚未保存"
+-                                : saved?.bundleVersion == context.bundle.version
+-                                    ? "已保存到本机" : "有新版本可更新"
+-                        )
+-                        .appFont(.caption).foregroundStyle(
+-                            saved == nil ? AppThemePalette.textSecondary : AppThemePalette.brand
+-                        )
+-                        .accessibilityIdentifier("game-touch-saved-\(context.id)")
+-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+-                        .contentShape(Rectangle())
+-                    }.buttonStyle(.plain).disabled(saving).accessibilityIdentifier(
+-                        "game-touch-saved-\(context.id)")
+-                    Button(action: saveLayout) {
+-                        if saving {
+-                            ProgressView()
+-                        } else {
+-                            Text(
+-                                saved == nil
+-                                    ? "保存到本机"
+-                                    : saved?.bundleVersion == context.bundle.version
+-                                        ? "重新保存" : "更新布局")
+-                        }
+-                    }.buttonStyle(AppContentCapsuleButtonStyle()).frame(minHeight: 44)
+-                        .disabled(
+-                            saving || library.isSaving || unsupported
+-                                || !context.choice.issues.isEmpty
+-                        )
+-                        .accessibilityIdentifier("game-touch-save-\(context.id)")
+-                }
++                                ? "保存到本机"
++                                : saved?.bundleVersion == context.bundle.version ? "重新保存" : "更新布局")
++                    }
++                }
++                .buttonStyle(AppContentCapsuleButtonStyle()).frame(minHeight: 44)
++                .fixedSize(horizontal: true, vertical: false)
++                .onGeometryChange(for: CGFloat.self) {
++                    $0.size.width
++                } action: {
++                    saveButtonWidth = $0
++                }
++                .disabled(
++                    saving || library.isSaving || unsupported || !context.choice.issues.isEmpty
++                )
++                .accessibilityIdentifier("game-touch-save-\(context.id)")
+             }
+             if unsupported || !context.choice.issues.isEmpty {
+                 Text("布局等待适配").appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+@@ -275,7 +281,7 @@
+                 Text(verbatim: errorMessage).appFont(.caption).foregroundStyle(
+                     AppThemePalette.textSecondary)
+             }
+-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).appSurface(
++        }.padding(12).frame(maxWidth: .infinity, alignment: .leading).appSurface(
+             radius: AppLayoutPolicy.cardRadius
+         )
+         .accessibilityElement(children: .contain).accessibilityIdentifier(
+--- a/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+@@ -33,6 +33,9 @@
+     let saveButton = app.buttons["game-touch-save-" + prefix + "default"]
+     XCTAssertGreaterThan(saveButton.frame.midY, previewEntry.frame.midY)
+     XCTAssertGreaterThan(saveButton.frame.midX, previewEntry.frame.midX)
++    let card = app.descendants(matching: .any)["game-touch-card-" + prefix + "default"].firstMatch
++    XCTAssertLessThanOrEqual(card.frame.height, 96)
++    XCTAssertGreaterThanOrEqual(saveButton.frame.height, 44)
+     save(app, "community-touch-layout-cards")
+     previewEntry.tap()
+     XCTAssertTrue(
+@@ -53,7 +56,7 @@
+     XCTAssertTrue(close.label.contains("保存并退出"))
+     close.tap()
+     XCTAssertTrue(previewEntry.waitForExistence(timeout: 5))
+-    waitSaved(app.buttons["game-touch-saved-" + prefix + "default"])
++    waitSaved(previewEntry)
+     app.buttons["primary-navigation-controller"].tap()
+     app.buttons["section-touch"].tap()
+     let management = app.buttons["controller-saved-touch-layouts"]
+@@ -135,7 +138,7 @@
+     app.buttons["official-touch-preview-close"].tap()
+     XCUIDevice.shared.orientation = .portrait
+     reveal(saveButton, in: app)
+-    waitSaved(app.buttons["game-touch-saved-fixture-1:default"])
++    waitSaved(app.buttons["game-touch-preview-fixture-1:default"])
+     save(app, "official-touch-saved-default")
+     app.buttons["game-touch-preview-fixture-1:unsupported"].tap()
+     app.buttons["touch-workspace-settings"].tap()
+@@ -147,7 +150,7 @@
+     waitEnabled(alternativeSave)
+     reveal(alternativeSave, in: app)
+     alternativeSave.tap()
+-    waitSaved(app.buttons["game-touch-saved-fixture-1:alternative"])
++    waitSaved(app.buttons["game-touch-preview-fixture-1:alternative"])
+     app.buttons["primary-navigation-controller"].tap()
+     app.buttons["section-touch"].tap()
+     let management = app.buttons["controller-saved-touch-layouts"]

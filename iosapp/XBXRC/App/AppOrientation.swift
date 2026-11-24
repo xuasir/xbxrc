@@ -63,6 +63,15 @@ final class AppOrientationCoordinator {
         applyCurrentGeometry()
     }
 
+    /// 手机编辑器请求系统旋转实际窗口，iPad 方向继续由窗口管理。
+    func requestInterfaceOrientation(_ mask: UIInterfaceOrientationMask) {
+        guard mode == .application else { return }
+        for scene in connectedWindowScenes() {
+            guard scene.traitCollection.userInterfaceIdiom == .phone else { continue }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+        }
+    }
+
     private func applyCurrentGeometry() {
         let scenes = connectedWindowScenes()
         guard !scenes.isEmpty else { return }

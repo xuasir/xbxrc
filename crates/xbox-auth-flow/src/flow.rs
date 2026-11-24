@@ -1,10 +1,12 @@
 use crate::error::AuthFlowError;
+use crate::telemetry::observe_request;
 use crate::types::{
     AuthBundle, AuthFlowSeed, BuildDownstreamTokensInput, BuildDownstreamTokensOutput,
     CompleteOAuthLoginInput, CompleteOAuthLoginOutput, DownstreamTokenScope, FlowSisuTokenData,
     FlowTokenDetails, PendingOAuthLogin, RefreshAndFinalizeInput, RefreshAndFinalizeOutput,
     StartOAuthLoginInput, StartOAuthLoginOutput,
 };
+use crate::{AuthFlowObserver, AuthRenewalBackend};
 use serde_json::{json, Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
@@ -15,6 +17,59 @@ const XAL_DEVICE_VERSION: &str = "15.0";
 
 pub struct AuthFlow {
     auth_api: AuthApi,
+}
+
+#[async_trait::async_trait]
+impl AuthRenewalBackend for AuthFlow {
+    async fn downstream(
+        &self,
+        input: BuildDownstreamTokensInput,
+        scope: DownstreamTokenScope,
+        observer: &dyn AuthFlowObserver,
+    ) -> Result<AuthBundle, AuthFlowError> {
+        self.build_auth_bundle(
+            &input.user_token,
+            input.sisu_token,
+            &input.seed.private_jwk,
+            &input.force_region_ip,
+            scope,
+            Some(observer),
+        )
+        .await
+    }
+
+    async fn refresh_core(
+        &self,
+        refresh_token: &str,
+        observer: &dyn AuthFlowObserver,
+    ) -> Result<xbox_webapi::OAuthTokenResponse, AuthFlowError> {
+        let token = observe_request(
+            Some(observer),
+            "oauthRefresh",
+            self.auth_api.refresh_user_token(refresh_token),
+        )
+        .await
+        .map_err(AuthFlowError::RefreshGrant)?;
+        Ok(preserve_refresh_token(token, refresh_token))
+    }
+
+    async fn finalize_core(
+        &self,
+        user: &xbox_webapi::OAuthTokenResponse,
+        seed: &AuthFlowSeed,
+        force_region_ip: &str,
+        scope: DownstreamTokenScope,
+        observer: &dyn AuthFlowObserver,
+    ) -> Result<AuthBundle, AuthFlowError> {
+        self.finalize_login(
+            user,
+            &seed.private_jwk,
+            force_region_ip,
+            scope,
+            Some(observer),
+        )
+        .await
+    }
 }
 
 impl AuthFlow {
@@ -123,6 +178,7 @@ impl AuthFlow {
                 } else {
                     DownstreamTokenScope::Web
                 },
+                None,
             )
             .await?;
 
@@ -144,6 +200,7 @@ impl AuthFlow {
                 } else {
                     DownstreamTokenScope::Web
                 },
+                None,
             )
             .await?;
 
@@ -173,6 +230,7 @@ impl AuthFlow {
                 &input.seed.private_jwk,
                 &input.force_region_ip,
                 scope,
+                None,
             )
             .await?;
 
@@ -199,7 +257,7 @@ impl AuthFlow {
         force_region_ip: &str,
         scope: DownstreamTokenScope,
     ) -> Result<AuthBundle, AuthFlowError> {
-        self.finalize_login(user_token, &seed.private_jwk, force_region_ip, scope)
+        self.finalize_login(user_token, &seed.private_jwk, force_region_ip, scope, None)
             .await
     }
 
@@ -226,25 +284,31 @@ impl AuthFlow {
         private_jwk: &Value,
         force_region_ip: &str,
         scope: DownstreamTokenScope,
+        observer: Option<&dyn AuthFlowObserver>,
     ) -> Result<AuthBundle, AuthFlowError> {
         let device_uuid = uuid::Uuid::new_v4().to_string();
         let serial_number = uuid::Uuid::new_v4().to_string();
-        let device_token = self
-            .auth_api
-            .get_device_token(
+        let device_token = observe_request(
+            observer,
+            "deviceToken",
+            self.auth_api.get_device_token(
                 XAL_TITLE_ID,
                 &device_uuid,
                 &serial_number,
                 XAL_DEVICE_VERSION,
                 private_jwk,
-            )
-            .await?
-            .Token;
+            ),
+        )
+        .await?
+        .Token;
 
-        let sisu_auth_res = self
-            .auth_api
-            .sisu_authorize(&user_token.access_token, &device_token, private_jwk)
-            .await?;
+        let sisu_auth_res = observe_request(
+            observer,
+            "sisuAuthorize",
+            self.auth_api
+                .sisu_authorize(&user_token.access_token, &device_token, private_jwk),
+        )
+        .await?;
 
         let title_token = sisu_auth_res
             .title_token
@@ -266,8 +330,15 @@ impl AuthFlow {
             authorization_token: convert_token_details(authorization_token)?,
         };
 
-        self.build_auth_bundle(user_token, sisu_token, private_jwk, force_region_ip, scope)
-            .await
+        self.build_auth_bundle(
+            user_token,
+            sisu_token,
+            private_jwk,
+            force_region_ip,
+            scope,
+            observer,
+        )
+        .await
     }
 
     // 这里统一收敛 XSTS/Web/streaming token 生成，供 refresh 与 skip-refresh 复用。
@@ -278,19 +349,29 @@ impl AuthFlow {
         private_jwk: &Value,
         force_region_ip: &str,
         scope: DownstreamTokenScope,
+        observer: Option<&dyn AuthFlowObserver>,
     ) -> Result<AuthBundle, AuthFlowError> {
         let user_token_str = sisu_token.user_token.token.as_deref().ok_or_else(|| {
             AuthFlowError::Protocol("Sisu response missing user token string".to_string())
         })?;
 
-        let web_token_resp = self
-            .auth_api
-            .xsts_authorize(user_token_str, "http://xboxlive.com", private_jwk)
-            .await?;
+        let web_token_resp = observe_request(
+            observer,
+            "webXsts",
+            self.auth_api
+                .xsts_authorize(user_token_str, "http://xboxlive.com", private_jwk),
+        )
+        .await?;
         let token_update_time = now_ms();
         let stream_tokens = if scope != DownstreamTokenScope::Web {
-            self.build_stream_tokens(user_token_str, private_jwk, force_region_ip, scope)
-                .await?
+            self.build_stream_tokens(
+                user_token_str,
+                private_jwk,
+                force_region_ip,
+                scope,
+                observer,
+            )
+            .await?
         } else {
             Map::new()
         };
@@ -317,19 +398,26 @@ impl AuthFlow {
         private_jwk: &Value,
         force_region_ip: &str,
         scope: DownstreamTokenScope,
+        observer: Option<&dyn AuthFlowObserver>,
     ) -> Result<Map<String, Value>, AuthFlowError> {
-        let gssv_token = self
-            .auth_api
-            .xsts_authorize(user_token_str, "http://gssv.xboxlive.com/", private_jwk)
-            .await?
-            .Token;
+        let gssv_token = observe_request(
+            observer,
+            "streamingXsts",
+            self.auth_api
+                .xsts_authorize(user_token_str, "http://gssv.xboxlive.com/", private_jwk),
+        )
+        .await?
+        .Token;
 
         let mut stream_tokens = Map::new();
         if scope.includes_home() {
-            let xhome_token = self
-                .auth_api
-                .get_streaming_token(&gssv_token, "xhome", force_region_ip)
-                .await?;
+            let xhome_token = observe_request(
+                observer,
+                "homeToken",
+                self.auth_api
+                    .get_streaming_token(&gssv_token, "xhome", force_region_ip),
+            )
+            .await?;
             stream_tokens.insert(
                 "xHomeToken".to_string(),
                 json!({
@@ -342,10 +430,13 @@ impl AuthFlow {
             return Ok(stream_tokens);
         }
 
-        let xgpuweb_result = self
-            .auth_api
-            .get_streaming_token(&gssv_token, "xgpuweb", force_region_ip)
-            .await;
+        let xgpuweb_result = observe_request(
+            observer,
+            "cloudToken",
+            self.auth_api
+                .get_streaming_token(&gssv_token, "xgpuweb", force_region_ip),
+        )
+        .await;
         match xgpuweb_result {
             Ok(token) => {
                 stream_tokens.insert(
@@ -358,10 +449,13 @@ impl AuthFlow {
             }
             Err(xgpuweb_error) => {
                 let xgpuweb_diagnostics = streaming_token_error_diagnostics(&xgpuweb_error);
-                match self
-                    .auth_api
-                    .get_streaming_token(&gssv_token, "xgpuwebf2p", force_region_ip)
-                    .await
+                match observe_request(
+                    observer,
+                    "cloudFallbackToken",
+                    self.auth_api
+                        .get_streaming_token(&gssv_token, "xgpuwebf2p", force_region_ip),
+                )
+                .await
                 {
                     Ok(token) => {
                         log::warn!(

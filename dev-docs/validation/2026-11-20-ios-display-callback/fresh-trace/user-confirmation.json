@@ -1,0 +1,19 @@
+{
+  "confirmedDate": "2026-11-21",
+  "recordedAt": "2026-11-21T01:18:00.003462+08:00",
+  "source": "用户在本聊天对现场操作的明确答复",
+  "question": "日志在23:23:56因输入通道关闭而结束。结束前主动关闭主机或远端会话，还是画面自行停住并断线？",
+  "answer": "主动关闭主机或会话",
+  "classification": "userInitiatedConsoleOrSessionTermination",
+  "traceEvent": {
+    "seq": 33863,
+    "event": "sessionTerminal",
+    "reason": "dataChannel.closed.input"
+  },
+  "interpretation": "尾部媒体供给停止及远端通道关闭归为用户主动结束情境，客户端按记录的终止原因完成清理。",
+  "remainingWork": [
+    "后台创建显示管线就绪事实补送",
+    "同visibility revision内恢复验证与playing状态收口顺序",
+    "连续前台至少60秒验收"
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "29ABAC02-4CFF-4701-9712-B2C8D87FEFEE",
+      "deviceName" : "iPad Pro 13-inch (M5)",
+      "modelName" : "iPad Pro 13-inch (M5)",
+      "osBuildNumber" : "24A434",
+      "osVersion" : "27.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "5秒",
+                  "durationInSeconds" : 5.550642967224121,
+                  "name" : "testScopedTouchWorkspaceRealViewportSnapshots()",
+                  "nodeIdentifier" : "CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests/testScopedTouchWorkspaceRealViewportSnapshots",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "CapabilityMigrationTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/CapabilityMigrationTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "XBXRCTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        },
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "1分钟3秒",
+                  "durationInSeconds" : 63.97660505771637,
+                  "name" : "testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+                  "nodeIdentifier" : "TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testCustomTemplateDragSaveSwitchReloadAndVisualAdjustments",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "40秒",
+                  "durationInSeconds" : 40.90282905101776,
+                  "name" : "testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+                  "nodeIdentifier" : "TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests/testPortraitLayoutEditorKeepsControlsInLowerHalfAndDiscardsDraft",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "TouchLayoutInteractionTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/TouchLayoutInteractionTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "XBXRCUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "XBXRC",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

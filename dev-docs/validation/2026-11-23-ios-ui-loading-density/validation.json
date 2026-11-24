@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-23",
+  "result": "Passed",
+  "nativeLayouts": 14,
+  "uiRegressions": 4,
+  "selectedXCTestCases": 5,
+  "failedTests": 0,
+  "dimensions": [
+    320,
+    390,
+    667,
+    1024
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "languages": [
+    "zh-Hans",
+    "en"
+  ],
+  "accessibilitySize": "accessibility3",
+  "deviceBuild": "Passed",
+  "swiftFormatLint": "Passed",
+  "swiftParse": "Passed",
+  "frontendLintFix": "Passed",
+  "xcodeProjectLint": "Passed",
+  "streamingBoundary": "Passed",
+  "diffCheck": "Passed",
+  "visualReview": [
+    "touch-capsule-window-dark.png",
+    "touch-capsule-narrow-accessibility.png",
+    "my-skeleton-window-dark.png",
+    "my-skeleton-phone-light.png",
+    "my-skeleton-narrow-accessibility.png",
+    "my-skeleton-partial.png",
+    "my-initial-failure.png",
+    "my-loaded.png",
+    "my-refresh-snapshot.png",
+    "cloud-source-updates.png",
+    "cloud-global-failures.png"
+  ],
+  "retainedScreenshots": 19,
+  "retainedReferences": 2,
+  "temporarySourceRestored": true,
+  "cleanup": "Passed",
+  "removedTemporaryMiB": 929.52
+}

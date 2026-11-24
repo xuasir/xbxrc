@@ -101,7 +101,7 @@ struct AchievementsView: View {
         .padding(.bottom, 24)
         .frame(maxWidth: 960).frame(maxWidth: .infinity)
       }
-      .refreshable {
+      .appRefreshable {
         await dataStore.refreshLibrary()
       }
     }
@@ -112,7 +112,7 @@ struct AchievementsView: View {
     switch dataStore.libraryPhase {
     case .idle, .loading:
       refreshableLibraryEmptyState {
-        ProgressView("正在载入成就列表")
+        libraryRequestState
       }
     case .failed:
       refreshableLibraryEmptyState { libraryRequestState.padding(AppLayoutPolicy.pageInset) }
@@ -144,7 +144,7 @@ struct AchievementsView: View {
         content()
           .frame(maxWidth: .infinity, minHeight: geometry.size.height)
       }
-      .refreshable { await dataStore.refreshLibrary() }
+      .appRefreshable { await dataStore.refreshLibrary() }
     }
   }
 }

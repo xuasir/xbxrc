@@ -1,0 +1,58 @@
+{
+  "implementation": "complete",
+  "manualConnectionValidation": "pending",
+  "traceNetworkCause": "auth transport failure; precise network subtype absent from input",
+  "rustBridgeTests": {
+    "passed": 93,
+    "failed": 0,
+    "includesFutureConstructionBudgetBytes": 8192,
+    "includesFFICallerStackBytes": 557056
+  },
+  "swiftTests": {
+    "passed": 37,
+    "failed": 0,
+    "includesForeignCallbacks": true
+  },
+  "iPhoneOSBuild": {
+    "status": "succeeded",
+    "signed": false,
+    "errors": 0
+  },
+  "checks": {
+    "rust-format-check": {
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "xbox-ios-bridge",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    "streaming-boundary": {
+      "command": [
+        "sh",
+        "iosapp/scripts/check-streaming-session-boundary.sh"
+      ],
+      "exitCode": 0
+    },
+    "diff-check": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0
+    }
+  },
+  "bindingsReproducible": true,
+  "stagingPreserved": true,
+  "sourceSnapshotCount": 16,
+  "userLogPreserved": true,
+  "temporaryCleanup": "passed",
+  "resolvedValidationFailure": "test-only home_host_facts import restored full Rust regression",
+  "environmentNotes": [
+    "CoreSimulator service and xcresulttool report-cache access required sandbox escalation; automatic review accepted execution."
+  ],
+  "temporaryAllocatedBytesRemoved": 908812288
+}

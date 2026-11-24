@@ -1,0 +1,13 @@
+{
+  "before": {
+    "xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+    "xbox_ios_bridgeFFI.h": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+    "xbox_ios_bridge.swift": "c40f917cf49568519b362e589374ec543900eac6551f49fc205b59db4ff6753c"
+  },
+  "after": {
+    "xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a",
+    "xbox_ios_bridgeFFI.h": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+    "xbox_ios_bridge.swift": "c40f917cf49568519b362e589374ec543900eac6551f49fc205b59db4ff6753c"
+  },
+  "identical": true
+}

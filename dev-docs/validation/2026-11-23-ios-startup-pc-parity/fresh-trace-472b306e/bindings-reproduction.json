@@ -1,0 +1,14 @@
+{
+  "exitCode": 0,
+  "identical": true,
+  "before": {
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "60069e2af20f80cb9193037e798e07e218ac0345c6473a98e1ee5ef890a72c8c",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+  },
+  "after": {
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.swift": "60069e2af20f80cb9193037e798e07e218ac0345c6473a98e1ee5ef890a72c8c",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridgeFFI.h": "a0eb246e29ac1b3a7e178de2d5fab10a13988ff6d23568891050ce7cc199a5b9",
+    "iosapp/XBXRC/Platform/RustBridge/Generated/xbox_ios_bridge.modulemap": "1a0832d0eb0a665e811cbd5db226af8d4ec1627adef069d1312a5301c8ada03a"
+  }
+}
