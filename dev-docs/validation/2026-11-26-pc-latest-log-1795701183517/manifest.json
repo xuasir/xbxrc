@@ -1,0 +1,33 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795701183517-1.jsonl",
+  "snapshot": "/private/tmp/xbxrc-pc-worker-log-20261126-mi_dxevz/runtime-trace-1795701183517-1.jsonl",
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-worker-log-20261126-mi_dxevz",
+  "sourceBytesAtCapture": 8430352,
+  "snapshotBytes": 8430352,
+  "trailingPartialBytes": 0,
+  "snapshotSha256": "b798d2c33ee73acf83cbe50abc49d97407ad63e6cf22bc810226e2d88a956497",
+  "capturedAt": "2026-11-26T21:56:21.084628+08:00",
+  "retainedInput": "runtime-trace-1795701183517-1.jsonl.gz",
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-26-pc-latest-log-1795701183517",
+  "analyzedAt": "2026-11-26T22:10:47.476135+08:00",
+  "sourceBytesAfterAnalysis": null,
+  "sourceMissingAtArchive": true,
+  "sourceDirectoryExistsAtArchive": false,
+  "sourceStateNote": "开始分析时已冻结全部完整行；归档时原应用日志目录已不存在，冻结压缩副本保留完整原始证据。",
+  "analysisCommands": [
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py <snapshot> --json --exclude-categories log --sample-rows 1 --top-events 15 --top-suspicious 8",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_production_health_report.py <snapshot> --output production-health.json",
+      "exitCode": 0,
+      "gate": "FAIL"
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_browser_webrtc_behavior_report.py <snapshot> --require-stability",
+      "exitCode": 2,
+      "gate": "FAIL"
+    }
+  ]
+}

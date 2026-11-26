@@ -1,0 +1,1164 @@
+{
+  "productionContractVersion": 1,
+  "gate": "FAIL",
+  "acceptanceGate": "FAIL",
+  "sections": {
+    "networkHealth": {
+      "status": "PASS",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    },
+    "recoveryChainHealth": {
+      "status": "PASS",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    },
+    "mediaSupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    },
+    "steadySupply": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    },
+    "submitPresentTail": {
+      "status": "FAIL",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    },
+    "frameSupplyDelta": {
+      "status": "INSUFFICIENT_EVIDENCE",
+      "segments": 3,
+      "samples": 239,
+      "validMs": 136889.0
+    }
+  },
+  "steadyDurationMs": 205154.0,
+  "thresholds": {
+    "minSteadySeconds": 60,
+    "publicationRatio": 0.95,
+    "maxPublicationGapMs": 3000,
+    "mediaValidRatio": 0.9,
+    "supplyRatio": 0.9,
+    "sustainedMs": 3000
+  },
+  "rowCount": 3175,
+  "healthRecords": 109,
+  "devIntervals": 135,
+  "unsupportedContractRecords": 0,
+  "segments": [
+    {
+      "sessionId": "EBDC175A-7773-4640-AD99-CBF55242A34F",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 0,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {},
+      "gate": "INSUFFICIENT_EVIDENCE",
+      "coverage": {
+        "startMs": 34825.0,
+        "endMs": 35079.0,
+        "durationMs": 254.0,
+        "samples": 1,
+        "publishedMs": 250.0,
+        "publicationRatio": 0.9843,
+        "mediaValidMs": 254.0,
+        "mediaValidRatio": 1,
+        "longestPublicationGapMs": 4.0,
+        "maxSampleGapMs": 254.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 1
+        },
+        "collectionStates": {
+          "notObserved": 1
+        },
+        "maxCollectionAgeMs": 0,
+        "counterCoverageMs": {
+          "received": 254.0,
+          "decoded": 254.0,
+          "videoPresent": 254.0,
+          "callbacks": 254.0,
+          "rendererSubmit": 254.0
+        },
+        "fps": {
+          "received": 59.1,
+          "decoded": 59.1,
+          "videoPresent": 62.992,
+          "callbacks": 62.992,
+          "rendererSubmit": 60.0
+        },
+        "deltaTotals": {
+          "received": 15.0,
+          "decoded": 15.0,
+          "videoPresent": 16.0,
+          "callbacks": 16.0,
+          "rendererSubmit": 15.24,
+          "framesDropped": 0.0,
+          "freezeCount": 0.0,
+          "keyframes": 0.0,
+          "pli": 0.0,
+          "fir": 0.0,
+          "nack": 0.0
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "PASS",
+          "measuredSamples": 1,
+          "maxRttMs": 5.0,
+          "maxJitterMs": 2.0,
+          "maxLossRatio": 0
+        },
+        "recoveryChainHealth": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 0.0,
+            "pli": 0.0,
+            "fir": 0.0,
+            "nack": 0.0,
+            "freezeCount": 0.0,
+            "framesDropped": 0.0
+          }
+        },
+        "mediaSupply": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "sourceTargetsFps": [],
+          "receivedFps": 59.1,
+          "decodeFps": 59.1,
+          "receiveDecodeDeltaFps": 0.0
+        },
+        "steadySupply": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "videoPresentFps": 62.992,
+          "callbackFps": 62.992,
+          "callbackBatchingObserved": false,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "cpuDraw": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "upload": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "cpuSubmit": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 1,
+          "validMs": 254.0,
+          "window": {
+            "startMs": 34825.0,
+            "endMs": 35079.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "fps": {
+            "received": 59.1,
+            "decoded": 59.1,
+            "videoPresent": 62.992,
+            "callbacks": 62.992,
+            "rendererSubmit": 60.0
+          },
+          "deltaTotals": {
+            "received": 15.0,
+            "decoded": 15.0,
+            "videoPresent": 16.0,
+            "callbacks": 16.0,
+            "rendererSubmit": 15.24,
+            "framesDropped": 0.0,
+            "freezeCount": 0.0,
+            "keyframes": 0.0,
+            "pli": 0.0,
+            "fir": 0.0,
+            "nack": 0.0
+          },
+          "effectiveRendererTargetsFps": [],
+          "differencesFps": {
+            "receiveDecode": 0.0,
+            "decodeVideoPresent": -3.892,
+            "videoPresentCallback": 0.0,
+            "callbackRendererSubmit": 2.992
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": []
+    },
+    {
+      "sessionId": "EBDC175A-7773-4640-AD99-CBF55242A34F",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 0,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {},
+      "gate": "INSUFFICIENT_EVIDENCE",
+      "coverage": {
+        "startMs": 35833.0,
+        "endMs": 136673.0,
+        "durationMs": 100840.0,
+        "samples": 134,
+        "publishedMs": 33500.0,
+        "publicationRatio": 0.3322,
+        "mediaValidMs": 33778.0,
+        "mediaValidRatio": 0.335,
+        "longestPublicationGapMs": 794.0,
+        "maxSampleGapMs": 255.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 134
+        },
+        "collectionStates": {
+          "notObserved": 134
+        },
+        "maxCollectionAgeMs": 0,
+        "counterCoverageMs": {
+          "received": 33778.0,
+          "decoded": 33778.0,
+          "videoPresent": 33778.0,
+          "callbacks": 33778.0,
+          "rendererSubmit": 33778.0
+        },
+        "fps": {
+          "received": 59.35,
+          "decoded": 59.264,
+          "videoPresent": 60.069,
+          "callbacks": 55.036,
+          "rendererSubmit": 59.11
+        },
+        "deltaTotals": {
+          "received": 2005.0,
+          "decoded": 2002.0,
+          "videoPresent": 2029.0,
+          "callbacks": 1859.0,
+          "rendererSubmit": 1996.626,
+          "framesDropped": 0.0,
+          "freezeCount": 3.0,
+          "keyframes": 3.0,
+          "pli": 0.0,
+          "fir": 0.0,
+          "nack": 0.0
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "PASS",
+          "measuredSamples": 134,
+          "maxRttMs": 31.0,
+          "maxJitterMs": 11.0,
+          "maxLossRatio": 0.03503693919725973
+        },
+        "recoveryChainHealth": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 3.0,
+            "pli": 0.0,
+            "fir": 0.0,
+            "nack": 0.0,
+            "freezeCount": 3.0,
+            "framesDropped": 0.0
+          }
+        },
+        "mediaSupply": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "sourceTargetsFps": [],
+          "receivedFps": 59.35,
+          "decodeFps": 59.264,
+          "receiveDecodeDeltaFps": 0.086
+        },
+        "steadySupply": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "videoPresentFps": 60.069,
+          "callbackFps": 55.036,
+          "callbackBatchingObserved": false,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "PASS",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 134,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 6.0,
+            "maxReportedP99Ms": 6.0,
+            "maxMs": 6.0,
+            "latest": {
+              "seq": 3100,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 2.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 134,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 6.0,
+            "maxReportedP99Ms": 6.0,
+            "maxMs": 6.0,
+            "latest": {
+              "seq": 3100,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 134,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3100,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 134,
+          "validMs": 33778.0,
+          "window": {
+            "startMs": 35833.0,
+            "endMs": 136673.0
+          },
+          "sources": [
+            "devCollectionInterval"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "fps": {
+            "received": 59.35,
+            "decoded": 59.264,
+            "videoPresent": 60.069,
+            "callbacks": 55.036,
+            "rendererSubmit": 59.11
+          },
+          "deltaTotals": {
+            "received": 2005.0,
+            "decoded": 2002.0,
+            "videoPresent": 2029.0,
+            "callbacks": 1859.0,
+            "rendererSubmit": 1996.626,
+            "framesDropped": 0.0,
+            "freezeCount": 3.0,
+            "keyframes": 3.0,
+            "pli": 0.0,
+            "fir": 0.0,
+            "nack": 0.0
+          },
+          "effectiveRendererTargetsFps": [],
+          "differencesFps": {
+            "receiveDecode": 0.086,
+            "decodeVideoPresent": -0.805,
+            "videoPresentCallback": 5.033,
+            "callbackRendererSubmit": -4.074
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": []
+    },
+    {
+      "sessionId": "EBDC175A-7773-4640-AD99-CBF55242A34F",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "outputHeight": 1684,
+        "outputWidth": 2994,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererExecutionMode": "worker-direct",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "gate": "FAIL",
+      "coverage": {
+        "startMs": 33312.0,
+        "endMs": 137372.0,
+        "durationMs": 104060.0,
+        "samples": 104,
+        "publishedMs": 103060.0,
+        "publicationRatio": 0.9904,
+        "mediaValidMs": 102857.0,
+        "mediaValidRatio": 0.9884,
+        "longestPublicationGapMs": 194.0,
+        "maxSampleGapMs": 291.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 104
+        },
+        "collectionStates": {
+          "pending": 103,
+          "fresh": 1
+        },
+        "maxCollectionAgeMs": 2.0,
+        "counterCoverageMs": {
+          "received": 103109.0,
+          "decoded": 103109.0,
+          "videoPresent": 102857.0,
+          "callbacks": 102857.0,
+          "rendererSubmit": 102857.0
+        },
+        "fps": {
+          "received": 58.517,
+          "decoded": 58.517,
+          "videoPresent": 59.315,
+          "callbacks": 54.493,
+          "rendererSubmit": 59.005
+        },
+        "deltaTotals": {
+          "bytesReceived": 325152111,
+          "decoded": 6078,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 4,
+          "keyframes": 8,
+          "nack": 1,
+          "packetsReceived": 296135,
+          "pli": 0,
+          "received": 6078,
+          "callbackGaps": 5,
+          "callbacks": 5605,
+          "delivered": 6069,
+          "duplicates": 0,
+          "overwrites": 0,
+          "presentedJumps": 454,
+          "rateLimitDrops": 0,
+          "read": 6071,
+          "readerOverwrites": 2,
+          "rendererSubmit": 6069,
+          "staleDrops": 0,
+          "submitFailures": 0,
+          "videoPresent": 6101
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "measuredSamples": 104,
+          "maxRttMs": 31.0,
+          "maxJitterMs": 10.0,
+          "maxLossRatio": 0.1586
+        },
+        "recoveryChainHealth": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 8,
+            "pli": 0,
+            "fir": 0,
+            "nack": 1,
+            "freezeCount": 4,
+            "framesDropped": 0
+          }
+        },
+        "mediaSupply": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": 58.517,
+          "decodeFps": 58.517,
+          "receiveDecodeDeltaFps": 0.0
+        },
+        "steadySupply": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "videoPresentFps": 59.315,
+          "callbackFps": 54.493,
+          "callbackBatchingObserved": true,
+          "callbackGapObserved": true,
+          "maxCallbackIntervalMs": 1033.0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "FAIL",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 103,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 6.0,
+            "maxReportedP99Ms": 6.0,
+            "maxMs": 6.0,
+            "latest": {
+              "seq": 3136,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 2.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 103,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 6.0,
+            "maxReportedP99Ms": 6.0,
+            "maxMs": 6.0,
+            "latest": {
+              "seq": 3136,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 103,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3136,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 104,
+          "validMs": 102857.0,
+          "window": {
+            "startMs": 33312.0,
+            "endMs": 137372.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "fps": {
+            "received": 58.517,
+            "decoded": 58.517,
+            "videoPresent": 59.315,
+            "callbacks": 54.493,
+            "rendererSubmit": 59.005
+          },
+          "deltaTotals": {
+            "bytesReceived": 325152111,
+            "decoded": 6078,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 4,
+            "keyframes": 8,
+            "nack": 1,
+            "packetsReceived": 296135,
+            "pli": 0,
+            "received": 6078,
+            "callbackGaps": 5,
+            "callbacks": 5605,
+            "delivered": 6069,
+            "duplicates": 0,
+            "overwrites": 0,
+            "presentedJumps": 454,
+            "rateLimitDrops": 0,
+            "read": 6071,
+            "readerOverwrites": 2,
+            "rendererSubmit": 6069,
+            "staleDrops": 0,
+            "submitFailures": 0,
+            "videoPresent": 6101
+          },
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": 0.0,
+            "decodeVideoPresent": -0.798,
+            "videoPresentCallback": 4.822,
+            "callbackRendererSubmit": -4.512
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": [
+        {
+          "classification": "callbackSparseBatching",
+          "windows": [
+            {
+              "startMs": 72378.0,
+              "endMs": 75401.0,
+              "durationMs": 3023.0,
+              "firstSeq": 1369,
+              "samples": 3
+            },
+            {
+              "startMs": 83465.0,
+              "endMs": 86489.0,
+              "durationMs": 3024.0,
+              "firstSeq": 1670,
+              "samples": 3
+            },
+            {
+              "startMs": 91529.0,
+              "endMs": 95309.0,
+              "durationMs": 3780.0,
+              "firstSeq": 1878,
+              "samples": 4
+            },
+            {
+              "startMs": 101357.0,
+              "endMs": 104381.0,
+              "durationMs": 3024.0,
+              "firstSeq": 2133,
+              "samples": 3
+            },
+            {
+              "startMs": 121301.0,
+              "endMs": 124325.0,
+              "durationMs": 3024.0,
+              "firstSeq": 2631,
+              "samples": 3
+            },
+            {
+              "startMs": 130373.0,
+              "endMs": 133396.0,
+              "durationMs": 3023.0,
+              "firstSeq": 2883,
+              "samples": 3
+            }
+          ]
+        },
+        {
+          "classification": "submitPresentDelayed",
+          "windows": [
+            {
+              "startMs": 48437.0,
+              "endMs": 51462.0,
+              "durationMs": 3025.0,
+              "firstSeq": 703,
+              "samples": 3
+            }
+          ]
+        },
+        {
+          "classification": "callbackGap",
+          "windows": [
+            {
+              "startMs": 48437.0,
+              "endMs": 51462.0,
+              "durationMs": 3025.0,
+              "firstSeq": 703,
+              "samples": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "input": {
+    "status": "INSUFFICIENT_EVIDENCE",
+    "interactionRows": 17,
+    "healthRows": 5,
+    "failures": [],
+    "expectedBlocks": [],
+    "pairedOperations": [],
+    "incompleteOperations": [
+      {
+        "operationId": "7",
+        "source": "mouse",
+        "intent": "action",
+        "scope": "actionMenu",
+        "action": "exit",
+        "outcome": "operationStarted",
+        "reason": null,
+        "durationMs": null,
+        "seq": 3126
+      }
+    ],
+    "outcomes": {
+      "handlerInvoked": 7,
+      "active": 4,
+      "operationCompleted": 2,
+      "inactive": 3,
+      "operationStarted": 1
+    }
+  },
+  "traceLoss": {
+    "status": "PASS",
+    "producerMaxCounters": {
+      "dropped": 0,
+      "droppedEssential": 0,
+      "ipcFailed": 0,
+      "ipcTimedOut": 0,
+      "producerRowOversized": 0,
+      "payloadFailed": 0,
+      "ackMissing": 0,
+      "coalesced": 0,
+      "profileFiltered": 0,
+      "queueFull": 0,
+      "rowOversized": 0,
+      "writerUnavailable": 0
+    },
+    "backendMaxCounters": {
+      "essentialDropped": 0,
+      "keyDropped": 0,
+      "debugDropped": 0,
+      "rawDropped": 0,
+      "ioDropped": 0,
+      "ioFailures": 0,
+      "oversizedDropped": 0
+    },
+    "counterScope": "maxObservedCumulativeWithinRun"
+  },
+  "export": {
+    "status": "PASS",
+    "bundles": []
+  },
+  "ending": {
+    "status": "PASS",
+    "partialEnding": false,
+    "sessions": [
+      {
+        "sessionId": "EBDC175A-7773-4640-AD99-CBF55242A34F",
+        "status": "PASS",
+        "summarySeq": 3137,
+        "cleanupSeq": 3153.0,
+        "cleanupState": "completed",
+        "flushed": true,
+        "reason": "menuActionExit"
+      }
+    ]
+  },
+  "anomalies": [
+    {
+      "seq": 657,
+      "episodeId": "1",
+      "phase": "start",
+      "reason": "callbackGap",
+      "reasons": null,
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 658,
+      "episodeId": "1",
+      "phase": "windowStart",
+      "reason": "callbackGap",
+      "reasons": null,
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 683,
+      "episodeId": "1",
+      "phase": "upgrade",
+      "reason": "supplyDeficit",
+      "reasons": [
+        "callbackGap",
+        "supplyDeficit"
+      ],
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 684,
+      "episodeId": "1",
+      "phase": "upgrade",
+      "reason": "submitDelayed",
+      "reasons": [
+        "callbackGap",
+        "supplyDeficit",
+        "submitDelayed"
+      ],
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 690,
+      "episodeId": "1",
+      "phase": "upgrade",
+      "reason": "freeze",
+      "reasons": [
+        "callbackGap",
+        "supplyDeficit",
+        "submitDelayed",
+        "freeze"
+      ],
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 837,
+      "episodeId": "1",
+      "phase": "end",
+      "reason": "recovered",
+      "reasons": [
+        "callbackGap",
+        "supplyDeficit",
+        "submitDelayed",
+        "freeze"
+      ],
+      "durationMs": 5290,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 985,
+      "episodeId": "1",
+      "phase": "windowEnd",
+      "reason": "completed",
+      "reasons": [
+        "callbackGap",
+        "supplyDeficit",
+        "submitDelayed",
+        "freeze"
+      ],
+      "durationMs": 10078,
+      "sampleCount": 59,
+      "coverage": {
+        "afterMs": 10000,
+        "beforeMs": 4794,
+        "partial": false
+      }
+    },
+    {
+      "seq": 1031,
+      "episodeId": "2",
+      "phase": "start",
+      "reason": "samplingUnavailable",
+      "reasons": null,
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 1059,
+      "episodeId": "2",
+      "phase": "end",
+      "reason": "recovered",
+      "reasons": [
+        "samplingUnavailable"
+      ],
+      "durationMs": 1007,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 2973,
+      "episodeId": "3",
+      "phase": "start",
+      "reason": "freeze",
+      "reasons": null,
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 2974,
+      "episodeId": "3",
+      "phase": "windowStart",
+      "reason": "freeze",
+      "reasons": null,
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 2995,
+      "episodeId": "3",
+      "phase": "upgrade",
+      "reason": "callbackGap",
+      "reasons": [
+        "freeze",
+        "callbackGap"
+      ],
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 2996,
+      "episodeId": "3",
+      "phase": "upgrade",
+      "reason": "submitDelayed",
+      "reasons": [
+        "freeze",
+        "callbackGap",
+        "submitDelayed"
+      ],
+      "durationMs": null,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 3026,
+      "episodeId": "3",
+      "phase": "end",
+      "reason": "recovered",
+      "reasons": [
+        "freeze",
+        "callbackGap",
+        "submitDelayed"
+      ],
+      "durationMs": 1005,
+      "sampleCount": null,
+      "coverage": null
+    },
+    {
+      "seq": 3135,
+      "episodeId": "3",
+      "phase": "windowEnd",
+      "reason": "menuActionExit",
+      "reasons": [
+        "freeze",
+        "callbackGap",
+        "submitDelayed"
+      ],
+      "durationMs": 3721,
+      "sampleCount": 34,
+      "coverage": {
+        "afterMs": 3721,
+        "beforeMs": 4790,
+        "partial": true
+      }
+    }
+  ],
+  "capabilities": {
+    "browserPhysicalScanout": "UNSUPPORTED",
+    "browserNativeReferenceChain": "UNSUPPORTED"
+  },
+  "loading": {
+    "files": [
+      {
+        "fileName": "runtime-trace-1795701183517-1.jsonl",
+        "bytes": 8430352,
+        "sha256": "b798d2c33ee73acf83cbe50abc49d97407ad63e6cf22bc810226e2d88a956497"
+      }
+    ],
+    "malformedRows": 0,
+    "duplicateRows": 0
+  },
+  "freshness": {
+    "ageSeconds": 23.968,
+    "status": "PASS"
+  }
+}

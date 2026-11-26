@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "task": "2026-11-26-pc-worker-log-regression",
+  "productionSourceEdited": false,
+  "analysisCommands": [
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py <snapshot> --json --exclude-categories log --sample-rows 1 --top-events 15 --top-suspicious 8",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_production_health_report.py <snapshot> --output production-health.json",
+      "exitCode": 0,
+      "gate": "FAIL"
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_browser_webrtc_behavior_report.py <snapshot> --require-stability",
+      "exitCode": 2,
+      "gate": "FAIL"
+    }
+  ],
+  "automatedGate": "FAIL",
+  "normalizedSections": {
+    "networkHealth": "PASS",
+    "recoveryChainHealth": "PASS",
+    "mediaSupply": "PASS",
+    "steadySupply": "PASS",
+    "submitPresentTail": "FAIL",
+    "frameSupplyDelta": "PASS"
+  },
+  "smoke": {
+    "status": "PASS",
+    "runs": 1,
+    "checks": [
+      "gzip bytes/SHA256 and 3175 complete unique dev rows",
+      "actual input/render Worker capability and neutral acceptance",
+      "same-config steady coverage and native raw counters",
+      "normalized five PASS / submit-present FAIL preserved",
+      "GPU proxy and Main resource qualification",
+      "stats anchor deltas and evidence links",
+      "staged diff unchanged"
+    ],
+    "localEvidenceLinks": 9,
+    "productionCodeChecks": "unchanged production source; retained previous engineering smoke"
+  },
+  "stagedDiffSha256Before": "b395c0fff2ef026ab3d224acc6787377d30fed65f129e22a7013f930b6ea8f91",
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-worker-log-20261126-mi_dxevz",
+  "cleanup": {
+    "status": "PASS",
+    "path": "/private/tmp/xbxrc-pc-worker-log-20261126-mi_dxevz",
+    "existsAfter": false,
+    "removedFiles": 10,
+    "removedFileBytes": 8851323,
+    "removedAllocatedBytes": 8867840,
+    "removedFileMiB": 8.441,
+    "freeDiskBytesBefore": 86425600000,
+    "freeDiskBytesAfter": 86425600000,
+    "processes": "all foreground analysis commands completed; no background test/build/export sessions started",
+    "retained": [
+      "runtime-trace-1795701183517-1.jsonl.gz",
+      "facts.json",
+      "production-health.json",
+      "trace-summary.json",
+      "browser-behavior-summary.json",
+      "evidence-anchors.json",
+      "manifest.json",
+      "checks.json",
+      "README.md"
+    ],
+    "sourceLogMissingAtArchive": true,
+    "completedAt": "2026-11-26T22:15:19.615838+08:00"
+  },
+  "sourceLogState": {
+    "existsAtCapture": true,
+    "existsAtArchive": false,
+    "retainedSnapshot": "runtime-trace-1795701183517-1.jsonl.gz"
+  },
+  "stagedDiffSha256After": "b395c0fff2ef026ab3d224acc6787377d30fed65f129e22a7013f930b6ea8f91",
+  "stagedDiffPreserved": true
+}
