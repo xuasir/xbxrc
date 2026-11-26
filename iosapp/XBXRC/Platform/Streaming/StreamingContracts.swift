@@ -482,6 +482,8 @@ struct StreamingPeerStats: Equatable, Sendable {
     var observedFramesDecoded: UInt64? = nil
     var videoPacketsLost: Int64? = nil
     var selectedCandidatePairID: String? = nil
+    var videoTiming = StreamingMediaTimingSnapshot()
+    var audioTiming = StreamingMediaTimingSnapshot()
 
     init(
         inboundVideoBytes: UInt64,
@@ -563,15 +565,18 @@ final class StreamingVideoTrackHandle: @unchecked Sendable {
     let rawValue: RTCVideoTrack
     let traceContext: StreamingPresentationTraceContext?
     let frameFeedback: StreamingFrameFeedbackSession?
+    let presentation: StreamingPresentationSession
 
     init(
         rawValue: RTCVideoTrack,
         traceContext: StreamingPresentationTraceContext? = nil,
-        frameFeedback: StreamingFrameFeedbackSession? = nil
+        frameFeedback: StreamingFrameFeedbackSession? = nil,
+        presentation: StreamingPresentationSession = StreamingPresentationSession()
     ) {
         self.rawValue = rawValue
         self.traceContext = traceContext
         self.frameFeedback = frameFeedback
+        self.presentation = presentation
     }
 }
 
@@ -1053,6 +1058,7 @@ struct StreamingSupervisionSample: Encodable, Sendable {
     var counters: StreamingMediaCounters?
     var rttMs: Double?
     var jitterMs: Double?
+    var jitterBufferMs: Double?
     var pathId: String?
     var qualityLevel: Int = 0
     var qualitySupported = false
@@ -1062,6 +1068,8 @@ struct StreamingSupervisionSample: Encodable, Sendable {
     var connectionRecoveryFactKey: String?
     var qualityCompletion: StreamingQualityCompletion?
     var probe: StreamingRecoveryProbe?
+    var displayObservation: StreamingDisplayObservation?
+    var displayRecoveryCompletion: StreamingDisplayRecoveryCompletion?
 }
 
 struct StreamingMediaCounters: Encodable, Sendable {
@@ -1133,6 +1141,8 @@ struct StreamingSupervisionDecision: Decodable, Equatable, Sendable {
     var connectionRecoveryAllowed = false
     var connectionRecoveryExhausted = false
     var connectionRecoveryActive = false
+    var displayRecoveryEligible: Bool?
+    var displayRecovery: StreamingDisplayRecoveryDecision?
     static let unavailable = Self(
         fresh: false, duplicate: false, stallThresholdMs: 5000, hasInboundProgress: false,
         decodeRecoveryEligible: false, decodePressureSustainedMs: 0, healthyEpisodeComplete: false,

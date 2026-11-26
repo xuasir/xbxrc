@@ -1,0 +1,36 @@
+{
+  "planningScope": "PASS",
+  "milestones": "PASS",
+  "directPortAndOwnership": "PASS",
+  "nativeFrameCostGate": "PASS",
+  "boundedResourcesAndCapture": "PASS",
+  "platformDefaultGate": "PASS",
+  "lifecycleAndScope": "PASS",
+  "existingRecoveryDependency": "PASS",
+  "conditionalInputStage": "PASS",
+  "manualEvidenceBoundary": "PASS",
+  "sourceAckBoundary": "PASS",
+  "sourceTransferAndLatest": "PASS",
+  "browserApiDeclarations": "PASS",
+  "documentEvidenceLinks": "PASS",
+  "evidenceLinks": 13,
+  "sourceFiles": 20,
+  "runtimeEditsThisPlanningTurn": [],
+  "temporaryFilesCreated": 0,
+  "freeDiskBytes": 92160000000,
+  "unverifiedRuntimeGates": [
+    "WKWebView/WebView2 cross-worker Offscreen WebGL2 and native VideoFrame cost",
+    "DataChannel transfer/bootstrap/writable/close",
+    "controlled-load percentile improvements",
+    "physical canvas scanout capability"
+  ],
+  "gitDiffCheck": {
+    "exitCode": 0,
+    "scope": "规划文档及本轮任务记录"
+  },
+  "candidateTaskClassification": {
+    "M0": "simple validation",
+    "M1-M3": "complex implementation",
+    "M4": "complex optional capability stage"
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "uniqueFrontendTests": 266,
+  "stages": {
+    "m1-render-smoke": {
+      "success": true,
+      "numTotalTests": 117,
+      "numPassedTests": 117,
+      "numFailedTests": 0,
+      "files": [
+        {
+          "file": "src/player/infra/render/Renderers.test.ts",
+          "tests": 11,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/renderer-scheduling.test.ts",
+          "tests": 106,
+          "status": "passed"
+        }
+      ]
+    },
+    "m2-direct-smoke": {
+      "success": true,
+      "numTotalTests": 37,
+      "numPassedTests": 37,
+      "numFailedTests": 0,
+      "files": [
+        {
+          "file": "src/player/infra/render/decoded-video-frame-reader.test.ts",
+          "tests": 24,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/decoded-video-frame-worker-source.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/realtime-frame-copy-contract.test.ts",
+          "tests": 1,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/render-worker-frame-source.test.ts",
+          "tests": 5,
+          "status": "passed"
+        }
+      ]
+    },
+    "integration-smoke": {
+      "success": true,
+      "numTotalTests": 263,
+      "numPassedTests": 263,
+      "numFailedTests": 0,
+      "files": [
+        {
+          "file": "src/shared/diagnostics/production-trace-contract.test.ts",
+          "tests": 2,
+          "status": "passed"
+        },
+        {
+          "file": "src/streaming/runtime/browser-local-recovery.test.ts",
+          "tests": 2,
+          "status": "passed"
+        },
+        {
+          "file": "src/streaming/runtime/playback-health.test.ts",
+          "tests": 8,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/InputDelivery.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/InputService.test.ts",
+          "tests": 27,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/input-worker-host.test.ts",
+          "tests": 3,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/input-worker-runtime.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/session/SessionService.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/stats/StatsService.test.ts",
+          "tests": 14,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/stats/renderer-submit-age.test.ts",
+          "tests": 3,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/media/PlaybackService.test.ts",
+          "tests": 15,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/Renderers.test.ts",
+          "tests": 11,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/decoded-video-frame-reader.test.ts",
+          "tests": 24,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/decoded-video-frame-worker-source.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/realtime-frame-copy-contract.test.ts",
+          "tests": 1,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/render-worker-frame-source.test.ts",
+          "tests": 5,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/render-worker-host.test.ts",
+          "tests": 4,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/renderer-scheduling.test.ts",
+          "tests": 106,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/webrtc/WebRtcTransport.test.ts",
+          "tests": 3,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/protocol/input/InputPacketEncoder.test.ts",
+          "tests": 4,
+          "status": "passed"
+        }
+      ]
+    },
+    "lifecycle-smoke-final": {
+      "success": true,
+      "numTotalTests": 32,
+      "numPassedTests": 32,
+      "numFailedTests": 0,
+      "files": [
+        {
+          "file": "src/shared/diagnostics/production-trace-contract.test.ts",
+          "tests": 2,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/session/SessionService.test.ts",
+          "tests": 10,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/input-worker-host.test.ts",
+          "tests": 3,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/app/input/input-worker-runtime.test.ts",
+          "tests": 7,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/webrtc/WebRtcTransport.test.ts",
+          "tests": 3,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/render-worker-host.test.ts",
+          "tests": 4,
+          "status": "passed"
+        },
+        {
+          "file": "src/player/infra/render/render-worker-runtime.test.ts",
+          "tests": 3,
+          "status": "passed"
+        }
+      ]
+    }
+  }
+}

@@ -26,6 +26,7 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     audio: {
       volume: 1,
       enableAudioControl: false,
+      requestedChannelCount: 2,
     },
     renderer: {
       enabled: true,

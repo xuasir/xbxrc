@@ -1,0 +1,519 @@
+{
+  "status": "PASS",
+  "scope": "targeted-tests; latest executed result for each unique case",
+  "frontend": {
+    "total": 193,
+    "files": [
+      {
+        "file": "src/player/app/input/InputDelivery.test.ts",
+        "passed": 7,
+        "tests": [
+          "physical browser input delivery cancels a queued press when a menu claims already neutral input",
+          "physical browser input delivery cancels old device inputs and releases a disconnect within the extra buffer budget",
+          "physical browser input delivery captures an 8ms pulse while rAF is suspended",
+          "physical browser input delivery delivers 200 presses and releases at 20Hz with timer-only sampling",
+          "physical browser input delivery distinguishes two presses separated by an 8ms release",
+          "physical browser input delivery keeps a deep RT pull and release over a nonzero baseline through backpressure",
+          "physical browser input delivery records sampling identity and queue delay while limiting continuous analog traces"
+        ]
+      },
+      {
+        "file": "src/player/app/input/InputService.test.ts",
+        "passed": 27,
+        "tests": [
+          "browser input integration sends metadata first, encodes mapped axes once and releases on menu and disconnect",
+          "input delivery under pressure bounds accepted ordinary bytes and resumes fresh input on an empty-buffer event",
+          "input delivery under pressure bounds an excessive edge burst and records the loss explicitly",
+          "input delivery under pressure coalesces a short feedback batch while immediate input consumes its queued metadata",
+          "input delivery under pressure coalesces continuous stick-only motion while retaining a stop",
+          "input delivery under pressure commits sequence, metadata and statistics only after successful sends and retains button edges",
+          "input delivery under pressure delivers stationary-controller video feedback at 30 fps within one short batch",
+          "input delivery under pressure delivers stationary-controller video feedback at 60 fps within one short batch",
+          "input delivery under pressure discards old clicks after 250ms and synchronizes only the fresh latest state",
+          "input delivery under pressure drains ordered edges only while their bytes fit in the release reserve",
+          "input delivery under pressure expires old feedback behind pressure and sends only fresh feedback on writable",
+          "input delivery under pressure flushes idle metadata on the heartbeat and clears timers and old queues on replacement and stop",
+          "input delivery under pressure invalidates a captured writable callback when replacing or stopping the transport",
+          "input delivery under pressure keeps a neutral reset when every pending observation has expired",
+          "input delivery under pressure keeps press/release order and coalesces the latest analog state behind the soft waterline",
+          "input delivery under pressure pauses ordinary input behind old browser bytes and immediately delivers an ordered release",
+          "input delivery under pressure preserves a trigger pull and return above a nonzero rest value",
+          "input delivery under pressure prioritizes ownership release within the hard waterline and defers metadata",
+          "input delivery under pressure releases one button while another remains held within the release budget",
+          "input delivery under pressure respects packet size at the hard waterline and immediately retries after a writable event",
+          "input delivery under pressure retains nine alternating input states through brief backpressure",
+          "input delivery under pressure retries release after the hard waterline clears",
+          "input delivery under pressure retries the client handshake before sending input",
+          "input delivery under pressure uses the existing retry after rejected feedback and cancels the old timer at stop",
+          "resolution feedback on the wire defaults to standard feedback and retains stats when metadata capability is unavailable",
+          "resolution feedback on the wire keeps raw observations and applies the explicit preference false",
+          "resolution feedback on the wire keeps raw observations and applies the explicit preference true"
+        ]
+      },
+      {
+        "file": "src/player/app/input/frame-feedback.test.ts",
+        "passed": 6,
+        "tests": [
+          "feedback time contract bounds missing, invalid and negative render values without altering raw data",
+          "feedback time contract preserves render delay for decode delta 0",
+          "feedback time contract preserves render delay for decode delta 10",
+          "feedback time contract preserves render delay for decode delta 11",
+          "feedback time contract preserves render delay for decode delta 50",
+          "feedback time contract preserves render delay for decode delta 9"
+        ]
+      },
+      {
+        "file": "src/player/app/media/AudioEffectsService.test.ts",
+        "passed": 5,
+        "tests": [
+          "audio playback resources applies zero volume and live volume changes to direct audio playback",
+          "audio playback resources consumes mono policy without volume control and updates actual source format within the graph",
+          "audio playback resources disconnects both graph nodes and closes each context when switching or stopping",
+          "audio playback resources falls back to direct playback if the audio graph fails to start",
+          "audio playback resources isolates a late graph resume failure from its replacement"
+        ]
+      },
+      {
+        "file": "src/player/app/media/PlaybackService.test.ts",
+        "passed": 14,
+        "tests": [
+          "owned frame observations keeps timeupdate compatibility while tracking only actual playback advancement",
+          "owned frame observations preserves missing mediaTime diagnostics and recognizes duplicate frame counters",
+          "owned frame observations reports batched frame advancement, zero mediaTime and source fps from the actual playback path",
+          "owned frame observations shares polled frames with presentation facts while retaining original RTP metadata and source fps",
+          "playback resource ownership attributes diagnostic surfaces to committed and pending renderer generations through handoff and stop",
+          "playback resource ownership bounds first-frame handoff and pauses its deadline while the display is hidden",
+          "playback resource ownership disposes late candidates and ignores old video dimensions and autoplay errors after rebuild/stop",
+          "playback resource ownership keeps the current renderer through candidate attach and transfers only after its first frame",
+          "playback resource ownership reports committed sharpening updates and falls straight back to default rendering on a standard failure",
+          "playback resource ownership retains a newer pending renderer when the current pipeline fails during handoff",
+          "playback resource ownership separates attach call, asynchronous readiness and previous release using owned generation clocks",
+          "playback resource ownership starts the canvas first-frame deadline after usable media and preserves hard failure handling before media",
+          "playback resource ownership uses native video immediately when source-sized GPU allocation is unavailable",
+          "playback resource ownership uses the same owned fallback chain for SR and standard WebGL hard failures and preserves explicit retry"
+        ]
+      },
+      {
+        "file": "src/player/app/media/audio-playback.test.ts",
+        "passed": 7,
+        "tests": [
+          "actual audio playback lifecycle bounds a failed graph recovery to one rebuild and retains direct playback fallback",
+          "actual audio playback lifecycle cleans listeners, context and owned timeouts when stopping a pending resume",
+          "actual audio playback lifecycle continues blocked autoplay from a user gesture on the same stream",
+          "actual audio playback lifecycle emits audioReady after direct play settles, including intentional zero volume",
+          "actual audio playback lifecycle recovers suspended contexts and device changes with the current graph and channel configuration",
+          "actual audio playback lifecycle replaces a pending mono graph with direct stereo playback in a new generation",
+          "actual audio playback lifecycle retains negotiated mono when enabling the existing gain control"
+        ]
+      },
+      {
+        "file": "src/player/app/session/SessionService.test.ts",
+        "passed": 10,
+        "tests": [
+          "browser session replacement applies 1280×720 receive constraints to the actual offer and ICE restart",
+          "browser session replacement applies 1920×1080 receive constraints to the actual offer and ICE restart",
+          "browser session replacement applies 2560×1440 receive constraints to the actual offer and ICE restart",
+          "browser session replacement consumes audio channel policy with track-before-answer and answer-before-track ordering",
+          "browser session replacement discards audio format completion from an answer on a replaced peer",
+          "browser session replacement flushes input directly on the live data channel drain event and cleans up its listener",
+          "browser session replacement isolates input, handshake, rumble, tracks and ICE from a failed peer after rebinding",
+          "browser session replacement keeps remote send dimensions distinct from local receive constraints in safe trace summaries",
+          "browser session replacement preserves the SDP-patch opt-out on the actual offer",
+          "browser session replacement reclaims retry and control timers on close and keeps the next session alive after delayed events"
+        ]
+      },
+      {
+        "file": "src/player/app/stats/StatsService.test.ts",
+        "passed": 14,
+        "tests": [
+          "statsService browser WebRTC sampling emits browser WebRTC deltas between samples",
+          "statsService browser WebRTC sampling emits codec, keyframe, feedback and candidate pair samples from getStats",
+          "statsService browser WebRTC sampling selects the active audio track and publishes independent buffering and compensation samples",
+          "statsService observation ownership absorbs duplicate sequences and frames from an older video generation",
+          "statsService observation ownership aligns independent received, decoded, video advancement, callback and actual draw facts",
+          "statsService observation ownership coalesces slow refreshes and absorbs the result after stop",
+          "statsService observation ownership keeps a missing video report unavailable through repeated cache reads",
+          "statsService observation ownership keeps one 250ms collection clock while snapshot readers leave its baseline intact",
+          "statsService observation ownership lets a replacement peer sample while an old peer response stays isolated",
+          "statsService observation ownership projects receive/decode/jitter and counters from the same sample",
+          "statsService observation ownership reads live same-generation submission age while preserving the shared sampled rates and identity",
+          "statsService observation ownership resets deltas for a changed track or restarted counters while preserving loss corrections",
+          "statsService observation ownership selects the candidate pair identified by the transport",
+          "statsService observation ownership shares measured presentation facts and size updates with every cached consumer"
+        ]
+      },
+      {
+        "file": "src/player/app/stats/audio-stats.test.ts",
+        "passed": 3,
+        "tests": [
+          "audio statistics coverage keeps missing metrics unknown and records silent supply without an output fault",
+          "audio statistics coverage measures buffering, concealment, compensation and comparable A/V estimates",
+          "audio statistics coverage resets audio identities and regressions independently from the video stream"
+        ]
+      },
+      {
+        "file": "src/player/infra/webrtc/SdpManipulator.test.ts",
+        "passed": 8,
+        "tests": [
+          "receive video dimensions advertises receive width and height with macroblock limits in the video section",
+          "receive video dimensions handles LF and creates constraints for H264 without an existing fmtp line",
+          "receive video dimensions isolates rejected video sections and codecs outside each active media payload list",
+          "receive video dimensions updates receive dimensions while preserving existing send attributes",
+          "remote video bitrate contract preserves the user receive framerate through bitrate downshift and restore",
+          "remote video bitrate contract replaces old AS/TIAS limits and preserves media boundaries",
+          "remote video bitrate contract requires an active remote sending video section with a declared cap",
+          "remote video bitrate contract writes the cap even when video is the last media section"
+        ]
+      },
+      {
+        "file": "src/player/infra/webrtc/audio-sdp.test.ts",
+        "passed": 4,
+        "tests": [
+          "negotiated audio channels consumes empty fmtp and sender hints with tab-separated parameters",
+          "negotiated audio channels patches every receiving Opus payload once and preserves FEC and other media",
+          "negotiated audio channels separates codec capability, sender hint and observed source channels by audio mid",
+          "negotiated audio channels uses the declared session direction and preserves CRLF while creating missing fmtp"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/browser-local-recovery.test.ts",
+        "passed": 2,
+        "tests": [
+          "local recovery evidence and renderer scope proves renderer rebuild using committed submissions and renderer generation",
+          "local recovery evidence and renderer scope uses counters only from the committed peer and sample while preserving unknown fields"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/browser-network-delay.test.ts",
+        "passed": 3,
+        "tests": [
+          "low loss delay pressure reference classifies sustained RTT and buffer growth independently of repair packets",
+          "low loss delay pressure reference evaluates a zero-loss quality action by delay and supply: improved=false",
+          "low loss delay pressure reference evaluates a zero-loss quality action by delay and supply: improved=true"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/browser-policy.test.ts",
+        "passed": 27,
+        "tests": [
+          "local recovery qualification and effects holds renderer faults within the display owner",
+          "local recovery qualification and effects keeps bitrate and loss changes outside local recovery effects",
+          "local recovery qualification and effects records unknown when two path RTTs exceed the local observation deadline",
+          "local recovery qualification and effects requires healthy video, decode and receive long coverage before closing the local episode",
+          "local recovery qualification and effects requires sustained decode evidence and at least 15s between soft actions",
+          "local recovery qualification and effects uses real video progress, the action generation and bounded RTT waiting",
+          "local render ownership accepts direct main-thread delivery with sparse presentation callbacks",
+          "local render ownership accepts direct worker delivery with sparse presentation callbacks",
+          "local render ownership clears pressure on healthy serving and leaves engine selection to the user",
+          "local render ownership detects 60 to 44 candidate loss and proves the native fallback against the full source rate",
+          "local render ownership detects persistent 50.4/60 and 40/60 output loss in webgl2 independently of mean CPU cost",
+          "local render ownership detects persistent 50.4/60 and 40/60 output loss in webgl2_sr independently of mean CPU cost",
+          "local render ownership finds a canvas stall while video and decode continue, with network unchanged",
+          "local render ownership keeps a complete 30fps source and a user 30fps limit healthy, and holds incomplete source evidence",
+          "local render ownership rate limits repeated pressure recommendations and invalidates old context",
+          "local render ownership requires fresh post-resume coverage and keeps warmup free of soft actions",
+          "local render ownership separates decode and batched callback supply while retaining source cadence limits",
+          "same-sample policy evidence accepts each new snapshot once and ignores reordered snapshots",
+          "same-sample policy evidence resets continuous qualification on missing, stale and gapped facts",
+          "transport-owned quality policy allows one action, verifies loss and supply, and restores after a healthy long window",
+          "transport-owned quality policy holds quality on healthy LAN, stable high RTT and low-motion bitrate for a full minute",
+          "transport-owned quality policy isolates a late quality completion from a hidden or stale observation episode",
+          "transport-owned quality policy keeps an extreme path RTT within the bounded effect deadline",
+          "transport-owned quality policy keeps short spikes, duplicate reads and unavailable remote capability at zero actions",
+          "transport-owned quality policy requires full loss evidence and independently confirms RTT growth, jitter or repair/buffer accumulation",
+          "transport-owned quality policy resets path RTT and isolates completion from the previous peer/path",
+          "transport-owned quality policy restores the previous effective target and suspends repeated requests after no effect"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/browser-runtime.test.ts",
+        "passed": 41,
+        "tests": [
+          "browser-runtime super resolution state allows retry after fallback by toggling sr off then on and clears fallback reason",
+          "browser-runtime super resolution state applies the latest SR source dimensions after dwell and continues after four re-evaluations",
+          "browser-runtime super resolution state assesses quality with recvonly capability while retaining remote quality as an independent fact",
+          "browser-runtime super resolution state blocks SR attach when pipelinePreference=video even with fsr1Experimental",
+          "browser-runtime super resolution state cancels a pending chat answer on close and absorbs its late response",
+          "browser-runtime super resolution state cancels a pending microphone permission wait and applies the latest queued toggle",
+          "browser-runtime super resolution state cancels pending ICE gathering and removes peer listeners on stop",
+          "browser-runtime super resolution state discards a late quality answer after stop",
+          "browser-runtime super resolution state does not classify batched RVFC callbacks as renderStarvation without presentAge or callback gap",
+          "browser-runtime super resolution state does not double-count Player videoFrameProcessed events into browser render telemetry",
+          "browser-runtime super resolution state estimates display refresh rate from requestAnimationFrame when screen.frameRate is unavailable",
+          "browser-runtime super resolution state executes confirmed Rust local decode recovery through its existing owner",
+          "browser-runtime super resolution state executes confirmed Rust local presentation recovery through its existing owner",
+          "browser-runtime super resolution state forwards committed render facts while diagnostics are closed without extra stats reads",
+          "browser-runtime super resolution state freezes sr tier from latest video size when enabled after videoReady",
+          "browser-runtime super resolution state honors an explicit UI SR disable over the startup preference",
+          "browser-runtime super resolution state keeps Rust pipelinePreference=video after display degrade recalculation",
+          "browser-runtime super resolution state keeps a real recovery state visible instead of normalizing it to healthy",
+          "browser-runtime super resolution state keeps a single render backpressure event local without limiting sender framerate",
+          "browser-runtime super resolution state keeps cloud high RTT as profile pressure without dropping quality to L2 when delivery is healthy",
+          "browser-runtime super resolution state keeps renderer updates at zero while the effective display configuration stays unchanged",
+          "browser-runtime super resolution state keeps the direct engine and reports persistent renderer pressure while transport stays unchanged",
+          "browser-runtime super resolution state keeps the same media decisions with tracing off and dev during healthy high RTT and renderer pressure",
+          "browser-runtime super resolution state normalizes stale startup observability once browser-direct already has video output",
+          "browser-runtime super resolution state projects fullscreen display context into renderer attach and snapshot",
+          "browser-runtime super resolution state queues microphone negotiation until the in-flight ICE restart has completed",
+          "browser-runtime super resolution state rebuilds the video element when the decoder stalls but packets keep arriving",
+          "browser-runtime super resolution state records browser WebRTC stats and SDP samples to runtime trace",
+          "browser-runtime super resolution state records browser-direct render telemetry summaries and exposes frame-tracking state in snapshots",
+          "browser-runtime super resolution state records production counters from the matching shared sample and leaves mismatched counters unavailable",
+          "browser-runtime super resolution state records the original player error and negotiation phase before forwarding it",
+          "browser-runtime super resolution state records why source fps estimation is unavailable in render telemetry",
+          "browser-runtime super resolution state refreshes renderer attach when observed display geometry changes",
+          "browser-runtime super resolution state refreshes renderer attach when videoReady changes source dimensions",
+          "browser-runtime super resolution state renews the local recovery budget after a healthy long window closes the previous episode",
+          "browser-runtime super resolution state restores committed transport settings when a congested receiver quality offer fails",
+          "browser-runtime super resolution state restores remote SDP quality while fresh frames continue after congestion",
+          "browser-runtime super resolution state retains the legacy SR preset while reporting independent reconstruction and sharpening",
+          "browser-runtime super resolution state revokes a hung restart at the parent deadline and absorbs a late SDP answer",
+          "browser-runtime super resolution state starts from user quality and keeps healthy warmup free of transport actions",
+          "browser-runtime super resolution state suspends an ignored remote quality request and retains source/codec intent"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/playback-health.test.ts",
+        "passed": 7,
+        "tests": [
+          "production playback buckets covers every 250ms interval, including a short deficit and a callback spike",
+          "production playback buckets keeps sampling pending evidence and finite late-response coverage",
+          "production playback buckets preserves measured zero and marks unmatched or missing counters unavailable",
+          "production playback buckets segments generation changes, counter resets and repeated sample IDs",
+          "production playback lifecycle and hard budgets captures pre/post windows and tracks sustained symptoms through detail cooldown",
+          "production playback lifecycle and hard budgets closes a previous observation epoch on begin and retains a heartbeat-derived gap in the ending summary",
+          "production playback lifecycle and hard budgets keeps 30min continuous health, checkpoints and a bounded anomaly ring"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/production-trace-budget.test.ts",
+        "passed": 2,
+        "tests": [
+          "production trace full-path budgets keeps menu health at 1Hz through the actual producer under continuous navigation and confirmations",
+          "production trace full-path budgets publishes complete 30min health and sustained anomaly payloads within JSONL and cost budgets"
+        ]
+      },
+      {
+        "file": "src/streaming/runtime/shared-supervision-baseline.test.ts",
+        "passed": 6,
+        "tests": [
+          "公共 Rust 监督合同的 PC 行为基准 decode-gap",
+          "公共 Rust 监督合同的 PC 行为基准 decode-pressure",
+          "公共 Rust 监督合同的 PC 行为基准 quality-improved",
+          "公共 Rust 监督合同的 PC 行为基准 quality-supply-loss",
+          "公共 Rust 监督合同的 PC 行为基准 quality-unsupported",
+          "公共 Rust 监督合同的 PC 行为基准 rtt-growth"
+        ]
+      }
+    ]
+  },
+  "rust": {
+    "total": 23,
+    "tests": [
+      {
+        "test": "session::recovery::supervision::tests::connection_arbiter_matches_fact_reason_window_and_observation_barrier",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::connection_episode_budget_survives_peer_replacement_and_resets_after_new_frames",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::continuous_decode_pressure_requires_new_covered_samples_and_action_cooling",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::cumulative_windows_include_observed_jitter_buffer_and_clear_on_counter_reset",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::delay_quality_effect_requires_improved_delay_and_preserved_supply",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::delay_warning_preserves_low_baseline_until_path_changes",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::gap_visibility_and_old_peer_preserve_evidence_boundaries",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::inbound_progress_separates_transport_loss_from_local_decode_stall",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::ineffective_quality_returns_to_previous_level_and_missing_supply_is_unknown",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::local_stall_recovers_30_and_60_fps_decode_after_two_seconds_of_fresh_supply",
+        "status": "passed",
+        "latestLog": "m4-rust-final.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::local_stall_renderer_probe_closes_on_new_renderer_submission_with_the_same_video",
+        "status": "passed",
+        "latestLog": "m4-rust-final.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::local_stall_separates_renderer_stall_from_sparse_callbacks_and_reset_facts",
+        "status": "passed",
+        "latestLog": "m4-rust-final.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::local_stall_starts_fresh_evidence_after_a_visibility_boundary",
+        "status": "passed",
+        "latestLog": "review-rust-boundary.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::local_stall_upgrades_an_ineffective_keyframe_once_and_preserves_same_action_cooling",
+        "status": "passed",
+        "latestLog": "m4-rust-final.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::low_loss_delay_pressure_uses_continuous_rtt_and_buffer_evidence",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::missing_native_decode_counter_keeps_decode_pressure_unknown",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::native_counters_have_continuous_windows_and_clear_on_regression",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::network_pressure_uses_loss_and_growth_with_full_coverage",
+        "status": "passed",
+        "latestLog": "m3-rust-boundary-final.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::quality_reservation_is_once_and_success_uses_post_action_network_supply",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::recovery_effect_requires_fresh_coverage_and_correct_generations",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::same_facts_replay_pc_decode_and_network_baseline",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::shared_thresholds_preserve_pc_startup_default_and_frame_interval_limits",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      },
+      {
+        "test": "session::recovery::supervision::tests::unsupported_quality_retains_level_and_does_not_repeat_requests",
+        "status": "passed",
+        "latestLog": "m3-rust-tests.log"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "report": "m1-tests.json",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "m2-tests.json",
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "m3-tests.json",
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "m4-tests.json",
+      "passed": 43,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "m5-tests.json",
+      "passed": 58,
+      "failed": 2,
+      "skipped": 0
+    },
+    {
+      "report": "m5-stats-final.json",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 12
+    },
+    {
+      "report": "review-boundaries.json",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "final-audio-boundaries.json",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "productionProjection": {
+    "status": "PASS",
+    "scope": "actual-production-projection",
+    "assertions": 15,
+    "checks": [
+      "requestedMonoRetained",
+      "actualMonoOutputRetained",
+      "audioSamplesRetained",
+      "audioBufferRetained",
+      "concealmentRetained",
+      "missingPlayoutQualified",
+      "contextStateRetained",
+      "effectiveChannelsRetained",
+      "localDomainRetained",
+      "localReasonRetained",
+      "localCoverageRetained",
+      "feedbackAgeRetained",
+      "healthBudget",
+      "eventBudgets",
+      "privateTrackRemoved"
+    ],
+    "rowBytes": {
+      "health": 3034,
+      "audio": 688,
+      "local": 579,
+      "feedback": 589
+    },
+    "budgets": {
+      "health": 4096,
+      "audio": 1024,
+      "local": 1024,
+      "feedback": 1024
+    },
+    "temporaryBundles": [
+      "shared/diagnostics/production-trace-contract.mjs",
+      "streaming/runtime/playback-health.mjs",
+      "streaming/runtime/__fixtures__/playback.mjs"
+    ]
+  }
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "path": "src/player/infra/render/Renderers.ts",
+    "sha256": "8a041ca6ee146188ce3c5010fe594c987547d87fc722fdad4ad218abf44e186e",
+    "bytes": 46778,
+    "lines": 1162
+  },
+  {
+    "path": "src/player/infra/render/decoded-video-frame-reader.ts",
+    "sha256": "b104d905b4fe8bab816a3b1b2da6d00640ac5caaf67a25b6281d4c2313114892",
+    "bytes": 16551,
+    "lines": 408
+  },
+  {
+    "path": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+    "sha256": "d5b7dd1959c8fad34614995f158c25280fb7a0df7f417e62065752fe0634f1b9",
+    "bytes": 6231,
+    "lines": 163
+  },
+  {
+    "path": "src/player/infra/render/video-frame-source.ts",
+    "sha256": "5981091adb7f7e5121d1d2e6be63478abd4a222d111bc60a1ff22dfa2f9fa85f",
+    "bytes": 26631,
+    "lines": 527
+  },
+  {
+    "path": "src/player/infra/render/render-observation.ts",
+    "sha256": "86ad717a3dd350be98d034ee402ace902b8a270bd9b02bcf95d0d936ed6b0431",
+    "bytes": 7285,
+    "lines": 182
+  },
+  {
+    "path": "src/player/infra/render/gpu-frame-timer.ts",
+    "sha256": "b273cc1e93ca116b7bf408ddf8d6f1caf5fa9cd2b1ca8252d63abd99e04bdfd2",
+    "bytes": 3662,
+    "lines": 118
+  },
+  {
+    "path": "src/player/infra/render/fsr1-reconstruction-pass.ts",
+    "sha256": "26e2924362c1aa9d34ff9eeb50a44f2ed01e80dd031f35e25b2f87e5a18d3d00",
+    "bytes": 12383,
+    "lines": 306
+  },
+  {
+    "path": "src/player/infra/render/webgl-frame-capture.ts",
+    "sha256": "1a49a61378b77948f0bfe78b18e88c0ce395913982471dcb8b3ce4026ce3e651",
+    "bytes": 1419,
+    "lines": 47
+  },
+  {
+    "path": "src/player/app/media/PlaybackService.ts",
+    "sha256": "d25be7721f3e68138a6a864e637c371653850a70c688a5fb8423b87d58716132",
+    "bytes": 23709,
+    "lines": 516
+  },
+  {
+    "path": "src/player/app/stats/StatsService.ts",
+    "sha256": "8b3eb5dfba878e0ee300802a56ed742517a37d74cca630034802efcaad65817f",
+    "bytes": 34788,
+    "lines": 814
+  },
+  {
+    "path": "src/player/app/input/InputService.ts",
+    "sha256": "893f2164515ca096006c7de7909067e13caf7a18afa1573254b10080fc5e0ab0",
+    "bytes": 23037,
+    "lines": 541
+  },
+  {
+    "path": "src/player/infra/webrtc/DataChannelHub.ts",
+    "sha256": "32cc310b1d301a6418aa1105dcffd12e04f3504e861932562603e5539ce569e8",
+    "bytes": 3750,
+    "lines": 111
+  },
+  {
+    "path": "src/player/protocol/channels/InputChannel.ts",
+    "sha256": "90ad0d989276ef57fddd0ab979e1e223fe1b014c38d2c974b3888178f9915480",
+    "bytes": 2046,
+    "lines": 80
+  },
+  {
+    "path": "src/player/infra/webrtc/WebRtcTransport.ts",
+    "sha256": "d0cf8affd9076d9196d01680df6de0f23057a97024b7fdaeb8313681790a6a90",
+    "bytes": 8944,
+    "lines": 272
+  },
+  {
+    "path": "src/shared/gamepad/browser-backend.ts",
+    "sha256": "ff33f5313c952f72cc3cb583528d1b303c005b5f170e1e0cbabac3dcf2cae8a7",
+    "bytes": 12712,
+    "lines": 316
+  },
+  {
+    "path": "src/streaming/runtime/browser-local-recovery.ts",
+    "sha256": "cb20cbaf776a5c03f596bf382b68798238a6d83739529cf6f46341f5c030326e",
+    "bytes": 1513,
+    "lines": 28
+  },
+  {
+    "path": "src/streaming/runtime/browser-runtime.ts",
+    "sha256": "f0e5ae469294826c11b32d0d8d49b466c9cecb8da04451eff344462ecea03c86",
+    "bytes": 123971,
+    "lines": 2655
+  },
+  {
+    "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+    "sha256": "f7d0d2ee5e44ec77e45df4afe4d23247e79412154f92a05f8a872229d7f152ef",
+    "bytes": 25565,
+    "lines": 670
+  },
+  {
+    "path": "docs/rfcs/2026-11-26-ios-streaming-latency-threading.md",
+    "sha256": "4924f0b495805336aad2bc0d24911d763d6d04ed59173345b6a9b1db1ca614e9",
+    "bytes": 30467,
+    "lines": 299
+  },
+  {
+    "path": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+    "sha256": "60c2b0c9da8e8c8bca51b5754d627f71c39c4585e5e1b9ee8efa54e203652d72",
+    "bytes": 16080,
+    "lines": 137
+  }
+]

@@ -1,0 +1,52 @@
+{
+  "frontendSourceChanges": [
+    {
+      "file": "src/player/infra/render/Renderers.ts",
+      "baselineSha256": "ea72f992197e2a86ea431a58e593daac01d9f7084e9a0e65e644e970a9269a32",
+      "finalSha256": "2b0ad8b7501271650c83320869eaca96b0a8036034f2d1dcbb43eaea897214ac",
+      "addedLines": 96,
+      "removedLines": 8
+    },
+    {
+      "file": "src/player/infra/render/render-observation.ts",
+      "baselineSha256": "c45bc70686d3f6a0356d165e30b017b9b1d52f9c7cc5faf754d8189156b8a82d",
+      "finalSha256": "86ad717a3dd350be98d034ee402ace902b8a270bd9b02bcf95d0d936ed6b0431",
+      "addedLines": 5,
+      "removedLines": 1
+    },
+    {
+      "file": "src/player/infra/render/renderer-scheduling.test.ts",
+      "baselineSha256": "629f57303108db0bcd3ba1011f5023aa3dd66dd68743cd6304b18e8fd104afb5",
+      "finalSha256": "3f054570b4b958e155cad712dc39b96ab9428244544272c32f03f8c93d51b664",
+      "addedLines": 112,
+      "removedLines": 11
+    }
+  ],
+  "commands": [
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "scope": "final production implementation"
+    },
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec vitest run src/player/infra/render/Renderers.test.ts src/player/infra/render/renderer-scheduling.test.ts",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check -- task paths",
+      "exitCode": 0
+    }
+  ],
+  "frontendFilesChangedOutsideTask": [],
+  "cleanup": {
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-video-texture-reuse-20261126-zbi5t73n",
+    "removed": true,
+    "removedFileBytes": 3331505,
+    "freeBeforeBytes": 92979200000,
+    "freeAfterBytes": 92979200000
+  }
+}

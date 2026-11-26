@@ -1,7 +1,12 @@
 import type { CodecPreferenceOptions } from '../../domain/session'
+import { setAudioChannelPreference } from './audio-sdp'
 import { parseSdpImageAttributes } from './sdp-image-attributes'
 
 export class SdpManipulator {
+  setAudioChannelCount(sdp: string, channels: 1 | 2): string {
+    return setAudioChannelPreference(sdp, channels)
+  }
+
   setBitrate(sdp: string, media: string, bitrate: number): string {
     const separator = sdp.includes('\r\n') ? '\r\n' : '\n'
     const lines = sdp.split(/\r?\n/)

@@ -1,5 +1,6 @@
 import type { LatencySummary } from '../../shared/latency-window'
-import type { BrowserStatsWindowSummary } from './stats'
+import type { RenderExecutionObservation } from '../infra/render/render-observation'
+import type { BrowserAudioStatsSummary, BrowserStatsWindowSummary } from './stats'
 
 export interface DecodedFrameClockObservation {
   state: 'calibrated' | 'expired' | 'uncalibrated'
@@ -39,6 +40,7 @@ export interface RendererTiming {
 
 export interface DecodedFrameSupplyObservation {
   schemaVersion: 1
+  readerGeneration?: number
   clockDomain: 'performanceEpoch'
   observedAtMs: number
   receivedMessages: number
@@ -261,10 +263,43 @@ export function deriveRendererAttachSpec(config: RendererRuntimeConfig): Rendere
 export interface AudioRuntimeConfig {
   volume: number
   enableAudioControl: boolean
+  requestedChannelCount?: 1 | 2
+}
+
+export interface AudioPlaybackFormat {
+  requestedChannelCount: 1 | 2
+  effectiveChannelCount: 1 | 2
+  source: 'trackSettings' | 'senderHint' | 'requested'
+  mid?: string
+  payloadType?: number
+  codecChannelCount?: number
+  sourceChannelCount?: 1 | 2
+  senderStereo?: boolean
+}
+
+export interface AudioPlaybackObservation {
+  generation: number
+  observedAtMs: number
+  state: 'idle' | 'starting' | 'ready' | 'waiting' | 'paused' | 'blocked' | 'ended' | 'failed'
+  route: 'direct' | 'web-audio'
+  contextState?: AudioContextState
+  trackState?: MediaStreamTrackState
+  trackMuted?: boolean
+  trackIdentifier?: string
+  elementPaused?: boolean
+  format?: AudioPlaybackFormat
+  outputChannelCount?: number
+  channelFallbackReason?: string
+  intentionallySilent: boolean
+  recoveryAttempts: number
+  recoveryReason?: string
+  errorKind?: string
 }
 
 export interface RendererRuntimeConfig {
   enabled: boolean
+  /** 内部执行域覆盖；auto 在真实 Worker 能力探测成功后使用直接帧链。 */
+  renderExecution?: 'auto' | 'main' | 'worker'
   /** 已提交管线持有的回退原因，供普通指标栏显示。 */
   renderFallbackReason?: RendererFallbackReason
   sharpness: number
@@ -316,10 +351,15 @@ export interface RendererRuntimeConfig {
   /** 播放资源所有者注入的首帧与硬故障通知。 */
   rendererFrameReadyNotifier?: () => void
   rendererRuntimeFailureNotifier?: (reason: string) => void
+  rendererExecutionNotifier?: (reason: string, resources: import('../infra/render/render-observation').RendererResources) => void
 }
 
 /** 浏览器共享快照与五段帧链；控制、面板与导出使用同一合同。 */
 export interface BrowserPlaybackStats {
+  rendererExecution?: RenderExecutionObservation
+  rendererObservationSkewMs?: number
+  audioPlayback?: AudioPlaybackObservation
+  audioStats?: BrowserAudioStatsSummary
   resolutionFeedbackState?: 'disabled' | 'active' | 'awaiting-metadata' | 'metadata-unavailable'
 
   inboundVideoFps?: number

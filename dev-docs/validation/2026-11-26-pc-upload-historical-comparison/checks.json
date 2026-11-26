@@ -1,0 +1,15 @@
+{
+  "primaryMean": "PASS",
+  "secondaryMean": "PASS",
+  "baselineParameterMatch": "PASS",
+  "secondaryActualSourceSize": "PASS",
+  "steadyCurrentMean": "PASS",
+  "tailComparison": "PASS",
+  "ratio": "PASS",
+  "historicalMetricsIdentity": "PASS",
+  "committedUploadContract": "PASS",
+  "textWhitespace": "PASS",
+  "runtimeSourceEdits": [],
+  "temporaryFilesCreated": 0,
+  "freeDiskBytes": 92160000000
+}

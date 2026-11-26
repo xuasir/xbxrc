@@ -1,5 +1,5 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { AudioRuntimeConfig, MediaDiagnosticsOptions, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
+import type { AudioPlaybackFormat, AudioRuntimeConfig, MediaDiagnosticsOptions, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
 import type { InputService } from '../input/InputService'
 import { AudioEffectsService } from './AudioEffectsService'
 import { MicrophoneService } from './MicrophoneService'
@@ -9,6 +9,7 @@ export class MediaService {
   private readonly playbackService: PlaybackService
   private readonly microphoneService: MicrophoneService
   private readonly audioEffectsService: AudioEffectsService
+  private audioReadyGeneration?: number
 
   constructor(
     private readonly getContainer: () => HTMLElement,
@@ -26,7 +27,13 @@ export class MediaService {
       this.rendererAttach,
     )
     this.microphoneService = new MicrophoneService(this.emitter)
-    this.audioEffectsService = new AudioEffectsService()
+    this.audioEffectsService = new AudioEffectsService((observation) => {
+      this.emitter.emit('media.audioStateChanged', observation)
+      if (observation.state === 'ready' && observation.generation !== this.audioReadyGeneration) {
+        this.audioReadyGeneration = observation.generation
+        this.emitter.emit('media.audioReady', {})
+      }
+    })
   }
 
   updateAudioConfig(config: Partial<AudioRuntimeConfig>): void {
@@ -62,9 +69,25 @@ export class MediaService {
     this.playbackService.attachVideoStream(stream)
   }
 
-  attachAudioStream(stream: MediaStream): void {
-    const audioElement = this.playbackService.attachAudioStream(stream)
-    this.audioEffectsService.attach(stream, audioElement, this.audioConfig)
+  attachAudioStream(stream: MediaStream, format?: AudioPlaybackFormat, track?: MediaStreamTrack): void {
+    if (format)
+      this.audioConfig.requestedChannelCount = format.requestedChannelCount
+    const selectedTrack = track ?? stream.getAudioTracks?.()[0]
+    const audioStream = selectedTrack && (stream.getAudioTracks?.().length ?? 0) > 1 && typeof MediaStream !== 'undefined'
+      ? new MediaStream([selectedTrack])
+      : stream
+    const audioElement = this.playbackService.attachAudioStream(audioStream)
+    this.audioEffectsService.attach(audioStream, audioElement, this.audioConfig, format, selectedTrack)
+  }
+
+  updateAudioPlaybackFormat(format: AudioPlaybackFormat): void {
+    this.audioConfig.requestedChannelCount = format.requestedChannelCount
+    this.audioEffectsService.updateFormat(format)
+  }
+
+  snapshotAudioObservation() {
+    const observation = this.audioEffectsService.snapshotObservation()
+    return observation.state === 'idle' ? undefined : observation
   }
 
   setVolumeDirect(value: number): void {
@@ -99,7 +122,7 @@ export class MediaService {
   }
 
   snapshotDiagnostics(options?: MediaDiagnosticsOptions) {
-    return this.playbackService.snapshotDiagnostics(options)
+    return { ...this.playbackService.snapshotDiagnostics(options), audio: this.snapshotAudioObservation() }
   }
 
   destroy(): void {

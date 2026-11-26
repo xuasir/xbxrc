@@ -1,0 +1,289 @@
+{
+  "status": "PASS",
+  "scope": "planning-source-document-smoke",
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "git": {
+    "branch": "main",
+    "head": "37e4fb434039d38062d08e0cf2c9a8030d33b8f8"
+  },
+  "sourceChecks": [
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "daaac1f1b63d5a4e077815940ac38831548b265d2a78032ce7bdfd6f85bb3e44",
+      "anchors": [
+        {
+          "symbol": "pub fn classify_runtime_network_pressure(",
+          "line": 160
+        },
+        {
+          "symbol": "pub fn runtime_stall_threshold(",
+          "line": 150
+        },
+        {
+          "symbol": "let decode_recovery_eligible = fresh",
+          "line": 313
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/quality.rs",
+      "sha256": "4a856704688294564745e5abe9af853079bc3f137031853e99ec12adb579ac27",
+      "anchors": [
+        {
+          "symbol": "post.loss_avg.unwrap() < probe.baseline.loss_avg.unwrap() * 0.5",
+          "line": 209
+        },
+        {
+          "symbol": "self.rtt_baseline = sample.long.rtt_ms_avg",
+          "line": 172
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "991e7dd2162d34dbb461082845d54551021326d69c720a425789e5870ef13bc2",
+      "anchors": [
+        {
+          "symbol": "pub struct RuntimeMediaCounters",
+          "line": 8
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming/src/policy/negotiation/compiler.rs",
+      "sha256": "4de37ef5f43c9aef9ac14810ada9eff3abfa0c3d37a52e61441d3803e4753549",
+      "anchors": [
+        {
+          "symbol": "AudioChannels::Auto | AudioChannels::Stereo => true",
+          "line": 23
+        }
+      ]
+    },
+    {
+      "file": "crates/xbox-streaming/src/policy/projection.rs",
+      "sha256": "401f9d26e004910f4611ec8e8cdfb1a2f429b1c73472062612948ba326f5d71d",
+      "anchors": [
+        {
+          "symbol": "force_mono_audio: !plan.negotiation.stereo_audio",
+          "line": 192
+        }
+      ]
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.ts",
+      "sha256": "ab36e66bde07c79e7c85383c10a51433e9807c22b193433f6b3c12325ec29446",
+      "anchors": [
+        {
+          "symbol": "const MEDIA_STALL_EVIDENCE_GRACE_MS = 8_000",
+          "line": 83
+        },
+        {
+          "symbol": "forceMonoAudio: spec.runtime.forceMonoAudio",
+          "line": 257
+        },
+        {
+          "symbol": "enableAudioControl: spec.render.enableAudioControl === true",
+          "line": 233
+        }
+      ]
+    },
+    {
+      "file": "src/streaming/runtime/browser-supervision.ts",
+      "sha256": "a32bc8fc5ca132938970d288013d82d3752e6853538733827122e6fb34f026e0",
+      "anchors": [
+        {
+          "symbol": "function startMonitoring(): void",
+          "line": 50
+        },
+        {
+          "symbol": "}, 1_000)",
+          "line": 68
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/input/InputService.ts",
+      "sha256": "ce5b7f1a46ac4d9bf80c3da1e2b764bb243b38ee94c4dc12a6b8aed682fe56f9",
+      "anchors": [
+        {
+          "symbol": "const INPUT_RETRY_INTERVAL_MS = 50",
+          "line": 18
+        },
+        {
+          "symbol": "this.frameMetadataQueue.length > 30",
+          "line": 429
+        }
+      ]
+    },
+    {
+      "file": "src/player/domain/media.ts",
+      "sha256": "a2dee096c9641add94fd8855e64a56acba17f02ac60848624235c928515d45a7",
+      "anchors": [
+        {
+          "symbol": "export interface AudioRuntimeConfig",
+          "line": 261
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/session/SessionService.ts",
+      "sha256": "68a84730df75cc4eb52e6ef2224059e178d16c12b68bc18e53e0d239f43cd8ad",
+      "anchors": [
+        {
+          "symbol": "if (!this.options.transport.forceMonoAudio)",
+          "line": 221
+        },
+        {
+          "symbol": "nextSdp = nextSdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1')",
+          "line": 222
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/media/MediaService.ts",
+      "sha256": "0d495cc1c27762cd4bccabcf313d9e336e8b6593ad6b43f890a65e73752a54a6",
+      "anchors": [
+        {
+          "symbol": "this.audioEffectsService.attach(stream, audioElement, this.audioConfig)",
+          "line": 67
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.ts",
+      "sha256": "2f108342dd67046cb85db618f1d3928ee8ace9dec9018c2c7b5f62eab9b8a186",
+      "anchors": [
+        {
+          "symbol": "this.emitter.emit('media.audioReady', {})",
+          "line": 151
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/media/AudioEffectsService.ts",
+      "sha256": "0cb7afa6cfb940c9998684cc3704efcf6dba27a1c9ff2f90a30cedada47bc598",
+      "anchors": [
+        {
+          "symbol": "const context = new AudioContext()",
+          "line": 23
+        },
+        {
+          "symbol": "this.source.connect(this.gain).connect(context.destination)",
+          "line": 27
+        }
+      ]
+    },
+    {
+      "file": "src/player/app/stats/StatsService.ts",
+      "sha256": "75f0b32c1f016a9fc71982f74972f4644aa20fc3a0716f20af68849d882d801a",
+      "anchors": [
+        {
+          "symbol": "kind: 'video'",
+          "line": 19
+        },
+        {
+          "symbol": "receiver.track?.kind === 'video'",
+          "line": 334
+        }
+      ]
+    }
+  ],
+  "documentLinksChecked": [
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../crates/xbox-streaming/src/session/recovery/supervision.rs"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../crates/xbox-streaming/src/session/recovery/quality.rs"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/streaming/runtime/browser-runtime.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/streaming/runtime/browser-supervision.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/input/InputService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/input/frame-feedback.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../crates/xbox-streaming/src/policy/negotiation/compiler.rs"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../crates/xbox-streaming/src/policy/projection.rs"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/session/SessionService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/domain/media.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/media/AudioEffectsService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/media/PlaybackService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/media/MediaService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../src/player/app/stats/StatsService.ts"
+    },
+    {
+      "document": "docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md",
+      "target": "../../dev-docs/validation/2026-11-26-pc-streaming-latency-recovery-audio/README.md"
+    },
+    {
+      "document": "dev-docs/validation/2026-11-26-pc-streaming-latency-recovery-audio/README.md",
+      "target": "../../../docs/rfcs/2026-11-26-pc-streaming-latency-recovery-audio.md"
+    }
+  ],
+  "milestonesChecked": [
+    "5a: negotiated audio channels",
+    "4: feedback deadlines",
+    "2: low-loss delay accumulation",
+    "3: local stall recovery",
+    "5b: audio playback health"
+  ],
+  "plannedTestFilesVerified": [
+    "src/player/app/input/InputService.test.ts",
+    "src/player/app/input/InputDelivery.test.ts",
+    "src/player/app/input/frame-feedback.test.ts",
+    "src/player/app/media/AudioEffectsService.test.ts",
+    "src/player/app/media/PlaybackService.test.ts",
+    "src/player/app/stats/StatsService.test.ts",
+    "src/player/app/stats/browser-stats.test.ts",
+    "src/player/app/session/SessionService.test.ts",
+    "src/player/infra/webrtc/SdpManipulator.test.ts",
+    "src/streaming/runtime/browser-runtime.test.ts",
+    "src/streaming/runtime/browser-supervision.test.ts",
+    "src/streaming/runtime/shared-supervision-baseline.test.ts",
+    "crates/xbox-streaming/src/session/recovery/supervision.test.rs"
+  ],
+  "runtimeTestRunsThisRound": 0,
+  "productionFilesWrittenByThisRound": [],
+  "diffCheckExitCode": 0,
+  "cleanup": {
+    "temporaryPathsCreated": [],
+    "temporaryArtifactCount": 0,
+    "removedFileBytes": 0,
+    "freeBytesAfter": 92160000000
+  }
+}

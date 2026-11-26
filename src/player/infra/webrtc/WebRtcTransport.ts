@@ -11,7 +11,7 @@ function debugLog(..._args: Array<unknown>): void {}
 export interface WebRtcTransportEvents {
   iceCandidate: IceCandidateLike
   connectionState: { state: RTCPeerConnectionState }
-  track: { kind: 'audio' | 'video', stream: MediaStream }
+  track: { kind: 'audio' | 'video', stream: MediaStream, track?: MediaStreamTrack, mid?: string }
 }
 
 export class WebRtcTransport {
@@ -67,7 +67,7 @@ export class WebRtcTransport {
         trackId: event.track.id,
         streamId: stream.id,
       })
-      this.emitter.emit('track', { kind: event.track.kind as 'audio' | 'video', stream })
+      this.emitter.emit('track', { kind: event.track.kind as 'audio' | 'video', stream, track: event.track, mid: event.transceiver?.mid ?? undefined })
     }
     peer.addEventListener('icecandidate', (event) => {
       if (this.peer !== peer || !event.candidate) {
@@ -113,6 +113,12 @@ export class WebRtcTransport {
 
   getDataChannel(name: string): RTCDataChannel | undefined {
     return this.channels.get(name)
+  }
+
+  /** 已转移的 input channel 由 Worker 关闭，Window 撤销其对象归属。 */
+  releaseDataChannel(name: string, channel: RTCDataChannel): void {
+    if (this.channels.get(name) === channel)
+      this.channels.delete(name)
   }
 
   createOffer(options?: CreateOfferOptions): Promise<RTCSessionDescriptionInit> {
@@ -220,14 +226,22 @@ export class WebRtcTransport {
     return this.ensurePeer()
   }
 
-  close(): void {
+  close(afterInput?: Promise<void>): void {
     const peer = this.peer
     this.peer = undefined
-    for (const channel of this.channels.values())
-      channel.close()
+    const channels = [...this.channels.values()]
     this.channels.clear()
     this.iceCandidates.length = 0
-    peer?.close()
+    const release = () => {
+      for (const channel of channels)
+        channel.close()
+      peer?.close()
+    }
+    // 先撤销旧 peer 回调与观察归属，再等待有界 neutral 接受确认后关闭原 peer。
+    if (afterInput)
+      void afterInput.then(release, release)
+    else
+      release()
   }
 
   private ensurePeer(): RTCPeerConnection {

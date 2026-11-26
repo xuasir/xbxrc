@@ -1,0 +1,50 @@
+{
+  "task": "2026-11-26-ios-media-calibration",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug",
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/DerivedData",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/Smoke.xcresult",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/SourcePackages",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/baseline",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/device-module-cache",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/device-typecheck.log",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/run-smoke.py",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/rust-smoke.log",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/smoke.log",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/swift-format.json",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/validated-source"
+  ],
+  "allocatedBytesRemoved": 694595584,
+  "freeDiskBeforeBytes": 90931200000,
+  "freeDiskAfterBytes": 91340800000,
+  "observedFreeDiskDeltaBytes": 409600000,
+  "durationSeconds": 0.47,
+  "rootExistsAfter": false,
+  "processCompletionEvidence": {
+    "xcodebuildExitCode": 0,
+    "deviceTypecheckExitCode": 0,
+    "rustTestExitCode": 0,
+    "sharedCompatibilityExitCode": 0,
+    "xcresultExports": "completed",
+    "simulatorShutdownExitCode": 0
+  },
+  "retained": [
+    "仓库内必要测试摘要、代码差异、SDK合同、已验共享源码与修复诊断",
+    "共享 target/ios、target/browser Rust缓存",
+    "共享 target/ios-webrtc/137.7151.04/SourcePackages 依赖缓存",
+    "用户输入截图和系统管理的Xcode/Simulator缓存",
+    "其他任务的源码、文档与临时产物"
+  ],
+  "simulator": {
+    "name": "iPhone 18 Pro",
+    "runtime": "iOS 27.2",
+    "udid": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "initialState": "Shutdown",
+    "authorization": "用户明确允许启动并做定向测试",
+    "finalState": "Shutdown"
+  },
+  "concurrentFilesPreserved": [
+    "crates/xbox-streaming/src/session/recovery/supervision.rs",
+    "crates/xbox-streaming/src/session/recovery/supervision.test.rs"
+  ]
+}

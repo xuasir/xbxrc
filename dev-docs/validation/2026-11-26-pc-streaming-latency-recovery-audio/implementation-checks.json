@@ -1,0 +1,229 @@
+{
+  "status": "PASS",
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "scope": "PC Browser implementation and targeted smoke",
+  "commands": [
+    {
+      "command": "cargo fmt --all",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo check --offline -p xbxrc --lib",
+      "exitCode": 0
+    }
+  ],
+  "sourceFingerprints": [
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/local_stall.rs",
+      "sha256": "faa8a4dfffd9fc9ea1b35aed9b850c591dccc38af0c97c5dc2296bad3fad27c8"
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "bdb0bbf2626e8aee8d86a9dc1defb220d1b5f97e544b986fd16320515b563eed"
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/quality.rs",
+      "sha256": "ba947448d53925ba046b2fa580b340d6c4857f635a8d16493452d758768b80d2"
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "f7d0d2ee5e44ec77e45df4afe4d23247e79412154f92a05f8a872229d7f152ef"
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "sha256": "a47b070e868a91be01b505c5f3feb317eb9d731b12d7770a846be47bf880187d"
+    },
+    {
+      "file": "src/player/api/PlayerClient.ts",
+      "sha256": "9e2c6acce87bd9a5c6119e6843bbaefb96944c1d278827e2a75163b38b3f1156"
+    },
+    {
+      "file": "src/player/api/events.ts",
+      "sha256": "f007473fec268c6b07a1628ed29ab1bd518072231ec9977a81cf9af4ccabafae"
+    },
+    {
+      "file": "src/player/app/input/InputDelivery.test.ts",
+      "sha256": "6f6d70a481bc380482febabb5cee5f0ebd5f0d0d5d0e6bcc2fd55e899e4fccd3"
+    },
+    {
+      "file": "src/player/app/input/InputService.test.ts",
+      "sha256": "930862f63b3f4ec752f18c0af9b7bcc1d109aeff90d29ba30e0843304d00cfed"
+    },
+    {
+      "file": "src/player/app/input/InputService.ts",
+      "sha256": "893f2164515ca096006c7de7909067e13caf7a18afa1573254b10080fc5e0ab0"
+    },
+    {
+      "file": "src/player/app/media/AudioEffectsService.test.ts",
+      "sha256": "4cf8e74cf53fd300d8e8584413a2683499b12e1fca65205cfe71d9478133301c"
+    },
+    {
+      "file": "src/player/app/media/AudioEffectsService.ts",
+      "sha256": "0525b1a2ebe8f4e9420cedaed591cdd7cf6b3b2166a6d12a5d7bffbde5ada3a3"
+    },
+    {
+      "file": "src/player/app/media/MediaService.ts",
+      "sha256": "195717826dfc36fa4d76533a7f3a08e0a673b1e66f019615c07e2dc4e31a4287"
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.test.ts",
+      "sha256": "07f5f2f6b8c1f6e6166da51b775ece47972833defc50080deb56992f9ca42bce"
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.ts",
+      "sha256": "d25be7721f3e68138a6a864e637c371653850a70c688a5fb8423b87d58716132"
+    },
+    {
+      "file": "src/player/app/media/audio-playback.test.ts",
+      "sha256": "0d403655efb4569dc77ececb9fd9239905b4fbd16dbed120573a3ccb4874ced3"
+    },
+    {
+      "file": "src/player/app/session/SessionService.test.ts",
+      "sha256": "1e86e2a06df9d9984c3b4a6712fe65a9ae20513360217b4b3f353e8f5917d857"
+    },
+    {
+      "file": "src/player/app/session/SessionService.ts",
+      "sha256": "0f0f7ee8c364f2beaee7d3330e9bc573818dc0007c16354f9b0b6928c911c179"
+    },
+    {
+      "file": "src/player/app/stats/StatsService.test.ts",
+      "sha256": "f747b4bb820c263afe1f337c7e86156d9668220d09256c2fe3f7229414323da4"
+    },
+    {
+      "file": "src/player/app/stats/StatsService.ts",
+      "sha256": "8b3eb5dfba878e0ee300802a56ed742517a37d74cca630034802efcaad65817f"
+    },
+    {
+      "file": "src/player/app/stats/audio-stats.test.ts",
+      "sha256": "7a80f870b9aef839e18278e58c64a0f232b35f99b6c637bf3c3be5aa9bdbfb18"
+    },
+    {
+      "file": "src/player/app/stats/audio-stats.ts",
+      "sha256": "eab29938f3394f1ac96185f4f6ef99443edd47b1b0d5b8b70389a82c6673a24d"
+    },
+    {
+      "file": "src/player/app/stats/browser-stats.ts",
+      "sha256": "7038e9b876fa8c39811bcfe0dba1b3fa4b94ecac7ba8f326852cf7b2853df8b2"
+    },
+    {
+      "file": "src/player/domain/config.ts",
+      "sha256": "f6955cb69925b2432008d500149fad78c6a974ebd4ab80a4721545bd9b99d4ad"
+    },
+    {
+      "file": "src/player/domain/media.ts",
+      "sha256": "1ac68b4b32a1c0993e95741b3aa5f62080da114f5e8c2b6ef2390266ca2d5127"
+    },
+    {
+      "file": "src/player/domain/stats.ts",
+      "sha256": "ccb7a66c703906b9bc3785b4a6a70b7e3f32334acfd40aa11d857d6082faf737"
+    },
+    {
+      "file": "src/player/infra/webrtc/SdpManipulator.test.ts",
+      "sha256": "6ef1b2a998467d750c271ee534ec513c60092786457322cda8d3ac8c91a9d3a8"
+    },
+    {
+      "file": "src/player/infra/webrtc/SdpManipulator.ts",
+      "sha256": "6db42496fa822848a1dc5b2f445262e41c9b87ab84aad94697440394e216b268"
+    },
+    {
+      "file": "src/player/infra/webrtc/WebRtcTransport.ts",
+      "sha256": "d0cf8affd9076d9196d01680df6de0f23057a97024b7fdaeb8313681790a6a90"
+    },
+    {
+      "file": "src/player/infra/webrtc/audio-sdp.test.ts",
+      "sha256": "5a6439bd57bebb381ef6e3c7bc403657b890e82d96e35f97e064949d44c49bdd"
+    },
+    {
+      "file": "src/player/infra/webrtc/audio-sdp.ts",
+      "sha256": "a82aa8597378e5b5c1939d561de0a594343e8ee91db40db066423c1e8544f322"
+    },
+    {
+      "file": "src/shared/diagnostics/production-trace-contract.json",
+      "sha256": "27b61386f7cc740eb1e446d98d4c43898fc1b7090c9c2c3196888cd26a4573d0"
+    },
+    {
+      "file": "src/shared/rpc/streaming.ts",
+      "sha256": "4a9dcc12df1273d5882c9eaa64d93abc281370a5af5c3a4c2d71901054ed749c"
+    },
+    {
+      "file": "src/streaming/runtime/browser-local-recovery.test.ts",
+      "sha256": "c18961495df630ec1784d142d86e0009a4b13006330ef4bcd4e534e22b70953f"
+    },
+    {
+      "file": "src/streaming/runtime/browser-local-recovery.ts",
+      "sha256": "cb20cbaf776a5c03f596bf382b68798238a6d83739529cf6f46341f5c030326e"
+    },
+    {
+      "file": "src/streaming/runtime/browser-network-delay.test.ts",
+      "sha256": "a94214375aa67560ba4ec18ce62153979114945830525fd290faa1a3d87b080d"
+    },
+    {
+      "file": "src/streaming/runtime/browser-network-policy.ts",
+      "sha256": "8f4e0b0af51d42a4dc4402b44c8e38b78ddf55485e1f2218b86629c68d55f07c"
+    },
+    {
+      "file": "src/streaming/runtime/browser-recovery-policy.ts",
+      "sha256": "ea6d80c40eea7d30c468b4674fd4894a1e36729dd5828761c3281aa7c4adbf89"
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.test.ts",
+      "sha256": "87d37cc3ea60ab3f72b1b7a6ea817cb467e5b63e47724f82e5a924abb31c26e6"
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.ts",
+      "sha256": "f0e5ae469294826c11b32d0d8d49b466c9cecb8da04451eff344462ecea03c86"
+    },
+    {
+      "file": "src/streaming/runtime/playback-health.test.ts",
+      "sha256": "67542ef2d5534bf029a8c1719ced18cc392d776cec004b5da2f7817e94af5165"
+    },
+    {
+      "file": "src/streaming/runtime/playback-health.ts",
+      "sha256": "7b701e73e1c7c7fade53479c71a582f72937857ea47de99c3147daa569cfad7d"
+    }
+  ],
+  "concurrentSharedRustFiles": [
+    "crates/xbox-streaming/src/session/recovery/observation.rs",
+    "crates/xbox-streaming/src/session/recovery/supervision.rs",
+    "crates/xbox-streaming/src/session/recovery/supervision.test.rs"
+  ],
+  "frontendFormatterChangesOutsideTask": [],
+  "acceptance": {
+    "frontendUniqueTests": 193,
+    "rustUniqueTests": 23,
+    "productionProjectionAssertions": 15,
+    "hardwareAcceptance": "pending user Home/Cloud short run"
+  },
+  "cleanup": {
+    "state": "complete",
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-streaming-repair-20261126-l6xcus3y",
+    "buildTestExportProcessesFinished": true,
+    "processConfirmation": "all managed exec completion receipts; process inventory unavailable in sandbox",
+    "removedFileCount": 66,
+    "removedFileBytes": 3956362,
+    "targetExistsAfter": false,
+    "freeBytesBefore": 92160000000,
+    "freeBytesAfter": 92160000000,
+    "retained": [
+      "RFC",
+      "Report",
+      "validation summaries",
+      "shared Cargo build cache"
+    ]
+  },
+  "documentLinksChecked": 21,
+  "diffCheckExitCode": 0,
+  "git": {
+    "branch": "main",
+    "head": "37e4fb434039d38062d08e0cf2c9a8030d33b8f8"
+  }
+}

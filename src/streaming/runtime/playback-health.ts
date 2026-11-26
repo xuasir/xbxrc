@@ -2,7 +2,50 @@ import type { PlayerEvents } from '../../player/api/events'
 import type { BrowserPlaybackStats } from '../../player/domain/media'
 
 export type PlaybackObservation = PlayerEvents['stats.browserObservation']
-export const COUNTERS = ['received', 'decoded', 'videoPresent', 'callbacks', 'rendererSubmit', 'framesDropped', 'freezeCount', 'callbackGaps', 'presentedJumps', 'overwrites', 'rateLimitDrops', 'duplicates', 'submitFailures', 'packetsReceived', 'bytesReceived', 'keyframes', 'pli', 'fir', 'nack'] as const
+
+export function compactAudio(stats: BrowserPlaybackStats | undefined): Record<string, unknown> | undefined {
+  const output = stats?.audioPlayback
+  const source = stats?.audioStats
+  if (!output && !source?.supported)
+    return undefined
+  return {
+    state: output?.state,
+    route: output?.route,
+    audioGeneration: output?.generation,
+    contextState: output?.contextState,
+    trackState: output?.trackState,
+    trackMuted: output?.trackMuted,
+    requestedChannelCount: output?.format?.requestedChannelCount,
+    effectiveChannelCount: output?.format?.effectiveChannelCount,
+    codecChannelCount: output?.format?.codecChannelCount,
+    sourceChannelCount: output?.format?.sourceChannelCount,
+    channelSource: output?.format?.source,
+    outputChannelCount: output?.outputChannelCount,
+    channelFallbackReason: output?.channelFallbackReason,
+    intentionallySilent: output?.intentionallySilent,
+    recoveryAttempts: output?.recoveryAttempts,
+    recoveryReason: output?.recoveryReason,
+    errorKind: output?.errorKind,
+    audioStats: source?.supported
+      ? {
+          coverageMs: source.coverageMs,
+          progressObserved: source.progressObserved,
+          samplesPerSecond: measured(source.samplesPerSecond),
+          jitterBufferMs: measured(source.jitterBufferMs),
+          concealedRatio: measured(source.concealedRatio, 4),
+          packetsReceivedTotal: source.packetsReceivedTotal,
+          samplesReceivedTotal: source.samplesReceivedTotal,
+          concealedSamplesTotal: source.concealedSamplesTotal,
+          insertedSamplesTotal: source.insertedSamplesTotal,
+          removedSamplesTotal: source.removedSamplesTotal,
+          playoutDeltaMs: measured(source.playoutDeltaMs),
+          playoutEstimateState: source.playoutEstimateState,
+          resetReason: source.resetReason,
+        }
+      : undefined,
+  }
+}
+export const COUNTERS = ['received', 'decoded', 'videoPresent', 'callbacks', 'rendererSubmit', 'framesDropped', 'freezeCount', 'callbackGaps', 'presentedJumps', 'overwrites', 'rateLimitDrops', 'duplicates', 'submitFailures', 'packetsReceived', 'bytesReceived', 'keyframes', 'pli', 'fir', 'nack', 'read', 'delivered', 'readerOverwrites', 'staleDrops'] as const
 export type Counter = typeof COUNTERS[number]
 export type Counters = Partial<Record<Counter, number>>
 
@@ -31,6 +74,8 @@ export function observationIdentity(observation: PlaybackObservation): string {
 }
 
 export function counterIdentity(counter: Counter, observation: PlaybackObservation): string {
+  if (['read', 'delivered', 'readerOverwrites', 'staleDrops'].includes(counter))
+    return `${observation.sample.peerGeneration}:${observation.stats.rendererGeneration}:${observation.stats.rendererExecution?.scope?.readerGeneration ?? observation.stats.rendererDecodedFrameSupply?.readerGeneration}:${observation.stats.rendererExecution?.scope?.linkEpoch}`
   if (['rendererSubmit', 'overwrites', 'rateLimitDrops', 'duplicates', 'submitFailures'].includes(counter))
     return `${observation.sample.peerGeneration}:${observation.stats.rendererKind}:${observation.stats.rendererGeneration}`
   if (['videoPresent', 'callbacks', 'callbackGaps', 'presentedJumps'].includes(counter))
@@ -43,6 +88,10 @@ export function readCounters({ sample, stats }: PlaybackObservation): Counters {
   return {
     received: measured(video?.framesReceived, 0),
     decoded: measured(video?.framesDecoded, 0),
+    read: measured(stats.rendererExecution?.link?.readFrames ?? (stats.rendererDecodedFrameSupply?.workerReadFrames || stats.rendererDecodedFrameSupply?.receivedMessages), 0),
+    delivered: measured(stats.rendererExecution?.link?.deliveredFrames ?? stats.rendererDecodedFrameSupply?.deliveredFrames, 0),
+    readerOverwrites: measured(stats.rendererExecution?.link?.overwrittenFrames ?? stats.rendererDecodedFrameSupply?.workerOverwriteCount, 0),
+    staleDrops: measured(stats.rendererExecution?.link?.staleDrops ?? stats.rendererDecodedFrameSupply?.staleFrameDropCount, 0),
     videoPresent: measured(stats.videoPresentFramesTotal, 0),
     callbacks: measured(stats.videoCallbacksTotal, 0),
     rendererSubmit: measured(stats.rendererKind === 'video' ? stats.videoPresentFramesTotal : stats.rendererSubmittedFramesTotal, 0),
@@ -89,6 +138,7 @@ export function compactDecodedSupply(stats: BrowserPlaybackStats): Record<string
     rendererKind: stats.rendererKind,
     rendererGeneration: stats.rendererGeneration,
     rendererFrameSource: stats.rendererFrameSource,
+    execution: stats.rendererExecution ? { mode: stats.rendererExecution.mode, scope: stats.rendererExecution.scope, renderEpoch: stats.rendererExecution.renderEpoch, snapshotAgeMs: measured(stats.rendererExecution.snapshotAgeMs), skewMs: measured(stats.rendererObservationSkewMs) } : undefined,
     sampleId: stats.statsSampleId,
     sampledAtMs: stats.statsSampledAtMs,
     sampleAgeMs: stats.statsSampledAtMs === undefined ? undefined : measured(performance.now() - stats.statsSampledAtMs),
@@ -220,7 +270,8 @@ export class PlaybackHealthWindow {
       ? measured(this.delta[counter]! * 1000 / elapsedMs)
       : undefined
     const allTotals = observation ? readCounters(observation) : {}
-    const totals = Object.fromEntries(['received', 'decoded', 'videoPresent', 'callbacks', 'rendererSubmit', 'framesDropped', 'freezeCount', 'keyframes', 'pli', 'fir', 'nack'].filter(key => allTotals[key as Counter] !== undefined).map(key => [key, allTotals[key as Counter]]))
+    // rVFC与Reader累计另由会话summary/decodedSupply记录，健康桶保留完整同窗delta。
+    const totals = Object.fromEntries(['received', 'decoded', 'rendererSubmit', 'framesDropped', 'freezeCount', 'keyframes', 'pli', 'fir', 'nack'].filter(key => allTotals[key as Counter] !== undefined).map(key => [key, allTotals[key as Counter]]))
     return {
       productionContractVersion: 1,
       healthSequence,
@@ -243,6 +294,7 @@ export class PlaybackHealthWindow {
       window: { startMs: measured(startMs, 1), endMs: measured(endMs, 1), elapsedMs: measured(elapsedMs, 1), sampleCount: this.sampleCount, validSampleCount: this.validSampleCount, firstSampleId: this.firstSampleId, lastSampleId: sample?.sampleId, partial, resetReasons: [...this.resets] },
       coverage: { elapsedMs: measured(elapsedMs, 1), validMs: measured(this.validMs, 1), ratio: elapsedMs > 0 ? measured(this.validMs / elapsedMs, 4) : 0, maxSampleGapMs: measured(Math.max(this.maxSampleGapMs, stale && sample ? now - sample.sampledAtMs : 0), 1), counterMs: Object.fromEntries(['received', 'decoded', 'videoPresent', 'callbacks', 'rendererSubmit'].map(key => [key, this.counterMs[key as Counter] ?? 0])), partial },
       network: { state: facts.networkState, rttMs: measured(stats?.networkRttMs), jitterMs: measured(stats?.networkJitterMs), packetLossRatio: this.validMs > 0 && this.delta.packetsReceived !== undefined ? measured(Math.max(0, this.packetsLostDelta) / Math.max(1, this.delta.packetsReceived + this.packetsLostDelta), 4) : undefined, bitrateKbps: this.delta.bytesReceived !== undefined && elapsedMs > 0 ? measured(this.delta.bytesReceived * 8 / elapsedMs) : undefined, jitterBufferMs: measured(stats?.jitterBufferMs), packetAgeMs: measured(stats?.packetAgeMs), packetsLostDelta: this.validMs > 0 ? this.packetsLostDelta : undefined, transportPath: sample?.selectedCandidatePair?.localCandidate?.candidateType },
+      audio: compactAudio(stats),
       recovery: { cause: facts.recoveryCause, firstFrameStage: facts.firstFrameStage, presentationMilestone: facts.presentationMilestone, controlChannelState: facts.controlChannelState, controlChannelSendFailBurst: facts.controlChannelSendFailBurst, actionPending: facts.actionPending, totalFreezesDuration: measured(video?.totalFreezesDuration), decodeMs: this.delta.decoded ? measured(this.decodeTimeMs / this.delta.decoded) : undefined, nativeRecoveryGate: 'unsupported' },
       frameSupply: { rateScope: 'bucket', receivedFps: rate('received'), decodeFps: rate('decoded'), videoPresentFps: rate('videoPresent'), callbackFps: rate('callbacks'), rendererSubmitFps: rate('rendererSubmit'), delta: this.delta, totals, sourceWidth: stats?.renderSourceWidth ?? video?.frameWidth, sourceHeight: stats?.renderSourceHeight ?? video?.frameHeight, outputWidth: stats?.renderActualOutputWidth, outputHeight: stats?.renderActualOutputHeight, maxCallbackIntervalMs: measured(this.maxCallbackIntervalMs), maxPresentedFramesDelta: this.maxPresentedFramesDelta, trackingSource: facts.capabilities.trackingSource, windows: observation ? compactWindows(observation) : undefined },
       renderer: { cause: stats?.renderCause, videoPresentAgeMs: measured(stats?.videoPresentAgeMs), submitAgeMs: measured(stats?.rendererSubmitAgeMs), maxSubmitAgeMs: measured(this.maxSubmitAgeMs), maxVideoPresentAgeMs: measured(this.maxVideoPresentAgeMs), ...(observation ? compactTimings(observation) : {}), screenPresentState: 'unavailable' },

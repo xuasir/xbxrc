@@ -60,6 +60,7 @@ struct StreamingSessionDiagnostics: Equatable, Sendable {
     var mediaReadyElapsedMilliseconds: Double? = nil
     var requestedVideoBitrateKbps: Int? = nil
     var negotiatedVideoBitrateKbps: Int? = nil
+    var audioOutput: StreamingAudioOutputSnapshot? = nil
 
     static let empty = StreamingSessionDiagnostics(
         peerStats: nil,

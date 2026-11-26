@@ -3,6 +3,19 @@ use super::observation::{RuntimeMediaCounters, RuntimeWindowAccumulator};
 use super::quality::{RuntimeQualityCompletion, RuntimeQualityDecision, RuntimeQualityState};
 use serde::{Deserialize, Serialize};
 
+#[path = "local_stall.rs"]
+mod local_stall;
+use local_stall::LocalStallState;
+pub use local_stall::RuntimeLocalStallDecision;
+
+#[path = "display.rs"]
+mod display;
+use display::DisplayRecoveryState;
+pub use display::{
+    RuntimeDisplayObservation, RuntimeDisplayRecoveryAction, RuntimeDisplayRecoveryCompletion,
+    RuntimeDisplayRecoveryDecision,
+};
+
 pub const FIRST_FRAME_GUARD_MS: u64 = 4_000;
 pub const SUPERVISION_INTERVAL_MS: u64 = 1_000;
 pub const SOFT_WINDOW_MS: u64 = 3_000;
@@ -56,6 +69,16 @@ pub struct RuntimeSupervisionSample {
     pub video_generation: u64,
     pub warmup_until_ms: u64,
     pub previous_action_at_ms: Option<u64>,
+    pub previous_action_kind: Option<String>,
+    pub previous_action_effect: Option<String>,
+    pub has_presented_media: bool,
+    pub local_counters: Option<RuntimeMediaCounters>,
+    pub renderer_generation: Option<u64>,
+    pub renderer_kind: Option<String>,
+    pub renderer_submitted_total: Option<u64>,
+    pub renderer_submit_age_ms: Option<f64>,
+    pub renderer_present_fps: Option<f64>,
+    pub renderer_present_coverage_ms: Option<u64>,
     pub eligible_since_ms: u64,
     pub short: RuntimeObservationWindow,
     pub long: RuntimeObservationWindow,
@@ -64,6 +87,7 @@ pub struct RuntimeSupervisionSample {
     pub counters: Option<RuntimeMediaCounters>,
     pub rtt_ms: Option<f64>,
     pub jitter_ms: Option<f64>,
+    pub jitter_buffer_ms: Option<f64>,
     pub path_id: Option<String>,
     pub quality_level: u8,
     pub quality_supported: bool,
@@ -72,6 +96,8 @@ pub struct RuntimeSupervisionSample {
     pub connection_recovery_followup: bool,
     pub connection_recovery_action_completed: bool,
     pub connection_recovery_fact_key: Option<String>,
+    pub display_observation: Option<RuntimeDisplayObservation>,
+    pub display_recovery_completion: Option<RuntimeDisplayRecoveryCompletion>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -87,6 +113,8 @@ pub struct RuntimeSupervisionState {
     previous_action_at_ms: Option<u64>,
     stall_evidence_observed: bool,
     windows: RuntimeWindowAccumulator,
+    local_stall: LocalStallState,
+    display: DisplayRecoveryState,
     quality: RuntimeQualityState,
     connection_started_ms: Option<u64>,
     connection_last_action_ms: Option<u64>,
@@ -111,6 +139,9 @@ pub struct RuntimeSupervisionDecision {
     pub media_connection_eligible: bool,
     pub network_pressure: String,
     pub probe_effect: Option<RuntimeRecoveryEffect>,
+    pub local_stall: Option<RuntimeLocalStallDecision>,
+    pub display_recovery_eligible: bool,
+    pub display_recovery: Option<RuntimeDisplayRecoveryDecision>,
     pub short: RuntimeObservationWindow,
     pub quality: RuntimeQualityDecision,
     pub connection_recovery_allowed: bool,
@@ -135,6 +166,8 @@ pub struct RuntimeRecoveryProbe {
     pub sample_id: Option<String>,
     pub video_generation: Option<u64>,
     pub peer_generation: Option<u64>,
+    pub renderer_generation: Option<u64>,
+    pub recovery_scope: Option<String>,
     pub baseline: RuntimeRecoveryBaseline,
 }
 
@@ -160,35 +193,69 @@ pub fn classify_runtime_network_pressure(
     window: &RuntimeObservationWindow,
     baseline: Option<f64>,
 ) -> &'static str {
-    let Some(loss) = window.loss_avg.filter(|n| n.is_finite()) else {
-        return "unknown";
-    };
-    if window.loss_coverage_ms < SOFT_WINDOW_MS - 1 {
-        return "unknown";
-    }
+    assess_runtime_network_pressure(window, baseline).pressure
+}
+
+pub(super) struct RuntimeNetworkAssessment {
+    pub pressure: &'static str,
+    pub reason: &'static str,
+}
+
+pub(super) fn assess_runtime_network_pressure(
+    window: &RuntimeObservationWindow,
+    baseline: Option<f64>,
+) -> RuntimeNetworkAssessment {
+    let finite = |value: Option<f64>| value.filter(|n| n.is_finite() && *n >= 0.0);
+    let loss = finite(window.loss_avg).filter(|_| window.loss_coverage_ms >= SOFT_WINDOW_MS - 1);
+    let baseline = finite(baseline);
     let rtt_growth = baseline
-        .zip(window.rtt_ms_avg)
+        .zip(finite(window.rtt_ms_avg))
         .filter(|_| window.rtt_coverage_ms >= SOFT_WINDOW_MS - 1)
-        .map(|(a, b)| b - a)
-        .unwrap_or(0.0);
+        .map(|(a, b)| b - a);
+    let delay_pressure =
+        rtt_growth.is_some_and(|growth| growth > 50.0_f64.max(baseline.unwrap_or(0.0) * 0.25));
     let jitter = window.jitter_coverage_ms >= SOFT_WINDOW_MS - 1
-        && window.jitter_ms_avg.unwrap_or(0.0) >= 35.0;
+        && finite(window.jitter_ms_avg).is_some_and(|n| n >= 35.0);
     let buffer_growth = window.jitter_buffer_coverage_ms >= SOFT_WINDOW_MS - 1
-        && window.jitter_buffer_ms_last.unwrap_or(0.0)
-            - window.jitter_buffer_ms_first.unwrap_or(0.0)
-            >= 100.0
-        && window.repair_packets_per_second_avg.unwrap_or(0.0) > 0.0;
-    if loss >= 0.08
-        || (loss >= 0.03
-            && (rtt_growth > 50.0_f64.max(baseline.unwrap_or(0.0) * 0.25)
-                || jitter
-                || buffer_growth))
-    {
-        "congested"
-    } else if loss >= 0.03 {
-        "warning"
+        && finite(window.jitter_buffer_ms_last)
+            .zip(finite(window.jitter_buffer_ms_first))
+            .is_some_and(|(last, first)| last - first >= 100.0);
+    if loss.is_some_and(|loss| {
+        loss >= 0.08
+            || (loss >= 0.03
+                && (delay_pressure
+                    || jitter
+                    || (buffer_growth
+                        && window.repair_packets_per_second_avg.unwrap_or(0.0) > 0.0)))
+    }) {
+        RuntimeNetworkAssessment {
+            pressure: "congested",
+            reason: "transportLoss",
+        }
+    } else if delay_pressure {
+        RuntimeNetworkAssessment {
+            pressure: if buffer_growth {
+                "congested"
+            } else {
+                "warning"
+            },
+            reason: "delayAccumulation",
+        }
+    } else if loss.is_some_and(|loss| loss >= 0.03) {
+        RuntimeNetworkAssessment {
+            pressure: "warning",
+            reason: "transportLoss",
+        }
+    } else if loss.is_some() {
+        RuntimeNetworkAssessment {
+            pressure: "stable",
+            reason: "pathStable",
+        }
     } else {
-        "stable"
+        RuntimeNetworkAssessment {
+            pressure: "unknown",
+            reason: "networkEvidenceIncomplete",
+        }
     }
 }
 
@@ -214,6 +281,9 @@ pub fn decide_runtime_supervision(
             media_connection_eligible: false,
             network_pressure: "unknown".into(),
             probe_effect: None,
+            local_stall: None,
+            display_recovery_eligible: false,
+            display_recovery: None,
             short: RuntimeObservationWindow::default(),
             quality: RuntimeQualityDecision::default(),
             connection_recovery_allowed: false,
@@ -247,9 +317,13 @@ pub fn decide_runtime_supervision(
     let mut projected = sample.clone();
     if fresh {
         if let Some(counters) = &sample.counters {
-            state
-                .windows
-                .observe(at, counters, sample.rtt_ms, sample.jitter_ms);
+            state.windows.observe(
+                at,
+                counters,
+                sample.rtt_ms,
+                sample.jitter_ms,
+                sample.jitter_buffer_ms,
+            );
             projected.short = state.windows.window(at, SOFT_WINDOW_MS);
             projected.long = state.windows.window(at, STABLE_WINDOW_MS);
             projected.inbound_video_fps = projected.short.inbound_fps_avg;
@@ -309,6 +383,30 @@ pub fn decide_runtime_supervision(
     let action_cooled = sample
         .previous_action_at_ms
         .is_none_or(|last| at.saturating_sub(last) >= STABLE_WINDOW_MS);
+    let probe_effect = sample
+        .probe
+        .as_ref()
+        .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate));
+    let mut local_stall = state.local_stall.observe(sample, fresh, duplicate);
+    if let Some(local) = &mut local_stall {
+        let effect = probe_effect
+            .as_ref()
+            .map(|effect| effect.result.as_str())
+            .or(sample.previous_action_effect.as_deref());
+        let upgrade = sample.previous_action_kind.as_deref() == Some("keyframeRequest")
+            && matches!(effect, Some("neutral" | "degraded"))
+            && sample
+                .previous_action_at_ms
+                .is_some_and(|last| at.saturating_sub(last) >= SOFT_WINDOW_MS);
+        local.eligible =
+            (action_cooled || upgrade) && (sample.probe.is_none() || probe_effect.is_some());
+        if upgrade {
+            local.action = "playbackRebuild".into();
+            local.reason = "ineffectiveKeyframeUpgrade".into();
+        } else if !local.eligible {
+            local.reason = "localActionCooldown".into();
+        }
+    }
     let decode_recovery_eligible = fresh
         && !duplicate
         && action_cooled
@@ -325,19 +423,20 @@ pub fn decide_runtime_supervision(
         && sample.long.received_coverage_ms >= STABLE_WINDOW_MS - 1
         && sample.long.decode_coverage_ms >= STABLE_WINDOW_MS - 1
         && sample.long.video_coverage_ms >= STABLE_WINDOW_MS - 1;
-    let has_inbound_progress = fresh
-        && !duplicate
-        && state.stall_evidence_observed
-        && (sample
-            .inbound_bytes_total
-            .zip(state.inbound_bytes)
-            .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)
-            || sample
-                .inbound_video_packet_count_total
-                .zip(state.inbound_packets)
-                .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)
-            || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0
-            || sample.decode_fps.unwrap_or(0.0) >= 1.0);
+    let has_inbound_progress = local_stall.is_some()
+        || (fresh
+            && !duplicate
+            && state.stall_evidence_observed
+            && (sample
+                .inbound_bytes_total
+                .zip(state.inbound_bytes)
+                .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)
+                || sample
+                    .inbound_video_packet_count_total
+                    .zip(state.inbound_packets)
+                    .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)
+                || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0
+                || sample.decode_fps.unwrap_or(0.0) >= 1.0));
     if fresh && !duplicate {
         state.sample_id = sample.sample_id.clone();
         state.sampled_at_ms = Some(at);
@@ -432,6 +531,7 @@ pub fn decide_runtime_supervision(
         state.connection_stable_since_ms = None;
         state.connection_last_frame_ms = None;
     }
+    let display_recovery = state.display.observe(sample, fresh, duplicate);
     RuntimeSupervisionDecision {
         fresh,
         duplicate,
@@ -456,10 +556,12 @@ pub fn decide_runtime_supervision(
             "unknown"
         }
         .into(),
-        probe_effect: sample
-            .probe
+        probe_effect,
+        local_stall,
+        display_recovery_eligible: display_recovery
             .as_ref()
-            .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate)),
+            .is_some_and(|decision| decision.eligible),
+        display_recovery,
         short: sample.short.clone(),
         quality,
         connection_recovery_allowed,
@@ -496,17 +598,38 @@ pub fn evaluate_runtime_recovery_probe(
     } else {
         probe.peer_generation == Some(sample.peer_generation)
     };
+    let renderer_scope = probe.recovery_scope.as_deref() == Some("renderer");
     let playback_valid = probe.action != "playbackRebuild"
-        || probe
-            .video_generation
-            .is_some_and(|p| sample.video_generation != p);
+        || (renderer_scope
+            && probe
+                .renderer_generation
+                .is_some_and(|p| sample.renderer_generation.is_some_and(|n| n != p)))
+        || (!renderer_scope
+            && probe
+                .video_generation
+                .is_some_and(|p| sample.video_generation != p));
+    let presentation_coverage = if renderer_scope {
+        sample.renderer_present_coverage_ms.unwrap_or(0)
+    } else {
+        sample.short.video_coverage_ms
+    };
+    let presentation_fps = if renderer_scope {
+        sample.renderer_present_fps
+    } else {
+        sample.short.video_present_fps_avg
+    };
+    let presentation_age = if renderer_scope {
+        sample.renderer_submit_age_ms
+    } else {
+        sample.video_present_age_ms
+    };
     let covered = fresh
         && sample.sample_id != probe.sample_id
         && sample
             .sampled_at_ms
             .is_some_and(|at| at.saturating_sub(SOFT_WINDOW_MS) >= probe.started_at_ms)
         && sample.short.decode_coverage_ms >= SOFT_WINDOW_MS - 1
-        && sample.short.video_coverage_ms >= SOFT_WINDOW_MS - 1
+        && presentation_coverage >= SOFT_WINDOW_MS - 1
         && peer_valid
         && playback_valid;
     if !covered {
@@ -516,13 +639,13 @@ pub fn evaluate_runtime_recovery_probe(
     let score = decode.zip(probe.baseline.decode_fps).map(|(n, p)| n - p);
     let margin = 1.0_f64.max(probe.baseline.decode_fps.unwrap_or(0.0) * 0.1);
     let new_frames = decode.unwrap_or(0.0) > 0.0
-        && sample.short.video_present_fps_avg.unwrap_or(0.0) > 0.0
-        && sample.video_present_age_ms.is_some_and(|n| n < 500.0);
+        && presentation_fps.unwrap_or(0.0) > 0.0
+        && presentation_age.is_some_and(|n| n < 500.0);
     let improved = new_frames
         && (matches!(probe.action.as_str(), "reconnect" | "playbackRebuild")
             || score.is_some_and(|n| n > margin)
             || probe.baseline.video_fps.is_some_and(|n| n < 1.0)
-                && sample.short.video_present_fps_avg.unwrap_or(0.0) >= 1.0);
+                && presentation_fps.unwrap_or(0.0) >= 1.0);
     Some(RuntimeRecoveryEffect {
         result: if improved {
             "improved"

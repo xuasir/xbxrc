@@ -1,0 +1,37 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba",
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/AudioSmoke.xcresult",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/DerivedData",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/SourcePackages",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/audio-smoke.log",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/baseline",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/fetch-upstream.py",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/run-audio-smoke.py",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/swift-format.json",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/upstream"
+  ],
+  "rootExistsAfter": false,
+  "allocatedBytesRemoved": 656785408,
+  "freeDiskBeforeBytes": 83148800000,
+  "freeDiskAfterBytes": 83558400000,
+  "observedFreeDiskDeltaBytes": 409600000,
+  "durationSeconds": 0.39,
+  "processCompletionEvidence": {
+    "xcodebuildExitCode": 0,
+    "xcresultExports": "completed",
+    "simulatorShutdownExitCode": 0
+  },
+  "retained": [
+    "本轮 SDK 源码摘要、6 项测试结果和检查证据",
+    "共享 WebRTC/Rust 缓存、系统管理缓存、其他任务产物及用户数据"
+  ],
+  "simulator": {
+    "udid": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "name": "iPhone 18 Pro",
+    "runtime": "iOS 27.2",
+    "initialState": "Shutdown",
+    "authorization": "本对话已明确允许启动同一模拟器做串流定向测试；接续音频回归验证",
+    "finalState": "Shutdown"
+  }
+}

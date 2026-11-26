@@ -1,0 +1,82 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "xbox-streaming",
+    "session::recovery::supervision::tests::",
+    "--",
+    "--nocapture"
+  ],
+  "exitCode": 0,
+  "elapsedSeconds": 6.8,
+  "reason": "验收后共享监督文件增加并行任务的可选 renderer/local-stall 合同，追加最小共享兼容冒烟；本轮 Swift 及观察窗口源码保持验收版本。",
+  "sourceAtResult": [
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "f048194b6b550e8acc1cb1f371da1ed6a82b38a549514f836a128be65abbd9f5"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "40c5f828fb5403ca222f0c48d887a61b4889d5c788e5b316454e476d676726a2"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "82b8ed4c618eb48cb0764a15756d8c344a7a74b03415b999482b9aca5e33f957"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "sha256": "d54c9c6addcf2eede08f7ffc224b8e13085b89bf6ef55f6c5836acd0b5b6697e"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "2baa85e110d58c70972f2bae1f1a483d242dd3b45799ff7b88a7afa61c7eef7c"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "dcde22104e68dbbde7cf2230aa2443ec06e88d1036a59c61eaea36ee3c031ca0"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "sha256": "5c77543655214441f0a6a4eecfcd60e08c3fb5fb5bab34a9b274da66eeadf904"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "1a9ab4adf7d788ca9b9fe386e00f6d43e2b49e878f4fd2346cd997b6dacae976"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "bdb0bbf2626e8aee8d86a9dc1defb220d1b5f97e544b986fd16320515b563eed"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "46f1fd5d7f73e728a27d6c7748df02a2646e9be23a993466391aa1d6ec2fee26"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "sha256": "e0eb18153fb5da78f57bcc5df2cc118db50441e0e7fb06efeabec8f53f29cbec"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+      "sha256": "69142d2173a70a4b9d106c529d5d95bad596bfbe2d2dd636cab650bef0c7530d"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMediaTiming.swift",
+      "sha256": "ba054b1b1d96fe85df81f51b703981b92a50b807b17597b44799b5eadd6d0ca8"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingVideoColor.swift",
+      "sha256": "f5cab7def503ec0de7a7e7896592bd3e8ce0988130f10b1193952e0edb791bbe"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "3ed41989898b2a7e2d37132ec2ad616370dceed1193fc38efb25a6e688f3dc18"
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "01763b0c7b14102546adde685e9baba4b524d39723d252f622075da43b6cd35a"
+    }
+  ],
+  "passedTests": 18,
+  "failedTests": 0
+}

@@ -1,0 +1,337 @@
+{
+  "task": "2026-11-26-ios-media-calibration",
+  "date": "2026-11-26",
+  "round": "r1",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug",
+  "temporaryArtifacts": [
+    "DerivedData",
+    "Smoke.xcresult",
+    "SourcePackages",
+    "baseline",
+    "device-module-cache",
+    "device-typecheck.log",
+    "run-smoke.py",
+    "rust-smoke.log",
+    "smoke.log",
+    "swift-format.json",
+    "validated-source"
+  ],
+  "sourceBefore": [
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "d9f9ba9494cbb530bb481fb7759819205b33d04626aff3d0481422ca1df8133a"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "5b7ff17cbeff66dbde5ce21e06b2392b0b2b323982492ca80e45c3a0dfaeff96"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "sha256": "d5c2b3613a345f651aefdebd324a6f1edcbc5640c922864ff9b5567d1f586588"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "a752b1660ded244328a66941ecb2bca2172eb9d0f56b8af1385c41e9c4c8144c"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "sha256": "690a7e1e2ee0bf661c0575ee411709c78ecd02d693bb45b79c00aa722259ad64"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "b93877b7ddbcc99cd57879ffea6207e2d2417e7bf3e8cad2862745b6dfc4b225"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "28bbf0f9e57d6473e235e152d9a6f8c2ce399deab7176b075165a9e2fba8efb7"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "4557d41ff24d0893a88d14c010fb6b8c560a8821457917c41f736d69823c41bd"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "sha256": "df95ced73fcb700ae92e70c93e9ba45f42e21b82baeba7fdaf0b19cc6855af73"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "cadfe23aca2f877f037dfe222350c952cdefb805b55b1adb2876f898a82d269a"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+      "sha256": "432d7a3b51385a8b9b8f84173336dae6f5c04068ba3988052bcbde084aea861e"
+    }
+  ],
+  "scope": [
+    "接收缓冲与解码统计和异步采样时序",
+    "按帧元数据选择SDR色彩矩阵与输出色彩空间",
+    "协商声道、实际音频路由与延迟校准"
+  ],
+  "deferred": [
+    "长时稳定性"
+  ],
+  "sharedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+  "sharedRustCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios",
+  "simulator": {
+    "name": "iPhone 18 Pro",
+    "runtime": "iOS 27.2",
+    "udid": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "initialState": "Shutdown",
+    "authorization": "用户明确允许启动并做定向测试",
+    "finalState": "Shutdown"
+  },
+  "diskFreeBeforeBytes": 92160000000,
+  "testCommand": [
+    "xcodebuild",
+    "test",
+    "-project",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-destination",
+    "platform=iOS Simulator,id=BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "-destination-timeout",
+    "30",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/SourcePackages",
+    "-resultBundlePath",
+    "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/Smoke.xcresult",
+    "-disableAutomaticPackageResolution",
+    "-skipPackageUpdates",
+    "-parallel-testing-enabled",
+    "NO",
+    "-enableCodeCoverage",
+    "NO",
+    "-only-testing:XBXRCTests/StreamingMediaCalibrationTests",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testSupervisionCapturesFreshStatsAfterAsyncPeerSnapshot",
+    "-only-testing:XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+    "-only-testing:XBXRCTests/XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingAudioPermissionOnlyAppliesToSendReceive",
+    "CODE_SIGNING_ALLOWED=NO"
+  ],
+  "testScope": "14 项定向单元/原生冒烟；新增 9 项校准、1 项异步采样、原生 Metal/WebRTC 及既有音频配置/权限边界",
+  "testProcess": {
+    "pid": 43378,
+    "running": false,
+    "exitCode": 0
+  },
+  "sourceAfter": [
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "f048194b6b550e8acc1cb1f371da1ed6a82b38a549514f836a128be65abbd9f5",
+      "bytes": 95188
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "40c5f828fb5403ca222f0c48d887a61b4889d5c788e5b316454e476d676726a2",
+      "bytes": 76894
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "82b8ed4c618eb48cb0764a15756d8c344a7a74b03415b999482b9aca5e33f957",
+      "bytes": 103438
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "sha256": "d54c9c6addcf2eede08f7ffc224b8e13085b89bf6ef55f6c5836acd0b5b6697e",
+      "bytes": 42847
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "2baa85e110d58c70972f2bae1f1a483d242dd3b45799ff7b88a7afa61c7eef7c",
+      "bytes": 87811
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "dcde22104e68dbbde7cf2230aa2443ec06e88d1036a59c61eaea36ee3c031ca0",
+      "bytes": 21800
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "sha256": "5c77543655214441f0a6a4eecfcd60e08c3fb5fb5bab34a9b274da66eeadf904",
+      "bytes": 18092
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "1a9ab4adf7d788ca9b9fe386e00f6d43e2b49e878f4fd2346cd997b6dacae976",
+      "bytes": 213604
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "bdb0bbf2626e8aee8d86a9dc1defb220d1b5f97e544b986fd16320515b563eed",
+      "bytes": 5548
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "719a369c53f779ddca36c0859966d31eb1405a531188e72a753c4d9539c36b3f",
+      "bytes": 22212
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "sha256": "7184ab6d19df15f3894596996d8be3bef87aecb401c4f92223d835eb3a72de17",
+      "bytes": 21582
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+      "sha256": "69142d2173a70a4b9d106c529d5d95bad596bfbe2d2dd636cab650bef0c7530d",
+      "bytes": 5570
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMediaTiming.swift",
+      "sha256": "ba054b1b1d96fe85df81f51b703981b92a50b807b17597b44799b5eadd6d0ca8",
+      "bytes": 6353
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingVideoColor.swift",
+      "sha256": "f5cab7def503ec0de7a7e7896592bd3e8ce0988130f10b1193952e0edb791bbe",
+      "bytes": 4598
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "3ed41989898b2a7e2d37132ec2ad616370dceed1193fc38efb25a6e688f3dc18",
+      "bytes": 4347
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "01763b0c7b14102546adde685e9baba4b524d39723d252f622075da43b6cd35a",
+      "bytes": 10907
+    }
+  ],
+  "validation": {
+    "iosPassed": 14,
+    "iosFailed": 0,
+    "rustPassed": 15,
+    "rustFailed": 0,
+    "deviceTypecheck": "passed",
+    "swiftFormattedFiles": 12,
+    "sessionBoundary": "passed",
+    "gitDiffCheck": "passed",
+    "sharedCompatibilityPassed": 18,
+    "sharedCompatibilityFailed": 0
+  },
+  "state": "completed",
+  "evidenceFiles": [
+    "README.md",
+    "checks.json",
+    "cleanup.json",
+    "concurrent-changes.diff",
+    "device-typecheck-initial.json",
+    "device-typecheck-initial.log",
+    "device-typecheck.json",
+    "execution-manifest.json",
+    "failure-diagnostics.md",
+    "format.json",
+    "implementation.diff",
+    "ios-run.json",
+    "rust-smoke.json",
+    "rust-smoke.log",
+    "sdk-contract.json",
+    "shared-compatibility.json",
+    "shared-compatibility.log",
+    "smoke-test-cases.log",
+    "validated-sources",
+    "xctest-summary.json",
+    "xctest-tests.json"
+  ],
+  "taskLine": "| 2026-11-26-ios-media-calibration | 修复 iOS 接收统计时序、画面色彩与实际音频输出 | Done | 2026-11-26 | 单窗口完成 RTP 缓冲/解码增量、异步采样、BT.601/709/2020 色彩及声道/路由校准；14 项 iOS 原生/定向、首轮15项Rust及并行改动后18项兼容、真机 SDK 严格类型与格式/边界/diff 通过。长时稳定性接续后续；实机色彩/听感/路由短测由用户验收。证据归档、本轮临时产物清理及模拟器关闭恢复完成。[RFC](rfcs/2026-11-26-ios-media-calibration.md) · [Report](reports/2026-11-26-ios-media-calibration.md) · [证据](../dev-docs/validation/2026-11-26-ios-media-calibration/README.md)。 |",
+  "concurrentChangesAfterValidation": [
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "validatedSHA256": "719a369c53f779ddca36c0859966d31eb1405a531188e72a753c4d9539c36b3f",
+      "currentSHA256": "b3bc961c15c4ae88ef956dc91c10763885cd994c7688015c447fd2495b3f5176",
+      "delta": "--- validated/crates/xbox-streaming/src/session/recovery/supervision.rs\n+++ current/crates/xbox-streaming/src/session/recovery/supervision.rs\n@@ -2,6 +2,11 @@\n use super::observation::{RuntimeMediaCounters, RuntimeWindowAccumulator};\n use super::quality::{RuntimeQualityCompletion, RuntimeQualityDecision, RuntimeQualityState};\n use serde::{Deserialize, Serialize};\n+\n+#[path = \"local_stall.rs\"]\n+mod local_stall;\n+use local_stall::LocalStallState;\n+pub use local_stall::RuntimeLocalStallDecision;\n \n pub const FIRST_FRAME_GUARD_MS: u64 = 4_000;\n pub const SUPERVISION_INTERVAL_MS: u64 = 1_000;\n@@ -56,6 +61,16 @@\n     pub video_generation: u64,\n     pub warmup_until_ms: u64,\n     pub previous_action_at_ms: Option<u64>,\n+    pub previous_action_kind: Option<String>,\n+    pub previous_action_effect: Option<String>,\n+    pub has_presented_media: bool,\n+    pub local_counters: Option<RuntimeMediaCounters>,\n+    pub renderer_generation: Option<u64>,\n+    pub renderer_kind: Option<String>,\n+    pub renderer_submitted_total: Option<u64>,\n+    pub renderer_submit_age_ms: Option<f64>,\n+    pub renderer_present_fps: Option<f64>,\n+    pub renderer_present_coverage_ms: Option<u64>,\n     pub eligible_since_ms: u64,\n     pub short: RuntimeObservationWindow,\n     pub long: RuntimeObservationWindow,\n@@ -88,6 +103,7 @@\n     previous_action_at_ms: Option<u64>,\n     stall_evidence_observed: bool,\n     windows: RuntimeWindowAccumulator,\n+    local_stall: LocalStallState,\n     quality: RuntimeQualityState,\n     connection_started_ms: Option<u64>,\n     connection_last_action_ms: Option<u64>,\n@@ -112,6 +128,7 @@\n     pub media_connection_eligible: bool,\n     pub network_pressure: String,\n     pub probe_effect: Option<RuntimeRecoveryEffect>,\n+    pub local_stall: Option<RuntimeLocalStallDecision>,\n     pub short: RuntimeObservationWindow,\n     pub quality: RuntimeQualityDecision,\n     pub connection_recovery_allowed: bool,\n@@ -136,6 +153,8 @@\n     pub sample_id: Option<String>,\n     pub video_generation: Option<u64>,\n     pub peer_generation: Option<u64>,\n+    pub renderer_generation: Option<u64>,\n+    pub recovery_scope: Option<String>,\n     pub baseline: RuntimeRecoveryBaseline,\n }\n \n@@ -249,6 +268,7 @@\n             media_connection_eligible: false,\n             network_pressure: \"unknown\".into(),\n             probe_effect: None,\n+            local_stall: None,\n             short: RuntimeObservationWindow::default(),\n             quality: RuntimeQualityDecision::default(),\n             connection_recovery_allowed: false,\n@@ -348,6 +368,30 @@\n     let action_cooled = sample\n         .previous_action_at_ms\n         .is_none_or(|last| at.saturating_sub(last) >= STABLE_WINDOW_MS);\n+    let probe_effect = sample\n+        .probe\n+        .as_ref()\n+        .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate));\n+    let mut local_stall = state.local_stall.observe(sample, fresh, duplicate);\n+    if let Some(local) = &mut local_stall {\n+        let effect = probe_effect\n+            .as_ref()\n+            .map(|effect| effect.result.as_str())\n+            .or(sample.previous_action_effect.as_deref());\n+        let upgrade = sample.previous_action_kind.as_deref() == Some(\"keyframeRequest\")\n+            && matches!(effect, Some(\"neutral\" | \"degraded\"))\n+            && sample\n+                .previous_action_at_ms\n+                .is_some_and(|last| at.saturating_sub(last) >= SOFT_WINDOW_MS);\n+        local.eligible =\n+            (action_cooled || upgrade) && (sample.probe.is_none() || probe_effect.is_some());\n+        if upgrade {\n+            local.action = \"playbackRebuild\".into();\n+            local.reason = \"ineffectiveKeyframeUpgrade\".into();\n+        } else if !local.eligible {\n+            local.reason = \"localActionCooldown\".into();\n+        }\n+    }\n     let decode_recovery_eligible = fresh\n         && !duplicate\n         && action_cooled\n@@ -364,19 +408,20 @@\n         && sample.long.received_coverage_ms >= STABLE_WINDOW_MS - 1\n         && sample.long.decode_coverage_ms >= STABLE_WINDOW_MS - 1\n         && sample.long.video_coverage_ms >= STABLE_WINDOW_MS - 1;\n-    let has_inbound_progress = fresh\n-        && !duplicate\n-        && state.stall_evidence_observed\n-        && (sample\n-            .inbound_bytes_total\n-            .zip(state.inbound_bytes)\n-            .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)\n-            || sample\n-                .inbound_video_packet_count_total\n-                .zip(state.inbound_packets)\n-                .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)\n-            || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0\n-            || sample.decode_fps.unwrap_or(0.0) >= 1.0);\n+    let has_inbound_progress = local_stall.is_some()\n+        || (fresh\n+            && !duplicate\n+            && state.stall_evidence_observed\n+            && (sample\n+                .inbound_bytes_total\n+                .zip(state.inbound_bytes)\n+                .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)\n+                || sample\n+                    .inbound_video_packet_count_total\n+                    .zip(state.inbound_packets)\n+                    .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)\n+                || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0\n+                || sample.decode_fps.unwrap_or(0.0) >= 1.0));\n     if fresh && !duplicate {\n         state.sample_id = sample.sample_id.clone();\n         state.sampled_at_ms = Some(at);\n@@ -495,10 +540,8 @@\n             \"unknown\"\n         }\n         .into(),\n-        probe_effect: sample\n-            .probe\n-            .as_ref()\n-            .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate)),\n+        probe_effect,\n+        local_stall,\n         short: sample.short.clone(),\n         quality,\n         connection_recovery_allowed,\n@@ -535,17 +578,38 @@\n     } else {\n         probe.peer_generation == Some(sample.peer_generation)\n     };\n+    let renderer_scope = probe.recovery_scope.as_deref() == Some(\"renderer\");\n     let playback_valid = probe.action != \"playbackRebuild\"\n-        || probe\n-            .video_generation\n-            .is_some_and(|p| sample.video_generation != p);\n+        || (renderer_scope\n+            && probe\n+                .renderer_generation\n+                .is_some_and(|p| sample.renderer_generation.is_some_and(|n| n != p)))\n+        || (!renderer_scope\n+            && probe\n+                .video_generation\n+                .is_some_and(|p| sample.video_generation != p));\n+    let presentation_coverage = if renderer_scope {\n+        sample.renderer_present_coverage_ms.unwrap_or(0)\n+    } else {\n+        sample.short.video_coverage_ms\n+    };\n+    let presentation_fps = if renderer_scope {\n+        sample.renderer_present_fps\n+    } else {\n+        sample.short.video_present_fps_avg\n+    };\n+    let presentation_age = if renderer_scope {\n+        sample.renderer_submit_age_ms\n+    } else {\n+        sample.video_present_age_ms\n+    };\n     let covered = fresh\n         && sample.sample_id != probe.sample_id\n         && sample\n             .sampled_at_ms\n             .is_some_and(|at| at.saturating_sub(SOFT_WINDOW_MS) >= probe.started_at_ms)\n         && sample.short.decode_coverage_ms >= SOFT_WINDOW_MS - 1\n-        && sample.short.video_coverage_ms >= SOFT_WINDOW_MS - 1\n+        && presentation_coverage >= SOFT_WINDOW_MS - 1\n         && peer_valid\n         && playback_valid;\n     if !covered {\n@@ -555,13 +619,13 @@\n     let score = decode.zip(probe.baseline.decode_fps).map(|(n, p)| n - p);\n     let margin = 1.0_f64.max(probe.baseline.decode_fps.unwrap_or(0.0) * 0.1);\n     let new_frames = decode.unwrap_or(0.0) > 0.0\n-        && sample.short.video_present_fps_avg.unwrap_or(0.0) > 0.0\n-        && sample.video_present_age_ms.is_some_and(|n| n < 500.0);\n+        && presentation_fps.unwrap_or(0.0) > 0.0\n+        && presentation_age.is_some_and(|n| n < 500.0);\n     let improved = new_frames\n         && (matches!(probe.action.as_str(), \"reconnect\" | \"playbackRebuild\")\n             || score.is_some_and(|n| n > margin)\n             || probe.baseline.video_fps.is_some_and(|n| n < 1.0)\n-                && sample.short.video_present_fps_avg.unwrap_or(0.0) >= 1.0);\n+                && presentation_fps.unwrap_or(0.0) >= 1.0);\n     Some(RuntimeRecoveryEffect {\n         result: if improved {\n             \"improved\"\n"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "validatedSHA256": "7184ab6d19df15f3894596996d8be3bef87aecb401c4f92223d835eb3a72de17",
+      "currentSHA256": "0f33f302e42b9fee72facbbc1f42133666300e143aa7a2a7707d89a0898be335",
+      "delta": "--- validated/crates/xbox-streaming/src/session/recovery/supervision.test.rs\n+++ current/crates/xbox-streaming/src/session/recovery/supervision.test.rs\n@@ -1,4 +1,146 @@\n use super::*;\n+\n+fn local_sample(at: u64, decoded: u64, submitted: u64) -> RuntimeSupervisionSample {\n+    let mut result = sample(at, if decoded > 0 { 60.0 } else { 0.0 });\n+    result.has_presented_media = true;\n+    result.frame_interval_ms = Some(1000.0 / 60.0);\n+    result.inactivity_elapsed_ms = 0;\n+    result.renderer_kind = Some(\"webgl2\".into());\n+    result.renderer_generation = Some(1);\n+    result.renderer_submitted_total = Some(submitted);\n+    result.renderer_submit_age_ms = Some(at.saturating_sub(20_000) as f64);\n+    result.local_counters = Some(RuntimeMediaCounters {\n+        received: Some(at.saturating_sub(20_000) * 60 / 1_000),\n+        decoded: Some(decoded),\n+        presented: Some(0),\n+        packets_received: Some(at.saturating_sub(20_000)),\n+        packets_lost: None,\n+    });\n+    result\n+}\n+\n+#[test]\n+fn local_stall_recovers_30_and_60_fps_decode_after_two_seconds_of_fresh_supply() {\n+    for interval in [1000.0 / 30.0, 1000.0 / 60.0] {\n+        let mut state = RuntimeSupervisionState::default();\n+        for at in (20_000..=22_000).step_by(1_000) {\n+            let mut input = local_sample(at, 0, 0);\n+            input.frame_interval_ms = Some(interval);\n+            let decision = decide_runtime_supervision(&input, &mut state);\n+            if at < 22_000 {\n+                assert!(decision.local_stall.is_none());\n+            } else {\n+                let local = decision.local_stall.unwrap();\n+                assert!(local.eligible);\n+                assert_eq!(local.domain, \"decode\");\n+                assert_eq!(local.action, \"keyframeRequest\");\n+                assert_eq!(local.age_ms, 2_000);\n+                assert!(!decision.decode_recovery_eligible);\n+                assert!(!decision.media_connection_eligible);\n+            }\n+        }\n+    }\n+}\n+\n+#[test]\n+fn local_stall_separates_renderer_stall_from_sparse_callbacks_and_reset_facts() {\n+    let mut state = RuntimeSupervisionState::default();\n+    for at in (20_000..=22_000).step_by(1_000) {\n+        let decision = decide_runtime_supervision(&local_sample(at, at - 20_000, 0), &mut state);\n+        if at == 22_000 {\n+            let local = decision.local_stall.unwrap();\n+            assert_eq!(local.domain, \"presentation\");\n+            assert_eq!(local.action, \"playbackRebuild\");\n+        }\n+    }\n+    let sparse = local_sample(23_000, 3_000, 60);\n+    assert!(decide_runtime_supervision(&sparse, &mut state)\n+        .local_stall\n+        .is_none());\n+    let mut reset = local_sample(24_000, 0, 0);\n+    reset.video_generation = 2;\n+    assert!(decide_runtime_supervision(&reset, &mut state)\n+        .local_stall\n+        .is_none());\n+    reset.visible = false;\n+    assert!(decide_runtime_supervision(&reset, &mut state)\n+        .local_stall\n+        .is_none());\n+    reset.visible = true;\n+    reset.now_ms = 25_000;\n+    reset.sampled_at_ms = Some(25_000);\n+    reset.sample_id = Some(\"after-visible\".into());\n+    assert!(decide_runtime_supervision(&reset, &mut state)\n+        .local_stall\n+        .is_none());\n+}\n+\n+#[test]\n+fn local_stall_upgrades_an_ineffective_keyframe_once_and_preserves_same_action_cooling() {\n+    let mut state = RuntimeSupervisionState::default();\n+    for at in (20_000..=25_000).step_by(1_000) {\n+        let mut input = local_sample(at, 0, 0);\n+        if at >= 23_000 {\n+            input.previous_action_at_ms = Some(22_000);\n+            input.previous_action_kind = Some(\"keyframeRequest\".into());\n+        }\n+        if at == 25_000 {\n+            input.previous_action_effect = Some(\"neutral\".into());\n+        }\n+        let decision = decide_runtime_supervision(&input, &mut state);\n+        if at == 24_000 {\n+            assert!(!decision.local_stall.unwrap().eligible);\n+        }\n+        if at == 25_000 {\n+            let local = decision.local_stall.unwrap();\n+            assert!(local.eligible);\n+            assert_eq!(local.action, \"playbackRebuild\");\n+        }\n+    }\n+    let mut input = local_sample(26_000, 0, 0);\n+    input.previous_action_at_ms = Some(25_000);\n+    input.previous_action_kind = Some(\"playbackRebuild\".into());\n+    input.previous_action_effect = Some(\"neutral\".into());\n+    assert!(\n+        !decide_runtime_supervision(&input, &mut state)\n+            .local_stall\n+            .unwrap()\n+            .eligible\n+    );\n+}\n+\n+#[test]\n+fn local_stall_renderer_probe_closes_on_new_renderer_submission_with_the_same_video() {\n+    let mut input = local_sample(23_000, 60, 60);\n+    input.renderer_generation = Some(2);\n+    input.renderer_present_fps = Some(60.0);\n+    input.renderer_present_coverage_ms = Some(3_000);\n+    input.renderer_submit_age_ms = Some(20.0);\n+    input.short.video_coverage_ms = 0;\n+    let probe = RuntimeRecoveryProbe {\n+        action: \"playbackRebuild\".into(),\n+        started_at_ms: 20_000,\n+        observe_ms: 3_000,\n+        required_observe_ms: 3_000,\n+        sample_id: Some(\"before-renderer\".into()),\n+        video_generation: Some(1),\n+        peer_generation: Some(1),\n+        renderer_generation: Some(1),\n+        recovery_scope: Some(\"renderer\".into()),\n+        baseline: RuntimeRecoveryBaseline {\n+            decode_fps: Some(60.0),\n+            video_fps: Some(0.0),\n+        },\n+    };\n+    assert_eq!(\n+        evaluate_runtime_recovery_probe(&probe, &input, true)\n+            .unwrap()\n+            .result,\n+        \"improved\"\n+    );\n+    input.renderer_generation = Some(1);\n+    assert!(evaluate_runtime_recovery_probe(&probe, &input, true).is_none());\n+}\n \n fn delay_sample(at: u64, rtt: f64, first: f64, last: f64) -> RuntimeSupervisionSample {\n     let mut result = quality_sample(at, 0.0);\n@@ -327,6 +469,8 @@\n     let mut sample = sample(7_000, 60.0);\n     let probe = RuntimeRecoveryProbe {\n         action: \"keyframeRequest\".into(),\n+        renderer_generation: None,\n+        recovery_scope: None,\n         started_at_ms: 3_000,\n         observe_ms: 3_000,\n         required_observe_ms: 3_000,\n"
+    }
+  ],
+  "sourceCurrentAtClosure": [
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "f048194b6b550e8acc1cb1f371da1ed6a82b38a549514f836a128be65abbd9f5"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "40c5f828fb5403ca222f0c48d887a61b4889d5c788e5b316454e476d676726a2"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "82b8ed4c618eb48cb0764a15756d8c344a7a74b03415b999482b9aca5e33f957"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "sha256": "d54c9c6addcf2eede08f7ffc224b8e13085b89bf6ef55f6c5836acd0b5b6697e"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "2baa85e110d58c70972f2bae1f1a483d242dd3b45799ff7b88a7afa61c7eef7c"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "dcde22104e68dbbde7cf2230aa2443ec06e88d1036a59c61eaea36ee3c031ca0"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "sha256": "5c77543655214441f0a6a4eecfcd60e08c3fb5fb5bab34a9b274da66eeadf904"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "1a9ab4adf7d788ca9b9fe386e00f6d43e2b49e878f4fd2346cd997b6dacae976"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "bdb0bbf2626e8aee8d86a9dc1defb220d1b5f97e544b986fd16320515b563eed"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "b3bc961c15c4ae88ef956dc91c10763885cd994c7688015c447fd2495b3f5176"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.test.rs",
+      "sha256": "0f33f302e42b9fee72facbbc1f42133666300e143aa7a2a7707d89a0898be335"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+      "sha256": "69142d2173a70a4b9d106c529d5d95bad596bfbe2d2dd636cab650bef0c7530d"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMediaTiming.swift",
+      "sha256": "ba054b1b1d96fe85df81f51b703981b92a50b807b17597b44799b5eadd6d0ca8"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingVideoColor.swift",
+      "sha256": "f5cab7def503ec0de7a7e7896592bd3e8ce0988130f10b1193952e0edb791bbe"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "3ed41989898b2a7e2d37132ec2ad616370dceed1193fc38efb25a6e688f3dc18"
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "01763b0c7b14102546adde685e9baba4b524d39723d252f622075da43b6cd35a"
+    }
+  ],
+  "temporaryRootExists": false,
+  "cleanup": "cleanup.json",
+  "cleanupAllocatedBytesRemoved": 694595584,
+  "cleanupObservedFreeDiskDeltaBytes": 409600000,
+  "finalDocumentation": [
+    "docs/rfcs/2026-11-26-ios-media-calibration.md",
+    "docs/reports/2026-11-26-ios-media-calibration.md",
+    "dev-docs/validation/2026-11-26-ios-media-calibration/README.md"
+  ]
+}

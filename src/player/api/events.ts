@@ -1,5 +1,5 @@
 import type { ProcessedVideoFrameMetadata } from '../domain/input'
-import type { PresentedVideoFrameMetadata, StreamStats } from '../domain/media'
+import type { AudioPlaybackObservation, PresentedVideoFrameMetadata, StreamStats } from '../domain/media'
 import type { ChannelMessage } from '../domain/messages'
 import type { IceCandidateLike, SessionState } from '../domain/session'
 import type {
@@ -32,6 +32,7 @@ export interface PlayerEvents {
   /** SR renderer 初始化失败并已回退到标准 webgl2。 */
   'media.superResolutionFallback': { reason: string }
   'media.audioReady': Record<string, never>
+  'media.audioStateChanged': AudioPlaybackObservation
   'media.resourcesObserved': { reason: string, resources: Record<string, unknown> }
   'chat.stateChanged': { capturing: boolean, paused: boolean }
   'error': { error: unknown }

@@ -1,0 +1,64 @@
+{
+  "archivedInputAndCaptureHash": "PASS",
+  "jsonlAndSequence": "PASS",
+  "textureUploadAccounting": "PASS",
+  "rollingUploadTail": "PASS",
+  "finalFrameSupply": "PASS",
+  "readerAndPauseObservations": "PASS",
+  "networkSpikeAndEnding": "PASS",
+  "continuousVisibleScope": "PASS",
+  "archivedJson": "PASS",
+  "textWhitespace": "PASS",
+  "summaryAnalyzer": {
+    "exitCode": 0,
+    "runs": 1,
+    "scope": "继承上轮已完成输出"
+  },
+  "productionHealthAnalyzer": {
+    "exitCode": 0,
+    "runs": 1,
+    "dataGate": "FAIL",
+    "scope": "只读诊断，门限结果按README解释"
+  },
+  "browserBehaviorAnalyzer": {
+    "exitCode": 0,
+    "runs": 1,
+    "behaviorGate": "PASS"
+  },
+  "initialVerificationFailure": {
+    "check": "原件路径哈希",
+    "error": "FileNotFoundError",
+    "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795678668580-1.jsonl",
+    "observation": "应用原日志目录已移除；相关应用与默认临时目录均无新trace",
+    "resolution": "压缩归档冻结输入，核对解压内容与捕获SHA256"
+  },
+  "runtimeSourceEditsThisTask": [],
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-log-analysis-20261126-nyccyqj4",
+  "cleanup": {
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-log-analysis-20261126-nyccyqj4",
+    "removed": true,
+    "removedFileBytes": 4331533,
+    "freeBeforeBytes": 94617600000,
+    "freeAfterBytes": 94617600000,
+    "processCheck": "引用chat即时状态idle；全部分析/冒烟命令已返回，工具会话无待执行进程",
+    "removedFiles": [
+      "browser-behavior.json",
+      "evidence-anchors.json",
+      "facts.json",
+      "manifest.json",
+      "production-health.json",
+      "runtime-trace-1795678668580-1.jsonl",
+      "summary.json"
+    ],
+    "retained": "本证据目录的压缩输入、README和JSON报告；原应用日志目录在核验前已移除"
+  },
+  "gitDiffCheck": {
+    "exitCode": 0,
+    "runs": 1,
+    "scope": [
+      "docs/project-task.md",
+      "dev-docs/validation/2026-11-26-pc-stream-log-analysis"
+    ],
+    "untrackedTextScope": "10项证据冒烟中的textWhitespace覆盖本轮新文本文件"
+  }
+}

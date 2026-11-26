@@ -70,7 +70,7 @@ require_pattern 'session\.superviseRuntime' "$SWIFT_RUNTIME" 'Swift 必须消费
 require_pattern 'control\.supervise' "$SWIFT_ACTOR" '原生恢复动作必须消费公共监督结果'
 require_pattern 'let rawValue: RTCVideoTrack' "$SWIFT_CONTRACTS" '视频轨道必须保留强类型 RTCVideoTrack'
 require_pattern 'StreamingMetalVideoSurfaceView' "$SWIFT_PLAYER" '播放器必须装配自定义 Metal surface'
-require_pattern 'nextTrack\.add\(view\.renderer\)' "$SWIFT_PLAYER" '视频轨道必须接入自定义 renderer'
+require_pattern 'nextTrack\.add\(nextRenderer\)' "$SWIFT_PLAYER" '视频轨道必须接入自定义 renderer'
 reject_pattern 'canImport\((WebRTC|MetalKit)\)|UnavailableStreamingPeerRuntime|webRTCUnavailable' "$SWIFT_STREAMING_DIR" 'iOS 串流必须在构建时满足 WebRTC/Metal 依赖'
 reject_pattern 'rawValue: AnyObject|rawValue as\? RTCVideoTrack|trackTypeMismatch' "$SWIFT_STREAMING_DIR" '视频轨道必须沿强类型原生身份传递'
 reject_pattern 'RTCMTLVideoView|RTCEAGLVideoView|WKWebView|AVSampleBufferDisplayLayer|VTDecompressionSession|import (AVKit|WebKit)|ffmpeg|xbxengine' "$SWIFT_STREAMING_DIR" 'iOS 串流必须沿单一 libwebrtc 解码与自定义 Metal 上屏路径'

@@ -1,0 +1,6 @@
+{
+  "exitCode": 0,
+  "elapsedSeconds": 61.71,
+  "resultBundle": "/private/tmp/xbxrc-ios-media-calibration-r1.i9b4ocug/Smoke.xcresult",
+  "scope": "14 项定向单元/原生冒烟；新增 9 项校准、1 项异步采样、原生 Metal/WebRTC 及既有音频配置/权限边界"
+}

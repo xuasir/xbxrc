@@ -1,0 +1,178 @@
+{
+  "task": "2026-11-26-ios-audio-playout-regression",
+  "date": "2026-11-26",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba",
+  "sourceBefore": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "dcde22104e68dbbde7cf2230aa2443ec06e88d1036a59c61eaea36ee3c031ca0"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "3ed41989898b2a7e2d37132ec2ad616370dceed1193fc38efb25a6e688f3dc18"
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "01763b0c7b14102546adde685e9baba4b524d39723d252f622075da43b6cd35a"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "88df0c5e82f8bde1f2a38480854953a84b9ec26a28ddc0780f99caa44b4738e1"
+    },
+    {
+      "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+      "sha256": "898af397a2906b7e5147dc4216f4f04d6375a29041546be10f69ff589ed51788"
+    },
+    {
+      "path": "docs/project-task.md",
+      "sha256": "e33e5535684095a1185f6acd9957dfc3ea8bd8fee8c63b932784665f8b849b77"
+    }
+  ],
+  "temporaryArtifacts": [
+    "AudioSmoke.xcresult",
+    "DerivedData",
+    "SourcePackages",
+    "audio-smoke.log",
+    "baseline",
+    "fetch-upstream.py",
+    "run-audio-smoke.py",
+    "swift-format.json",
+    "upstream"
+  ],
+  "scope": "接续用户声音撕裂/慢放/延迟回归，恢复默认 ADM 配置并移除播放期重配置；保留观测及其他串流修复",
+  "sharedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+  "sharedRustCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios",
+  "traceInput": "现有仓库 iOS traces 截止 2026-11-23；本轮真实症状暂无新 trace",
+  "userRoute": "扬声器，麦克风关闭",
+  "simulator": {
+    "udid": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "name": "iPhone 18 Pro",
+    "runtime": "iOS 27.2",
+    "initialState": "Shutdown",
+    "authorization": "本对话已明确允许启动同一模拟器做串流定向测试；接续音频回归验证",
+    "finalState": "Shutdown"
+  },
+  "sourceBeforeTests": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "672138656228bd3091254f2d12d654cf7d66b8c261ff4475f3d6beaeed7ba87a"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "54f65d84073c11d61003df73fff54647ebfcc5a87cd861d2a4299273d2c7ae17"
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "9aa89311354eae9bda0550ee7a5a9f603d730366e0920254ff8aa5c112c20d62"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "d6e96683deab25f4f239c4231b6ed93cd03953e920a642d8e238f1dbf9da3de6"
+    }
+  ],
+  "testCommand": [
+    "xcodebuild",
+    "test",
+    "-project",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-destination",
+    "platform=iOS Simulator,id=BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "-destination-timeout",
+    "30",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/SourcePackages",
+    "-resultBundlePath",
+    "/private/tmp/xbxrc-ios-audio-regression-r1.nece5dba/AudioSmoke.xcresult",
+    "-disableAutomaticPackageResolution",
+    "-skipPackageUpdates",
+    "-parallel-testing-enabled",
+    "NO",
+    "-enableCodeCoverage",
+    "NO",
+    "-only-testing:XBXRCTests/StreamingMediaCalibrationTests/testAudioPreferencesKeepDefaultADMFormatAcrossStereoAndRoutes",
+    "-only-testing:XBXRCTests/StreamingMediaCalibrationTests/testAudioConfigurationsKeepDefaultPCMAndBufferWithStereoNegotiation",
+    "-only-testing:XBXRCTests/StreamingMediaCalibrationTests/testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio",
+    "-only-testing:XBXRCTests/StreamingMediaCalibrationTests/testNativeNegotiationAndHealthyRouteOnlyUpdateObservations",
+    "-only-testing:XBXRCTests/XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+    "CODE_SIGNING_ALLOWED=NO"
+  ],
+  "testProcess": {
+    "pid": 76327,
+    "running": false,
+    "exitCode": 0
+  },
+  "sourceAfter": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "672138656228bd3091254f2d12d654cf7d66b8c261ff4475f3d6beaeed7ba87a"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "54f65d84073c11d61003df73fff54647ebfcc5a87cd861d2a4299273d2c7ae17"
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "9aa89311354eae9bda0550ee7a5a9f603d730366e0920254ff8aa5c112c20d62"
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "d6e96683deab25f4f239c4231b6ed93cd03953e920a642d8e238f1dbf9da3de6"
+    }
+  ],
+  "validation": {
+    "nativeAudioTestsPassed": 6,
+    "nativeAudioTestsFailed": 0,
+    "wholeSimulatorProjectBuild": "passed",
+    "sessionBoundary": "passed",
+    "swiftFormatFiles": 4
+  },
+  "finalDocuments": [
+    "docs/rfcs/2026-11-26-ios-media-calibration.md",
+    "docs/reports/2026-11-26-ios-media-calibration.md",
+    "dev-docs/validation/2026-11-26-ios-audio-playout-regression/README.md"
+  ],
+  "state": "completed",
+  "sourceAtClosure": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "672138656228bd3091254f2d12d654cf7d66b8c261ff4475f3d6beaeed7ba87a",
+      "matchesValidated": true
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+      "sha256": "54f65d84073c11d61003df73fff54647ebfcc5a87cd861d2a4299273d2c7ae17",
+      "matchesValidated": true
+    },
+    {
+      "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+      "sha256": "9aa89311354eae9bda0550ee7a5a9f603d730366e0920254ff8aa5c112c20d62",
+      "matchesValidated": true
+    },
+    {
+      "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+      "sha256": "d6e96683deab25f4f239c4231b6ed93cd03953e920a642d8e238f1dbf9da3de6",
+      "matchesValidated": true
+    }
+  ],
+  "temporaryRootExists": false,
+  "cleanup": "cleanup.json",
+  "evidenceFiles": [
+    "README.md",
+    "audio-run.json",
+    "audio-test-cases.log",
+    "audio-test-summary.json",
+    "audio-tests.json",
+    "checks.json",
+    "cleanup.json",
+    "execution-manifest.json",
+    "format.json",
+    "implementation.diff",
+    "upstream-contract.json"
+  ],
+  "taskLine": "| 2026-11-26-ios-audio-playout-regression | 修复 iOS 音频校准后的撕裂、慢放与延迟回归 | Done | 2026-11-26 | simple接续；扬声器/Mic关闭回归，按固定M137源码恢复单声道PCM、默认20ms首选I/O，协商/健康路由只更新观测；保留生命周期恢复和其他修复。6项音频XCTest、整工程编译、范围格式/边界/diff通过，证据与临时清理完成；重新构建重启后接续实机听感验收。[证据](../dev-docs/validation/2026-11-26-ios-audio-playout-regression/README.md)。 |"
+}

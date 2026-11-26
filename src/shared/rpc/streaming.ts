@@ -421,6 +421,16 @@ export interface StreamingRuntimeSupervisionSample {
   videoGeneration: number
   warmupUntilMs: number
   previousActionAtMs?: number
+  previousActionKind?: 'keyframeRequest' | 'playbackRebuild' | 'reconnect'
+  previousActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  hasPresentedMedia?: boolean
+  localCounters?: { received?: number, decoded?: number, presented?: number, packetsReceived?: number }
+  rendererGeneration?: number
+  rendererKind?: string
+  rendererSubmittedTotal?: number
+  rendererSubmitAgeMs?: number
+  rendererPresentFps?: number
+  rendererPresentCoverageMs?: number
   eligibleSinceMs: number
   short: StreamingRuntimeObservationWindow
   long: StreamingRuntimeObservationWindow
@@ -438,6 +448,8 @@ export interface StreamingRuntimeSupervisionSample {
     sampleId?: string
     videoGeneration?: number
     peerGeneration?: number
+    rendererGeneration?: number
+    recoveryScope?: 'renderer'
     baseline: { decodeFps?: number, videoFps?: number }
   }
 }
@@ -453,11 +465,21 @@ export interface StreamingRuntimeSupervisionDecision {
   mediaConnectionEligible: boolean
   networkPressure: 'stable' | 'warning' | 'congested' | 'unknown'
   probeEffect?: { result: 'improved' | 'neutral' | 'degraded' | 'unknown', reason: string, score?: number | null } | null
+  localStall?: {
+    domain: 'decode' | 'presentation'
+    action: 'keyframeRequest' | 'playbackRebuild'
+    ageMs: number
+    coverageMs: number
+    eligible: boolean
+    reason: string
+  } | null
   quality?: {
     state: 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
     reason: string
     rttBaselineMs?: number | null
     rttDeltaMs?: number | null
+    bufferDelayMs?: number | null
+    bufferGrowthMs?: number | null
     effect?: 'improved' | 'neutral' | 'degraded' | 'unknown' | null
     action?: { id: number, level: number, reason: string } | null
   }

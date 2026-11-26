@@ -69,7 +69,7 @@ struct StreamingMetricsSampler {
             submittedFps: displayRate(
                 diagnostics.displayHealth?.submitCount, previous.display?.submitCount),
             presentedFps: displayRate(
-                diagnostics.displayHealth?.presentCount, previous.display?.presentCount),
+                diagnostics.displayHealth?.displayedCount, previous.display?.displayedCount),
             totalBitrateBps: audioRate.flatMap { audio in videoRate.map { (audio + $0) * 8 } },
             packetLossPercent: loss)
         return latest
@@ -172,6 +172,14 @@ struct StreamingDiagnosticsModel {
                     "jitter", "网络抖动",
                     fresh ? duration(stats?.jitterSeconds.map { $0 * 1_000 }) : "--"),
                 row("packetLoss", "近 5 秒丢包", packetLoss),
+                row(
+                    "jitterBuffer", "视频接收缓冲",
+                    fresh ? duration(stats?.videoTiming.jitterBufferMilliseconds) : "--"),
+                row(
+                    "jitterBufferTarget", "接收缓冲目标 / 最低",
+                    fresh
+                        ? "\(duration(stats?.videoTiming.jitterBufferTargetMilliseconds)) / \(duration(stats?.videoTiming.jitterBufferMinimumMilliseconds))"
+                        : "--"),
                 row("qualityObserved", "实际视频码率", videoBitrate),
                 row(
                     "qualityRequested", "请求码率上限",
@@ -206,6 +214,9 @@ struct StreamingDiagnosticsModel {
                     "videoAdvancementFps", "视频推进 / 秒",
                     fresh ? decimal(diagnostics.metrics.presentedFps) : "--"),
                 row("sourceSize", "实际源尺寸", resolution),
+                row(
+                    "decodeTime", "单帧解码耗时",
+                    fresh ? duration(stats?.videoTiming.decodeMilliseconds) : "--"),
                 row(
                     "outputSize", "实际输出尺寸",
                     fresh
@@ -273,6 +284,16 @@ struct StreamingDiagnosticsModel {
                 row("observation", "观测 / 样本", observation),
                 row("sampleAge", "采样距今", age(diagnostics.metrics.sampledAtMilliseconds)),
                 row("audioLifecycle", "音频状态", diagnostics.audioLifecycleState ?? "--"),
+                row(
+                    "audioChannels", "音频协商 / 实际声道",
+                    diagnostics.audioOutput.map {
+                        "\($0.negotiatedChannels) / \($0.actualChannels)"
+                    } ?? "--"),
+                row(
+                    "audioOutputLatency", "音频输出 / I/O 缓冲",
+                    diagnostics.audioOutput.map {
+                        "\(duration($0.outputLatencyMilliseconds)) / \(duration($0.ioBufferMilliseconds))"
+                    } ?? "--"),
                 row("audioRoute", "音频路由", diagnostics.audioRoute ?? "--"),
                 row(
                     "handshake", "通道握手",

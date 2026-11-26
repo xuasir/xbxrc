@@ -47,7 +47,7 @@ enum IOSStreamStickTransform {
     }
 }
 
-/// 触屏、实体手柄与菜单共用既有 DataChannel 输出，热路径在 MainActor 上采样。
+/// MainActor 管理触点与设置预览；生产采样和网络发送交给 InputQueue。
 @MainActor
 final class StreamInputSession: ObservableObject {
     var onTouchLayoutCommand: ((XboxStreamTouchLayoutCommand) -> Void)?
@@ -69,11 +69,14 @@ final class StreamInputSession: ObservableObject {
     private let controllerProvider: @MainActor () -> GCController?
     private var virtualState = IOSStreamGamepadState.neutral
     private var activeTouches: Set<String> = []
-    private var requiresNeutral = false
+    private var previewCore = StreamInputCore()
+    private var worker: StreamingInputWorker?
+    private var workerConfigurationTask: Task<Void, Never>?
+    private var workerConfiguration: InputConfigurationSnapshot?
+    private var configurationRevision: UInt64 = 0
+    private var touchSequence: UInt64 = 0
     private var pendingTouchNeutralFrame = false
     private var suppressionReasons: Set<StreamInputSuppressionReason> = []
-    private var shortcuts = MobileShortcutMatcher()
-    private var lastShortcutPreferences: MobilePreferences?
     private weak var lastController: GCController?
     private weak var cachedLayoutController: GCController?
     private var cachedLayoutKey = ""
@@ -127,8 +130,8 @@ final class StreamInputSession: ObservableObject {
         selectedController = availableControllers.first { Self.controllerID($0) == id }
         selectedControllerID = selectedController == nil ? "auto" : id
         releaseTouches()
-        requiresNeutral = true
-        shortcuts.reset()
+        previewCore.barrier(epoch: 0, suppressed: isSuppressed, reason: "deviceChanged")
+        worker?.barrier(suppressed: isSuppressed, reason: "deviceChanged")
         refreshDeviceStatus()
     }
     static func controllerID(_ controller: GCController) -> String {
@@ -236,64 +239,146 @@ final class StreamInputSession: ObservableObject {
             snapshot.mapped(using: preferences), preferences: preferences)
     }
 
+    /// 设置页与合同测试的同步预览入口，生产发送直接消费 worker 的 Core。
     func outputState(now: Double) -> IOSStreamGamepadState {
         let snapshot = controllerSnapshot()
-        let controller = snapshot.controller
-        if lastController !== controller {
-            lastController = controller
+        if lastController !== snapshot.controller {
+            lastController = snapshot.controller
             releaseTouches()
-            requiresNeutral = true
-            shortcuts.reset()
-            refreshDeviceStatus()
+            previewCore.barrier(epoch: 0, suppressed: isSuppressed, reason: "deviceChanged")
         }
-        let preferences = self.preferences
-        if let previous = lastShortcutPreferences,
-            previous.shortcutButtons(for: .menu) != preferences.shortcutButtons(for: .menu)
-                || previous.diagnosticsButtons != preferences.diagnosticsButtons
-                || previous.menuHoldDuration != preferences.menuHoldDuration
-                || previous.gamepadBindings != preferences.gamepadBindings
-        {
-            shortcuts.reset()
-            requiresNeutral = true
-        }
-        lastShortcutPreferences = preferences
-        let rawPhysical = snapshot.raw
-        let mapped = snapshot.mapped(using: preferences)
-        let physical = IOSStreamStickTransform.apply(mapped, preferences: preferences)
-        guard !isSuppressed else { return .neutral }
+        let config = InputConfigurationSnapshot(
+            revision: 0, preferences: preferences,
+            controllerID: snapshot.controller.map(Self.controllerID), layoutKey: snapshot.layoutKey)
+        previewCore.configure(config, at: now)
+        previewCore.sampleController(
+            .init(
+                raw: snapshot.raw, buttons: snapshot.buttons,
+                axes: snapshot.axes, connected: snapshot.controller != nil), at: now)
+        touchSequence &+= 1
+        previewCore.consumeTouch(
+            .init(
+                sourceID: "preview", sequence: touchSequence, inputEpoch: 0,
+                transitions: [], finalState: virtualState, sourceActive: !activeTouches.isEmpty),
+            at: now)
+        if let action = previewCore.takeShortcutAction() { revealShortcut(action) }
+        updateSource(previewCore.source)
+        let candidate = previewCore.candidate(at: now)
+        previewCore.accepted(candidate)
         if pendingTouchNeutralFrame {
             pendingTouchNeutralFrame = false
             return .neutral
         }
-        if requiresNeutral {
-            guard snapshot.buttons.values.allSatisfy({ $0 <= 0.5 }),
-                MobileShortcutButton.allCases.allSatisfy({ !$0.isPressed(in: mapped) }),
-                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: rawPhysical)) <= 0.15 }),
-                MobileControlAxis.allCases.allSatisfy({ abs($0.value(in: mapped)) <= 0.15 })
-            else { return .neutral }
-            requiresNeutral = false
+        if candidate.barrier { return .neutral }
+        while previewCore.snapshot.pendingEdges > 0 {
+            previewCore.accepted(previewCore.candidate(at: now))
         }
-        let shortcut = shortcuts.sample(mapped, preferences: preferences, now: now)
-        if let action = shortcut.action {
-            switch action {
-            case .menu: menuRevealToken &+= 1
-            case .diagnostics: diagnosticsRevealToken &+= 1
+        return previewCore.snapshot.state
+    }
+
+    func bindWorker(_ value: StreamingInputWorker) {
+        if let previous = worker, previous !== value { previous.stop() }
+        workerConfigurationTask?.cancel()
+        worker = value
+        workerConfiguration = nil
+        refreshWorkerConfiguration()
+        value.barrier(suppressed: isSuppressed, reason: "inputAttached")
+        workerConfigurationTask = Task { @MainActor [weak self, weak value] in
+            while !Task.isCancelled {
+                guard let self, let value, self.worker === value else { return }
+                self.refreshWorkerConfiguration()
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
-        if shortcut.captured { return .neutral }
-        let raw: IOSStreamGamepadState
-        if physical != .neutral {
-            updateSource(.controller)
-            raw = physical
-        } else if !activeTouches.isEmpty {
-            updateSource(.touch)
-            raw = virtualState
-        } else {
-            updateSource(controller == nil ? .idle : .controller)
-            raw = .neutral
+    }
+
+    func unbindWorker(_ value: StreamingInputWorker) {
+        guard worker === value else { return }
+        workerConfigurationTask?.cancel()
+        workerConfigurationTask = nil
+        worker = nil
+        workerConfiguration = nil
+    }
+
+    private func refreshWorkerConfiguration() {
+        guard let worker else { return }
+        let controller = currentController
+        let prefs = preferences
+        let id = controller.map(Self.controllerID)
+        guard
+            workerConfiguration?.controllerID != id || workerConfiguration?.preferences != prefs
+                || workerConfiguration == nil
+        else { return }
+        configurationRevision &+= 1
+        let snapshot = InputConfigurationSnapshot(
+            revision: configurationRevision,
+            preferences: prefs, controllerID: id, layoutKey: layoutKey(for: controller))
+        if workerConfiguration != nil {
+            worker.barrier(suppressed: isSuppressed, reason: "configurationChanged")
         }
-        return source == .controller
-            ? raw : IOSStreamStickTransform.apply(raw, preferences: preferences)
+        workerConfiguration = snapshot
+        worker.configure(
+            snapshot, controller: controller.map { StreamingControllerLease(controller: $0) })
+        refreshDeviceStatus()
+    }
+
+    func receiveWorkerEvent(_ event: StreamingInputWorkerEvent) {
+        switch event {
+        case .state(let snapshot):
+            updateSource(snapshot.source)
+            if liveState != snapshot.state { liveState = snapshot.state }
+        case .shortcut(let action): revealShortcut(action)
+        default: break
+        }
+    }
+
+    private func revealShortcut(_ action: MobileShortcutTarget) {
+        switch action {
+        case .menu: menuRevealToken &+= 1
+        case .diagnostics: diagnosticsRevealToken &+= 1
+        }
+    }
+
+    func submitTouchLayoutFrame(_ frame: TouchInputFrame) {
+        guard !isSuppressed else { return }
+        virtualState = frame.gamepad
+        if frame.pointerCount > 0 || frame.gamepad != .neutral {
+            activeTouches.insert("layout")
+        } else {
+            activeTouches.remove("layout")
+        }
+        touchSequence &+= 1
+        let transitions = frame.transitions.enumerated().map { index, transition in
+            InputSampleTransition(
+                state: IOSStreamGamepadState(
+                    buttonMask: transition.buttonMask,
+                    leftThumbX: transition.leftThumbX, leftThumbY: transition.leftThumbY,
+                    rightThumbX: transition.rightThumbX, rightThumbY: transition.rightThumbY,
+                    leftTrigger: transition.leftTrigger, rightTrigger: transition.rightTrigger),
+                collectedAtMs: (frame.transitionTimestamps.indices.contains(index)
+                    ? frame.transitionTimestamps[index] : frame.stateCompletedTimestamp) * 1_000,
+                sourceActive: transition.sourceActive ?? (transition.buttonMask != 0))
+        }
+        worker?.submit(
+            .init(
+                sourceID: "touch", sequence: touchSequence,
+                inputEpoch: worker?.inputFence.current ?? 0, transitions: transitions,
+                finalState: frame.gamepad, sourceActive: frame.pointerCount > 0))
+    }
+
+    private func publishTouchState() {
+        touchSequence &+= 1
+        let now = StreamingFrameFeedbackClock.nowMilliseconds
+        worker?.submit(
+            .init(
+                sourceID: "touch", sequence: touchSequence,
+                inputEpoch: worker?.inputFence.current ?? 0,
+                transitions: [
+                    .init(
+                        state: virtualState, collectedAtMs: now,
+                        sourceActive: !activeTouches.isEmpty)
+                ],
+                finalState: virtualState, sourceActive: !activeTouches.isEmpty))
     }
 
     private func updateSource(_ value: StreamInputSource) {
@@ -305,10 +390,12 @@ final class StreamInputSession: ObservableObject {
         let suppressed = !suppressionReasons.isEmpty
         guard suppressed != isSuppressed else { return }
         isSuppressed = suppressed
+        previewCore.barrier(epoch: 0, suppressed: suppressed, reason: "suppressionChanged")
+        worker?.barrier(suppressed: suppressed, reason: "suppressionChanged")
         releaseTouches()
-        requiresNeutral = true
+        previewCore.barrier(epoch: 0, suppressed: isSuppressed, reason: "deviceChanged")
+        worker?.barrier(suppressed: isSuppressed, reason: "deviceChanged")
         pendingTouchNeutralFrame = true
-        shortcuts.reset()
     }
 
     func setTouchButton(_ mask: UInt16, pressed: Bool, id: String) {
@@ -320,6 +407,7 @@ final class StreamInputSession: ObservableObject {
             activeTouches.remove(id)
             virtualState.buttonMask &= ~mask
         }
+        publishTouchState()
     }
 
     func setTouchTrigger(left: Bool, pressed: Bool) {
@@ -331,6 +419,7 @@ final class StreamInputSession: ObservableObject {
         } else {
             virtualState.rightTrigger = pressed ? 1 : 0
         }
+        publishTouchState()
     }
 
     func setTouchStick(left: Bool, x: Float, y: Float, active: Bool) {
@@ -344,14 +433,17 @@ final class StreamInputSession: ObservableObject {
             virtualState.rightThumbX = active ? x : 0
             virtualState.rightThumbY = active ? y : 0
         }
+        publishTouchState()
     }
 
     func releaseTouches() {
         virtualState = .neutral
         activeTouches.removeAll()
+        publishTouchState()
     }
 
     func releaseTouchesForLayoutChange() {
+        worker?.barrier(suppressed: isSuppressed, reason: "layoutChanged")
         releaseTouches()
         // 唯一采样出口先发 neutral，紧接着的新触点保持自己的完整生命周期。
         pendingTouchNeutralFrame = true
@@ -365,6 +457,7 @@ final class StreamInputSession: ObservableObject {
         } else {
             activeTouches.remove("layout")
         }
+        publishTouchState()
     }
 
     func reset() {
@@ -372,9 +465,8 @@ final class StreamInputSession: ObservableObject {
         pendingTouchNeutralFrame = false
         suppressionReasons.removeAll()
         isSuppressed = false
-        requiresNeutral = true
-        shortcuts.reset()
-        lastShortcutPreferences = nil
+        previewCore.barrier(epoch: 0, suppressed: isSuppressed, reason: "deviceChanged")
+        worker?.barrier(suppressed: isSuppressed, reason: "deviceChanged")
         source = .idle
     }
 

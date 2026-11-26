@@ -1,0 +1,250 @@
+{
+  "taskId": "2026-11-26-android-native-technical-plan",
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "scope": "Android 原生端基础技术方案",
+  "baseline": {
+    "branch": "main",
+    "head": "37e4fb434039d38062d08e0cf2c9a8030d33b8f8",
+    "status": [
+      "A  dev-docs/validation/2026-11-26-pc-video-texture-reuse/README.md",
+      "A  dev-docs/validation/2026-11-26-pc-video-texture-reuse/checks.json",
+      "A  dev-docs/validation/2026-11-26-pc-video-texture-reuse/initial-failure-summary.json",
+      "A  dev-docs/validation/2026-11-26-pc-video-texture-reuse/renderer-smoke-summary.json",
+      "M  docs/project-task.md",
+      "M  src/player/infra/render/renderer-scheduling.test.ts"
+    ],
+    "ledgerSHA256": "3259efb13e6b8ee59e43a2d8c4fde25ab2922434fe4fdb145976bbd79687eb54",
+    "ledgerIndexSHA256": "3259efb13e6b8ee59e43a2d8c4fde25ab2922434fe4fdb145976bbd79687eb54",
+    "indexSHA256": "92f7c115eb719ce4016019599c4290a695b0e1f6590756e222e02d0fb56a71b8"
+  },
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "fcf94df66e4119e5401fc337b96dbf9ebb95dd0fb0904c95f745ef70326c8bd0"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "22451a5eacd663f7fbe535965a21bfdc1b40bbbcafdc702b92c2ab020cac4d25"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/Cargo.toml",
+      "sha256": "e6324e210398d932570a7a5b97e3fe03a81c818fee041f478c7ad54646811b5b"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/lib.rs",
+      "sha256": "1d12309417fa6f5e10cf75f3e0393a7e11eba0d377d242ccd0364f861f377cd2"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/auth_session.rs",
+      "sha256": "31d4883e9666844f44118483fd6e1dbc6129674f144899debaf998fb0aca7fc8"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/streaming.rs",
+      "sha256": "ce7e5f20f6d1e27500ed283d4934a45cc230b1d39a5f88e85982fd399423596b"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/mod.rs",
+      "sha256": "820d95dbbc5fbcc0de741ff45d0c50f0535005562c77d8bc54e4714d21926c12"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/runtime.rs",
+      "sha256": "58fb524bc031b487ad99aeadab6496e73bd15c92cd8c658adc81f5405ea646f9"
+    },
+    {
+      "path": "crates/xbox-ios-bridge/examples/uniffi-bindgen.rs",
+      "sha256": "3126094bda55df048f682c39ffedf911a6579c3af0b172b86422edc66319e73c"
+    },
+    {
+      "path": "crates/xbox-streaming-protocol/src/stream_data_channel.rs",
+      "sha256": "2c22c03cffc10482afb549d4889567441b3a9381b9774e9d9c3b7022b23b17c4"
+    },
+    {
+      "path": "iosapp/DESIGN.md",
+      "sha256": "f64e99ba046abe67b3117d08301d02cb59188a4b521252dd02cf296d0d46457e"
+    },
+    {
+      "path": "iosapp/README.md",
+      "sha256": "653ac79c2a241dfe3fc47782e69566c82459e1ea270d1244b40c5f7df96d27b9"
+    },
+    {
+      "path": "iosapp/Packages/WebRTC/artifact-manifest.json",
+      "sha256": "050718cb8982642034751c868e348935545cf98a2caf09a82e9d9fd26c86f188"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "5b7ff17cbeff66dbde5ce21e06b2392b0b2b323982492ca80e45c3a0dfaeff96"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+      "sha256": "005d9a44f9bd70aea1376993530bce22bc09ee68665990d5ca599c69370f44f6"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift",
+      "sha256": "0bbf0c6e0d98c9996e60ca7eaf557cf0f6ca92c70d6b34406318d6e2a1c2252d"
+    },
+    {
+      "path": "docs/isu/2026-11-26-ios-to-android-feasibility.md",
+      "sha256": "ba984283272ae4b2bc3deec016163efe5e8c653b8dd7829b6aeb8e5f6ee71a50"
+    }
+  ],
+  "existingChangedFiles": [
+    {
+      "path": "dev-docs/validation/2026-11-26-pc-video-texture-reuse/README.md",
+      "status": "A ",
+      "sha256": "931e8223285a5290483b631aba1f789c100a0bb684d34e17ade8834abc536356"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-26-pc-video-texture-reuse/checks.json",
+      "status": "A ",
+      "sha256": "324b2b6a563280565b6d4130ec2e240c31d619cae2c54dc0b323ab5aae2a6dbb"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-26-pc-video-texture-reuse/initial-failure-summary.json",
+      "status": "A ",
+      "sha256": "a20504ccf46a4c82c4d3682780a1c2ecb90e7be3f5b45e76f8f658974d3396e1"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-26-pc-video-texture-reuse/renderer-smoke-summary.json",
+      "status": "A ",
+      "sha256": "0fc13041880629e95c51e2ae228cbd549eed7617cd1b296385e6091ddc77aeeb"
+    },
+    {
+      "path": "docs/project-task.md",
+      "status": "M ",
+      "sha256": "3259efb13e6b8ee59e43a2d8c4fde25ab2922434fe4fdb145976bbd79687eb54"
+    },
+    {
+      "path": "src/player/infra/render/renderer-scheduling.test.ts",
+      "status": "M ",
+      "sha256": "3f054570b4b958e155cad712dc39b96ab9428244544272c32f03f8c93d51b664"
+    }
+  ],
+  "artifacts": [
+    "docs/rfcs/2026-11-26-android-native-technical-plan.md",
+    "docs/reports/2026-11-26-android-native-technical-plan.md",
+    "dev-docs/validation/2026-11-26-android-native-technical-plan/README.md",
+    "dev-docs/validation/2026-11-26-android-native-technical-plan/checks.json"
+  ],
+  "changedLedger": "docs/project-task.md",
+  "planState": "completed",
+  "implementationState": "planned",
+  "inspectedToolCapability": "cargo rustc --help 支持 --lib 与 --crate-type，Android 可在构建阶段指定 cdylib。",
+  "verification": {
+    "recordedAtUTC": "2026-11-26T07:53:16.757209+00:00",
+    "checks": {
+      "rfcStructure": {
+        "passed": true,
+        "codeFencesPaired": true
+      },
+      "scopeStates": {
+        "passed": true
+      },
+      "localLinks": {
+        "count": 20,
+        "missing": [],
+        "passed": true
+      },
+      "existingApiNames": {
+        "count": 19,
+        "missing": [],
+        "passed": true
+      },
+      "sourceSnapshot": {
+        "count": 17,
+        "changes": [],
+        "passed": true
+      },
+      "existingChangedFileContents": {
+        "changes": [],
+        "passed": true
+      },
+      "ledgerExistingRows": {
+        "passed": true,
+        "concurrentIndependentRowsPreserved": [
+          {
+            "taskId": "2026-11-26-pc-stream-log-analysis",
+            "row": "| 2026-11-26-pc-stream-log-analysis | 分析纹理上传优化后的最新 PC 串流日志 | In Progress | 2026-11-26 | simple只读；接续最新 Browser 实机 trace，按前台/隐藏与 worker 代际核对上传路径、网络、恢复、帧供给和提交长尾，归档证据并清理中断任务的临时快照。 |"
+          }
+        ],
+        "policy": "task-merge-guard：保留不同任务的独立新增记录。"
+      },
+      "singleCompletedPlanTask": {
+        "count": 1,
+        "passed": true
+      },
+      "gitIndexPreserved": {
+        "passed": true
+      },
+      "ledgerIndexPreserved": {
+        "passed": true
+      },
+      "otherWorktreeStatus": {
+        "passed": true
+      },
+      "gitHeadPreserved": {
+        "passed": true
+      },
+      "artifactsExist": {
+        "passed": true
+      }
+    },
+    "diffChecks": [
+      {
+        "path": "docs/rfcs/2026-11-26-android-native-technical-plan.md",
+        "passed": true,
+        "output": ""
+      },
+      {
+        "path": "docs/reports/2026-11-26-android-native-technical-plan.md",
+        "passed": true,
+        "output": ""
+      },
+      {
+        "path": "dev-docs/validation/2026-11-26-android-native-technical-plan/README.md",
+        "passed": true,
+        "output": ""
+      },
+      {
+        "path": "dev-docs/validation/2026-11-26-android-native-technical-plan/checks.json",
+        "passed": true,
+        "output": ""
+      },
+      {
+        "path": "docs/project-task.md",
+        "passed": true,
+        "output": ""
+      }
+    ],
+    "passed": true,
+    "initialFailures": [
+      "ledgerExistingRows",
+      "docs/rfcs/2026-11-26-android-native-technical-plan.md",
+      "docs/reports/2026-11-26-android-native-technical-plan.md",
+      "dev-docs/validation/2026-11-26-android-native-technical-plan/README.md"
+    ],
+    "initialRecordedAtUTC": "2026-11-26T07:53:16.757209+00:00",
+    "focusedRecheck": {
+      "recordedAtUTC": "2026-11-26T07:55:23.024413+00:00",
+      "checks": [
+        "ledgerExistingRows",
+        "docs/rfcs/2026-11-26-android-native-technical-plan.md",
+        "docs/reports/2026-11-26-android-native-technical-plan.md",
+        "dev-docs/validation/2026-11-26-android-native-technical-plan/README.md"
+      ],
+      "fullChecksRepeated": false
+    }
+  },
+  "cleanup": {
+    "temporaryPathsCreated": [],
+    "temporaryFilesCreated": 0,
+    "buildOrDeviceProcessesStarted": 0,
+    "retainedArtifacts": [
+      "docs/rfcs/2026-11-26-android-native-technical-plan.md",
+      "docs/reports/2026-11-26-android-native-technical-plan.md",
+      "dev-docs/validation/2026-11-26-android-native-technical-plan/README.md",
+      "dev-docs/validation/2026-11-26-android-native-technical-plan/checks.json"
+    ],
+    "availableDiskBytes": 92979200000
+  }
+}

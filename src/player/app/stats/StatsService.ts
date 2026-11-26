@@ -1,9 +1,10 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
-import type { PresentedVideoFrameMetadata, StreamStats } from '../../domain/media'
+import type { AudioPlaybackObservation, PresentedVideoFrameMetadata, StreamStats } from '../../domain/media'
 import type {
   BrowserWebRtcCandidatePairSample,
   BrowserWebRtcCodecSample,
   BrowserWebRtcIceCandidateSample,
+  BrowserWebRtcInboundAudioSample,
   BrowserWebRtcInboundVideoSample,
   BrowserWebRtcStatsSample,
   BrowserWebRtcTimelineEvent,
@@ -12,7 +13,9 @@ import type {
   InputPacketStats,
 } from '../../domain/stats'
 import type { RendererObservationSnapshot } from '../../infra/render/render-observation'
+import { buildAudioStatsDelta, summarizeAudioStats } from './audio-stats'
 import { BrowserStatsProjection } from './browser-stats'
+import { rendererSubmitAge } from './renderer-submit-age'
 
 interface InboundVideoRtpStat extends RTCStats {
   type: 'inbound-rtp'
@@ -67,6 +70,11 @@ interface InboundVideoRtpStat extends RTCStats {
   frameHeight?: number
 }
 
+interface InboundAudioRtpStat extends RTCStats, BrowserWebRtcInboundAudioSample {
+  type: 'inbound-rtp'
+  kind: 'audio'
+}
+
 interface CandidatePairStat extends RTCStats {
   type: 'candidate-pair'
   state: RTCStatsIceCandidatePairState
@@ -98,6 +106,7 @@ interface CodecStat extends RTCStats {
   payloadType?: number | string
   mimeType?: string
   clockRate?: number
+  channels?: number
   sdpFmtpLine?: string
 }
 
@@ -133,6 +142,11 @@ function isInboundVideoRtpStat(stat: RTCStats): stat is InboundVideoRtpStat {
   }
   const candidate = stat as RTCStats & { kind?: string, mediaType?: string }
   return candidate.kind === 'video' || candidate.mediaType === 'video'
+}
+
+function isInboundAudioRtpStat(stat: RTCStats): stat is InboundAudioRtpStat {
+  const candidate = stat as RTCStats & { kind?: string, mediaType?: string }
+  return candidate.type === 'inbound-rtp' && (candidate.kind === 'audio' || candidate.mediaType === 'audio')
 }
 
 function isSucceededCandidatePairStat(stat: RTCStats): stat is CandidatePairStat {
@@ -178,6 +192,7 @@ export class StatsService {
     private readonly getPeer: () => RTCPeerConnection | undefined,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
     private readonly getRendererObservation?: () => RendererObservationSnapshot | undefined,
+    private readonly getAudioObservation?: () => AudioPlaybackObservation | undefined,
   ) {
     this.unsubscribeFns = [
       emitter.on('media.videoFramePresented', frame => this.observePresentation(frame)),
@@ -189,9 +204,9 @@ export class StatsService {
       }),
       emitter.on('stats.inputPacket', (p: InputPacketStats) => {
         if (p.gamepadFrames + p.pointerFrames + p.mouseFrames + p.keyboardFrames > 0)
-          this.fpsCounts.input++
+          this.fpsCounts.input += p.inputPackets ?? 1
         if (p.metadataFrames > 0)
-          this.fpsCounts.metadata++
+          this.fpsCounts.metadata += p.metadataPackets ?? 1
       }),
     ]
   }
@@ -291,9 +306,10 @@ export class StatsService {
     const renderer = this.latest.rendererKind && this.latest.rendererKind !== 'video' ? this.getRendererObservation?.() : undefined
     const sameRenderer = renderer?.generation === this.latest.rendererGeneration && renderer?.kind === this.latest.rendererKind
     // FPS沿共享采样窗口读取；年龄使用当前同代际提交，避免采样间的新draw被缓存年龄覆盖。
+    const submission = sameRenderer ? rendererSubmitAge(renderer, now) : {}
     const rendererSubmitAgeMs = this.latest.rendererKind === 'video'
       ? videoPresentAgeMs
-      : sameRenderer && renderer?.resources.lastDrawAtMs !== undefined ? Math.max(0, now - renderer.resources.lastDrawAtMs) : undefined
+      : submission.ageMs
     const width = this.latest.renderSourceWidth ?? this.videoDimensions?.width
     const height = this.latest.renderSourceHeight ?? this.videoDimensions?.height
     return {
@@ -301,7 +317,9 @@ export class StatsService {
       ...(width && height ? { resolution: `${width}x${height}` } : {}),
       videoPresentAgeMs,
       rendererSubmitAgeMs,
-      rendererSubmitAgeObservedAtMs: rendererSubmitAgeMs === undefined ? undefined : now,
+      rendererExecution: sameRenderer ? renderer?.resources.execution : this.latest.rendererExecution,
+      rendererObservationSkewMs: sameRenderer && renderer?.resources.execution?.observedAtMs !== undefined && this.lastSample ? Math.abs(this.lastSample.sampledAtMs - renderer.resources.execution.observedAtMs) : this.latest.rendererObservationSkewMs,
+      rendererSubmitAgeObservedAtMs: this.latest.rendererKind === 'video' ? now : submission.observedAtMs,
       presentAgeMs: this.latest.rendererKind && this.latest.rendererKind !== 'video' ? rendererSubmitAgeMs : videoPresentAgeMs,
       statsSampleAgeMs: age,
       statsObservationState: this.latest.statsObservationState === 'unavailable' || age === undefined ? 'unavailable' : age > 1000 || this.latest.statsObservationState === 'stale' ? 'stale' : 'fresh',
@@ -332,11 +350,14 @@ export class StatsService {
       if (!current())
         return this.snapshot()
       const preferredTrackId = peer.getReceivers?.().find(receiver => receiver.track?.kind === 'video')?.track.id
-      const sample = buildBrowserWebRtcStatsSample(report, peer.connectionState, preferredTrackId)
+      const audioObservation = this.getAudioObservation?.()
+      const audioTrackId = audioObservation?.trackIdentifier ?? peer.getReceivers?.().find(receiver => receiver.track?.kind === 'audio' && receiver.track.readyState !== 'ended')?.track.id
+      const sample = buildBrowserWebRtcStatsSample(report, peer.connectionState, preferredTrackId, audioTrackId)
       sample.sampleId = `${generation}:${++this.sampleSequence}`
       sample.peerGeneration = generation
       sample.collectionStartedAtMs = startedAtMs
       sample.collectionDurationMs = Math.max(0, sample.sampledAtMs - startedAtMs)
+      Object.assign(sample, buildAudioStatsDelta(this.lastSample, sample))
       sample.deltaResetReason = resolveDeltaResetReason(this.lastSample, sample)
       if (!sample.deltaResetReason)
         sample.delta = buildBrowserWebRtcStatsDelta(this.lastSample, sample)
@@ -346,6 +367,7 @@ export class StatsService {
       const previousRenderer = this.lastRendererObservation
       const rendererComparable = renderer !== undefined && renderer.generation === previousRenderer?.generation
         && renderer.targetFps === previousRenderer.targetFps && renderer.sourceWidth === previousRenderer.sourceWidth && renderer.sourceHeight === previousRenderer.sourceHeight
+        && renderer.resources.execution?.renderEpoch === previousRenderer.resources.execution?.renderEpoch
       const videoPresentFps = elapsed > 0 && p.lastFrameAtMs !== undefined ? (p.frames - p.sampledFrames) * 1000 / elapsed : undefined
       const videoPresentAgeMs = p.lastFrameAtMs === undefined ? undefined : Math.max(0, sample.sampledAtMs - p.lastFrameAtMs)
       const draws = rendererComparable && renderer?.resources.realtimeDrawCount !== undefined && previousRenderer?.resources.realtimeDrawCount !== undefined
@@ -362,8 +384,12 @@ export class StatsService {
         const previous = previousRenderer?.resources[field]
         return draws && costSamples === draws && current !== undefined && previous !== undefined && current >= previous ? (current - previous) / draws : undefined
       }
-      const rendererSubmitFps = renderer?.kind === 'video' ? videoPresentFps : draws !== undefined && elapsed > 0 ? draws * 1000 / elapsed : undefined
-      const rendererSubmitAgeMs = renderer?.kind === 'video' ? videoPresentAgeMs : renderer?.resources.lastDrawAtMs === undefined ? undefined : Math.max(0, sample.sampledAtMs - renderer.resources.lastDrawAtMs)
+      const rendererElapsed = renderer?.resources.execution?.observedAtMs !== undefined && previousRenderer?.resources.execution?.observedAtMs !== undefined
+        ? renderer.resources.execution.observedAtMs - previousRenderer.resources.execution.observedAtMs
+        : elapsed
+      const rendererSubmitFps = renderer?.kind === 'video' ? videoPresentFps : draws !== undefined && rendererElapsed > 0 ? draws * 1000 / rendererElapsed : undefined
+      const submission = rendererSubmitAge(renderer, sample.sampledAtMs)
+      const rendererSubmitAgeMs = renderer?.kind === 'video' ? videoPresentAgeMs : submission.ageMs
       const presentation = {
         videoGeneration: p.videoGeneration,
         rendererGeneration: renderer?.generation,
@@ -383,6 +409,7 @@ export class StatsService {
         callbackFps: elapsed > 0 && p.callbacks > 0 ? (p.callbacks - p.sampledCallbacks) * 1000 / elapsed : undefined,
         rendererSubmitFps,
         rendererSubmitAgeMs,
+        rendererSubmitAgeObservedAtMs: renderer?.kind === 'video' ? sample.sampledAtMs : submission.observedAtMs,
         renderDrawDurationMsAvg: draws && drawTime !== undefined ? drawTime / draws : undefined,
         renderUploadDurationMsAvg: measuredCost('uploadDurationTotalMs'),
         renderSubmitDurationMsAvg: measuredCost('submitDurationTotalMs'),
@@ -393,13 +420,20 @@ export class StatsService {
       p.sampledCallbacks = p.callbacks
       p.sampledAtMs = sample.sampledAtMs
       this.lastRendererObservation = renderer ? { ...renderer, resources: { ...renderer.resources } } : undefined
+      const audioStats = summarizeAudioStats(sample)
       this.latest = {
         ...emptyStats(),
         ...this.projection.observe(sample, presentation),
         ...presentation,
+        audioPlayback: audioObservation,
+        audioStats,
+        inboundAudioBytesTotal: sample.inboundAudio?.bytesReceived,
+        audioVideoPlayoutDeltaMs: audioStats.playoutDeltaMs,
         rendererKind: renderer?.kind,
         rendererFrameSource: renderer?.resources.renderFrameSource,
         rendererDecodedFrameSupply: renderer?.resources.decodedFrameSupply,
+        rendererExecution: renderer?.resources.execution,
+        rendererObservationSkewMs: renderer?.resources.execution?.observedAtMs === undefined ? undefined : Math.abs(sample.sampledAtMs - renderer.resources.execution.observedAtMs),
         rendererTargetFps: renderer?.targetFps,
         rendererLatestVideoSequence: renderer?.latestVideoSequence,
         rendererSubmittedVideoSequence: renderer?.resources.lastDrawSequence,
@@ -430,7 +464,7 @@ export class StatsService {
       p.maxGap = p.maxJump = 0
       this.emitObservation('stats.browserObservation', { sample, stats: this.latest })
       this.recordMilestones(sample)
-      if (sample.inboundVideo || sample.selectedCodec)
+      if (sample.inboundVideo || sample.selectedCodec || sample.inboundAudio)
         this.emitter.emit('stats.browserWebRtc', sample)
       return this.snapshot()
     }).catch((error: unknown) => {
@@ -567,6 +601,7 @@ function buildBrowserWebRtcStatsSample(
   stats: RTCStatsReport,
   connectionState: RTCPeerConnectionState,
   preferredTrackId?: string,
+  preferredAudioTrackId?: string,
 ): BrowserWebRtcStatsSample {
   const inboundVideo = Array.from(stats.values())
     .filter(isInboundVideoRtpStat)
@@ -576,6 +611,36 @@ function buildBrowserWebRtcStatsSample(
       || (right.packetsReceived ?? 0) - (left.packetsReceived ?? 0),
     )[0]
   const transport = resolveTransportSample(stats)
+  const inboundAudio = Array.from(stats.values()).filter(isInboundAudioRtpStat).sort((left, right) =>
+    Number(right.trackIdentifier === preferredAudioTrackId && preferredAudioTrackId !== undefined)
+    - Number(left.trackIdentifier === preferredAudioTrackId && preferredAudioTrackId !== undefined)
+    || (right.packetsReceived ?? 0) - (left.packetsReceived ?? 0))[0]
+  const audio = inboundAudio
+    ? pickStatsFields(inboundAudio, [
+        'id',
+        'mid',
+        'ssrc',
+        'trackIdentifier',
+        'codecId',
+        'bytesReceived',
+        'packetsReceived',
+        'packetsLost',
+        'jitter',
+        'jitterBufferDelay',
+        'jitterBufferTargetDelay',
+        'jitterBufferMinimumDelay',
+        'jitterBufferEmittedCount',
+        'totalSamplesReceived',
+        'concealedSamples',
+        'silentConcealedSamples',
+        'concealmentEvents',
+        'insertedSamplesForDeceleration',
+        'removedSamplesForAcceleration',
+        'audioLevel',
+        'totalAudioEnergy',
+        'estimatedPlayoutTimestamp',
+      ])
+    : undefined
   const selectedCandidatePair = resolveSelectedCandidatePairSample(stats, transport?.selectedCandidatePairId)
   const selectedCodec = inboundVideo?.codecId !== undefined
     ? toCodecSample(stats.get(inboundVideo.codecId))
@@ -585,6 +650,8 @@ function buildBrowserWebRtcStatsSample(
     sampledAtMs: performance.now(),
     connectionState,
     selectedCodec,
+    selectedAudioCodec: inboundAudio?.codecId ? toCodecSample(stats.get(inboundAudio.codecId)) : undefined,
+    inboundAudio: audio,
     inboundVideo: inboundVideo ? toInboundVideoSample(inboundVideo) : undefined,
     selectedCandidatePair,
     transport,
@@ -654,6 +721,7 @@ function toCodecSample(stat: RTCStats | undefined): BrowserWebRtcCodecSample | u
     'payloadType',
     'mimeType',
     'clockRate',
+    'channels',
     'sdpFmtpLine',
   ])
 }

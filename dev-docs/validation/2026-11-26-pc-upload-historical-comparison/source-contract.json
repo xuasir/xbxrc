@@ -1,0 +1,36 @@
+[
+  {
+    "revision": "76a1ea69",
+    "file": "src/player/infra/render/Renderers.ts",
+    "sha256": "40f89fbe697e42a3741f71369ae9525d2d8134793470c4adb59d283c0d59655c",
+    "texSubImageCallCount": 0,
+    "excerpts": [
+      {
+        "line": 713,
+        "text": "    this.guard?.timer.begin(startedAtMs)\n    let uploadFinishedAtMs: number\n    const uploadStartedAtMs = performance.now()\n    try {\n      if (this.videoTexture !== null)"
+      },
+      {
+        "line": 718,
+        "text": "        gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)\n      // 解码供给上传对应VideoFrame，兼容入口使用video；两者复用同一纹理。\n      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frameSource.renderSource)\n      if (!this.textureAllocated) {\n        this.guard?.check(performance.now(), true)"
+      },
+      {
+        "line": 734,
+        "text": "    this.drewToScreenThisFrame = true\n    const submittedAtMs = performance.now()\n    this.drawObservation.record(getVideoFrameSource(this.video).lastRenderFrame, capture, submittedAtMs - startedAtMs, uploadFinishedAtMs - uploadStartedAtMs, submittedAtMs - uploadFinishedAtMs, startedAtMs)\n    if (!this.hasDrawnFrame) {\n      this.hasDrawnFrame = true"
+      }
+    ],
+    "qualification": "提交源码用于说明计时与导入合同；实机为dirty构建，实际采样源码身份以历史source-verification为准"
+  },
+  {
+    "revision": "76a1ea69",
+    "file": "src/player/infra/render/render-observation.ts",
+    "sha256": "5402e66af88fc510b32082187a04f181ae9a9deceb8843995718ec398e22b630",
+    "texSubImageCallCount": 0,
+    "excerpts": [
+      {
+        "line": 147,
+        "text": "      if (uploadMs !== undefined && submitMs !== undefined && Number.isFinite(uploadMs) && Number.isFinite(submitMs)) {\n        this.drawCostSampleCount++\n        this.uploadDurationTotalMs += uploadMs\n        this.submitDurationTotalMs += submitMs\n        this.uploadDurationMaxMs = Math.max(this.uploadDurationMaxMs, uploadMs)"
+      }
+    ],
+    "qualification": "提交源码用于说明计时与导入合同；实机为dirty构建，实际采样源码身份以历史source-verification为准"
+  }
+]

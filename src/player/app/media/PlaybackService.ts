@@ -1,6 +1,6 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { MediaDiagnosticsOptions, PresentedVideoFrameMetadata, RendererAttachSpec, RendererRuntimeConfig } from '../../domain/media'
-import type { RendererLifecycleObservation, RendererObservationSnapshot } from '../../infra/render/render-observation'
+import type { RendererLifecycleObservation, RendererObservationSnapshot, RendererResources } from '../../infra/render/render-observation'
 import type { VideoRenderer } from '../../infra/render/Renderers'
 import type { ObservedVideoFrameMetadata } from '../../infra/render/video-frame-source'
 import type { InputService } from '../input/InputService'
@@ -29,6 +29,7 @@ export class PlaybackService {
   private pending?: RendererResource
   private rendererGeneration = 0
   private fallbackKind?: RendererAttachSpec['kind']
+  private fallbackExecution?: 'main'
   private frameTrackingCleanup: (() => void) | null = null
   private videoListenersCleanup?: () => void
 
@@ -52,6 +53,7 @@ export class PlaybackService {
 
   retryRendering(): void {
     this.fallbackKind = undefined
+    this.fallbackExecution = undefined
     if (this.pending)
       return
     if (this.videoElement)
@@ -148,7 +150,7 @@ export class PlaybackService {
     audio.autoplay = true
     this.getContainer().appendChild(audio)
     this.audioElement = audio
-    this.emitter.emit('media.audioReady', {})
+    this.reportResources('audioAttached')
     return audio
   }
 
@@ -156,11 +158,13 @@ export class PlaybackService {
     this.releaseVideo()
     this.releaseAudio()
     this.fallbackKind = undefined
+    this.fallbackExecution = undefined
   }
 
   snapshotResources() {
     const video = this.videoElement
     const frameSource = video ? getVideoFrameSource(video).snapshotResources() : undefined
+    const rendererResources = this.current?.renderer.snapshotResources()
     return {
       videoElements: Number(video !== null),
       audioElements: Number(this.audioElement !== null),
@@ -170,11 +174,11 @@ export class PlaybackService {
       nativeFrameCallbacks: frameSource?.nativeFrameCallbacks ?? 0,
       animationCallbacks: frameSource?.animationCallbacks ?? 0,
       frameCounterSource: frameSource?.frameCounterSource,
-      renderFrameSource: frameSource?.renderFrameSource ?? 'presentation',
+      renderFrameSource: rendererResources?.renderFrameSource ?? frameSource?.renderFrameSource ?? 'presentation',
       renderFrameFallbackReason: frameSource?.renderFrameFallbackReason,
-      decodedFramesReceived: frameSource?.decodedFramesReceived ?? 0,
-      decodedFrameReaders: frameSource?.decodedFrameReaders ?? 0,
-      retainedDecodedFrames: frameSource?.retainedDecodedFrames ?? 0,
+      decodedFramesReceived: rendererResources?.decodedFramesReceived ?? frameSource?.decodedFramesReceived ?? 0,
+      decodedFrameReaders: rendererResources?.execution?.mode && rendererResources.execution.mode !== 'main' ? 1 : frameSource?.decodedFrameReaders ?? 0,
+      retainedDecodedFrames: rendererResources?.execution?.link?.heldFrames ?? frameSource?.retainedDecodedFrames ?? 0,
       renderFrameTimestampUs: frameSource?.renderFrameTimestampUs,
       nativeCallbackCount: frameSource?.nativeCallbackCount ?? 0,
       polledFrameCount: frameSource?.polledFrameCount ?? 0,
@@ -212,19 +216,21 @@ export class PlaybackService {
     if (!resource)
       return undefined
     const source = getVideoFrameSource(resource.video)
+    const rendererResources = resource.renderer.snapshotResources()
+    const worker = rendererResources?.execution?.mode && rendererResources.execution.mode !== 'main' ? rendererResources.execution : undefined
     const sourceFrame = resource.renderer.kind === 'video' ? source.lastFrame : source.lastRenderFrame
     const sourceSize = resource.renderer.kind === 'video'
       ? { width: resource.video.videoWidth, height: resource.video.videoHeight }
-      : source.renderSize
+      : worker ? { width: worker.sourceWidth ?? 0, height: worker.sourceHeight ?? 0 } : source.renderSize
     return {
       generation: resource.generation,
       kind: resource.renderer.kind,
       targetFps: resource.config.targetFps,
-      latestVideoSequence: sourceFrame?.localSequence,
+      latestVideoSequence: worker?.latestSequence ?? sourceFrame?.localSequence,
       sourceWidth: sourceSize.width || resource.video.videoWidth || undefined,
       sourceHeight: sourceSize.height || resource.video.videoHeight || undefined,
       lifecycle: { ...resource.lifecycle },
-      resources: resource.renderer.snapshotResources() ?? { gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: 0 },
+      resources: rendererResources ?? { gpuObjects: 0, frameRequests: 0, animationCallbacks: 0, captureWaiters: 0, domNodes: 0 },
     }
   }
 
@@ -299,12 +305,14 @@ export class PlaybackService {
     const config = mergeRendererConfigWithAttachSpec(this.rendererConfig, spec)
     const ownedConfig = {
       ...config,
+      renderExecution: this.fallbackExecution ?? config.renderExecution,
       rendererFrameReadyNotifier: () => {
         resource.lifecycle.frameReadyAtMs ??= performance.now()
         resource.ready = true
         this.commitRenderer(resource)
       },
       rendererRuntimeFailureNotifier: (reason: string) => this.failRenderer(resource, reason),
+      rendererExecutionNotifier: (reason: string, resources: RendererResources) => this.emitter.emit('media.resourcesObserved', { reason, resources: { rendererGeneration: resource.generation, execution: resources.execution, gpuObjects: resources.gpuObjects, frameRequests: resources.frameRequests, captureWaiters: resources.captureWaiters } }),
     }
     const renderer = spec.kind === 'webgl2_sr'
       ? new SuperResolutionWebGL2Renderer(ownedConfig)
@@ -362,6 +370,11 @@ export class PlaybackService {
     // 新配置的候选继续完成首帧交接，故障仅释放原管线。
     if (this.pending)
       return
+    if (reason.startsWith('renderWorker:')) {
+      this.fallbackExecution = 'main'
+      this.beginRenderer(resource.video, this.effectiveSpec())
+      return
+    }
     if (resource.renderer.kind === 'video') {
       this.emitter.emit('error', { error: new Error(reason) })
       return

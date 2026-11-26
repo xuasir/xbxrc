@@ -86,6 +86,11 @@ final class TouchLayoutSurfaceView: UIView {
   private var identifiers: [ObjectIdentifier: Int] = [:]
   private var nextPointerID = 0
   private var drawings: [String: TouchControlDrawing] = [:]
+  private var accessibilityCache: [String: UIAccessibilityElement] = [:]
+  private var accessibilityGeometry: [String: [TouchControlSocket]] = [:]
+  private var needsFullRefresh = true
+  private var previousActiveControls: Set<String> = []
+  private var previousHighlights: Set<String> = []
   private var displayLink: CADisplayLink?
   private var displayTarget: TouchDisplayTarget?
   private var backgroundObserver: NSObjectProtocol?
@@ -103,7 +108,7 @@ final class TouchLayoutSurfaceView: UIView {
       let pressed = self.feedback.update(frame, now: CACurrentMediaTime())
       if frame?.reason != "pointer" { self.identifiers.removeAll() }
       if !pressed.isEmpty { self.onPress?() }
-      self.requestRender()
+      self.requestRender(fullRefresh: frame?.reason != "pointer")
     }
     backgroundObserver = NotificationCenter.default.addObserver(
       forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
@@ -166,7 +171,8 @@ final class TouchLayoutSurfaceView: UIView {
     input.setViewport(size: bounds.size, insets: insets)
   }
 
-  func requestRender() {
+  func requestRender(fullRefresh: Bool = true) {
+    needsFullRefresh = needsFullRefresh || fullRefresh
     if displayLink == nil {
       if !rendering { render() }
     } else {
@@ -195,24 +201,44 @@ final class TouchLayoutSurfaceView: UIView {
       drawings.removeValue(forKey: key)?.root.removeFromSuperlayer()
     }
     var elements: [UIAccessibilityElement] = []
+    var activeControls: Set<String> = []
+    var highlights: Set<String> = []
+    var accessibleIDs: Set<String> = []
     for socket in input.sockets {
       let drawing = drawings[socket.id] ?? TouchControlDrawing()
       if drawings[socket.id] == nil {
         drawings[socket.id] = drawing
         layer.addSublayer(drawing.root)
       }
-      drawing.palette = input.layout?.colorPalette ?? .object([:])
-      drawing.update(
-        socket: socket, runtime: input.runtimes[socket.id],
-        opacity: controlOpacity, traits: traitCollection,
-        assets: assets,
-        highlighted: feedback.isHighlighted(socket.id, now: now)
-          || (onMoveControl != nil && selectedControlID == socket.id))
+      let runtime = input.runtimes[socket.id]
+      let highlighted =
+        feedback.isHighlighted(socket.id, now: now)
+        || (onMoveControl != nil && selectedControlID == socket.id)
+      if runtime?.isActive == true { activeControls.insert(socket.id) }
+      if highlighted { highlights.insert(socket.id) }
+      if needsFullRefresh || runtime?.isActive == true || runtime?.needsTimeUpdate == true
+        || previousActiveControls.contains(socket.id) || highlighted
+        || previousHighlights.contains(socket.id)
+      {
+        drawing.palette = input.layout?.colorPalette ?? .object([:])
+        drawing.update(
+          socket: socket, runtime: input.runtimes[socket.id],
+          opacity: controlOpacity, traits: traitCollection,
+          assets: assets,
+          highlighted: highlighted)
+      }
       let arcade = socket.control.kind == .arcadeButtons
-      let accessibleSockets = arcade ? TouchArcadeGeometry.buttons(in: socket) : [socket]
+      if needsFullRefresh || accessibilityGeometry[socket.id] == nil {
+        accessibilityGeometry[socket.id] =
+          arcade ? TouchArcadeGeometry.buttons(in: socket) : [socket]
+      }
+      let accessibleSockets = accessibilityGeometry[socket.id] ?? [socket]
       let activeButtons = arcade ? input.runtimes[socket.id]?.activeArcadeButtonIDs ?? [] : []
       for accessible in accessibleSockets {
-        let element = UIAccessibilityElement(accessibilityContainer: self)
+        accessibleIDs.insert(accessible.id)
+        let element =
+          accessibilityCache[accessible.id] ?? UIAccessibilityElement(accessibilityContainer: self)
+        accessibilityCache[accessible.id] = element
         element.accessibilityIdentifier = "touch-control-\(accessible.id)"
         element.accessibilityLabel = accessible.control.title
         element.accessibilityTraits = .button
@@ -231,6 +257,15 @@ final class TouchLayoutSurfaceView: UIView {
         elements.append(element)
       }
     }
+    for id in accessibilityCache.keys where !accessibleIDs.contains(id) {
+      accessibilityCache.removeValue(forKey: id)
+    }
+    for id in accessibilityGeometry.keys where !valid.contains(id) {
+      accessibilityGeometry.removeValue(forKey: id)
+    }
+    previousActiveControls = activeControls
+    previousHighlights = highlights
+    needsFullRefresh = false
     accessibilityElements = elements
     CATransaction.commit()
     input.didRender(at: now)

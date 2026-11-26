@@ -11,10 +11,12 @@ export interface BrowserRecoveryProbe {
   sampleId?: string
   videoGeneration?: number
   peerGeneration?: number
+  rendererGeneration?: number
+  recoveryScope?: 'renderer'
   baseline: { decodeFps?: number, videoFps?: number }
 }
 
-export function createBrowserRecoveryProbe(action: BrowserRecoveryAction, stats: StreamStats, nowMs: number): BrowserRecoveryProbe {
+export function createBrowserRecoveryProbe(action: BrowserRecoveryAction, stats: StreamStats, nowMs: number, scope?: 'renderer'): BrowserRecoveryProbe {
   const requiredObserveMs = action === 'playbackRebuild' ? BROWSER_SOFT_WINDOW_MS : Math.max(BROWSER_SOFT_WINDOW_MS, (stats.networkRttMs ?? 0) * 2)
   return {
     action,
@@ -24,7 +26,8 @@ export function createBrowserRecoveryProbe(action: BrowserRecoveryAction, stats:
     sampleId: stats.statsSampleId,
     videoGeneration: stats.statsVideoGeneration,
     peerGeneration: stats.statsPeerGeneration,
-    baseline: { decodeFps: stats.browserStatsWindows?.short.decodeFpsAvg, videoFps: stats.browserStatsWindows?.short.videoPresentFpsAvg },
+    ...(scope === 'renderer' ? { rendererGeneration: stats.rendererGeneration, recoveryScope: scope } : {}),
+    baseline: { decodeFps: stats.browserStatsWindows?.short.decodeFpsAvg, videoFps: scope === 'renderer' ? stats.browserStatsWindows?.short.rendererSubmitFpsAvg : stats.browserStatsWindows?.short.videoPresentFpsAvg },
   }
 }
 
@@ -42,17 +45,20 @@ export function evaluateBrowserRecoveryProbe(probe: BrowserRecoveryProbe, stats:
   const peerValid = probe.action === 'reconnect'
     ? stats.statsPeerGeneration !== undefined && stats.statsPeerGeneration !== probe.peerGeneration
     : stats.statsPeerGeneration === probe.peerGeneration
-  const playbackValid = probe.action !== 'playbackRebuild' || (stats.statsVideoGeneration !== undefined && stats.statsVideoGeneration !== probe.videoGeneration)
+  const rendererScope = probe.recoveryScope === 'renderer'
+  const playbackValid = probe.action !== 'playbackRebuild' || (rendererScope
+    ? stats.rendererGeneration !== undefined && stats.rendererGeneration !== probe.rendererGeneration
+    : stats.statsVideoGeneration !== undefined && stats.statsVideoGeneration !== probe.videoGeneration)
   const covered = stats.statsObservationState === 'fresh' && stats.statsSampleId !== probe.sampleId
     && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= probe.startedAtMs
     && (short?.decodeCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
-    && (short?.videoCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
+    && ((rendererScope ? short?.rendererCoverageMs : short?.videoCoverageMs) ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
     && peerValid && playbackValid
   if (!covered)
     return nowMs - probe.startedAtMs >= BROWSER_STABLE_WINDOW_MS ? { result: 'unknown', reason: 'postActionEvidenceIncomplete' } : undefined
   const decode = short?.decodeFpsAvg
-  const video = short?.videoPresentFpsAvg
-  const newFrames = (decode ?? 0) > 0 && (video ?? 0) > 0 && (stats.videoPresentAgeMs ?? Number.POSITIVE_INFINITY) < 500
+  const video = rendererScope ? short?.rendererSubmitFpsAvg : short?.videoPresentFpsAvg
+  const newFrames = (decode ?? 0) > 0 && (video ?? 0) > 0 && ((rendererScope ? stats.rendererSubmitAgeMs : stats.videoPresentAgeMs) ?? Number.POSITIVE_INFINITY) < 500
   const previous = probe.baseline
   const score = decode !== undefined && previous.decodeFps !== undefined ? decode - previous.decodeFps : undefined
   if (newFrames && (probe.action === 'reconnect' || probe.action === 'playbackRebuild'

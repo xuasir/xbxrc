@@ -13,6 +13,13 @@ enum IOSRuntimeTrace {
         writer.currentProfile
     }
 
+    /// 在热路径构造 payload 前沿轻量采样口径判断，主动采集保留完整帧事实。
+    static func shouldRecordPresentationFrame(counter: Int64, firstFrame: Bool = false) -> Bool {
+        writer.isCapturing
+            || (writer.currentProfile != .off
+                && (firstFrame || counter == 1 || counter.isMultiple(of: 60)))
+    }
+
     static var launchSessionID: String {
         writer.sessionID
     }

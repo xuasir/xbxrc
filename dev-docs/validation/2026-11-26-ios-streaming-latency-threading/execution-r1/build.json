@@ -1,0 +1,25 @@
+{
+  "exitCode": 65,
+  "elapsedSeconds": 13.76,
+  "command": [
+    "xcodebuild",
+    "build-for-testing",
+    "-project",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-destination",
+    "generic/platform=iOS Simulator",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+    "-skipPackageUpdates",
+    "-disableAutomaticPackageResolution",
+    "CODE_SIGNING_ALLOWED=NO",
+    "ENABLE_USER_SCRIPT_SANDBOXING=NO",
+    "ONLY_ACTIVE_ARCH=YES",
+    "ARCHS=arm64",
+    "OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795678668580-1.jsonl",
+  "snapshot": "/private/tmp/xbxrc-pc-log-analysis-20261126-nyccyqj4/runtime-trace-1795678668580-1.jsonl",
+  "sourceBytesAtCapture": 4056899,
+  "snapshotBytes": 4056899,
+  "trailingPartialBytes": 0,
+  "snapshotSha256": "0f291173f64286d3cf6552863f3ca97e2812b32f2b72a5397142741a442446b0",
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-log-analysis-20261126-nyccyqj4",
+  "sourceAvailabilityAtClosure": "absent",
+  "retainedInput": "runtime-trace-1795678668580-1.jsonl.gz",
+  "reason": "验收前原应用日志目录已移除，冻结输入作为本次可复查原件归档。"
+}

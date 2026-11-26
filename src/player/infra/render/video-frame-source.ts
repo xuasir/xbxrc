@@ -72,6 +72,7 @@ function readVideoFrameCounter(video: HTMLVideoElement): VideoFrameCounter | und
 class VideoFrameSource {
   private readonly pending = new Map<number, { callback: FrameRequest, render?: boolean, onFailure?: (reason: DecodedFrameFallback) => void }>()
   private decodedReader?: DecodedVideoFrameReader
+  private externalDecodedRenderers = 0
   private decodedFrame?: VideoFrame
   private renderFrame?: ObservedVideoFrameMetadata
   private renderSequence = 0
@@ -150,6 +151,20 @@ class VideoFrameSource {
     this.pending.set(id, { callback })
     this.schedule()
     return id
+  }
+
+  /** 外部 Render Worker 的直接供给沿用原 RVFC 观察节拍。 */
+  retainExternalDecodedRenderer(): () => void {
+    this.externalDecodedRenderers++
+    this.schedule()
+    let active = true
+    return () => {
+      if (active) {
+        active = false
+        this.externalDecodedRenderers--
+        this.schedule()
+      }
+    }
   }
 
   requestRender(callback: FrameRequest, onFailure?: (reason: DecodedFrameFallback) => void): number {
@@ -270,7 +285,7 @@ class VideoFrameSource {
       return
     }
     const epoch = this.epoch
-    const direct = this.decodedReader !== undefined && this.decodedReader.mode !== 'presentation'
+    const direct = this.externalDecodedRenderers > 0 || (this.decodedReader !== undefined && this.decodedReader.mode !== 'presentation')
     if (typeof this.video.requestVideoFrameCallback === 'function') {
       if (direct && this.presentationWatchdog === undefined) {
         this.lastNativeCallbackAtMs ??= performance.now()

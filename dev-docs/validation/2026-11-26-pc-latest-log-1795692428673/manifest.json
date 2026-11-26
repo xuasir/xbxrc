@@ -1,0 +1,37 @@
+{
+  "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795692428673-1.jsonl",
+  "snapshot": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/runtime-trace-1795692428673-1.jsonl",
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj",
+  "capturedAt": "2026-11-26T19:40:47.041631+08:00",
+  "sourceBytesAtCapture": 15303638,
+  "snapshotBytes": 15303638,
+  "trailingPartialBytes": 0,
+  "snapshotSha256": "547bfc3dfddea19e06bd4d488edf602cecbb7dd590e465c5b269d24a0655dad1",
+  "rows": 5483,
+  "firstSeq": 1,
+  "lastSeq": 5483,
+  "firstTsMs": 1795692428673,
+  "lastTsMs": 1795692692955,
+  "firstTime": "2026-11-26T19:27:08.673000+08:00",
+  "lastTime": "2026-11-26T19:31:32.955000+08:00",
+  "sourceBytesAfterCapture": 15303638,
+  "retainedInput": "runtime-trace-1795692428673-1.jsonl.gz",
+  "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-26-pc-latest-log-1795692428673",
+  "analysisCommands": [
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py <frozen-trace> --json --exclude-categories log",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_production_health_report.py <frozen-trace> --output production-health.json",
+      "exitCode": 0,
+      "gate": "FAIL"
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_browser_webrtc_behavior_report.py <frozen-trace> --require-stability",
+      "exitCode": 2,
+      "gate": "FAIL",
+      "reason": "中段 source supply deficit 和 submit age 长尾"
+    }
+  ]
+}

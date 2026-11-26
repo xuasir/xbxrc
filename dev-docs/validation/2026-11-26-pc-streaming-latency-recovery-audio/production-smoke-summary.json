@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "scope": "actual-production-projection",
+  "assertions": 15,
+  "checks": [
+    "requestedMonoRetained",
+    "actualMonoOutputRetained",
+    "audioSamplesRetained",
+    "audioBufferRetained",
+    "concealmentRetained",
+    "missingPlayoutQualified",
+    "contextStateRetained",
+    "effectiveChannelsRetained",
+    "localDomainRetained",
+    "localReasonRetained",
+    "localCoverageRetained",
+    "feedbackAgeRetained",
+    "healthBudget",
+    "eventBudgets",
+    "privateTrackRemoved"
+  ],
+  "rowBytes": {
+    "health": 3034,
+    "audio": 688,
+    "local": 579,
+    "feedback": 589
+  },
+  "budgets": {
+    "health": 4096,
+    "audio": 1024,
+    "local": 1024,
+    "feedback": 1024
+  },
+  "temporaryBundles": [
+    "shared/diagnostics/production-trace-contract.mjs",
+    "streaming/runtime/playback-health.mjs",
+    "streaming/runtime/__fixtures__/playback.mjs"
+  ]
+}

@@ -50,6 +50,8 @@ export interface ProcessedVideoFrameMetadata {
 }
 
 export interface InputRuntimeConfig {
+  /** 内部执行域选择；宿主支持真实 DataChannel 转移时启用 Worker。 */
+  inputExecution?: 'auto' | 'main'
   preventResolutionDrops: boolean
   vibrationEnabled: boolean
   vibrationStrength: VibrationStrengthPreset

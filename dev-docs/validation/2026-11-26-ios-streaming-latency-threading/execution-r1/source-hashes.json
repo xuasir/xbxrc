@@ -1,0 +1,162 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/IOSStreamInputProtocol.swift",
+    "sha256": "0bbf0c6e0d98c9996e60ca7eaf557cf0f6ca92c70d6b34406318d6e2a1c2252d"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/ImportedFrameResources.swift",
+    "sha256": "b85538f456745c503c306a46ed16dd32c8979f21c27c7399d696325e0033079e"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+    "sha256": "973087b982057d0773e2b006c2a4d362f4e71027a40fabcc990e5614ef0bc371"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamInputCore.swift",
+    "sha256": "40f06e7a6e2e41966f0a4e1b3f39c4595576e5d2a31b2a446e47a772278a856d"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+    "sha256": "b5d62cb43acdd874a528141518cc9928af833ff7ff94f31d646d92185a86f4fe"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+    "sha256": "0398c8f76c7a3df92dc2cf58566d3fae8b5e7caeb2b4c98c02ee74e795d38486"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+    "sha256": "dcde22104e68dbbde7cf2230aa2443ec06e88d1036a59c61eaea36ee3c031ca0"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleState.swift",
+    "sha256": "cfe17f8d00696fff5dec909951b7968eff2120490d55c0a1ab1df4b1d07a7872"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+    "sha256": "3ed41989898b2a7e2d37132ec2ad616370dceed1193fc38efb25a6e688f3dc18"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+    "sha256": "5a3f786dac8a640ab483fb6be71fe47e248d24b25cf1eef4daf2bc7edbd73026"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControllerInputDriver.swift",
+    "sha256": "5645c607376e3b5a075beba4b22fa6ddbef04cb5396e6582cb21d994f5ef58b1"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsGestureRecognizer.swift",
+    "sha256": "4d302380996d1a7d7801c73000a0b41c6b8048a9b433b1b5b51a145efe03af15"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsOverlay.swift",
+    "sha256": "bb00070aa266f96c0bf7189314896088201940c26b5304dccbe9dfc635e783f2"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingControlsState.swift",
+    "sha256": "69142d2173a70a4b9d106c529d5d95bad596bfbe2d2dd636cab650bef0c7530d"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsActor.swift",
+    "sha256": "94a34b2261022138d840e930747a6f3a5182c251089cfe64928a335f646420f1"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+    "sha256": "4347322b5b22c79525f04d514553303ca88d1913b70b93d7a8cff8cbe885be8b"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "sha256": "402e93331733de067e814262bb888bc7395cc829308f968290ce0c36992b3e80"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingDisplayObservation.swift",
+    "sha256": "1c06bbb88ca31a912b6292d5028dad10fbd8ad3b01d36044d5f40ef166a4760c"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingExecutionScope.swift",
+    "sha256": "06d6ae8350c0bba1431f82801871eeb01628e2df3db1d2ff1f67e36b3f8cdb42"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+    "sha256": "d8412bc360fe9974e7044da4f553004899478285ac449b9db8382303e74caa76"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingInputWorker.swift",
+    "sha256": "f9e06b2a5b8b2f20ab07df5a5277f8d1eacf7fd7e7cf99784482232c6e14ad09"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMediaTiming.swift",
+    "sha256": "ba054b1b1d96fe85df81f51b703981b92a50b807b17597b44799b5eadd6d0ca8"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+    "sha256": "d9c148c72a79cc06f853e561d1bb09e39db7ef457edba5ddfdd2650a0212863e"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalVideoSurfaceView.swift",
+    "sha256": "094248ad338afe9e26dd2dc87acd18f5cd09a1e30f706b37b0b157f79d560d39"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+    "sha256": "fd8e33da1bd25f369ce99c7ef3ebc03068eb591e54e711157c2f75f772de2da9"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingRenderResourceCache.swift",
+    "sha256": "d44c424b824d4a2c3b540d71958e0f906b93a01cd51b3ee1e19c392f834823e4"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingRenderWorker.swift",
+    "sha256": "04b13dd2850cc54c73ea641a8abe479f0a68f26350fec4b198056028bdcd3550"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "sha256": "4c856fb9798750ed209a985e38cdf110da86931334f7926e388b3e81477692f9"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingSessionState.swift",
+    "sha256": "6d2e3b35ffda1c29d2d3154cafa17339719b4cc88d770d18f65112aa82bfbdbb"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingStartupDiagnostics.swift",
+    "sha256": "c64e6e4265eeebd3d17c11fbe6617e5813df9ad78d38c2a303a24fdeacaab88c"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingSurfaceLease.swift",
+    "sha256": "15e34985eda61cc71486415bc69ba45d30e978f3bf90f7dd0dcb4a5b1a0139a0"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+    "sha256": "48a384f5c96ad27af47e668d4e2518da1e4a737bc3090685dfa76732b17263e4"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+    "sha256": "a1f1dd7ecdafb470044d5e35222d5cd057d1bf54e985371fe49f4321b1aba13a"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+    "sha256": "1e1c846c919e24fa8a62f38f6c0febc24312b8a8d775a65222f608d6100993a7"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingVideoColor.swift",
+    "sha256": "f5cab7def503ec0de7a7e7896592bd3e8ce0988130f10b1193952e0edb791bbe"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+    "sha256": "a4a7308e2d6ff46b658a00960e7fc665cff7ea54bfe285a32dad77b249fc7c53"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+    "sha256": "101b5e847683549bddcc0c1e8e6626b63ffea5f71a7d27eb711cec390d26aa4f"
+  },
+  {
+    "path": "iosapp/XBXRC/Shaders/Streaming.metal",
+    "sha256": "1512dce420e4dfe8633106bb14c40e8f88ed0e3cca5887fd737c2576e5f73967"
+  },
+  {
+    "path": "iosapp/XBXRCTests/StreamingExecutionTests.swift",
+    "sha256": "9643e72ce4040696b68cff56ae4b1fec8a7d64e1e24530bd8aa2efbe96b61985"
+  },
+  {
+    "path": "crates/xbox-streaming/src/session/recovery/display.rs",
+    "sha256": "58b3d9276cf5e80c6a1eb7a4c099eb2d426d1c838ae17c7cbe6b3fd614c95783"
+  }
+]

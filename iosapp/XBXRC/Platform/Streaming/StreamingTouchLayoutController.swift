@@ -107,7 +107,7 @@ final class StreamingTouchLayoutController: ObservableObject {
     self.session = session
     session.onTouchLayoutCommand = { [weak self] command in self?.receive(command) }
     input.onInput = { [weak session] frame in
-      session?.setTouchLayoutState(frame.gamepad, active: frame.pointerCount > 0)
+      session?.submitTouchLayoutFrame(frame)
     }
     suppressionSubscription = session.$isSuppressed.removeDuplicates().sink {
       [weak self] value in

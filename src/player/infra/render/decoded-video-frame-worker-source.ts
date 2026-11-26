@@ -1,10 +1,13 @@
 import type { DecodedFrameFallback, DecodedFrameWorkerMessage, TrackProcessorConstructor } from './decoded-video-frame-reader'
+import type { FrameLinkScope } from './render-worker-protocol'
 import { FRAME_CLOCK_QUANTIZATION_MS } from './decoded-frame-clock'
 
 export interface DecodedFrameWorkerRequest {
   type: 'start' | 'ack' | 'stop' | 'clock'
   id?: number
   track?: MediaStreamTrack
+  port?: MessagePort
+  scope?: FrameLinkScope
   sequence?: number
   acknowledgedAtEpochMs?: number
   acknowledgedAtWorkerEpochMs?: number

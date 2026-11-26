@@ -1,0 +1,53 @@
+{
+  "resolved": true,
+  "diagnoses": [
+    {
+      "stage": "M3 Rust",
+      "initial": "17 passed / 1 failed",
+      "reason": "旧丢包覆盖断言需要跟随独立 RTT 资格更新；已补充丢包不足但 RTT 覆盖充分的 warning，以及两项覆盖不足的 unknown。",
+      "final": "针对该边界 1/1 通过"
+    },
+    {
+      "stage": "M4 Rust",
+      "initial": "测试编译 E0382",
+      "reason": "测试同一 Option 在两个分支被消费，改为只读借用；生产实现保持原意。",
+      "final": "局部恢复 4/4 与新增前后台边界 1/1 通过"
+    },
+    {
+      "stage": "M5 Stats",
+      "initial": "58 passed / 2 failed",
+      "reason": "音频样本需进入原视频限定的事件出口；新增测试模拟时钟隔离同步修复。",
+      "final": "受影响统计 2/2 通过"
+    },
+    {
+      "stage": "lint",
+      "initial": "22 errors",
+      "reason": "多语句回调拆行、abort 回调声明顺序与 SDP 参数正则的线性匹配修正。",
+      "final": "pnpm lint:fix 通过"
+    },
+    {
+      "stage": "production probe tooling",
+      "initial": "ERR_MODULE_NOT_FOUND",
+      "reason": "esbuild 保留入口目录层级；按实际生成路径加载，复用同一批临时 bundle。",
+      "final": "15/15 生产投影断言通过"
+    }
+  ],
+  "initialFrontendFailures": [
+    {
+      "report": "m5-tests.json",
+      "file": "src/player/app/stats/StatsService.test.ts",
+      "test": "statsService browser WebRTC sampling selects the active audio track and publishes independent buffering and compensation samples",
+      "messages": [
+        "AssertionError: expected undefined to be 'chosen-audio' // Object.is equality\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/app/stats/StatsService.test.ts:35:46\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    },
+    {
+      "report": "m5-tests.json",
+      "file": "src/player/app/stats/StatsService.test.ts",
+      "test": "statsService browser WebRTC sampling emits browser WebRTC deltas between samples",
+      "messages": [
+        "AssertionError: expected undefined to deeply equal ObjectContaining{…}\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/app/stats/StatsService.test.ts:302:30\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+      ]
+    }
+  ]
+}

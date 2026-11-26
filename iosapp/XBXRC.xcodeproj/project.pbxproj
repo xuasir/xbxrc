@@ -146,6 +146,23 @@
 		182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */; };
 		956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */; };
 		B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */; };
+		AF87882737650156B56F3448 /* StreamingMediaTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF87882737650156B56F3448 /* StreamingMediaTiming.swift */; };
+		A46279BE2731A6F4E86D466D /* StreamingVideoColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B46279BE2731A6F4E86D466D /* StreamingVideoColor.swift */; };
+		A9C2AF927D5522C227E2C2F5 /* StreamingAudioOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C2AF927D5522C227E2C2F5 /* StreamingAudioOutput.swift */; };
+		A9505F2AE3388E3B1497A807 /* StreamingMediaCalibrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9505F2AE3388E3B1497A807 /* StreamingMediaCalibrationTests.swift */; };
+		8FCB316BBD64AF07E859EE39 /* StreamingExecutionScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9911650F377C0AE373D58D5 /* StreamingExecutionScope.swift */; };
+		EBE3B46CF5112D87DDC3F991 /* StreamInputCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB47906BE4A3D0D665EC56 /* StreamInputCore.swift */; };
+		989E885F9DC5A02EE3A83704 /* StreamingInputWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5106BB6C22829ADAC280EF79 /* StreamingInputWorker.swift */; };
+		6AF7EBF44F46CFE2383DF9B4 /* StreamingControllerInputDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A6223F48D685A32D35C12F /* StreamingControllerInputDriver.swift */; };
+		212733EA55340613739AD8B9 /* StreamingSurfaceLease.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFFAEFA41DC4226803828EA /* StreamingSurfaceLease.swift */; };
+		41E79592BF317D3D1AEFDE6E /* StreamingDiagnosticsActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D3BBF138FD0A8174189835 /* StreamingDiagnosticsActor.swift */; };
+		7ADD4A25A5DA74A826E4FF09 /* StreamingRenderResourceCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B487142DEB33AB12A7D6A22 /* StreamingRenderResourceCache.swift */; };
+		67692C8F00CABE54EC45E759 /* ImportedFrameResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DFA5C95EE9D1B0447643956 /* ImportedFrameResources.swift */; };
+		41F88BA2C53A8EF3786AF4E8 /* StreamingRenderWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AA6FFDBB52A689F37BDF2DB /* StreamingRenderWorker.swift */; };
+		15B5841CE11C84392C72FD62 /* StreamingMetalVideoSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFBAD78678608696BC522E8 /* StreamingMetalVideoSurfaceView.swift */; };
+		45C23B0F1447E1FDCB8BA416 /* Streaming.metal in Sources */ = {isa = PBXBuildFile; fileRef = A0243539C81EFD8C6CACA322 /* Streaming.metal */; };
+		2B0DD79690D96DD6B43A1479 /* StreamingDisplayObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D2DCD507D608E8324E258F /* StreamingDisplayObservation.swift */; };
+		5A6BE02948DE879B172F1351 /* StreamingExecutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E60988A615A0BA7E5B184BC /* StreamingExecutionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -304,6 +321,23 @@
 		5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProductDetailRepository.swift; sourceTree = "<group>"; };
 		1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumFileDownload.swift; sourceTree = "<group>"; };
 		DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPBehaviorParityTests.swift; sourceTree = "<group>"; };
+		BF87882737650156B56F3448 /* StreamingMediaTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMediaTiming.swift; sourceTree = "<group>"; };
+		B46279BE2731A6F4E86D466D /* StreamingVideoColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingVideoColor.swift; sourceTree = "<group>"; };
+		B9C2AF927D5522C227E2C2F5 /* StreamingAudioOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioOutput.swift; sourceTree = "<group>"; };
+		B9505F2AE3388E3B1497A807 /* StreamingMediaCalibrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMediaCalibrationTests.swift; sourceTree = "<group>"; };
+		F9911650F377C0AE373D58D5 /* StreamingExecutionScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingExecutionScope.swift; sourceTree = "<group>"; };
+		A8AB47906BE4A3D0D665EC56 /* StreamInputCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamInputCore.swift; sourceTree = "<group>"; };
+		5106BB6C22829ADAC280EF79 /* StreamingInputWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingInputWorker.swift; sourceTree = "<group>"; };
+		54A6223F48D685A32D35C12F /* StreamingControllerInputDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControllerInputDriver.swift; sourceTree = "<group>"; };
+		CFFFAEFA41DC4226803828EA /* StreamingSurfaceLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StreamingSurfaceLease.swift; path = "StreamingSurfaceLease.swift"; sourceTree = "<group>"; };
+		C5D3BBF138FD0A8174189835 /* StreamingDiagnosticsActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StreamingDiagnosticsActor.swift; path = "StreamingDiagnosticsActor.swift"; sourceTree = "<group>"; };
+		3B487142DEB33AB12A7D6A22 /* StreamingRenderResourceCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StreamingRenderResourceCache.swift; path = "StreamingRenderResourceCache.swift"; sourceTree = "<group>"; };
+		2DFA5C95EE9D1B0447643956 /* ImportedFrameResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImportedFrameResources.swift; path = "ImportedFrameResources.swift"; sourceTree = "<group>"; };
+		9AA6FFDBB52A689F37BDF2DB /* StreamingRenderWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StreamingRenderWorker.swift; path = "StreamingRenderWorker.swift"; sourceTree = "<group>"; };
+		CFFBAD78678608696BC522E8 /* StreamingMetalVideoSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StreamingMetalVideoSurfaceView.swift; path = "StreamingMetalVideoSurfaceView.swift"; sourceTree = "<group>"; };
+		A0243539C81EFD8C6CACA322 /* Streaming.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; name = Streaming.metal; path = "../../Shaders/Streaming.metal"; sourceTree = "<group>"; };
+		53D2DCD507D608E8324E258F /* StreamingDisplayObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingDisplayObservation.swift; sourceTree = "<group>"; };
+		6E60988A615A0BA7E5B184BC /* StreamingExecutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingExecutionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -492,6 +526,21 @@
 		C00000000000000000000009 /* Streaming */ = {
 			isa = PBXGroup;
 			children = (
+				53D2DCD507D608E8324E258F /* StreamingDisplayObservation.swift */,
+				A0243539C81EFD8C6CACA322 /* Streaming.metal */,
+				CFFBAD78678608696BC522E8 /* StreamingMetalVideoSurfaceView.swift */,
+				9AA6FFDBB52A689F37BDF2DB /* StreamingRenderWorker.swift */,
+				2DFA5C95EE9D1B0447643956 /* ImportedFrameResources.swift */,
+				3B487142DEB33AB12A7D6A22 /* StreamingRenderResourceCache.swift */,
+				C5D3BBF138FD0A8174189835 /* StreamingDiagnosticsActor.swift */,
+				CFFFAEFA41DC4226803828EA /* StreamingSurfaceLease.swift */,
+				54A6223F48D685A32D35C12F /* StreamingControllerInputDriver.swift */,
+				5106BB6C22829ADAC280EF79 /* StreamingInputWorker.swift */,
+				A8AB47906BE4A3D0D665EC56 /* StreamInputCore.swift */,
+				F9911650F377C0AE373D58D5 /* StreamingExecutionScope.swift */,
+				B9C2AF927D5522C227E2C2F5 /* StreamingAudioOutput.swift */,
+				B46279BE2731A6F4E86D466D /* StreamingVideoColor.swift */,
+				BF87882737650156B56F3448 /* StreamingMediaTiming.swift */,
 				744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */,
 				414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */,
 				1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */,
@@ -608,6 +657,8 @@
 		C0000000000000000000000D /* XBXRCTests */ = {
 			isa = PBXGroup;
 			children = (
+				6E60988A615A0BA7E5B184BC /* StreamingExecutionTests.swift */,
+				B9505F2AE3388E3B1497A807 /* StreamingMediaCalibrationTests.swift */,
 				DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */,
 				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
 				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
@@ -828,6 +879,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B0DD79690D96DD6B43A1479 /* StreamingDisplayObservation.swift in Sources */,
+				45C23B0F1447E1FDCB8BA416 /* Streaming.metal in Sources */,
+				15B5841CE11C84392C72FD62 /* StreamingMetalVideoSurfaceView.swift in Sources */,
+				41F88BA2C53A8EF3786AF4E8 /* StreamingRenderWorker.swift in Sources */,
+				67692C8F00CABE54EC45E759 /* ImportedFrameResources.swift in Sources */,
+				7ADD4A25A5DA74A826E4FF09 /* StreamingRenderResourceCache.swift in Sources */,
+				41E79592BF317D3D1AEFDE6E /* StreamingDiagnosticsActor.swift in Sources */,
+				212733EA55340613739AD8B9 /* StreamingSurfaceLease.swift in Sources */,
+				6AF7EBF44F46CFE2383DF9B4 /* StreamingControllerInputDriver.swift in Sources */,
+				989E885F9DC5A02EE3A83704 /* StreamingInputWorker.swift in Sources */,
+				EBE3B46CF5112D87DDC3F991 /* StreamInputCore.swift in Sources */,
+				8FCB316BBD64AF07E859EE39 /* StreamingExecutionScope.swift in Sources */,
+				A9C2AF927D5522C227E2C2F5 /* StreamingAudioOutput.swift in Sources */,
+				A46279BE2731A6F4E86D466D /* StreamingVideoColor.swift in Sources */,
+				AF87882737650156B56F3448 /* StreamingMediaTiming.swift in Sources */,
 				956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */,
 				182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */,
 				BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */,
@@ -949,6 +1015,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A6BE02948DE879B172F1351 /* StreamingExecutionTests.swift in Sources */,
+				A9505F2AE3388E3B1497A807 /* StreamingMediaCalibrationTests.swift in Sources */,
 				B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */,
 				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
 				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,

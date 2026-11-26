@@ -1,5 +1,340 @@
 use super::*;
 
+fn local_sample(at: u64, decoded: u64, submitted: u64) -> RuntimeSupervisionSample {
+    let mut result = sample(at, if decoded > 0 { 60.0 } else { 0.0 });
+    result.has_presented_media = true;
+    result.frame_interval_ms = Some(1000.0 / 60.0);
+    result.inactivity_elapsed_ms = 0;
+    result.renderer_kind = Some("webgl2".into());
+    result.renderer_generation = Some(1);
+    result.renderer_submitted_total = Some(submitted);
+    result.renderer_submit_age_ms = Some(at.saturating_sub(20_000) as f64);
+    result.local_counters = Some(RuntimeMediaCounters {
+        received: Some(at.saturating_sub(20_000) * 60 / 1_000),
+        decoded: Some(decoded),
+        presented: Some(0),
+        packets_received: Some(at.saturating_sub(20_000)),
+        packets_lost: None,
+    });
+    result
+}
+
+#[test]
+fn local_stall_starts_fresh_evidence_after_a_visibility_boundary() {
+    let mut state = RuntimeSupervisionState::default();
+    for at in (20_000..=22_000).step_by(1_000) {
+        decide_runtime_supervision(&local_sample(at, 0, 0), &mut state);
+    }
+    for at in [22_200, 23_000, 24_000] {
+        let mut input = local_sample(at, 0, 0);
+        input.eligible_since_ms = 22_250;
+        let decision = decide_runtime_supervision(&input, &mut state);
+        if at < 24_000 {
+            assert!(decision.local_stall.is_none());
+        } else {
+            assert_eq!(decision.local_stall.unwrap().coverage_ms, 1_000);
+        }
+    }
+}
+
+#[test]
+fn local_stall_recovers_30_and_60_fps_decode_after_two_seconds_of_fresh_supply() {
+    for interval in [1000.0 / 30.0, 1000.0 / 60.0] {
+        let mut state = RuntimeSupervisionState::default();
+        for at in (20_000..=22_000).step_by(1_000) {
+            let mut input = local_sample(at, 0, 0);
+            input.frame_interval_ms = Some(interval);
+            let decision = decide_runtime_supervision(&input, &mut state);
+            if at < 22_000 {
+                assert!(decision.local_stall.is_none());
+            } else {
+                let local = decision.local_stall.unwrap();
+                assert!(local.eligible);
+                assert_eq!(local.domain, "decode");
+                assert_eq!(local.action, "keyframeRequest");
+                assert_eq!(local.age_ms, 2_000);
+                assert!(!decision.decode_recovery_eligible);
+                assert!(!decision.media_connection_eligible);
+            }
+        }
+    }
+}
+
+#[test]
+fn local_stall_separates_renderer_stall_from_sparse_callbacks_and_reset_facts() {
+    let mut state = RuntimeSupervisionState::default();
+    for at in (20_000..=22_000).step_by(1_000) {
+        let decision = decide_runtime_supervision(&local_sample(at, at - 20_000, 0), &mut state);
+        if at == 22_000 {
+            let local = decision.local_stall.unwrap();
+            assert_eq!(local.domain, "presentation");
+            assert_eq!(local.action, "playbackRebuild");
+        }
+    }
+    let sparse = local_sample(23_000, 3_000, 60);
+    assert!(decide_runtime_supervision(&sparse, &mut state)
+        .local_stall
+        .is_none());
+    let mut reset = local_sample(24_000, 0, 0);
+    reset.video_generation = 2;
+    assert!(decide_runtime_supervision(&reset, &mut state)
+        .local_stall
+        .is_none());
+    reset.visible = false;
+    assert!(decide_runtime_supervision(&reset, &mut state)
+        .local_stall
+        .is_none());
+    reset.visible = true;
+    reset.now_ms = 25_000;
+    reset.sampled_at_ms = Some(25_000);
+    reset.sample_id = Some("after-visible".into());
+    assert!(decide_runtime_supervision(&reset, &mut state)
+        .local_stall
+        .is_none());
+}
+
+#[test]
+fn local_stall_upgrades_an_ineffective_keyframe_once_and_preserves_same_action_cooling() {
+    let mut state = RuntimeSupervisionState::default();
+    for at in (20_000..=25_000).step_by(1_000) {
+        let mut input = local_sample(at, 0, 0);
+        if at >= 23_000 {
+            input.previous_action_at_ms = Some(22_000);
+            input.previous_action_kind = Some("keyframeRequest".into());
+        }
+        if at == 25_000 {
+            input.previous_action_effect = Some("neutral".into());
+        }
+        let decision = decide_runtime_supervision(&input, &mut state);
+        if at == 24_000 {
+            assert!(!decision.local_stall.as_ref().unwrap().eligible);
+        }
+        if at == 25_000 {
+            let local = decision.local_stall.unwrap();
+            assert!(local.eligible);
+            assert_eq!(local.action, "playbackRebuild");
+        }
+    }
+    let mut input = local_sample(26_000, 0, 0);
+    input.previous_action_at_ms = Some(25_000);
+    input.previous_action_kind = Some("playbackRebuild".into());
+    input.previous_action_effect = Some("neutral".into());
+    assert!(
+        !decide_runtime_supervision(&input, &mut state)
+            .local_stall
+            .unwrap()
+            .eligible
+    );
+}
+
+#[test]
+fn local_stall_renderer_probe_closes_on_new_renderer_submission_with_the_same_video() {
+    let mut input = local_sample(23_000, 60, 60);
+    input.renderer_generation = Some(2);
+    input.renderer_present_fps = Some(60.0);
+    input.renderer_present_coverage_ms = Some(3_000);
+    input.renderer_submit_age_ms = Some(20.0);
+    input.short.video_coverage_ms = 0;
+    let probe = RuntimeRecoveryProbe {
+        action: "playbackRebuild".into(),
+        started_at_ms: 20_000,
+        observe_ms: 3_000,
+        required_observe_ms: 3_000,
+        sample_id: Some("before-renderer".into()),
+        video_generation: Some(1),
+        peer_generation: Some(1),
+        renderer_generation: Some(1),
+        recovery_scope: Some("renderer".into()),
+        baseline: RuntimeRecoveryBaseline {
+            decode_fps: Some(60.0),
+            video_fps: Some(0.0),
+        },
+    };
+    assert_eq!(
+        evaluate_runtime_recovery_probe(&probe, &input, true)
+            .unwrap()
+            .result,
+        "improved"
+    );
+    input.renderer_generation = Some(1);
+    assert!(evaluate_runtime_recovery_probe(&probe, &input, true).is_none());
+}
+
+fn delay_sample(at: u64, rtt: f64, first: f64, last: f64) -> RuntimeSupervisionSample {
+    let mut result = quality_sample(at, 0.0);
+    result.rtt_ms = Some(rtt);
+    result.short.rtt_coverage_ms = SOFT_WINDOW_MS;
+    result.short.rtt_ms_avg = Some(rtt);
+    result.short.jitter_buffer_coverage_ms = SOFT_WINDOW_MS;
+    result.short.jitter_buffer_ms_first = Some(first);
+    result.short.jitter_buffer_ms_last = Some(last);
+    result.long.rtt_coverage_ms = STABLE_WINDOW_MS;
+    result.long.rtt_ms_avg = Some(rtt);
+    result
+}
+
+#[test]
+fn low_loss_delay_pressure_uses_continuous_rtt_and_buffer_evidence() {
+    let mut window = delay_sample(3_000, 180.0, 20.0, 20.0).short;
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(30.0)),
+        "warning"
+    );
+    assert_eq!(
+        assess_runtime_network_pressure(&window, Some(30.0)).reason,
+        "delayAccumulation"
+    );
+    window.jitter_buffer_ms_last = Some(160.0);
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(30.0)),
+        "congested"
+    );
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(180.0)),
+        "stable"
+    );
+    window.rtt_coverage_ms = 1_000;
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(30.0)),
+        "stable"
+    );
+    window.loss_avg = None;
+    window.rtt_ms_avg = Some(f64::NAN);
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(30.0)),
+        "unknown"
+    );
+}
+
+#[test]
+fn delay_quality_effect_requires_improved_delay_and_preserved_supply() {
+    for improved in [true, false] {
+        let mut state = RuntimeSupervisionState::default();
+        decide_runtime_supervision(&delay_sample(3_000, 30.0, 20.0, 20.0), &mut state);
+        let mut action = None;
+        for at in (4_000..=7_000).step_by(1_000) {
+            action = decide_runtime_supervision(&delay_sample(at, 180.0, 20.0, 160.0), &mut state)
+                .quality
+                .action
+                .or(action);
+        }
+        let action = action.unwrap();
+        assert_eq!(action.reason, "delayAccumulation");
+        for at in (8_000..=11_000).step_by(1_000) {
+            let mut post = delay_sample(
+                at,
+                if improved { 80.0 } else { 180.0 },
+                if improved { 60.0 } else { 160.0 },
+                if improved { 60.0 } else { 160.0 },
+            );
+            post.quality_level = 1;
+            post.quality_completion = Some(RuntimeQualityCompletion {
+                id: action.id,
+                result: "applied".into(),
+                previous_level: 0,
+                completed_at_ms: 8_000,
+            });
+            let decision = decide_runtime_supervision(&post, &mut state);
+            assert!(decision.quality.action.is_none());
+            if at == 11_000 {
+                assert_eq!(
+                    decision.quality.effect.as_deref(),
+                    Some(if improved { "improved" } else { "neutral" })
+                );
+                assert_eq!(decision.quality.rtt_baseline_ms, Some(30.0));
+            }
+        }
+        if !improved {
+            for at in (12_000..=23_000).step_by(1_000) {
+                let mut post = delay_sample(at, 180.0, 160.0, 160.0);
+                post.quality_level = 1;
+                let decision = decide_runtime_supervision(&post, &mut state);
+                if at == 23_000 {
+                    assert_eq!(
+                        decision.quality.action.unwrap().reason,
+                        "ineffectiveRestore"
+                    );
+                } else {
+                    assert!(decision.quality.action.is_none());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn delay_warning_preserves_low_baseline_until_path_changes() {
+    let mut state = RuntimeSupervisionState::default();
+    decide_runtime_supervision(&delay_sample(3_000, 30.0, 20.0, 20.0), &mut state);
+    for at in (4_000..=30_000).step_by(1_000) {
+        let decision = decide_runtime_supervision(&delay_sample(at, 180.0, 20.0, 20.0), &mut state);
+        assert_eq!(decision.quality.rtt_baseline_ms, Some(30.0));
+        assert_eq!(decision.quality.state, "warning");
+        assert!(decision.quality.action.is_none());
+    }
+    let mut changed = delay_sample(31_000, 180.0, 20.0, 20.0);
+    changed.path_id = Some("changed-path".into());
+    let decision = decide_runtime_supervision(&changed, &mut state);
+    assert_eq!(decision.quality.rtt_baseline_ms, Some(180.0));
+    assert_eq!(decision.quality.state, "stable");
+}
+
+#[test]
+fn cumulative_windows_include_observed_jitter_buffer_and_clear_on_counter_reset() {
+    let mut windows = RuntimeWindowAccumulator::default();
+    for second in 0..=3 {
+        let counters = RuntimeMediaCounters {
+            received: Some(second * 60),
+            decoded: Some(second * 60),
+            presented: Some(second * 60),
+            packets_received: Some(second * 100),
+            packets_lost: Some(0),
+        };
+        windows.observe(
+            second * 1000,
+            &counters,
+            Some(10.0),
+            Some(2.0),
+            Some(second as f64 * 20.0),
+        );
+    }
+    let window = windows.window(3000, SOFT_WINDOW_MS);
+    assert_eq!(window.jitter_buffer_coverage_ms, 3000);
+    assert_eq!(window.jitter_buffer_ms_first, Some(20.0));
+    assert_eq!(window.jitter_buffer_ms_last, Some(60.0));
+    assert_eq!(window.decode_fps_avg, Some(60.0));
+    windows.observe(4000, &RuntimeMediaCounters::default(), None, None, None);
+    assert_eq!(
+        windows
+            .window(4000, SOFT_WINDOW_MS)
+            .jitter_buffer_coverage_ms,
+        2000
+    );
+    windows.observe(
+        5000,
+        &RuntimeMediaCounters {
+            received: Some(240),
+            ..Default::default()
+        },
+        None,
+        None,
+        Some(f64::NAN),
+    );
+    windows.observe(
+        6000,
+        &RuntimeMediaCounters {
+            received: Some(0),
+            ..Default::default()
+        },
+        None,
+        None,
+        Some(20.0),
+    );
+    let window = windows.window(6000, SOFT_WINDOW_MS);
+    assert_eq!(window.jitter_buffer_coverage_ms, 0);
+    assert_eq!(window.jitter_buffer_ms_first, None);
+}
+
 #[test]
 fn same_facts_replay_pc_decode_and_network_baseline() {
     let baseline: serde_json::Value = serde_json::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
@@ -138,6 +473,11 @@ fn network_pressure_uses_loss_and_growth_with_full_coverage() {
     window.loss_coverage_ms = 2_000;
     assert_eq!(
         classify_runtime_network_pressure(&window, Some(100.0)),
+        "warning"
+    );
+    window.rtt_coverage_ms = 2_000;
+    assert_eq!(
+        classify_runtime_network_pressure(&window, Some(100.0)),
         "unknown"
     );
 }
@@ -147,6 +487,8 @@ fn recovery_effect_requires_fresh_coverage_and_correct_generations() {
     let mut sample = sample(7_000, 60.0);
     let probe = RuntimeRecoveryProbe {
         action: "keyframeRequest".into(),
+        renderer_generation: None,
+        recovery_scope: None,
         started_at_ms: 3_000,
         observe_ms: 3_000,
         required_observe_ms: 3_000,

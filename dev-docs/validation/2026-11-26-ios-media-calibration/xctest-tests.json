@@ -1,0 +1,186 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+      "deviceName": "iPhone 18 Pro",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24B8117",
+      "osVersion": "27.2",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "1秒",
+                  "durationInSeconds": 1.1581699848175049,
+                  "name": "testSupervisionCapturesFreshStatsAfterAsyncPeerSnapshot()",
+                  "nodeIdentifier": "StreamingDisplayCallbackTests/testSupervisionCapturesFreshStatsAfterAsyncPeerSnapshot()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests/testSupervisionCapturesFreshStatsAfterAsyncPeerSnapshot",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "StreamingDisplayCallbackTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingDisplayCallbackTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "0.00061s",
+                  "durationInSeconds": 0.0006120204925537109,
+                  "name": "testAudioConfigurationsConsumeDirectionAndNegotiatedChannels()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioConfigurationsConsumeDirectionAndNegotiatedChannels()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioConfigurationsConsumeDirectionAndNegotiatedChannels",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0036s",
+                  "durationInSeconds": 0.003558039665222168,
+                  "name": "testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00086s",
+                  "durationInSeconds": 0.0008599758148193359,
+                  "name": "testAudioPreferencesRespectStereoMonoAndRouteLimits()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioPreferencesRespectStereoMonoAndRouteLimits()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioPreferencesRespectStereoMonoAndRouteLimits",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00054s",
+                  "durationInSeconds": 0.0005398988723754883,
+                  "name": "testBT709AndBT2020RedUseSourceCoefficients()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testBT709AndBT2020RedUseSourceCoefficients()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testBT709AndBT2020RedUseSourceCoefficients",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.028s",
+                  "durationInSeconds": 0.027652978897094727,
+                  "name": "testPixelBufferMetadataOverridesResolutionAndSurvivesMailbox()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testPixelBufferMetadataOverridesResolutionAndSurvivesMailbox()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testPixelBufferMetadataOverridesResolutionAndSurvivesMailbox",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00062s",
+                  "durationInSeconds": 0.0006209611892700195,
+                  "name": "testTimingKeepsMissingSilentInvalidAndInterruptedIntervalsUnknown()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testTimingKeepsMissingSilentInvalidAndInterruptedIntervalsUnknown()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testTimingKeepsMissingSilentInvalidAndInterruptedIntervalsUnknown",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00053s",
+                  "durationInSeconds": 0.0005279779434204102,
+                  "name": "testTimingResetsEachStreamAndWeightsByEmittedFrames()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testTimingResetsEachStreamAndWeightsByEmittedFrames()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testTimingResetsEachStreamAndWeightsByEmittedFrames",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00041s",
+                  "durationInSeconds": 0.00040900707244873047,
+                  "name": "testTimingUsesWindowDeltasForBufferTargetMinimumAndDecode()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testTimingUsesWindowDeltasForBufferTargetMinimumAndDecode()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testTimingUsesWindowDeltasForBufferTargetMinimumAndDecode",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00057s",
+                  "durationInSeconds": 0.0005650520324707031,
+                  "name": "testYUVRangePreservesExactBlackAndWhiteForAllMatrices()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testYUVRangePreservesExactBlackAndWhiteForAllMatrices()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testYUVRangePreservesExactBlackAndWhiteForAllMatrices",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "StreamingMediaCalibrationTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "2秒",
+                  "durationInSeconds": 2.8479819297790527,
+                  "name": "testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+                  "nodeIdentifier": "XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testNativeVideoRendererPresentsNV12FrameDeliveredFromBackgroundQueue",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.32s",
+                  "durationInSeconds": 0.31859397888183594,
+                  "name": "testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes()",
+                  "nodeIdentifier": "XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0021s",
+                  "durationInSeconds": 0.0021229982376098633,
+                  "name": "testStreamingAudioConfigurationsAreIndependentAndDirectionComplete()",
+                  "nodeIdentifier": "XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00042s",
+                  "durationInSeconds": 0.00042498111724853516,
+                  "name": "testStreamingAudioPermissionOnlyAppliesToSendReceive()",
+                  "nodeIdentifier": "XBXRCTests/testStreamingAudioPermissionOnlyAppliesToSendReceive()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingAudioPermissionOnlyAppliesToSendReceive",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "XBXRCTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "XBXRCTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        }
+      ],
+      "name": "XBXRC",
+      "nodeType": "Test Plan",
+      "result": "Passed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

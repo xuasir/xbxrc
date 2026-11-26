@@ -33,6 +33,7 @@ import { inputController } from '../../shared/gamepad/runtime'
 import { monotonicNowMs } from '../clock'
 import { withOperationTimeout } from '../execution/async-operation'
 import { normalizeDisplayOptions } from '../utils'
+import { buildLocalSupervisionFacts } from './browser-local-recovery'
 import { createBrowserNegotiation } from './browser-negotiation'
 import { createBrowserPlaybackTrace } from './browser-playback-trace'
 import { createBrowserRecoveryProbe } from './browser-recovery-policy'
@@ -70,6 +71,7 @@ import {
   applyBrowserVideoDisplay,
 } from './browser-video-display'
 import { createConnectionRecoveryCoordinator } from './connection-recovery'
+import { compactAudio } from './playback-health'
 import { observeRenderState } from './render-state'
 import { createSerialOperationQueue } from './serial-operation'
 
@@ -231,6 +233,7 @@ function createPlayerClient(
     audio: {
       volume: audioVolume,
       enableAudioControl: spec.render.enableAudioControl === true,
+      requestedChannelCount: spec.runtime.forceMonoAudio ? 1 : 2,
     },
     renderer: {
       enabled: true,
@@ -335,6 +338,8 @@ export function createBrowserRuntime(options: {
   let lastRecoveryActionEffect: 'improved' | 'neutral' | 'degraded' | 'unknown' | undefined
   let lastRecoveryActionEffectScore: number | undefined
   let lastRecoveryActionEffectReason: string | undefined
+  let lastRecoveryActionKind: RecoveryAction | undefined
+  let localStallDigest = ''
   let recoveryCause: RecoveryCause | undefined
   let senderPolicyCause: SenderPolicyCause = 'none'
   let warmupUntilMs = 0
@@ -479,6 +484,7 @@ export function createBrowserRuntime(options: {
           outputHeight: stats?.renderActualOutputHeight,
           rendererKind: stats?.rendererKind ?? plan?.kind,
           rendererFrameSource: stats?.rendererFrameSource ?? 'presentation',
+          rendererExecutionMode: stats?.rendererExecution?.mode,
           pipelineType: plan?.kind,
           processing: plan ? projectRenderProcessingFromPlan(plan) : undefined,
           processingMode: plan?.sharpening.processingMode,
@@ -501,6 +507,7 @@ export function createBrowserRuntime(options: {
           decoderImplementation: latestWebRtcSample?.inboundVideo?.decoderImplementation,
           powerEfficientDecoder: latestWebRtcSample?.inboundVideo?.powerEfficientDecoder,
           trackingSource: frameObservation.renderFrameTrackingSource ?? 'unavailable',
+          rendererExecutionMode: stats?.rendererExecution?.mode,
         },
         visibility: document.visibilityState,
       }
@@ -1374,7 +1381,14 @@ export function createBrowserRuntime(options: {
         playbackTrace.observe(observation)
       }),
       eventBus.on('stats.collectionState', state => playbackTrace.collectionState(state)),
+      eventBus.on('media.audioStateChanged', (observation) => {
+        recordRuntimeTraceEvent('audioPlaybackStateObserved', () => ({ ...compactAudio({ audioPlayback: observation }), observedAtMs: observation.observedAtMs }))
+      }),
       eventBus.on('media.resourcesObserved', (payload) => {
+        if (payload.reason === 'rendererExecutionObserved' || payload.reason === 'rendererExecutionStopped') {
+          recordRuntimeTraceEvent(payload.reason === 'rendererExecutionObserved' ? 'renderExecutionObserved' : 'renderExecutionStopped', () => ({ ...payload.resources }))
+          return
+        }
         const state = { ...observeRenderState(payload.resources), warning: renderHealth.warning }
         const digest = JSON.stringify(state)
         if (digest !== renderStateDigest) {
@@ -1548,9 +1562,10 @@ export function createBrowserRuntime(options: {
     lastRecoveryActionResult = 'suppressed'
   }
 
-  function beginRecoveryActionEffectProbe(action: RecoveryAction, now: number, stats: StreamStats): void {
-    pendingActionEffectProbe = createBrowserRecoveryProbe(action, stats, now)
+  function beginRecoveryActionEffectProbe(action: RecoveryAction, now: number, stats: StreamStats, scope?: 'renderer'): void {
+    pendingActionEffectProbe = createBrowserRecoveryProbe(action, stats, now, scope)
     lastRecoveryActionAtMs = now
+    lastRecoveryActionKind = action
     lastRecoveryActionEffect = lastRecoveryActionEffectScore = lastRecoveryActionEffectReason = undefined
   }
 
@@ -1662,6 +1677,7 @@ export function createBrowserRuntime(options: {
     inactivityElapsedMs: number
     stallThresholdMs: number
     stats: StreamStats
+    domain?: 'decode' | 'presentation'
   }): Promise<boolean> {
     if (pendingActionEffectProbe)
       return false
@@ -1682,7 +1698,8 @@ export function createBrowserRuntime(options: {
       inactivityElapsedMs: context.inactivityElapsedMs,
       stallThresholdMs: context.stallThresholdMs,
       budgetRemaining: formatRecoveryBudget(),
-      evidence: { domain: 'decode', observedAtMs: context.stats.statsSampledAtMs, sampleId: context.stats.statsSampleId, coverageMs: Math.min(context.stats.browserStatsWindows?.short.receivedCoverageMs ?? 0, context.stats.browserStatsWindows?.short.decodeCoverageMs ?? 0), sustainedMs: latestSupervisionDecision?.decodePressureSustainedMs ?? 0, previousActionAtMs: lastRecoveryActionAtMs },
+      localStall: latestSupervisionDecision?.localStall,
+      evidence: { domain: context.domain ?? 'decode', observedAtMs: context.stats.statsSampledAtMs, sampleId: context.stats.statsSampleId, coverageMs: latestSupervisionDecision?.localStall?.coverageMs ?? Math.min(context.stats.browserStatsWindows?.short.receivedCoverageMs ?? 0, context.stats.browserStatsWindows?.short.decodeCoverageMs ?? 0), sustainedMs: latestSupervisionDecision?.decodePressureSustainedMs ?? 0, previousActionAtMs: lastRecoveryActionAtMs },
     }))
     markRecoveryAction(action, 'planned')
 
@@ -1740,6 +1757,11 @@ export function createBrowserRuntime(options: {
     }
 
     if (action === 'playbackRebuild') {
+      const rendererOnly = context.domain === 'presentation' && context.stats.rendererKind !== 'video'
+      if (rendererOnly && assertClient().snapshotMediaResources().pendingRenderers > 0) {
+        recordLocalRecoverySuppressed(action, 'cooldown', { reason: 'rendererHandoffPending' })
+        return false
+      }
       if (playbackRebuildBudgetRemaining <= 0) {
         markRecoverySuppressed('budget', action)
         recordLocalRecoverySuppressed(action, 'budget')
@@ -1748,9 +1770,9 @@ export function createBrowserRuntime(options: {
       playbackRebuildBudgetRemaining = Math.max(0, playbackRebuildBudgetRemaining - 1)
       bandwidthAction = 'playbackRebuild'
       supervision.deferUntil(now + 3_000)
-      beginRecoveryActionEffectProbe(action, now, context.stats)
+      beginRecoveryActionEffectProbe(action, now, context.stats, rendererOnly ? 'renderer' : undefined)
       // L2 重挂当前媒体流，解码与新帧进展用于后续效果判断。
-      const resetApplied = assertClient().rebuildVideoPlayback()
+      const resetApplied = rendererOnly ? (assertClient().retryRendering(), true) : assertClient().rebuildVideoPlayback()
       if (!resetApplied)
         pendingActionEffectProbe = undefined
       markRecoveryAction(action, resetApplied ? 'executed' : 'notSupported')
@@ -1762,7 +1784,8 @@ export function createBrowserRuntime(options: {
         result: resetApplied ? 'executed' : 'notSupported',
         budgetRemaining: formatRecoveryBudget(),
         observedAtMs: now,
-        domain: 'decode',
+        domain: context.domain ?? 'decode',
+        recoveryScope: rendererOnly ? 'renderer' : 'playback',
       }))
       return true
     }
@@ -1883,6 +1906,8 @@ export function createBrowserRuntime(options: {
       rendererKind: stats.rendererKind,
       rendererFrameSource: stats.rendererFrameSource,
       rendererDecodedFrameSupply: stats.rendererDecodedFrameSupply,
+      rendererExecution: stats.rendererExecution,
+      rendererObservationSkewMs: stats.rendererObservationSkewMs,
       rendererTargetFps: stats.rendererTargetFps,
       trackingSource: frameObservation.renderFrameTrackingSource,
       sourceFpsEstimate: frameObservation.renderFrameSourceFpsEstimate ?? null,
@@ -1977,6 +2002,9 @@ export function createBrowserRuntime(options: {
           videoGeneration: stats.statsVideoGeneration ?? generation,
           warmupUntilMs: Math.floor(Math.max(0, warmupUntilMs)),
           previousActionAtMs: integer(lastRecoveryActionAtMs),
+          previousActionKind: lastRecoveryActionKind,
+          previousActionEffect: lastRecoveryActionEffect,
+          ...buildLocalSupervisionFacts(stats, latestWebRtcSample, firstPresentedAtMs !== undefined),
           eligibleSinceMs: Math.floor(supervisionEligibleSinceMs),
           short: window(stats.browserStatsWindows?.short),
           long: window(stats.browserStatsWindows?.long),
@@ -2020,6 +2048,13 @@ export function createBrowserRuntime(options: {
     }
     const channelHealth = assertClient().getControlChannelHealthSnapshot()
     const decodeRecoveryEligible = decision.decodeRecoveryEligible
+    const local = decision.localStall
+    const localEligible = local?.eligible === true
+    const nextLocalDigest = local ? [local.domain, local.action, local.eligible, local.reason].join('|') : ''
+    if (nextLocalDigest !== localStallDigest) {
+      localStallDigest = nextLocalDigest
+      recordRuntimeTraceEvent('localStallObserved', () => ({ state: local ? 'confirmed' : 'cleared', ...local, sampleId: stats.statsSampleId, peerGeneration: stats.statsPeerGeneration, videoGeneration: stats.statsVideoGeneration, rendererGeneration: stats.rendererGeneration }))
+    }
     if (decision.healthyEpisodeComplete && recoveryEpochId && !pendingActionEffectProbe) {
       recordRuntimeTraceEvent('recoveryEpochCompleted', () => ({ epochId: recoveryEpochId, reason: 'healthyLongWindow', sampleId: stats.statsSampleId }))
       recoveryEpochId = undefined
@@ -2032,13 +2067,13 @@ export function createBrowserRuntime(options: {
       return
     }
     const lastActivity = lastMediaActivityAt ?? connectedAt
-    const inactivityElapsedMs = Math.max(0, now - lastActivity)
+    const inactivityElapsedMs = Math.max(0, now - lastActivity, localEligible ? local!.ageMs : 0)
     const stallThresholdMs = decision.stallThresholdMs
     if (inactivityElapsedMs < stallThresholdMs) {
       return
     }
     const hasInboundProgress = decision.hasInboundProgress
-    if (hasInboundProgress && inactivityElapsedMs < stallThresholdMs + MEDIA_STALL_EVIDENCE_GRACE_MS) {
+    if (!localEligible && hasInboundProgress && inactivityElapsedMs < stallThresholdMs + MEDIA_STALL_EVIDENCE_GRACE_MS) {
       supervision.deferUntil(now + 2_000)
       recordRuntimeTraceEvent('stallRecoverySuppressedByInboundProgress', () => ({
         inactivityElapsedMs,
@@ -2060,12 +2095,13 @@ export function createBrowserRuntime(options: {
         decisionDigest: decisionDigest ?? null,
       }))
     }
-    const actionHandled = !decodeRecoveryEligible || recoveryCause === 'controlChannelUnhealthy'
+    const actionHandled = (!decodeRecoveryEligible && !localEligible) || recoveryCause === 'controlChannelUnhealthy'
       ? false
-      : await executeRecoveryAction(shouldTryPlaybackRebuild ? 'playbackRebuild' : 'keyframeRequest', now, {
+      : await executeRecoveryAction(localEligible ? local!.action : shouldTryPlaybackRebuild ? 'playbackRebuild' : 'keyframeRequest', now, {
           inactivityElapsedMs,
           stallThresholdMs,
           stats,
+          domain: localEligible ? local!.domain : 'decode',
         })
     if (actionHandled) {
       return
@@ -2147,6 +2183,8 @@ export function createBrowserRuntime(options: {
     lastRecoveryActionEffect = undefined
     lastRecoveryActionEffectScore = undefined
     lastRecoveryActionEffectReason = undefined
+    lastRecoveryActionKind = undefined
+    localStallDigest = ''
     recoveryCause = undefined
     senderPolicyCause = 'none'
   }

@@ -1,5 +1,5 @@
 use super::supervision::{
-    classify_runtime_network_pressure, RuntimeObservationWindow, RuntimeSupervisionSample,
+    assess_runtime_network_pressure, RuntimeObservationWindow, RuntimeSupervisionSample,
     SOFT_WINDOW_MS, STABLE_WINDOW_MS,
 };
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,8 @@ pub struct RuntimeQualityDecision {
     pub reason: String,
     pub rtt_baseline_ms: Option<f64>,
     pub rtt_delta_ms: Option<f64>,
+    pub buffer_delay_ms: Option<f64>,
+    pub buffer_growth_ms: Option<f64>,
     pub effect: Option<String>,
     pub action: Option<RuntimeQualityAction>,
 }
@@ -39,6 +41,8 @@ impl Default for RuntimeQualityDecision {
             reason: "observationUnavailable".into(),
             rtt_baseline_ms: None,
             rtt_delta_ms: None,
+            buffer_delay_ms: None,
+            buffer_growth_ms: None,
             effect: None,
             action: None,
         }
@@ -150,11 +154,12 @@ impl RuntimeQualityState {
             self.pressure_since = None;
             self.healthy_since = None;
         }
-        let pressure = if new_sample && at.saturating_sub(SOFT_WINDOW_MS) >= self.eligible_since {
-            classify_runtime_network_pressure(&sample.short, self.rtt_baseline)
+        let assessment = if new_sample && at.saturating_sub(SOFT_WINDOW_MS) >= self.eligible_since {
+            assess_runtime_network_pressure(&sample.short, self.rtt_baseline)
         } else {
-            "unknown"
+            assess_runtime_network_pressure(&RuntimeObservationWindow::default(), None)
         };
+        let pressure = assessment.pressure;
         if new_sample {
             self.last_sample_at = Some(at);
         }
@@ -162,14 +167,25 @@ impl RuntimeQualityState {
             self.healthy_since.get_or_insert(sample.now_ms);
             self.pressure_since = None;
             if self.rtt_baseline.is_none() && sample.short.rtt_coverage_ms >= SOFT_WINDOW_MS - 1 {
-                self.rtt_baseline = sample.short.rtt_ms_avg;
+                self.rtt_baseline = sample
+                    .short
+                    .rtt_ms_avg
+                    .filter(|n| n.is_finite() && *n >= 0.0);
             }
             if self
                 .healthy_since
                 .is_some_and(|since| sample.now_ms.saturating_sub(since) >= STABLE_WINDOW_MS)
                 && sample.long.rtt_coverage_ms >= STABLE_WINDOW_MS - 1
             {
-                self.rtt_baseline = sample.long.rtt_ms_avg;
+                // 健康基线向更低的已观测 RTT 收敛，持续排队会保持可见。
+                if let Some(rtt) = sample
+                    .long
+                    .rtt_ms_avg
+                    .filter(|n| n.is_finite() && *n >= 0.0)
+                {
+                    self.rtt_baseline =
+                        Some(self.rtt_baseline.map_or(rtt, |baseline| baseline.min(rtt)));
+                }
             }
         } else {
             self.healthy_since = None;
@@ -206,6 +222,8 @@ impl RuntimeQualityState {
                         } else {
                             "degraded"
                         }
+                    } else if probe.action.reason == "delayAccumulation" {
+                        evaluate_delay_effect(&probe.baseline, post)
                     } else if post.loss_avg.unwrap() < probe.baseline.loss_avg.unwrap() * 0.5 {
                         "improved"
                     } else if post.loss_avg.unwrap() > probe.baseline.loss_avg.unwrap() * 1.2 {
@@ -251,7 +269,14 @@ impl RuntimeQualityState {
                     .pressure_since
                     .is_some_and(|at| sample.now_ms.saturating_sub(at) >= SOFT_WINDOW_MS)
             {
-                Some((sample.quality_level + 1, "sustainedCongestion"))
+                Some((
+                    sample.quality_level + 1,
+                    if assessment.reason == "delayAccumulation" {
+                        "delayAccumulation"
+                    } else {
+                        "sustainedCongestion"
+                    },
+                ))
             } else {
                 None
             };
@@ -289,7 +314,7 @@ impl RuntimeQualityState {
                         } else if pressure == "stable" {
                             "pathStable"
                         } else {
-                            "transportLoss"
+                            assessment.reason
                         }
                         .into()
                     })
@@ -299,7 +324,7 @@ impl RuntimeQualityState {
                 } else if pressure == "stable" {
                     "pathStable"
                 } else {
-                    "transportLoss"
+                    assessment.reason
                 }
                 .into()
             },
@@ -309,10 +334,53 @@ impl RuntimeQualityState {
                 .rtt_ms_avg
                 .zip(self.rtt_baseline)
                 .map(|(n, p)| n - p),
+            buffer_delay_ms: sample.short.jitter_buffer_ms_last,
+            buffer_growth_ms: (sample.short.jitter_buffer_coverage_ms >= SOFT_WINDOW_MS - 1)
+                .then(|| {
+                    sample
+                        .short
+                        .jitter_buffer_ms_last
+                        .zip(sample.short.jitter_buffer_ms_first)
+                        .map(|(last, first)| last - first)
+                })
+                .flatten(),
             effect: self.effect.clone(),
             action,
         };
         self.decision = decision.clone();
         decision
+    }
+}
+
+fn evaluate_delay_effect(
+    before: &RuntimeObservationWindow,
+    after: &RuntimeObservationWindow,
+) -> &'static str {
+    let finite = |value: Option<f64>| value.filter(|n| n.is_finite() && *n >= 0.0);
+    let measured = before.rtt_coverage_ms >= SOFT_WINDOW_MS - 1
+        && after.rtt_coverage_ms >= SOFT_WINDOW_MS - 1
+        && before.jitter_buffer_coverage_ms >= SOFT_WINDOW_MS - 1
+        && after.jitter_buffer_coverage_ms >= SOFT_WINDOW_MS - 1;
+    let Some(((previous_rtt, rtt), (previous_buffer, buffer))) = finite(before.rtt_ms_avg)
+        .zip(finite(after.rtt_ms_avg))
+        .zip(finite(before.jitter_buffer_ms_last).zip(finite(after.jitter_buffer_ms_last)))
+        .filter(|_| measured)
+    else {
+        return "unknown";
+    };
+    let Some((previous_loss, loss)) = finite(before.loss_avg).zip(finite(after.loss_avg)) else {
+        return "unknown";
+    };
+    if loss > previous_loss + 0.01
+        || rtt - previous_rtt > 10.0_f64.max(previous_rtt * 0.2)
+        || buffer - previous_buffer > 20.0_f64.max(previous_buffer * 0.2)
+    {
+        "degraded"
+    } else if previous_rtt - rtt >= 10.0_f64.max(previous_rtt * 0.2)
+        && previous_buffer - buffer >= 20.0_f64.max(previous_buffer * 0.2)
+    {
+        "improved"
+    } else {
+        "neutral"
     }
 }

@@ -142,6 +142,69 @@ function buttonMask(packet: DataView): number {
 }
 
 describe('input delivery under pressure', () => {
+  it.each([30, 60])('delivers stationary-controller video feedback at %i fps within one short batch', (fps) => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    for (let index = 0; index < fps; index++) {
+      f.metadata(index + 1)
+      vi.advanceTimersByTime(8)
+      expect(f.sent.at(-1)!.getUint32(15, true)).toBe(index + 1)
+      vi.advanceTimersByTime(1000 / fps - 8)
+    }
+    expect(f.service.snapshotFeedback()).toMatchObject({ sentFrames: fps, deadlineMisses: 0, sendAge: { maxMs: 8 } })
+  })
+
+  it('coalesces a short feedback batch while immediate input consumes its queued metadata', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.metadata(1)
+    vi.advanceTimersByTime(4)
+    f.metadata(2)
+    vi.advanceTimersByTime(3)
+    expect(f.sent).toHaveLength(1)
+    f.queue(1)
+    expect(f.sent.at(-1)!.getUint8(14)).toBe(2)
+    expect(buttonMask(f.sent.at(-1)!)).toBe(16)
+    vi.advanceTimersByTime(1)
+    expect(f.sent).toHaveLength(2)
+    expect(f.service.snapshotFeedback().sendAge.maxMs).toBe(7)
+  })
+
+  it('expires old feedback behind pressure and sends only fresh feedback on writable', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.buffer(18 * 1024)
+    f.metadata(1)
+    vi.advanceTimersByTime(101)
+    f.metadata(2)
+    f.buffer(0)
+    f.writable()
+    expect(f.sent.at(-1)!.getUint8(14)).toBe(1)
+    expect(f.sent.at(-1)!.getUint32(15, true)).toBe(2)
+    expect(f.service.snapshotFeedback()).toMatchObject({ sentFrames: 1, expiredFrames: 1 })
+  })
+
+  it('uses the existing retry after rejected feedback and cancels the old timer at stop', () => {
+    const f = reliabilityFixture()
+    f.service.start(f.transport)
+    f.accepting(false)
+    f.metadata(5)
+    vi.advanceTimersByTime(8)
+    const attempts = f.attempts.length
+    vi.advanceTimersByTime(30)
+    expect(f.attempts).toHaveLength(attempts)
+    f.accepting(true)
+    vi.advanceTimersByTime(12)
+    expect(f.sent.at(-1)!.getUint32(15, true)).toBe(5)
+    expect(f.service.snapshotFeedback()).toMatchObject({ deadlineMisses: 1, blockedReason: 'transportRejected' })
+    f.metadata(6)
+    f.service.stop()
+    expect(vi.getTimerCount()).toBe(0)
+    const sent = f.sent.length
+    vi.advanceTimersByTime(50)
+    expect(f.sent).toHaveLength(sent)
+  })
+
   it('pauses ordinary input behind old browser bytes and immediately delivers an ordered release', () => {
     const f = reliabilityFixture()
     f.service.start(f.transport)

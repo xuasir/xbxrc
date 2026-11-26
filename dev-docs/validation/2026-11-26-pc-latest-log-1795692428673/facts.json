@@ -1,0 +1,3949 @@
+{
+  "schemaVersion": 1,
+  "trace": {
+    "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795692428673-1.jsonl",
+    "snapshot": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/runtime-trace-1795692428673-1.jsonl",
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj",
+    "capturedAt": "2026-11-26T19:40:47.041631+08:00",
+    "sourceBytesAtCapture": 15303638,
+    "snapshotBytes": 15303638,
+    "trailingPartialBytes": 0,
+    "snapshotSha256": "547bfc3dfddea19e06bd4d488edf602cecbb7dd590e465c5b269d24a0655dad1",
+    "rows": 5483,
+    "firstSeq": 1,
+    "lastSeq": 5483,
+    "firstTsMs": 1795692428673,
+    "lastTsMs": 1795692692955,
+    "firstTime": "2026-11-26T19:27:08.673000+08:00",
+    "lastTime": "2026-11-26T19:31:32.955000+08:00",
+    "sourceBytesAfterCapture": 15303638,
+    "retainedInput": "runtime-trace-1795692428673-1.jsonl.gz",
+    "evidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-26-pc-latest-log-1795692428673",
+    "analysisCommands": [
+      {
+        "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py <frozen-trace> --json --exclude-categories log",
+        "exitCode": 0
+      },
+      {
+        "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_production_health_report.py <frozen-trace> --output production-health.json",
+        "exitCode": 0,
+        "gate": "FAIL"
+      },
+      {
+        "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_browser_webrtc_behavior_report.py <frozen-trace> --require-stability",
+        "exitCode": 2,
+        "gate": "FAIL",
+        "reason": "中段 source supply deficit 和 submit age 长尾"
+      }
+    ]
+  },
+  "build": {
+    "buildFingerprint": {
+      "buildTimestampUnixMs": "1795692410490",
+      "cargoProfile": "debug",
+      "edition": "browser",
+      "gitCommitShort": "37e4fb43",
+      "sourceFingerprintSha256": "1463f257ab59eac2a3aabd415b573bf6d82f6414f83d8d12af97bdfdc7f745eb",
+      "workspaceDirty": true
+    },
+    "platform": "macos",
+    "targetType": "home"
+  },
+  "profile": {
+    "traceModes": {
+      "dev": 5483
+    },
+    "traceProfiles": {
+      "dev": 5483
+    },
+    "dimensions": {
+      "core": 25,
+      "lifecycle": 435,
+      "input": 2568,
+      "frontend": 1783,
+      "network": 18,
+      "presentation": 450,
+      "media_supply": 202,
+      "recovery": 2
+    },
+    "importance": {
+      "essential": 66,
+      "key": 3727,
+      "debug": 1690
+    },
+    "traceBudgetNotices": 0,
+    "categories": {
+      "state": 51,
+      "event": 4612,
+      "snapshot": 817,
+      "decision": 3
+    },
+    "domains": {
+      "trace": 5,
+      "app": 1,
+      "auth": 14,
+      "gamepad-shell": 1,
+      "streaming-runtime-host": 5037,
+      "data": 7,
+      "streaming": 418
+    },
+    "eventsTop": {
+      "event/streaming-runtime-host/gamepadFrameSent": 1862,
+      "event/streaming-runtime-host/browserWebRtcStatsObserved": 819,
+      "event/streaming-runtime-host/browserObservationConsumed": 291,
+      "event/streaming-runtime-host/gamepadSamplingObserved": 250,
+      "snapshot/streaming-runtime-host/browserPlaybackHealthObserved": 233,
+      "event/streaming-runtime-host/resolutionFeedbackObserved": 212,
+      "event/streaming-runtime-host/gamepadInputDeliveryObserved": 212,
+      "snapshot/streaming-runtime-host/decodedFrameSupplyObserved": 201,
+      "event/streaming-runtime-host/recoveryCauseClassified": 200,
+      "event/streaming-runtime-host/renderTelemetryObserved": 200,
+      "event/streaming/sessionStatePolled": 189,
+      "snapshot/streaming/sessionMonitorSnapshot": 189,
+      "snapshot/streaming-runtime-host/browserPlaybackAnomalySample": 167,
+      "event/streaming-runtime-host/panelStatsObserved": 90,
+      "event/streaming-runtime-host/browserMediaResourcesSnapshot": 90,
+      "state/streaming-runtime-host/browserPlaybackAnomalyObserved": 40,
+      "event/streaming-runtime-host/browserWebRtcTimelineObserved": 20,
+      "event/streaming-runtime-host/bandwidthStateChanged": 19,
+      "event/streaming-runtime-host/inputUiInteractionObserved": 15,
+      "event/streaming-runtime-host/gamepadInputChanged": 13
+    },
+    "phaseSegments": 0,
+    "longGaps": 53,
+    "anomalyWindows": 2,
+    "suspiciousRows": 4232
+  },
+  "session": {
+    "durationMs": 232116,
+    "firstPresented": {
+      "seq": 193,
+      "tsMs": 1795692460116,
+      "time": "2026-11-26T19:27:40.116000+08:00",
+      "event": "firstFrameStageChanged",
+      "payload": {
+        "clientGeneration": 1,
+        "clockDomain": "monotonic",
+        "connectedElapsedMs": 708,
+        "next": "firstPresented",
+        "observedAtMs": 31114,
+        "previous": "firstDecoded",
+        "reason": "framePresented",
+        "runtimeGeneration": 1
+      }
+    },
+    "ending": {
+      "status": "PASS",
+      "partialEnding": false,
+      "sessions": [
+        {
+          "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+          "status": "PASS",
+          "summarySeq": 5442,
+          "cleanupSeq": 5458.0,
+          "cleanupState": "completed",
+          "flushed": true,
+          "reason": "menuActionExit"
+        }
+      ]
+    }
+  },
+  "configurationTimeline": [
+    {
+      "seq": 104,
+      "tsMs": 1795692453738,
+      "time": "2026-11-26T19:27:33.738000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "unavailable"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 24736,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692453738
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshSource": "unavailable",
+          "expectedFps": 60,
+          "preventResolutionDrops": true,
+          "rendererFrameSource": "presentation",
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "awaiting-metadata",
+          "saturation": 100,
+          "sharpness": 3,
+          "superResolution": false
+        },
+        "lifecyclePhase": "binding",
+        "observationEpoch": 1,
+        "observedAtMs": 24736,
+        "productionContractVersion": 1,
+        "reason": "initial",
+        "runtimeGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 109,
+      "tsMs": 1795692453782,
+      "time": "2026-11-26T19:27:33.782000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "unavailable"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 24775,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692453777
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshSource": "unavailable",
+          "expectedFps": 60,
+          "preventResolutionDrops": true,
+          "rendererFrameSource": "presentation",
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "awaiting-metadata",
+          "saturation": 100,
+          "sharpness": 3,
+          "superResolution": false
+        },
+        "lifecyclePhase": "exchangingOffer",
+        "observationEpoch": 1,
+        "observedAtMs": 24775,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "runtimeGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 120,
+      "tsMs": 1795692453992,
+      "time": "2026-11-26T19:27:33.992000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "unavailable"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 24989,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692453990
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshSource": "unavailable",
+          "expectedFps": 60,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "presentation",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "awaiting-metadata",
+          "saturation": 100,
+          "sharpness": 3,
+          "superResolution": false
+        },
+        "lifecyclePhase": "exchangingOffer",
+        "observationEpoch": 1,
+        "observedAtMs": 24989,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "runtimeGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 122,
+      "tsMs": 1795692454242,
+      "time": "2026-11-26T19:27:34.242000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "unavailable"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 25238,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692454240
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "presentation",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "awaiting-metadata",
+          "saturation": 100,
+          "sharpness": 3,
+          "superResolution": false
+        },
+        "lifecyclePhase": "exchangingOffer",
+        "observationEpoch": 1,
+        "observedAtMs": 25238,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "runtimeGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 196,
+      "tsMs": 1795692460310,
+      "time": "2026-11-26T19:27:40.310000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 31307,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692460309
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "outputHeight": 1440,
+          "outputWidth": 2560,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "worker",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 31308,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 1805,
+      "tsMs": 1795692525101,
+      "time": "2026-11-26T19:28:45.101000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 96098,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692525100
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "outputHeight": 1440,
+          "outputWidth": 2560,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "presentation",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 0,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 96098,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "hidden"
+      }
+    },
+    {
+      "seq": 2032,
+      "tsMs": 1795692551207,
+      "time": "2026-11-26T19:29:11.207000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 122204,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692551205
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "outputHeight": 1440,
+          "outputWidth": 2560,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "initializing",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 122204,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 2036,
+      "tsMs": 1795692551458,
+      "time": "2026-11-26T19:29:11.458000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 122455,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692551457
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "outputHeight": 1440,
+          "outputWidth": 2560,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "worker",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 122455,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 3172,
+      "tsMs": 1795692596775,
+      "time": "2026-11-26T19:29:56.775000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 167773,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692596774
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshSource": "unavailable",
+          "expectedFps": 60,
+          "outputHeight": 1684,
+          "outputWidth": 2994,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "worker",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 167773,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "visible"
+      }
+    },
+    {
+      "seq": 3187,
+      "tsMs": 1795692597275,
+      "time": "2026-11-26T19:29:57.275000+08:00",
+      "event": "playbackObservationManifest",
+      "payload": {
+        "cadence": {
+          "anomalyMs": 250,
+          "checkpointMs": 30000,
+          "collectionMs": 250,
+          "healthMs": 1000
+        },
+        "capabilities": {
+          "gpuTiming": "unavailable",
+          "mediaBackend": "browser",
+          "nativeRecoveryGate": "unsupported",
+          "physicalPresent": "unavailable",
+          "trackingSource": "videoFrameCallback"
+        },
+        "clientGeneration": 1,
+        "clock": {
+          "monotonicMs": 168272,
+          "timeOriginMs": 1795692429001,
+          "wallTimeMs": 1795692597273
+        },
+        "clockDomain": "monotonic",
+        "configuration": {
+          "bitrateCapKbps": 100000,
+          "brightness": 100,
+          "contrast": 100,
+          "displayRefreshHz": 60,
+          "displayRefreshSource": "rafEstimate",
+          "expectedFps": 60,
+          "outputHeight": 1684,
+          "outputWidth": 2994,
+          "pipelineType": "webgl2",
+          "preventResolutionDrops": true,
+          "processing": "usm",
+          "processingMode": "quality",
+          "rendererFrameSource": "worker",
+          "rendererKind": "webgl2",
+          "rendererTargetFps": 60,
+          "requestedFps": 60,
+          "requestedHeight": 1440,
+          "requestedWidth": 2560,
+          "resolutionFeedbackState": "active",
+          "saturation": 100,
+          "sharpness": 3,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "superResolution": false
+        },
+        "lifecyclePhase": "connecting",
+        "observationEpoch": 1,
+        "observedAtMs": 168272,
+        "peerGeneration": 1,
+        "productionContractVersion": 1,
+        "reason": "capabilityChanged",
+        "rendererGeneration": 1,
+        "runtimeGeneration": 1,
+        "videoGeneration": 1,
+        "visibility": "visible"
+      }
+    }
+  ],
+  "foregroundNetwork": {
+    "bucketCount": 197,
+    "scope": "visible, non-partial, valid decode FPS health buckets; nearest-rank sample percentiles",
+    "metrics": {
+      "rttMs": {
+        "median": 4,
+        "p95": 13,
+        "max": 189
+      },
+      "jitterMs": {
+        "median": 5,
+        "p95": 9,
+        "max": 14
+      },
+      "jitterBufferMs": {
+        "median": 5.76,
+        "p95": 10.18,
+        "max": 28.7
+      },
+      "packetAgeMs": {
+        "median": 0,
+        "p95": 0,
+        "max": 4032
+      }
+    }
+  },
+  "videoTotals": {
+    "framesReceived": 12764,
+    "framesDecoded": 12763,
+    "framesDropped": 0,
+    "keyFramesDecoded": 14,
+    "pliCount": 2,
+    "firCount": 0,
+    "nackCount": 4,
+    "freezeCount": 5,
+    "totalFreezesDuration": 7.618,
+    "packetsReceived": 539840,
+    "packetsLost": 452,
+    "totalDecodeTime": 58.546972999999994,
+    "frameWidth": 2560,
+    "frameHeight": 1440
+  },
+  "videoCumulativeLossPercent": 0.08365846616274163,
+  "upload": {
+    "seq": 5384,
+    "method": "texImage2D",
+    "fullUploads": 11249,
+    "subUploads": 0,
+    "textureReuse": 0,
+    "uploadDurationTotalMs": 4938,
+    "meanUploadDurationMs": 0.43897235309805316,
+    "resourceScalars": {
+      "animationCallbacks": 0,
+      "captureDrawCount": 0,
+      "captureWaiters": 0,
+      "decodedFramesReceived": 7379,
+      "domNodes": 1,
+      "drawCostSampleCount": 11249,
+      "drawCount": 11249,
+      "drawDurationMaxMs": 37,
+      "drawDurationTotalMs": 5245,
+      "duplicateDrawCount": 0,
+      "frameRequests": 1,
+      "gpuErrorChecks": 195,
+      "gpuObjects": 5,
+      "lastDrawAtMs": 255220,
+      "lastDrawSequence": 11587,
+      "latestOverwriteCount": 0,
+      "outputHeight": 1684,
+      "outputWidth": 2994,
+      "rateLimitDropCount": 0,
+      "realtimeDrawCount": 11249,
+      "renderFrameSource": "worker",
+      "submitDurationMaxMs": 1,
+      "submitDurationTotalMs": 265,
+      "submitFailureCount": 0,
+      "superResolutionActive": false,
+      "uploadDurationMaxMs": 37,
+      "uploadDurationTotalMs": 4938,
+      "videoTextureFullUploads": 11249,
+      "videoTextureReuseCount": 0,
+      "videoTextureSubUploads": 0,
+      "videoUploadMethod": "texImage2D"
+    },
+    "latestRetained": {
+      "seq": 5426,
+      "tsMs": 1795692685754,
+      "time": "2026-11-26T19:31:25.754000+08:00",
+      "event": "renderTelemetryObserved",
+      "payload": {
+        "observedAtMs": 256749,
+        "trackingSource": "videoFrameCallback",
+        "rendererFrameSource": "worker",
+        "sourceWidth": 2560,
+        "sourceHeight": 1440,
+        "outputWidth": 2994,
+        "outputHeight": 1684,
+        "rendererTargetFps": 60,
+        "receivedFps": 59.5,
+        "decodeFps": 59.5,
+        "videoPresentFps": 63.492063492063494,
+        "callbackFps": 51.58730158730159,
+        "rendererSubmitFps": 59.523809523809526,
+        "sourceFpsEstimate": null,
+        "rawSourceFpsEstimate": null,
+        "sourceFpsUnavailableReason": "mediaTimeDeltaTooSmall",
+        "rendererTiming": {
+          "duration": {
+            "capacity": 256,
+            "count": 11325,
+            "maxMs": 1,
+            "maxObservedMs": 37,
+            "meanMs": 0.46875,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "interval": {
+            "capacity": 256,
+            "count": 7454,
+            "maxMs": 43,
+            "maxObservedMs": 4481,
+            "meanMs": 16.7890625,
+            "p50Ms": 17,
+            "p95Ms": 25,
+            "p99Ms": 32,
+            "retained": 256
+          },
+          "readToSubmit": {
+            "capacity": 256,
+            "count": 11325,
+            "maxMs": 4,
+            "maxObservedMs": 37,
+            "meanMs": 0.5234375,
+            "p50Ms": 0,
+            "p95Ms": 2,
+            "p99Ms": 3,
+            "retained": 256
+          },
+          "receiveToSubmit": {
+            "capacity": 256,
+            "count": 11325,
+            "maxMs": 1,
+            "maxObservedMs": 37,
+            "meanMs": 0.4921875,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "submit": {
+            "capacity": 256,
+            "count": 11325,
+            "maxMs": 1,
+            "maxObservedMs": 1,
+            "meanMs": 0.0390625,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "p99Ms": 1,
+            "retained": 256
+          },
+          "upload": {
+            "capacity": 256,
+            "count": 11325,
+            "maxMs": 1,
+            "maxObservedMs": 37,
+            "meanMs": 0.42578125,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "p99Ms": 1,
+            "retained": 256
+          }
+        },
+        "rendererGpuTiming": {
+          "completion": {
+            "completed": 194,
+            "fenceCount": 0,
+            "insertionCpuMaxMs": 1,
+            "latest": {
+              "insertedAtMs": 255992,
+              "lowerBoundMs": 0,
+              "observedAtMs": 255997,
+              "polls": 1,
+              "submittedAtMs": 255992,
+              "upperBoundMs": 5
+            },
+            "source": "webglFenceCompletionBounds",
+            "state": "ready",
+            "timeouts": 0,
+            "upperBound": {
+              "capacity": 256,
+              "count": 194,
+              "maxMs": 8,
+              "maxObservedMs": 8,
+              "meanMs": 4.634020618556701,
+              "p50Ms": 5,
+              "p95Ms": 6,
+              "p99Ms": 8,
+              "retained": 194
+            }
+          },
+          "disjointCount": 0,
+          "duration": {
+            "capacity": 256,
+            "count": 0,
+            "retained": 0
+          },
+          "queryCount": 0,
+          "source": "EXT_disjoint_timer_query_webgl2",
+          "state": "unavailable"
+        },
+        "rendererSubmittedFramesTotal": 11325,
+        "rendererDuplicateDrawCount": 0,
+        "rendererCaptureFramesTotal": 0,
+        "rendererSubmitFailureCount": 0,
+        "rendererRateLimitDropCount": 0,
+        "callbackCountSinceLastSample": 47,
+        "callbackGapCountSinceLastSample": 0,
+        "presentedFramesAdvancedSinceLastSample": 61,
+        "presentedFramesJumpCountSinceLastSample": 14,
+        "maxCallbackIntervalMsSinceLastSample": 36,
+        "droppedFramesSinceLastSample": 14
+      }
+    },
+    "maxUploadObservedFirstSeq": 3194
+  },
+  "foregroundProductionSegments": [
+    {
+      "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        null,
+        null
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "presentation",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "awaiting-metadata",
+        "saturation": 100,
+        "sharpness": 3,
+        "superResolution": false
+      },
+      "gate": "INSUFFICIENT_EVIDENCE",
+      "coverage": {
+        "startMs": 29796.0,
+        "endMs": 30803.0,
+        "durationMs": 1007.0,
+        "samples": 1,
+        "publishedMs": 1000.0,
+        "publicationRatio": 0.993,
+        "mediaValidMs": 0,
+        "mediaValidRatio": 0.0,
+        "longestPublicationGapMs": 7.0,
+        "maxSampleGapMs": 254.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "unavailable": 1
+        },
+        "collectionStates": {
+          "pending": 1
+        },
+        "maxCollectionAgeMs": 1.0,
+        "counterCoverageMs": {},
+        "fps": {
+          "received": null,
+          "decoded": null,
+          "videoPresent": null,
+          "callbacks": null,
+          "rendererSubmit": null
+        },
+        "deltaTotals": {}
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "measuredSamples": 0,
+          "maxRttMs": null,
+          "maxJitterMs": null,
+          "maxLossRatio": null
+        },
+        "recoveryChainHealth": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": null,
+            "pli": null,
+            "fir": null,
+            "nack": null,
+            "freezeCount": null,
+            "framesDropped": null
+          }
+        },
+        "mediaSupply": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": null,
+          "decodeFps": null,
+          "receiveDecodeDeltaFps": null
+        },
+        "steadySupply": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "videoPresentFps": null,
+          "callbackFps": null,
+          "callbackBatchingObserved": false,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "cpuDraw": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "upload": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "cpuSubmit": {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "windows": 0
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 1,
+          "validMs": 0,
+          "window": {
+            "startMs": 29796.0,
+            "endMs": 30803.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "INSUFFICIENT_EVIDENCE",
+          "fps": {
+            "received": null,
+            "decoded": null,
+            "videoPresent": null,
+            "callbacks": null,
+            "rendererSubmit": null
+          },
+          "deltaTotals": {},
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": null,
+            "decodeVideoPresent": null,
+            "videoPresentCallback": null,
+            "callbackRendererSubmit": null
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": []
+    },
+    {
+      "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "outputHeight": 1440,
+        "outputWidth": 2560,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "gate": "PASS",
+      "coverage": {
+        "startMs": 30803.0,
+        "endMs": 95848.0,
+        "durationMs": 65045.0,
+        "samples": 65,
+        "publishedMs": 64517.0,
+        "publicationRatio": 0.9919,
+        "mediaValidMs": 64542.0,
+        "mediaValidRatio": 0.9923,
+        "longestPublicationGapMs": 12.0,
+        "maxSampleGapMs": 257.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 65
+        },
+        "collectionStates": {
+          "pending": 65
+        },
+        "maxCollectionAgeMs": 2.0,
+        "counterCoverageMs": {
+          "received": 64793.0,
+          "decoded": 64793.0,
+          "videoPresent": 64542.0,
+          "callbacks": 64542.0,
+          "rendererSubmit": 64542.0
+        },
+        "fps": {
+          "received": 59.482,
+          "decoded": 59.513,
+          "videoPresent": 59.252,
+          "callbacks": 53.763,
+          "rendererSubmit": 59.221
+        },
+        "deltaTotals": {
+          "bytesReceived": 213881603,
+          "callbackGaps": 4,
+          "callbacks": 3497,
+          "decoded": 3871,
+          "duplicates": 0,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 2,
+          "keyframes": 6,
+          "nack": 1,
+          "overwrites": 0,
+          "packetsReceived": 194729,
+          "pli": 0,
+          "presentedJumps": 341,
+          "rateLimitDrops": 0,
+          "received": 3869,
+          "rendererSubmit": 3852,
+          "submitFailures": 0,
+          "videoPresent": 3854
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "measuredSamples": 65,
+          "maxRttMs": 189.0,
+          "maxJitterMs": 14.0,
+          "maxLossRatio": 0.0412
+        },
+        "recoveryChainHealth": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 6,
+            "pli": 0,
+            "fir": 0,
+            "nack": 1,
+            "freezeCount": 2,
+            "framesDropped": 0
+          }
+        },
+        "mediaSupply": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": 59.482,
+          "decodeFps": 59.513,
+          "receiveDecodeDeltaFps": -0.031
+        },
+        "steadySupply": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "videoPresentFps": 59.252,
+          "callbackFps": 53.763,
+          "callbackBatchingObserved": true,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 217.0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 65,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 8.0,
+            "maxMs": 11.0,
+            "latest": {
+              "seq": 1792,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 11.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 65,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 8.0,
+            "maxMs": 11.0,
+            "latest": {
+              "seq": 1792,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 11.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 65,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 0.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 1792,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 0.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 65,
+          "validMs": 64542.0,
+          "window": {
+            "startMs": 30803.0,
+            "endMs": 95848.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "fps": {
+            "received": 59.482,
+            "decoded": 59.513,
+            "videoPresent": 59.252,
+            "callbacks": 53.763,
+            "rendererSubmit": 59.221
+          },
+          "deltaTotals": {
+            "bytesReceived": 213881603,
+            "callbackGaps": 4,
+            "callbacks": 3497,
+            "decoded": 3871,
+            "duplicates": 0,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 2,
+            "keyframes": 6,
+            "nack": 1,
+            "overwrites": 0,
+            "packetsReceived": 194729,
+            "pli": 0,
+            "presentedJumps": 341,
+            "rateLimitDrops": 0,
+            "received": 3869,
+            "rendererSubmit": 3852,
+            "submitFailures": 0,
+            "videoPresent": 3854
+          },
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": -0.031,
+            "decodeVideoPresent": 0.261,
+            "videoPresentCallback": 5.489,
+            "callbackRendererSubmit": -5.458
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": [
+        {
+          "classification": "callbackSparseBatching",
+          "windows": [
+            {
+              "startMs": 45923.0,
+              "endMs": 48947.0,
+              "durationMs": 3024.0,
+              "firstSeq": 553,
+              "samples": 3
+            },
+            {
+              "startMs": 62815.0,
+              "endMs": 65839.0,
+              "durationMs": 3024.0,
+              "firstSeq": 972,
+              "samples": 3
+            },
+            {
+              "startMs": 77938.0,
+              "endMs": 80965.0,
+              "durationMs": 3027.0,
+              "firstSeq": 1368,
+              "samples": 3
+            },
+            {
+              "startMs": 85759.0,
+              "endMs": 89791.0,
+              "durationMs": 4032.0,
+              "firstSeq": 1552,
+              "samples": 4
+            },
+            {
+              "startMs": 90798.0,
+              "endMs": 95848.0,
+              "durationMs": 5050.0,
+              "firstSeq": 1683,
+              "samples": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "outputHeight": 1440,
+        "outputWidth": 2560,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "gate": "INSUFFICIENT_EVIDENCE",
+      "coverage": {
+        "startMs": 121952.0,
+        "endMs": 166810.0,
+        "durationMs": 44858.0,
+        "samples": 45,
+        "publishedMs": 44512.0,
+        "publicationRatio": 0.9923,
+        "mediaValidMs": 44858.0,
+        "mediaValidRatio": 1,
+        "longestPublicationGapMs": 17.0,
+        "maxSampleGapMs": 261.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 45
+        },
+        "collectionStates": {
+          "pending": 45
+        },
+        "maxCollectionAgeMs": 9.0,
+        "counterCoverageMs": {
+          "received": 44858.0,
+          "decoded": 44858.0,
+          "videoPresent": 44858.0,
+          "callbacks": 44858.0,
+          "rendererSubmit": 44858.0
+        },
+        "fps": {
+          "received": 48.353,
+          "decoded": 48.33,
+          "videoPresent": 48.397,
+          "callbacks": 41.709,
+          "rendererSubmit": 47.996
+        },
+        "deltaTotals": {
+          "bytesReceived": 76777545,
+          "callbackGaps": 1,
+          "callbacks": 1871,
+          "decoded": 2168,
+          "duplicates": 0,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 1,
+          "keyframes": 2,
+          "nack": 0,
+          "overwrites": 0,
+          "packetsReceived": 70507,
+          "pli": 1,
+          "presentedJumps": 295,
+          "rateLimitDrops": 0,
+          "received": 2169,
+          "rendererSubmit": 2153,
+          "submitFailures": 0,
+          "videoPresent": 2171
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "measuredSamples": 45,
+          "maxRttMs": 13.0,
+          "maxJitterMs": 6.0,
+          "maxLossRatio": 0
+        },
+        "recoveryChainHealth": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 2,
+            "pli": 1,
+            "fir": 0,
+            "nack": 0,
+            "freezeCount": 1,
+            "framesDropped": 0
+          }
+        },
+        "mediaSupply": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "FAIL",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": 48.353,
+          "decodeFps": 48.33,
+          "receiveDecodeDeltaFps": 0.023
+        },
+        "steadySupply": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "FAIL",
+          "videoPresentFps": 48.397,
+          "callbackFps": 41.709,
+          "callbackBatchingObserved": true,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 4475.0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "FAIL",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 45,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 2.0,
+            "maxMs": 11.0,
+            "latest": {
+              "seq": 3148,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 45,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 2.0,
+            "maxMs": 11.0,
+            "latest": {
+              "seq": 3148,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 45,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 0.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3148,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 0.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 45,
+          "validMs": 44858.0,
+          "window": {
+            "startMs": 121952.0,
+            "endMs": 166810.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "FAIL",
+          "fps": {
+            "received": 48.353,
+            "decoded": 48.33,
+            "videoPresent": 48.397,
+            "callbacks": 41.709,
+            "rendererSubmit": 47.996
+          },
+          "deltaTotals": {
+            "bytesReceived": 76777545,
+            "callbackGaps": 1,
+            "callbacks": 1871,
+            "decoded": 2168,
+            "duplicates": 0,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 1,
+            "keyframes": 2,
+            "nack": 0,
+            "overwrites": 0,
+            "packetsReceived": 70507,
+            "pli": 1,
+            "presentedJumps": 295,
+            "rateLimitDrops": 0,
+            "received": 2169,
+            "rendererSubmit": 2153,
+            "submitFailures": 0,
+            "videoPresent": 2171
+          },
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": 0.023,
+            "decodeVideoPresent": -0.067,
+            "videoPresentCallback": 6.688,
+            "callbackRendererSubmit": -6.287
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": [
+        {
+          "classification": "sourceSupplyDeficit",
+          "windows": [
+            {
+              "startMs": 123967.0,
+              "endMs": 133794.0,
+              "durationMs": 9827.0,
+              "firstSeq": 2103,
+              "samples": 10
+            },
+            {
+              "startMs": 159755.0,
+              "endMs": 162779.0,
+              "durationMs": 3024.0,
+              "firstSeq": 3004,
+              "samples": 3
+            }
+          ]
+        },
+        {
+          "classification": "videoPresentDeficit",
+          "windows": [
+            {
+              "startMs": 123967.0,
+              "endMs": 133794.0,
+              "durationMs": 9827.0,
+              "firstSeq": 2103,
+              "samples": 10
+            },
+            {
+              "startMs": 159755.0,
+              "endMs": 162779.0,
+              "durationMs": 3024.0,
+              "firstSeq": 3004,
+              "samples": 3
+            }
+          ]
+        },
+        {
+          "classification": "rendererSupplyDeficit",
+          "windows": [
+            {
+              "startMs": 123967.0,
+              "endMs": 133794.0,
+              "durationMs": 9827.0,
+              "firstSeq": 2103,
+              "samples": 10
+            },
+            {
+              "startMs": 159755.0,
+              "endMs": 162779.0,
+              "durationMs": 3024.0,
+              "firstSeq": 3004,
+              "samples": 3
+            }
+          ]
+        },
+        {
+          "classification": "callbackSparseBatching",
+          "windows": [
+            {
+              "startMs": 137827.0,
+              "endMs": 140851.0,
+              "durationMs": 3024.0,
+              "firstSeq": 2461,
+              "samples": 3
+            },
+            {
+              "startMs": 147911.0,
+              "endMs": 154966.0,
+              "durationMs": 7055.0,
+              "firstSeq": 2707,
+              "samples": 7
+            }
+          ]
+        },
+        {
+          "classification": "submitPresentDelayed",
+          "windows": [
+            {
+              "startMs": 127747.0,
+              "endMs": 132788.0,
+              "durationMs": 5041.0,
+              "firstSeq": 2201,
+              "samples": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshSource": "unavailable",
+        "expectedFps": 60,
+        "outputHeight": 1684,
+        "outputWidth": 2994,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "gate": "INSUFFICIENT_EVIDENCE",
+      "coverage": {
+        "startMs": 166810.0,
+        "endMs": 167772.0,
+        "durationMs": 962.0,
+        "samples": 1,
+        "publishedMs": 962.0,
+        "publicationRatio": 1,
+        "mediaValidMs": 962.0,
+        "mediaValidRatio": 1,
+        "longestPublicationGapMs": 0,
+        "maxSampleGapMs": 457.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 1
+        },
+        "collectionStates": {
+          "pending": 1
+        },
+        "maxCollectionAgeMs": 1.0,
+        "counterCoverageMs": {
+          "received": 962.0,
+          "decoded": 962.0,
+          "videoPresent": 962.0,
+          "callbacks": 962.0,
+          "rendererSubmit": 962.0
+        },
+        "fps": {
+          "received": 59.25,
+          "decoded": 59.25,
+          "videoPresent": 47.82,
+          "callbacks": 16.63,
+          "rendererSubmit": 38.46
+        },
+        "deltaTotals": {
+          "bytesReceived": 3086464,
+          "callbackGaps": 2,
+          "callbacks": 16,
+          "decoded": 57,
+          "duplicates": 0,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "keyframes": 0,
+          "nack": 0,
+          "overwrites": 0,
+          "packetsReceived": 2804,
+          "pli": 0,
+          "presentedJumps": 2,
+          "rateLimitDrops": 0,
+          "received": 57,
+          "rendererSubmit": 37,
+          "submitFailures": 0,
+          "videoPresent": 46
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "measuredSamples": 1,
+          "maxRttMs": 5.0,
+          "maxJitterMs": 3.0,
+          "maxLossRatio": 0
+        },
+        "recoveryChainHealth": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 0,
+            "pli": 0,
+            "fir": 0,
+            "nack": 0,
+            "freezeCount": 0,
+            "framesDropped": 0
+          }
+        },
+        "mediaSupply": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": 59.25,
+          "decodeFps": 59.25,
+          "receiveDecodeDeltaFps": 0.0
+        },
+        "steadySupply": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "videoPresentFps": 47.82,
+          "callbackFps": 16.63,
+          "callbackBatchingObserved": false,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 366.0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 1,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3176,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 1,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3176,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 1,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 0.0,
+            "maxReportedP99Ms": 0.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 3176,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 0.0,
+              "p99Ms": 0.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 1,
+          "validMs": 962.0,
+          "window": {
+            "startMs": 166810.0,
+            "endMs": 167772.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "fps": {
+            "received": 59.25,
+            "decoded": 59.25,
+            "videoPresent": 47.82,
+            "callbacks": 16.63,
+            "rendererSubmit": 38.46
+          },
+          "deltaTotals": {
+            "bytesReceived": 3086464,
+            "callbackGaps": 2,
+            "callbacks": 16,
+            "decoded": 57,
+            "duplicates": 0,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 0,
+            "keyframes": 0,
+            "nack": 0,
+            "overwrites": 0,
+            "packetsReceived": 2804,
+            "pli": 0,
+            "presentedJumps": 2,
+            "rateLimitDrops": 0,
+            "received": 57,
+            "rendererSubmit": 37,
+            "submitFailures": 0,
+            "videoPresent": 46
+          },
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": 0.0,
+            "decodeVideoPresent": 11.43,
+            "videoPresentCallback": 31.19,
+            "callbackRendererSubmit": -21.83
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": []
+    },
+    {
+      "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+      "runtimeGeneration": 1,
+      "clientGeneration": 1,
+      "observationEpoch": 1,
+      "identity": [
+        1,
+        1,
+        1
+      ],
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "outputHeight": 1684,
+        "outputWidth": 2994,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "gate": "PASS",
+      "coverage": {
+        "startMs": 167772.0,
+        "endMs": 256852.0,
+        "durationMs": 89080.0,
+        "samples": 90,
+        "publishedMs": 88353.0,
+        "publicationRatio": 0.9918,
+        "mediaValidMs": 88993.0,
+        "mediaValidRatio": 0.999,
+        "longestPublicationGapMs": 13.0,
+        "maxSampleGapMs": 259.0,
+        "missingHealthSequences": 0,
+        "observationStates": {
+          "fresh": 90
+        },
+        "collectionStates": {
+          "pending": 89,
+          "fresh": 1
+        },
+        "maxCollectionAgeMs": 4.0,
+        "counterCoverageMs": {
+          "received": 88993.0,
+          "decoded": 88993.0,
+          "videoPresent": 88993.0,
+          "callbacks": 88993.0,
+          "rendererSubmit": 88993.0
+        },
+        "fps": {
+          "received": 59.342,
+          "decoded": 59.342,
+          "videoPresent": 59.466,
+          "callbacks": 53.904,
+          "rendererSubmit": 59.33
+        },
+        "deltaTotals": {
+          "bytesReceived": 251629606,
+          "callbackGaps": 2,
+          "callbacks": 4797,
+          "decoded": 5281,
+          "duplicates": 0,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "keyframes": 4,
+          "nack": 0,
+          "overwrites": 0,
+          "packetsReceived": 229385,
+          "pli": 0,
+          "presentedJumps": 481,
+          "rateLimitDrops": 0,
+          "received": 5281,
+          "rendererSubmit": 5280,
+          "submitFailures": 0,
+          "videoPresent": 5292
+        }
+      },
+      "sections": {
+        "networkHealth": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "measuredSamples": 89,
+          "maxRttMs": 14.0,
+          "maxJitterMs": 9.0,
+          "maxLossRatio": 0
+        },
+        "recoveryChainHealth": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "capability": "browserPublicStats",
+          "nativeReferenceChainGate": "UNSUPPORTED",
+          "observedDeltas": {
+            "keyframes": 4,
+            "pli": 0,
+            "fir": 0,
+            "nack": 0,
+            "freezeCount": 0,
+            "framesDropped": 0
+          }
+        },
+        "mediaSupply": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "sourceTargetsFps": [
+            60.0
+          ],
+          "receivedFps": 59.342,
+          "decodeFps": 59.342,
+          "receiveDecodeDeltaFps": 0.0
+        },
+        "steadySupply": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "videoPresentFps": 59.466,
+          "callbackFps": 53.904,
+          "callbackBatchingObserved": true,
+          "callbackGapObserved": false,
+          "maxCallbackIntervalMs": 166.0,
+          "physicalScanout": "UNSUPPORTED"
+        },
+        "submitPresentTail": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "cpuDraw": {
+            "status": "PASS",
+            "windows": 90,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 37.0,
+            "latest": {
+              "seq": 5441,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "upload": {
+            "status": "PASS",
+            "windows": 90,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 37.0,
+            "latest": {
+              "seq": 5441,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 1.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "cpuSubmit": {
+            "status": "PASS",
+            "windows": 90,
+            "latestCount": 256.0,
+            "scope": "retainedSamples",
+            "maxReportedP95Ms": 1.0,
+            "maxReportedP99Ms": 1.0,
+            "maxMs": 1.0,
+            "latest": {
+              "seq": 5441,
+              "count": 256.0,
+              "scope": "retainedSamples",
+              "p95Ms": 0.0,
+              "p99Ms": 1.0,
+              "maxMs": 1.0
+            }
+          },
+          "gpu": {
+            "status": "UNSUPPORTED",
+            "windows": 0
+          }
+        },
+        "frameSupplyDelta": {
+          "samples": 90,
+          "validMs": 88993.0,
+          "window": {
+            "startMs": 167772.0,
+            "endMs": 256852.0
+          },
+          "sources": [
+            "productionBucket"
+          ],
+          "status": "PASS",
+          "fps": {
+            "received": 59.342,
+            "decoded": 59.342,
+            "videoPresent": 59.466,
+            "callbacks": 53.904,
+            "rendererSubmit": 59.33
+          },
+          "deltaTotals": {
+            "bytesReceived": 251629606,
+            "callbackGaps": 2,
+            "callbacks": 4797,
+            "decoded": 5281,
+            "duplicates": 0,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 0,
+            "keyframes": 4,
+            "nack": 0,
+            "overwrites": 0,
+            "packetsReceived": 229385,
+            "pli": 0,
+            "presentedJumps": 481,
+            "rateLimitDrops": 0,
+            "received": 5281,
+            "rendererSubmit": 5280,
+            "submitFailures": 0,
+            "videoPresent": 5292
+          },
+          "effectiveRendererTargetsFps": [
+            60.0
+          ],
+          "differencesFps": {
+            "receiveDecode": 0.0,
+            "decodeVideoPresent": -0.124,
+            "videoPresentCallback": 5.562,
+            "callbackRendererSubmit": -5.426
+          },
+          "intentionalRateLimitObserved": false
+        }
+      },
+      "diagnoses": [
+        {
+          "classification": "callbackSparseBatching",
+          "windows": [
+            {
+              "startMs": 187939.0,
+              "endMs": 191975.0,
+              "durationMs": 4036.0,
+              "firstSeq": 3699,
+              "samples": 4
+            },
+            {
+              "startMs": 194746.0,
+              "endMs": 198781.0,
+              "durationMs": 4035.0,
+              "firstSeq": 3865,
+              "samples": 4
+            },
+            {
+              "startMs": 201807.0,
+              "endMs": 209875.0,
+              "durationMs": 8068.0,
+              "firstSeq": 4034,
+              "samples": 8
+            },
+            {
+              "startMs": 214914.0,
+              "endMs": 217939.0,
+              "durationMs": 3025.0,
+              "firstSeq": 4351,
+              "samples": 3
+            },
+            {
+              "startMs": 230796.0,
+              "endMs": 233818.0,
+              "durationMs": 3022.0,
+              "firstSeq": 4797,
+              "samples": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sourcePause": {
+    "degradedWindow": {
+      "startMs": 123967,
+      "endMs": 133794,
+      "durationMs": 9827,
+      "startTime": "2026-11-26T19:29:12.968000+08:00",
+      "endTime": "2026-11-26T19:29:22.795000+08:00"
+    },
+    "zeroBuckets": [
+      {
+        "seq": 2227,
+        "tsMs": 1795692558772,
+        "time": "2026-11-26T19:29:18.772000+08:00",
+        "event": "browserPlaybackHealthObserved",
+        "payload": {
+          "observedAtMs": 129768,
+          "observationEpoch": 1,
+          "healthSequence": 105,
+          "visibility": "visible",
+          "connectionState": "connected",
+          "window": {
+            "elapsedMs": 1009,
+            "endMs": 129765,
+            "firstSampleId": "1:337",
+            "lastSampleId": "1:341",
+            "partial": false,
+            "resetReasons": [],
+            "sampleCount": 4,
+            "startMs": 128756,
+            "validSampleCount": 4
+          },
+          "coverage": {
+            "counterMs": {
+              "callbacks": 1009,
+              "decoded": 1009,
+              "received": 1009,
+              "rendererSubmit": 1009,
+              "videoPresent": 1009
+            },
+            "elapsedMs": 1009,
+            "maxSampleGapMs": 253,
+            "partial": false,
+            "ratio": 1,
+            "validMs": 1009
+          },
+          "frameSupply": {
+            "callbackFps": 0,
+            "decodeFps": 0,
+            "delta": {
+              "bytesReceived": 0,
+              "callbackGaps": 0,
+              "callbacks": 0,
+              "decoded": 0,
+              "duplicates": 0,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 0,
+              "keyframes": 0,
+              "nack": 0,
+              "overwrites": 0,
+              "packetsReceived": 0,
+              "pli": 0,
+              "presentedJumps": 0,
+              "rateLimitDrops": 0,
+              "received": 0,
+              "rendererSubmit": 0,
+              "submitFailures": 0,
+              "videoPresent": 0
+            },
+            "maxCallbackIntervalMs": 0,
+            "maxPresentedFramesDelta": 0,
+            "outputHeight": 1440,
+            "outputWidth": 2560,
+            "rateScope": "bucket",
+            "receivedFps": 0,
+            "rendererSubmitFps": 0,
+            "sourceHeight": 1440,
+            "sourceWidth": 2560,
+            "totals": {
+              "callbacks": 4437,
+              "decoded": 5519,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 4,
+              "keyframes": 8,
+              "nack": 4,
+              "pli": 1,
+              "received": 5519,
+              "rendererSubmit": 4117,
+              "videoPresent": 5521
+            },
+            "trackingSource": "videoFrameCallback",
+            "videoPresentFps": 0,
+            "windows": {
+              "long": {
+                "callbackFpsAvg": 30.21,
+                "counterMs": {
+                  "callbacks": 8806,
+                  "decoded": 8806,
+                  "received": 8806,
+                  "rendererSubmit": 7562,
+                  "videoPresent": 8806
+                },
+                "decodeFpsAvg": 36.57,
+                "durationMs": 8806,
+                "inboundFpsAvg": 36.45,
+                "rendererSubmitFpsAvg": 32.66,
+                "sampleCount": 32,
+                "videoPresentFpsAvg": 36.79
+              },
+              "short": {
+                "callbackFpsAvg": 14.76,
+                "coverageMs": 3000,
+                "decodeFpsAvg": 14.76,
+                "durationMs": 3000,
+                "inboundFpsAvg": 14.76,
+                "rendererSubmitFpsAvg": 14.76,
+                "sampleCount": 12,
+                "videoPresentFpsAvg": 14.76
+              }
+            }
+          },
+          "network": {
+            "bitrateKbps": 0,
+            "jitterMs": 1,
+            "packetAgeMs": 1009,
+            "packetLossRatio": 0,
+            "packetsLostDelta": 0,
+            "rttMs": 5,
+            "state": "stable",
+            "transportPath": "host"
+          },
+          "recovery": {
+            "actionPending": false,
+            "cause": "unknown",
+            "controlChannelState": "open",
+            "firstFrameStage": "firstPresented",
+            "nativeRecoveryGate": "unsupported",
+            "presentationMilestone": "mediaReady",
+            "totalFreezesDuration": 3.14
+          },
+          "renderer": {
+            "gpuTiming": {
+              "completion": {
+                "completed": 71,
+                "insertionCpuMaxMs": 1,
+                "latest": {
+                  "lowerBoundMs": 0,
+                  "upperBoundMs": 5
+                },
+                "state": "ready",
+                "timeouts": 0
+              },
+              "disjointCount": 0,
+              "duration": {
+                "count": 0
+              },
+              "queryCount": 0,
+              "state": "unavailable"
+            },
+            "maxSubmitAgeMs": 1221,
+            "maxVideoPresentAgeMs": 1221,
+            "screenPresentState": "unavailable",
+            "submitAgeMs": 1221,
+            "timing": {
+              "duration": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              },
+              "interval": {
+                "count": 246,
+                "maxMs": 52,
+                "p95Ms": 44,
+                "p99Ms": 48
+              },
+              "submit": {
+                "count": 256,
+                "maxMs": 1,
+                "p95Ms": 0,
+                "p99Ms": 1
+              },
+              "upload": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              }
+            },
+            "timingScope": "retainedSamples",
+            "videoPresentAgeMs": 1221
+          },
+          "audio": {
+            "audioGeneration": 1,
+            "audioStats": {
+              "concealedRatio": 0,
+              "concealedSamplesTotal": 23226,
+              "coverageMs": 253,
+              "insertedSamplesTotal": 1080,
+              "jitterBufferMs": 153.85,
+              "packetsReceivedTotal": 4935,
+              "playoutEstimateState": "unavailable",
+              "progressObserved": true,
+              "removedSamplesTotal": 8517,
+              "samplesPerSecond": 47430.83,
+              "samplesReceivedTotal": 4745760
+            },
+            "channelSource": "requested",
+            "codecChannelCount": 2,
+            "effectiveChannelCount": 2,
+            "intentionallySilent": false,
+            "recoveryAttempts": 0,
+            "recoveryReason": "attach",
+            "requestedChannelCount": 2,
+            "route": "direct",
+            "state": "ready",
+            "trackMuted": false,
+            "trackState": "live"
+          }
+        }
+      },
+      {
+        "seq": 2250,
+        "tsMs": 1795692559778,
+        "time": "2026-11-26T19:29:19.778000+08:00",
+        "event": "browserPlaybackHealthObserved",
+        "payload": {
+          "observedAtMs": 130775,
+          "observationEpoch": 1,
+          "healthSequence": 106,
+          "visibility": "visible",
+          "connectionState": "connected",
+          "window": {
+            "elapsedMs": 1007,
+            "endMs": 130772,
+            "firstSampleId": "1:341",
+            "lastSampleId": "1:345",
+            "partial": false,
+            "resetReasons": [],
+            "sampleCount": 4,
+            "startMs": 129765,
+            "validSampleCount": 4
+          },
+          "coverage": {
+            "counterMs": {
+              "callbacks": 1007,
+              "decoded": 1007,
+              "received": 1007,
+              "rendererSubmit": 1007,
+              "videoPresent": 1007
+            },
+            "elapsedMs": 1007,
+            "maxSampleGapMs": 255,
+            "partial": false,
+            "ratio": 1,
+            "validMs": 1007
+          },
+          "frameSupply": {
+            "callbackFps": 0,
+            "decodeFps": 0,
+            "delta": {
+              "bytesReceived": 0,
+              "callbackGaps": 0,
+              "callbacks": 0,
+              "decoded": 0,
+              "duplicates": 0,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 0,
+              "keyframes": 0,
+              "nack": 0,
+              "overwrites": 0,
+              "packetsReceived": 0,
+              "pli": 0,
+              "presentedJumps": 0,
+              "rateLimitDrops": 0,
+              "received": 0,
+              "rendererSubmit": 0,
+              "submitFailures": 0,
+              "videoPresent": 0
+            },
+            "maxCallbackIntervalMs": 0,
+            "maxPresentedFramesDelta": 0,
+            "outputHeight": 1440,
+            "outputWidth": 2560,
+            "rateScope": "bucket",
+            "receivedFps": 0,
+            "rendererSubmitFps": 0,
+            "sourceHeight": 1440,
+            "sourceWidth": 2560,
+            "totals": {
+              "callbacks": 4437,
+              "decoded": 5519,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 4,
+              "keyframes": 8,
+              "nack": 4,
+              "pli": 1,
+              "received": 5519,
+              "rendererSubmit": 4117,
+              "videoPresent": 5521
+            },
+            "trackingSource": "videoFrameCallback",
+            "videoPresentFps": 0,
+            "windows": {
+              "long": {
+                "callbackFpsAvg": 27.11,
+                "counterMs": {
+                  "callbacks": 9813,
+                  "decoded": 9813,
+                  "received": 9813,
+                  "rendererSubmit": 8569,
+                  "videoPresent": 9813
+                },
+                "decodeFpsAvg": 32.81,
+                "durationMs": 9813,
+                "inboundFpsAvg": 32.71,
+                "rendererSubmitFpsAvg": 28.82,
+                "sampleCount": 36,
+                "videoPresentFpsAvg": 33.02
+              },
+              "short": {
+                "callbackFpsAvg": 6.47,
+                "coverageMs": 3000,
+                "decodeFpsAvg": 6.47,
+                "durationMs": 3000,
+                "inboundFpsAvg": 6.13,
+                "rendererSubmitFpsAvg": 6.47,
+                "sampleCount": 12,
+                "videoPresentFpsAvg": 6.47
+              }
+            }
+          },
+          "network": {
+            "bitrateKbps": 0,
+            "jitterMs": 1,
+            "packetAgeMs": 2016,
+            "packetLossRatio": 0,
+            "packetsLostDelta": 0,
+            "rttMs": 5,
+            "state": "stable",
+            "transportPath": "host"
+          },
+          "recovery": {
+            "actionPending": false,
+            "cause": "unknown",
+            "controlChannelState": "open",
+            "firstFrameStage": "firstPresented",
+            "nativeRecoveryGate": "unsupported",
+            "presentationMilestone": "mediaReady",
+            "totalFreezesDuration": 3.14
+          },
+          "renderer": {
+            "gpuTiming": {
+              "completion": {
+                "completed": 71,
+                "insertionCpuMaxMs": 1,
+                "latest": {
+                  "lowerBoundMs": 0,
+                  "upperBoundMs": 5
+                },
+                "state": "ready",
+                "timeouts": 0
+              },
+              "disjointCount": 0,
+              "duration": {
+                "count": 0
+              },
+              "queryCount": 0,
+              "state": "unavailable"
+            },
+            "maxSubmitAgeMs": 2228,
+            "maxVideoPresentAgeMs": 2228,
+            "screenPresentState": "unavailable",
+            "submitAgeMs": 2228,
+            "timing": {
+              "duration": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              },
+              "interval": {
+                "count": 246,
+                "maxMs": 52,
+                "p95Ms": 44,
+                "p99Ms": 48
+              },
+              "submit": {
+                "count": 256,
+                "maxMs": 1,
+                "p95Ms": 0,
+                "p99Ms": 1
+              },
+              "upload": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              }
+            },
+            "timingScope": "retainedSamples",
+            "videoPresentAgeMs": 2228
+          },
+          "audio": {
+            "audioGeneration": 1,
+            "audioStats": {
+              "concealedRatio": 0,
+              "concealedSamplesTotal": 23226,
+              "coverageMs": 251,
+              "insertedSamplesTotal": 1080,
+              "jitterBufferMs": 159.17,
+              "packetsReceivedTotal": 4986,
+              "playoutEstimateState": "unavailable",
+              "progressObserved": true,
+              "removedSamplesTotal": 8517,
+              "samplesPerSecond": 47808.76,
+              "samplesReceivedTotal": 4794240
+            },
+            "channelSource": "requested",
+            "codecChannelCount": 2,
+            "effectiveChannelCount": 2,
+            "intentionallySilent": false,
+            "recoveryAttempts": 0,
+            "recoveryReason": "attach",
+            "requestedChannelCount": 2,
+            "route": "direct",
+            "state": "ready",
+            "trackMuted": false,
+            "trackState": "live"
+          }
+        }
+      },
+      {
+        "seq": 2280,
+        "tsMs": 1795692560789,
+        "time": "2026-11-26T19:29:20.789000+08:00",
+        "event": "browserPlaybackHealthObserved",
+        "payload": {
+          "observedAtMs": 131782,
+          "observationEpoch": 1,
+          "healthSequence": 107,
+          "visibility": "visible",
+          "connectionState": "connected",
+          "window": {
+            "elapsedMs": 1007,
+            "endMs": 131779,
+            "firstSampleId": "1:345",
+            "lastSampleId": "1:349",
+            "partial": false,
+            "resetReasons": [],
+            "sampleCount": 4,
+            "startMs": 130772,
+            "validSampleCount": 4
+          },
+          "coverage": {
+            "counterMs": {
+              "callbacks": 1007,
+              "decoded": 1007,
+              "received": 1007,
+              "rendererSubmit": 1007,
+              "videoPresent": 1007
+            },
+            "elapsedMs": 1007,
+            "maxSampleGapMs": 254,
+            "partial": false,
+            "ratio": 1,
+            "validMs": 1007
+          },
+          "frameSupply": {
+            "callbackFps": 0,
+            "decodeFps": 0,
+            "delta": {
+              "bytesReceived": 0,
+              "callbackGaps": 0,
+              "callbacks": 0,
+              "decoded": 0,
+              "duplicates": 0,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 0,
+              "keyframes": 0,
+              "nack": 0,
+              "overwrites": 0,
+              "packetsReceived": 0,
+              "pli": 1,
+              "presentedJumps": 0,
+              "rateLimitDrops": 0,
+              "received": 0,
+              "rendererSubmit": 0,
+              "submitFailures": 0,
+              "videoPresent": 0
+            },
+            "maxCallbackIntervalMs": 0,
+            "maxPresentedFramesDelta": 0,
+            "outputHeight": 1440,
+            "outputWidth": 2560,
+            "rateScope": "bucket",
+            "receivedFps": 0,
+            "rendererSubmitFps": 0,
+            "sourceHeight": 1440,
+            "sourceWidth": 2560,
+            "totals": {
+              "callbacks": 4437,
+              "decoded": 5519,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 4,
+              "keyframes": 8,
+              "nack": 4,
+              "pli": 2,
+              "received": 5519,
+              "rendererSubmit": 4117,
+              "videoPresent": 5521
+            },
+            "trackingSource": "videoFrameCallback",
+            "videoPresentFps": 0,
+            "windows": {
+              "long": {
+                "callbackFpsAvg": 24.58,
+                "counterMs": {
+                  "callbacks": 10820,
+                  "decoded": 10820,
+                  "received": 10820,
+                  "rendererSubmit": 9576,
+                  "videoPresent": 10820
+                },
+                "decodeFpsAvg": 29.76,
+                "durationMs": 10820,
+                "inboundFpsAvg": 29.67,
+                "rendererSubmitFpsAvg": 25.79,
+                "sampleCount": 40,
+                "videoPresentFpsAvg": 29.94
+              },
+              "short": {
+                "callbackFpsAvg": 0,
+                "coverageMs": 3000,
+                "decodeFpsAvg": 0,
+                "durationMs": 3000,
+                "inboundFpsAvg": 0,
+                "rendererSubmitFpsAvg": 0,
+                "sampleCount": 12,
+                "videoPresentFpsAvg": 0
+              }
+            }
+          },
+          "network": {
+            "bitrateKbps": 0,
+            "jitterMs": 1,
+            "packetAgeMs": 3023,
+            "packetLossRatio": 0,
+            "packetsLostDelta": 0,
+            "rttMs": 4,
+            "state": "stable",
+            "transportPath": "host"
+          },
+          "recovery": {
+            "actionPending": false,
+            "cause": "unknown",
+            "controlChannelState": "open",
+            "firstFrameStage": "firstPresented",
+            "nativeRecoveryGate": "unsupported",
+            "presentationMilestone": "mediaReady",
+            "totalFreezesDuration": 3.14
+          },
+          "renderer": {
+            "gpuTiming": {
+              "completion": {
+                "completed": 71,
+                "insertionCpuMaxMs": 1,
+                "latest": {
+                  "lowerBoundMs": 0,
+                  "upperBoundMs": 5
+                },
+                "state": "ready",
+                "timeouts": 0
+              },
+              "disjointCount": 0,
+              "duration": {
+                "count": 0
+              },
+              "queryCount": 0,
+              "state": "unavailable"
+            },
+            "maxSubmitAgeMs": 3235,
+            "maxVideoPresentAgeMs": 3235,
+            "screenPresentState": "unavailable",
+            "submitAgeMs": 3235,
+            "timing": {
+              "duration": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              },
+              "interval": {
+                "count": 246,
+                "maxMs": 52,
+                "p95Ms": 44,
+                "p99Ms": 48
+              },
+              "submit": {
+                "count": 256,
+                "maxMs": 1,
+                "p95Ms": 0,
+                "p99Ms": 1
+              },
+              "upload": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              }
+            },
+            "timingScope": "retainedSamples",
+            "videoPresentAgeMs": 3235
+          },
+          "audio": {
+            "audioGeneration": 1,
+            "audioStats": {
+              "concealedRatio": 0,
+              "concealedSamplesTotal": 23226,
+              "coverageMs": 251,
+              "insertedSamplesTotal": 1080,
+              "jitterBufferMs": 143.08,
+              "packetsReceivedTotal": 5036,
+              "playoutEstimateState": "unavailable",
+              "progressObserved": true,
+              "removedSamplesTotal": 9117,
+              "samplesPerSecond": 47808.76,
+              "samplesReceivedTotal": 4842720
+            },
+            "channelSource": "requested",
+            "codecChannelCount": 2,
+            "effectiveChannelCount": 2,
+            "intentionallySilent": false,
+            "recoveryAttempts": 0,
+            "recoveryReason": "attach",
+            "requestedChannelCount": 2,
+            "route": "direct",
+            "state": "ready",
+            "trackMuted": false,
+            "trackState": "live"
+          }
+        }
+      },
+      {
+        "seq": 2308,
+        "tsMs": 1795692561794,
+        "time": "2026-11-26T19:29:21.794000+08:00",
+        "event": "browserPlaybackHealthObserved",
+        "payload": {
+          "observedAtMs": 132790,
+          "observationEpoch": 1,
+          "healthSequence": 108,
+          "visibility": "visible",
+          "connectionState": "connected",
+          "window": {
+            "elapsedMs": 1009,
+            "endMs": 132788,
+            "firstSampleId": "1:349",
+            "lastSampleId": "1:353",
+            "partial": false,
+            "resetReasons": [],
+            "sampleCount": 4,
+            "startMs": 131779,
+            "validSampleCount": 4
+          },
+          "coverage": {
+            "counterMs": {
+              "callbacks": 1009,
+              "decoded": 1009,
+              "received": 1009,
+              "rendererSubmit": 1009,
+              "videoPresent": 1009
+            },
+            "elapsedMs": 1009,
+            "maxSampleGapMs": 253,
+            "partial": false,
+            "ratio": 1,
+            "validMs": 1009
+          },
+          "frameSupply": {
+            "callbackFps": 0,
+            "decodeFps": 0,
+            "delta": {
+              "bytesReceived": 0,
+              "callbackGaps": 0,
+              "callbacks": 0,
+              "decoded": 0,
+              "duplicates": 0,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 0,
+              "keyframes": 0,
+              "nack": 0,
+              "overwrites": 0,
+              "packetsReceived": 0,
+              "pli": 0,
+              "presentedJumps": 0,
+              "rateLimitDrops": 0,
+              "received": 0,
+              "rendererSubmit": 0,
+              "submitFailures": 0,
+              "videoPresent": 0
+            },
+            "maxCallbackIntervalMs": 0,
+            "maxPresentedFramesDelta": 0,
+            "outputHeight": 1440,
+            "outputWidth": 2560,
+            "rateScope": "bucket",
+            "receivedFps": 0,
+            "rendererSubmitFps": 0,
+            "sourceHeight": 1440,
+            "sourceWidth": 2560,
+            "totals": {
+              "callbacks": 4437,
+              "decoded": 5519,
+              "fir": 0,
+              "framesDropped": 0,
+              "freezeCount": 4,
+              "keyframes": 8,
+              "nack": 4,
+              "pli": 2,
+              "received": 5519,
+              "rendererSubmit": 4117,
+              "videoPresent": 5521
+            },
+            "trackingSource": "videoFrameCallback",
+            "videoPresentFps": 0,
+            "windows": {
+              "long": {
+                "callbackFpsAvg": 22.49,
+                "counterMs": {
+                  "callbacks": 11829,
+                  "decoded": 11829,
+                  "received": 11829,
+                  "rendererSubmit": 10585,
+                  "videoPresent": 11829
+                },
+                "decodeFpsAvg": 27.22,
+                "durationMs": 11829,
+                "inboundFpsAvg": 27.14,
+                "rendererSubmitFpsAvg": 23.33,
+                "sampleCount": 44,
+                "videoPresentFpsAvg": 27.39
+              },
+              "short": {
+                "callbackFpsAvg": 0,
+                "coverageMs": 3000,
+                "decodeFpsAvg": 0,
+                "durationMs": 3000,
+                "inboundFpsAvg": 0,
+                "rendererSubmitFpsAvg": 0,
+                "sampleCount": 12,
+                "videoPresentFpsAvg": 0
+              }
+            }
+          },
+          "network": {
+            "bitrateKbps": 0,
+            "jitterMs": 1,
+            "packetAgeMs": 4032,
+            "packetLossRatio": 0,
+            "packetsLostDelta": 0,
+            "rttMs": 4,
+            "state": "unknown",
+            "transportPath": "host"
+          },
+          "recovery": {
+            "actionPending": false,
+            "cause": "unknown",
+            "controlChannelState": "open",
+            "firstFrameStage": "firstPresented",
+            "nativeRecoveryGate": "unsupported",
+            "presentationMilestone": "mediaReady",
+            "totalFreezesDuration": 3.14
+          },
+          "renderer": {
+            "gpuTiming": {
+              "completion": {
+                "completed": 71,
+                "insertionCpuMaxMs": 1,
+                "latest": {
+                  "lowerBoundMs": 0,
+                  "upperBoundMs": 5
+                },
+                "state": "ready",
+                "timeouts": 0
+              },
+              "disjointCount": 0,
+              "duration": {
+                "count": 0
+              },
+              "queryCount": 0,
+              "state": "unavailable"
+            },
+            "maxSubmitAgeMs": 4244,
+            "maxVideoPresentAgeMs": 4244,
+            "screenPresentState": "unavailable",
+            "submitAgeMs": 4244,
+            "timing": {
+              "duration": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              },
+              "interval": {
+                "count": 246,
+                "maxMs": 52,
+                "p95Ms": 44,
+                "p99Ms": 48
+              },
+              "submit": {
+                "count": 256,
+                "maxMs": 1,
+                "p95Ms": 0,
+                "p99Ms": 1
+              },
+              "upload": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 2
+              }
+            },
+            "timingScope": "retainedSamples",
+            "videoPresentAgeMs": 4244
+          },
+          "audio": {
+            "audioGeneration": 1,
+            "audioStats": {
+              "concealedRatio": 0,
+              "concealedSamplesTotal": 23226,
+              "coverageMs": 253,
+              "insertedSamplesTotal": 1080,
+              "jitterBufferMs": 139.17,
+              "packetsReceivedTotal": 5087,
+              "playoutEstimateState": "unavailable",
+              "progressObserved": true,
+              "removedSamplesTotal": 9477,
+              "samplesPerSecond": 47430.83,
+              "samplesReceivedTotal": 4891200
+            },
+            "channelSource": "requested",
+            "codecChannelCount": 2,
+            "effectiveChannelCount": 2,
+            "intentionallySilent": false,
+            "recoveryAttempts": 0,
+            "recoveryReason": "attach",
+            "requestedChannelCount": 2,
+            "route": "direct",
+            "state": "ready",
+            "trackMuted": false,
+            "trackState": "live"
+          }
+        }
+      }
+    ],
+    "freezeDurationSeconds": 4.477,
+    "shortDeficit": {
+      "startMs": 159755,
+      "endMs": 162779,
+      "durationMs": 3024
+    }
+  },
+  "audio": {
+    "codec": {
+      "mimeType": "audio/opus",
+      "clockRate": 48000,
+      "channels": 2,
+      "sdpFmtpLine": "minptime=10;stereo=1;useinbandfec=1"
+    },
+    "totals": {
+      "totalSamplesReceived": 10841760,
+      "concealedSamples": 23226,
+      "concealmentEvents": 4,
+      "packetsReceived": 11285,
+      "packetsLost": 9,
+      "insertedSamplesForDeceleration": 1080,
+      "removedSamplesForAcceleration": 14404
+    },
+    "concealedRatioPercent": 0.21422721034223224,
+    "audioJitterBufferForeground": {
+      "medianMs": 38.46,
+      "p95Ms": 193.33,
+      "maxMs": 326.15
+    },
+    "lastHealth": {
+      "audioGeneration": 1,
+      "audioStats": {
+        "concealedRatio": 0,
+        "concealedSamplesTotal": 23226,
+        "coverageMs": 255,
+        "insertedSamplesTotal": 1080,
+        "jitterBufferMs": 36.92,
+        "packetsReceivedTotal": 11285,
+        "playoutEstimateState": "unavailable",
+        "progressObserved": true,
+        "removedSamplesTotal": 14404,
+        "samplesPerSecond": 47058.82,
+        "samplesReceivedTotal": 10841760
+      },
+      "channelSource": "requested",
+      "codecChannelCount": 2,
+      "effectiveChannelCount": 2,
+      "intentionallySilent": false,
+      "recoveryAttempts": 0,
+      "recoveryReason": "attach",
+      "requestedChannelCount": 2,
+      "route": "direct",
+      "state": "ready",
+      "trackMuted": false,
+      "trackState": "live"
+    }
+  },
+  "frameSupply": {
+    "finalTotals": {
+      "bytesReceived": 591643321,
+      "callbackGaps": 13,
+      "callbacks": 10885,
+      "decoded": 12763,
+      "duplicates": 0,
+      "fir": 0,
+      "framesDropped": 0,
+      "freezeCount": 5,
+      "keyframes": 14,
+      "nack": 4,
+      "overwrites": 0,
+      "packetsReceived": 539840,
+      "pli": 2,
+      "presentedJumps": 1770,
+      "rateLimitDrops": 0,
+      "received": 12764,
+      "rendererSubmit": 11340,
+      "submitFailures": 0,
+      "videoPresent": 12766
+    },
+    "decodeSubmitDifference": 1423,
+    "hiddenBucketDeltas": {
+      "received": 1054,
+      "decoded": 1053,
+      "videoPresent": 1056,
+      "callbacks": 526,
+      "rendererSubmit": 0
+    },
+    "hiddenBuckets": 26,
+    "workerReaderFinals": [
+      {
+        "firstSeq": 211,
+        "last": {
+          "seq": 1790,
+          "tsMs": 1795692524851,
+          "time": "2026-11-26T19:28:44.851000+08:00",
+          "event": "decodedFrameSupplyObserved",
+          "payload": {
+            "clientGeneration": 1,
+            "clockDomain": "monotonic",
+            "decodedSupply": {
+              "ackDeliveryMaxMs": 1,
+              "ackDeliveryP95Ms": 0,
+              "ackDeliveryStatus": "valid",
+              "ackRoundTripMaxMs": 13,
+              "ackRoundTripP95Ms": 2,
+              "acks": 3869,
+              "adjustedClocks": 394,
+              "consumeMaxMs": 11,
+              "consumeP95Ms": 1,
+              "delivered": 3870,
+              "deliveryBudgetMs": 50,
+              "invalidClocks": 0,
+              "lastSequence": 3871,
+              "overwrites": 1,
+              "pendingWaitMaxMs": 1,
+              "pendingWaitP95Ms": 0,
+              "pixelFormat": "NV12",
+              "read": 3871,
+              "readWaitMaxMs": 160,
+              "readWaitP95Ms": 45,
+              "receiveAgeMs": 49,
+              "receiveIntervalMaxMs": 161,
+              "receiveIntervalP95Ms": 44,
+              "received": 3870,
+              "sent": 3870,
+              "staleDrops": 0,
+              "supplyClock": {
+                "offsetMs": 0,
+                "state": "calibrated",
+                "uncertaintyMs": 2
+              },
+              "transferMaxMs": 4,
+              "transferP95Ms": 2,
+              "unknownClocks": 0,
+              "workerObservationAgeMs": 50
+            },
+            "observationEpoch": 1,
+            "observedAtMs": 95848,
+            "productionContractVersion": 1,
+            "rendererFrameSource": "worker",
+            "rendererGeneration": 1,
+            "rendererKind": "webgl2",
+            "runtimeGeneration": 1,
+            "sampleAgeMs": 0,
+            "sampleId": "1:283",
+            "sampledAtMs": 95848,
+            "timing": {
+              "readToSubmit": {
+                "count": 256,
+                "maxMs": 13,
+                "p95Ms": 2,
+                "p99Ms": 3
+              },
+              "receiveToSubmit": {
+                "count": 256,
+                "maxMs": 11,
+                "p95Ms": 1,
+                "p99Ms": 1
+              }
+            },
+            "timingScope": "retainedSamples"
+          }
+        }
+      },
+      {
+        "firstSeq": 2047,
+        "last": {
+          "seq": 5440,
+          "tsMs": 1795692685853,
+          "time": "2026-11-26T19:31:25.853000+08:00",
+          "event": "decodedFrameSupplyObserved",
+          "payload": {
+            "clientGeneration": 1,
+            "clockDomain": "monotonic",
+            "decodedSupply": {
+              "ackDeliveryMaxMs": 1,
+              "ackDeliveryP95Ms": 1,
+              "ackDeliveryStatus": "valid",
+              "ackRoundTripMaxMs": 4,
+              "ackRoundTripP95Ms": 3,
+              "acks": 7470,
+              "adjustedClocks": 1343,
+              "consumeMaxMs": 1,
+              "consumeP95Ms": 1,
+              "delivered": 7470,
+              "deliveryBudgetMs": 50,
+              "invalidClocks": 0,
+              "lastSequence": 7491,
+              "overwrites": 20,
+              "pendingWaitMaxMs": 0,
+              "pendingWaitP95Ms": 0,
+              "pixelFormat": "NV12",
+              "read": 7491,
+              "readWaitMaxMs": 33,
+              "readWaitP95Ms": 24,
+              "receiveAgeMs": 22,
+              "receiveIntervalMaxMs": 34,
+              "receiveIntervalP95Ms": 24,
+              "received": 7471,
+              "sent": 7471,
+              "staleDrops": 1,
+              "supplyClock": {
+                "offsetMs": 0,
+                "state": "calibrated",
+                "uncertaintyMs": 2
+              },
+              "transferMaxMs": 3,
+              "transferP95Ms": 2,
+              "unknownClocks": 0,
+              "workerObservationAgeMs": 23
+            },
+            "observationEpoch": 1,
+            "observedAtMs": 256851,
+            "productionContractVersion": 1,
+            "rendererFrameSource": "worker",
+            "rendererGeneration": 1,
+            "rendererKind": "webgl2",
+            "runtimeGeneration": 1,
+            "sampleAgeMs": 86,
+            "sampleId": "1:844",
+            "sampledAtMs": 256765,
+            "timing": {
+              "readToSubmit": {
+                "count": 256,
+                "maxMs": 4,
+                "p95Ms": 2,
+                "p99Ms": 3
+              },
+              "receiveToSubmit": {
+                "count": 256,
+                "maxMs": 1,
+                "p95Ms": 1,
+                "p99Ms": 1
+              }
+            },
+            "timingScope": "retainedSamples"
+          }
+        }
+      }
+    ],
+    "lastHealth": {
+      "seq": 5428,
+      "tsMs": 1795692685768,
+      "time": "2026-11-26T19:31:25.768000+08:00",
+      "event": "browserPlaybackHealthObserved",
+      "payload": {
+        "observedAtMs": 256766,
+        "observationEpoch": 1,
+        "healthSequence": 232,
+        "visibility": "visible",
+        "connectionState": "connected",
+        "window": {
+          "elapsedMs": 1011,
+          "endMs": 256765,
+          "firstSampleId": "1:840",
+          "lastSampleId": "1:844",
+          "partial": false,
+          "resetReasons": [],
+          "sampleCount": 4,
+          "startMs": 255754,
+          "validSampleCount": 4
+        },
+        "coverage": {
+          "counterMs": {
+            "callbacks": 1011,
+            "decoded": 1011,
+            "received": 1011,
+            "rendererSubmit": 1011,
+            "videoPresent": 1011
+          },
+          "elapsedMs": 1011,
+          "maxSampleGapMs": 255,
+          "partial": false,
+          "ratio": 1,
+          "validMs": 1011
+        },
+        "frameSupply": {
+          "callbackFps": 45.5,
+          "decodeFps": 59.35,
+          "delta": {
+            "bytesReceived": 3595579,
+            "callbackGaps": 0,
+            "callbacks": 46,
+            "decoded": 60,
+            "duplicates": 0,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 0,
+            "keyframes": 0,
+            "nack": 0,
+            "overwrites": 0,
+            "packetsReceived": 3277,
+            "pli": 0,
+            "presentedJumps": 14,
+            "rateLimitDrops": 0,
+            "received": 61,
+            "rendererSubmit": 60,
+            "submitFailures": 0,
+            "videoPresent": 60
+          },
+          "maxCallbackIntervalMs": 36,
+          "maxPresentedFramesDelta": 2,
+          "outputHeight": 1684,
+          "outputWidth": 2994,
+          "rateScope": "bucket",
+          "receivedFps": 60.34,
+          "rendererSubmitFps": 59.35,
+          "sourceHeight": 1440,
+          "sourceWidth": 2560,
+          "totals": {
+            "callbacks": 10885,
+            "decoded": 12763,
+            "fir": 0,
+            "framesDropped": 0,
+            "freezeCount": 5,
+            "keyframes": 14,
+            "nack": 4,
+            "pli": 2,
+            "received": 12764,
+            "rendererSubmit": 11340,
+            "videoPresent": 12766
+          },
+          "trackingSource": "videoFrameCallback",
+          "videoPresentFps": 59.35,
+          "windows": {
+            "long": {
+              "callbackFpsAvg": 53.71,
+              "coverageMs": 15000,
+              "decodeFpsAvg": 59.07,
+              "durationMs": 15000,
+              "inboundFpsAvg": 59.13,
+              "rendererSubmitFpsAvg": 59.07,
+              "sampleCount": 60,
+              "videoPresentFpsAvg": 59.1
+            },
+            "short": {
+              "callbackFpsAvg": 52.22,
+              "coverageMs": 3000,
+              "decodeFpsAvg": 59.78,
+              "durationMs": 3000,
+              "inboundFpsAvg": 60.11,
+              "rendererSubmitFpsAvg": 59.78,
+              "sampleCount": 12,
+              "videoPresentFpsAvg": 59.82
+            }
+          }
+        },
+        "network": {
+          "bitrateKbps": 28451.66,
+          "jitterBufferMs": 10.01,
+          "jitterMs": 9,
+          "packetAgeMs": 0,
+          "packetLossRatio": 0,
+          "packetsLostDelta": 0,
+          "rttMs": 6,
+          "state": "stable",
+          "transportPath": "host"
+        },
+        "recovery": {
+          "actionPending": false,
+          "cause": "unknown",
+          "controlChannelState": "open",
+          "decodeMs": 4.7,
+          "firstFrameStage": "firstPresented",
+          "nativeRecoveryGate": "unsupported",
+          "presentationMilestone": "mediaReady",
+          "totalFreezesDuration": 7.62
+        },
+        "renderer": {
+          "gpuTiming": {
+            "completion": {
+              "completed": 194,
+              "insertionCpuMaxMs": 1,
+              "latest": {
+                "lowerBoundMs": 0,
+                "upperBoundMs": 5
+              },
+              "state": "ready",
+              "timeouts": 0
+            },
+            "disjointCount": 0,
+            "duration": {
+              "count": 0
+            },
+            "queryCount": 0,
+            "state": "unavailable"
+          },
+          "maxSubmitAgeMs": 21,
+          "maxVideoPresentAgeMs": 32,
+          "screenPresentState": "unavailable",
+          "submitAgeMs": 21,
+          "timing": {
+            "duration": {
+              "count": 256,
+              "maxMs": 1,
+              "p95Ms": 1,
+              "p99Ms": 1
+            },
+            "interval": {
+              "count": 256,
+              "maxMs": 33,
+              "p95Ms": 24,
+              "p99Ms": 27
+            },
+            "submit": {
+              "count": 256,
+              "maxMs": 1,
+              "p95Ms": 0,
+              "p99Ms": 1
+            },
+            "upload": {
+              "count": 256,
+              "maxMs": 1,
+              "p95Ms": 1,
+              "p99Ms": 1
+            }
+          },
+          "timingScope": "retainedSamples",
+          "videoPresentAgeMs": 21
+        },
+        "audio": {
+          "audioGeneration": 1,
+          "audioStats": {
+            "concealedRatio": 0,
+            "concealedSamplesTotal": 23226,
+            "coverageMs": 255,
+            "insertedSamplesTotal": 1080,
+            "jitterBufferMs": 36.92,
+            "packetsReceivedTotal": 11285,
+            "playoutEstimateState": "unavailable",
+            "progressObserved": true,
+            "removedSamplesTotal": 14404,
+            "samplesPerSecond": 47058.82,
+            "samplesReceivedTotal": 10841760
+          },
+          "channelSource": "requested",
+          "codecChannelCount": 2,
+          "effectiveChannelCount": 2,
+          "intentionallySilent": false,
+          "recoveryAttempts": 0,
+          "recoveryReason": "attach",
+          "requestedChannelCount": 2,
+          "route": "direct",
+          "state": "ready",
+          "trackMuted": false,
+          "trackState": "live"
+        }
+      }
+    }
+  },
+  "recovery": {
+    "strictNativeRecoveryGate": "UNSUPPORTED",
+    "browserPerRequestEffectiveness": "INSUFFICIENT_EVIDENCE",
+    "rawStructuredEpisodeCounts": {
+      "pictureRecoveryTransition": 0,
+      "pictureRecoveryBlockerObserved": 0,
+      "videoIngressTermination": 0,
+      "firstFrameLatencyObserved": 0,
+      "keyframeRequestEpisode": 0,
+      "receiveFeedbackDecision": 0,
+      "referenceChainStateChanged": 0,
+      "cleanAnchorCommitted": 0,
+      "DisplayStable": 0
+    },
+    "attempts": [
+      {
+        "seq": 2237,
+        "tsMs": 1795692559231,
+        "time": "2026-11-26T19:29:19.231000+08:00",
+        "event": "recoveryArbiterSuppressed",
+        "payload": {
+          "clientGeneration": 1,
+          "clockDomain": "monotonic",
+          "factKey": "mediaHealth",
+          "hasInboundProgress": false,
+          "observedAtMs": 130228,
+          "recoveryCause": "unknown",
+          "runtimeGeneration": 1,
+          "suppressedBy": "localFaultDomain"
+        }
+      },
+      {
+        "seq": 2265,
+        "tsMs": 1795692560237,
+        "time": "2026-11-26T19:29:20.237000+08:00",
+        "event": "recoveryProposed",
+        "payload": {
+          "admissionId": "connection-1",
+          "factKey": "mediaHealth",
+          "runtimeGeneration": 1,
+          "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+          "source": "runtime-host"
+        }
+      },
+      {
+        "seq": 2292,
+        "tsMs": 1795692561247,
+        "time": "2026-11-26T19:29:21.247000+08:00",
+        "event": "recoveryProposed",
+        "payload": {
+          "admissionId": "connection-2",
+          "factKey": "mediaHealth",
+          "runtimeGeneration": 1,
+          "sessionId": "CCE23B90-1A20-40D4-83A1-2161BB05A0AD",
+          "source": "runtime-host"
+        }
+      },
+      {
+        "seq": 2266,
+        "tsMs": 1795692560238,
+        "time": "2026-11-26T19:29:20.238000+08:00",
+        "event": "decideRecovery",
+        "payload": {
+          "currentSession": true,
+          "fact": {
+            "connectedElapsedMs": 100825,
+            "connectionState": "connected",
+            "inactivityElapsedMs": 2687,
+            "type": "mediaHealth"
+          },
+          "isClosing": false,
+          "reason": null
+        }
+      },
+      {
+        "seq": 2293,
+        "tsMs": 1795692561248,
+        "time": "2026-11-26T19:29:21.248000+08:00",
+        "event": "decideRecovery",
+        "payload": {
+          "currentSession": true,
+          "fact": {
+            "connectedElapsedMs": 101829,
+            "connectionState": "connected",
+            "inactivityElapsedMs": 3691,
+            "type": "mediaHealth"
+          },
+          "isClosing": false,
+          "reason": null
+        }
+      }
+    ]
+  },
+  "reportLimitations": {
+    "devConsumedEvents": 291,
+    "devEventsMissingObservationEpoch": 291,
+    "automatedSteadyDurationMs": 424145.0,
+    "actualSessionDurationMs": 232116,
+    "physicalScanout": "UNSUPPORTED",
+    "gpuTimerQuery": "UNAVAILABLE",
+    "snapshotFreshnessBasedOnCopyMtime": true
+  },
+  "traceLoss": {
+    "status": "PASS",
+    "producerMaxCounters": {
+      "dropped": 0,
+      "droppedEssential": 0,
+      "ipcFailed": 0,
+      "ipcTimedOut": 0,
+      "producerRowOversized": 0,
+      "payloadFailed": 0,
+      "ackMissing": 0,
+      "coalesced": 0,
+      "profileFiltered": 0,
+      "queueFull": 0,
+      "rowOversized": 0,
+      "writerUnavailable": 0
+    },
+    "backendMaxCounters": {
+      "essentialDropped": 0,
+      "keyDropped": 0,
+      "debugDropped": 0,
+      "rawDropped": 0,
+      "ioDropped": 0,
+      "ioFailures": 0,
+      "oversizedDropped": 0
+    },
+    "counterScope": "maxObservedCumulativeWithinRun"
+  },
+  "checks": {
+    "summaryExitCode": 0,
+    "productionHealthExitCode": 0,
+    "browserRequireStabilityExitCode": 2,
+    "browserRequireStabilityOutcome": "FAIL from source-supply and submit-age episode; see segment diagnostics",
+    "malformedRows": 0,
+    "duplicateRows": 0
+  }
+}

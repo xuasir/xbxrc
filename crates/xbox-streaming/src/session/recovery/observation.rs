@@ -23,6 +23,7 @@ struct Interval {
     loss: Option<f64>,
     rtt: Option<f64>,
     jitter: Option<f64>,
+    jitter_buffer: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -38,6 +39,7 @@ impl RuntimeWindowAccumulator {
         counters: &RuntimeMediaCounters,
         rtt: Option<f64>,
         jitter: Option<f64>,
+        jitter_buffer: Option<f64>,
     ) {
         if let Some((last_at, last)) = &self.previous {
             if at <= *last_at {
@@ -83,6 +85,7 @@ impl RuntimeWindowAccumulator {
                     loss,
                     rtt,
                     jitter,
+                    jitter_buffer: jitter_buffer.filter(|value| value.is_finite() && *value >= 0.0),
                 });
             }
         }
@@ -119,6 +122,14 @@ impl RuntimeWindowAccumulator {
         let (loss_coverage_ms, loss_avg) = metric(|i| i.loss);
         let (rtt_coverage_ms, rtt_ms_avg) = metric(|i| i.rtt);
         let (jitter_coverage_ms, jitter_ms_avg) = metric(|i| i.jitter);
+        let (jitter_buffer_coverage_ms, _) = metric(|i| i.jitter_buffer);
+        let mut buffers = self
+            .intervals
+            .iter()
+            .filter(|i| i.end > start && i.start < at)
+            .filter_map(|i| i.jitter_buffer);
+        let jitter_buffer_ms_first = buffers.next();
+        let jitter_buffer_ms_last = buffers.last().or(jitter_buffer_ms_first);
         RuntimeObservationWindow {
             received_coverage_ms,
             inbound_fps_avg,
@@ -132,6 +143,9 @@ impl RuntimeWindowAccumulator {
             rtt_ms_avg,
             jitter_coverage_ms,
             jitter_ms_avg,
+            jitter_buffer_coverage_ms,
+            jitter_buffer_ms_first,
+            jitter_buffer_ms_last,
             ..Default::default()
         }
     }

@@ -1,0 +1,13 @@
+{
+  "webRTCVersion": "137.7151.04",
+  "receiverHeaderSHA256": "e9083663b93485d83cc56958b6b0b571309ac11fedf73c97887b86e8bebed529",
+  "receiverTimingControlPublicAPI": "固定 M137 ObjC receiver 公开只读 parameters/track/sources；视频缓冲采用标准 libwebrtc 自适应，当前改动补齐窗口观测。",
+  "audioSessionHeaderSHA256": "7b6493297386b67b0c96e5c995b4d7cd0077f96b200cd3accc383d80bbc90538",
+  "audioPreferences": [
+    "setPreferredSampleRate",
+    "setPreferredIOBufferDuration",
+    "setPreferredInputNumberOfChannels",
+    "setPreferredOutputNumberOfChannels"
+  ],
+  "nativeAudioCompatibility": "保持 playAndRecord/voiceChat 与有效输入通道；采集授权沿显式 sendReceive 开关。"
+}

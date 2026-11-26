@@ -368,6 +368,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
   it('records submit interval and upload percentiles independently of screenshot draws', async () => {
     const h = await harness(kind)
     h.gl.texImage2D.mockImplementation(() => h.gl.spend(2))
+    h.gl.texSubImage2D.mockImplementation(() => h.gl.spend(2))
     h.frame(0, 1)
     h.frame(20, 2)
     h.frame(45, 3)
@@ -394,10 +395,12 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
         source.snapshotDiagnostics({ videoPixels: true })
       const imported: number[] = []
       let image = 0
-      h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      const observeImport = (...args: unknown[]) => {
         if (args.at(-1) === h.decodedFrames.at(-1))
           imported.push(image)
-      })
+      }
+      h.gl.texImage2D.mockImplementation(observeImport)
+      h.gl.texSubImage2D.mockImplementation(observeImport)
       for (let slot = 0; slot < 600; slot++) {
         const at = slot * 1000 / 60
         image = slot + 1
@@ -494,7 +497,7 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
     expect(h.rafs.size + h.frames.size).toBe(0)
   })
 
-  it('imports each new video frame through texImage2D while retaining one source texture and skipping duplicate identities', async () => {
+  it('updates stable-sized video frames through one source texture and preserves zero-timestamp frame identities', async () => {
     const h = await harness(kind)
     const format = h.gl.RGBA
     h.frame(0, 1)
@@ -505,9 +508,95 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.decodedFrames[0]],
       [h.gl.TEXTURE_2D, 0, format, format, h.gl.UNSIGNED_BYTE, h.decodedFrames[1]],
     ])
-    expect(h.gl.texSubImage2D).not.toHaveBeenCalled()
+    expect(h.gl.texSubImage2D).toHaveBeenCalledTimes(0)
+    expect(h.decodedFrames.map(frame => frame.timestamp)).toEqual([0, 0])
     expect(h.gl.createTexture).toHaveBeenCalledTimes(textures)
-    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, videoUploadMethod: 'texImage2D' })
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, videoUploadMethod: 'texImage2D', videoTextureFullUploads: 2, videoTextureSubUploads: 0, videoTextureReuseCount: 0 })
+    h.renderer.destroy()
+  })
+
+  it('captures the current frame after output resizing while reusing its uploaded texture', async () => {
+    const h = await harness(kind, { sharpness: 0, renderSourceWidth: 32, renderSourceHeight: 18 })
+    h.frame(0, 1)
+    const firstCapture = h.renderer.captureRenderedFrame()
+    h.raf(1)
+    expect(await firstCapture).toBeTruthy()
+    h.frame(20, 2)
+    h.renderer.update({ renderOutputWidth: 64, renderOutputHeight: 36, superResolutionOutputWidth: 64, superResolutionOutputHeight: 36 })
+    const secondCapture = h.renderer.captureRenderedFrame()
+    h.raf(21)
+    expect(await secondCapture).toBeTruthy()
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, captureDrawCount: 2, videoTextureFullUploads: 2, videoTextureSubUploads: 0, videoTextureReuseCount: 2, outputWidth: 64, outputHeight: 36 })
+    expect(h.gl.texImage2D.mock.calls.filter(args => h.decodedFrames.includes(args.at(-1) as VideoFrame))).toHaveLength(2)
+    expect(h.gl.texSubImage2D).toHaveBeenCalledTimes(0)
+    expect(h.failure).toHaveBeenCalledTimes(0)
+    h.renderer.destroy()
+  })
+
+  it('uploads a newer rate-limited candidate when capturing while preserving realtime draw counts', async () => {
+    const h = await harness(kind, { targetFps: 30, renderSourceWidth: 32, renderSourceHeight: 18 })
+    h.frame(0, 1)
+    h.frame(10, 2)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, rateLimitDropCount: 1, videoTextureFullUploads: 1, videoTextureSubUploads: 0 })
+    const capture = h.renderer.captureRenderedFrame()
+    h.raf(11)
+    expect(await capture).toBeTruthy()
+    expect(h.gl.texImage2D).toHaveBeenLastCalledWith(h.gl.TEXTURE_2D, 0, h.gl.RGBA, h.gl.RGBA, h.gl.UNSIGNED_BYTE, h.decodedFrames[1])
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, captureDrawCount: 1, videoTextureFullUploads: 2, videoTextureSubUploads: 0, videoTextureReuseCount: 0 })
+    h.frame(40, 3)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, videoTextureFullUploads: 3, videoTextureSubUploads: 0 })
+    h.renderer.destroy()
+  })
+
+  it('reinitializes source texture storage when the decoded source grows and shrinks', async () => {
+    const h = await harness(kind)
+    h.frame(0, 1)
+    h.video.videoWidth = 2560
+    h.video.videoHeight = 1440
+    h.frame(20, 2)
+    h.frame(40, 3)
+    h.video.videoWidth = 1280
+    h.video.videoHeight = 720
+    h.frame(60, 4)
+    h.frame(80, 5)
+    expect(h.gl.texImage2D.mock.calls.filter(args => h.decodedFrames.includes(args.at(-1) as VideoFrame)).map(args => args.at(-1))).toEqual(h.decodedFrames)
+    expect(h.gl.texSubImage2D).toHaveBeenCalledTimes(0)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 5, videoTextureFullUploads: 5, videoTextureSubUploads: 0, videoTextureReuseCount: 0 })
+    expect(h.failure).toHaveBeenCalledTimes(0)
+    h.renderer.destroy()
+  })
+
+  it.each(['unavailable', 'exception', 'expensive'] as const)('keeps full VideoFrame imports selected when subimage is %s', async (fault) => {
+    const h = await harness(kind)
+    const subImage = h.gl.texSubImage2D
+    if (fault === 'unavailable')
+      Object.defineProperty(h.gl, 'texSubImage2D', { value: undefined })
+    else if (fault === 'exception')
+      subImage.mockImplementation(() => { throw new TypeError('unsupportedVideoFrameImport') })
+    else
+      subImage.mockImplementation(() => h.gl.spend(8))
+    h.gl.texImage2D.mockImplementation((...args: unknown[]) => {
+      if (h.decodedFrames.includes(args.at(-1) as VideoFrame))
+        h.gl.spend(0.3)
+    })
+    for (let frame = 1; frame <= 3; frame++)
+      h.frame(frame * 20, frame)
+    expect(h.gl.texImage2D.mock.calls.filter(args => h.decodedFrames.includes(args.at(-1) as VideoFrame)).map(args => args.at(-1))).toEqual(h.decodedFrames)
+    expect(subImage).toHaveBeenCalledTimes(0)
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 3, videoUploadMethod: 'texImage2D', videoTextureFullUploads: 3, videoTextureSubUploads: 0 })
+    expect(h.renderer.snapshotResources()?.uploadDurationTotalMs).toBeCloseTo(0.9)
+    expect(h.failure).toHaveBeenCalledTimes(0)
+    h.renderer.destroy()
+  })
+
+  it('reports context loss during initial full import through the renderer failure owner', async () => {
+    const h = await harness(kind)
+    h.gl.texImage2D.mockImplementationOnce(() => {
+      h.gl.getError.mockReturnValueOnce(0x9242)
+    })
+    h.frame(0, 1)
+    expect(h.failure).toHaveBeenCalledWith('gpuRuntimeError:37442')
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 0, submitFailureCount: 1, videoTextureFullUploads: 0, videoTextureSubUploads: 0 })
     h.renderer.destroy()
   })
 
@@ -517,7 +606,6 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
       if (args.at(-1) === h.decodedFrames.at(-1))
         h.gl.spend(8)
     })
-    h.gl.texSubImage2D.mockImplementation(() => h.gl.spend(8))
     h.gl.drawArrays.mockImplementation(() => h.gl.spend(3))
     h.frame(100, 1)
     expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, drawCostSampleCount: 1, drawDurationTotalMs: 11, uploadDurationTotalMs: 8, submitDurationTotalMs: 3, uploadDurationMaxMs: 8, submitDurationMaxMs: 3 })
@@ -629,14 +717,18 @@ describe.each(['webgl2', 'webgl2_sr'] as const)('%s new-frame scheduling', (kind
   })
 
   it('rebuilds the active program after context restore and presents another frame', async () => {
-    const h = await harness(kind)
+    const h = await harness(kind, { renderSourceWidth: 32, renderSourceHeight: 18 })
     h.frame(0, 1)
     h.canvases[0]?.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
     h.canvases[0]?.dispatchEvent(new Event('webglcontextrestored'))
     expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 1, duplicateDrawCount: 0, rateLimitDropCount: 0 })
+    const capture = h.renderer.captureRenderedFrame()
+    h.raf(10)
+    expect(await capture).toBeTruthy()
+    expect(h.renderer.snapshotResources()).toMatchObject({ videoTextureFullUploads: 2, videoTextureSubUploads: 0, videoTextureReuseCount: 0 })
     h.frame(34, 2)
     expect(h.failure.mock.calls).toEqual([['webgl2ContextLost']])
-    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, rateLimitDropCount: 0 })
+    expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, duplicateDrawCount: 0, rateLimitDropCount: 0, videoTextureFullUploads: 3, videoTextureSubUploads: 0, videoTextureReuseCount: 0 })
     expect(h.canvases[0]?.style.opacity).toBe('1')
     expect(h.gl.createProgram).toHaveBeenCalledTimes(2)
     h.renderer.destroy()
@@ -823,7 +915,7 @@ it('submits every zero-timestamp decoded frame in the original picture path befo
     await Promise.resolve()
     expect(h.gl.texImage2D).toHaveBeenLastCalledWith(h.gl.TEXTURE_2D, 0, h.gl.RGBA, h.gl.RGBA, h.gl.UNSIGNED_BYTE, frame)
   }
-  expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, renderFrameSource: 'main-thread', duplicateDrawCount: 0, submitFailureCount: 0 })
+  expect(h.renderer.snapshotResources()).toMatchObject({ realtimeDrawCount: 2, renderFrameSource: 'main-thread', duplicateDrawCount: 0, submitFailureCount: 0, videoTextureFullUploads: 2, videoTextureSubUploads: 0 })
   expect(h.gl.drawArrays).toHaveBeenCalledTimes(2)
   expect(h.gl.createFramebuffer).not.toHaveBeenCalled()
   h.renderer.destroy()

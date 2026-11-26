@@ -1,0 +1,151 @@
+{
+  "changedBaselineFiles": [
+    {
+      "file": "src/player/domain/input.ts",
+      "baselineSha256": "bf2d446448923a6cab0681c21101a4155f6d2d02bee72fa768bb0d5cfb29c5f2",
+      "finalSha256": "947a4b1dfa844ed5a39ce7ee274b68f97f40a4329ccf045ed43e7751b0f151a3"
+    },
+    {
+      "file": "src/player/domain/stats.ts",
+      "baselineSha256": "ccb7a66c703906b9bc3785b4a6a70b7e3f32334acfd40aa11d857d6082faf737",
+      "finalSha256": "f1d94b6fa938382f07fef21e73b31d2857c8ce2b4b3d35d0e9884aa357dc0b73"
+    },
+    {
+      "file": "src/player/domain/media.ts",
+      "baselineSha256": "1ac68b4b32a1c0993e95741b3aa5f62080da114f5e8c2b6ef2390266ca2d5127",
+      "finalSha256": "dab7bf03beca2c0509afbe6f50f0b71a4c9bd3df4d9c185f2c39a6af5e49d767"
+    },
+    {
+      "file": "src/player/protocol/input/InputPacketEncoder.ts",
+      "baselineSha256": "07ecb0cb702a0393aef7d0e1aa63c852b9af437fd5657f37d70209e159da4962",
+      "finalSha256": "600c8e9a44510a892fb569b650cd77abc8357c6bda51c73362ecaf083ed0e054"
+    },
+    {
+      "file": "src/player/app/input/InputService.ts",
+      "baselineSha256": "893f2164515ca096006c7de7909067e13caf7a18afa1573254b10080fc5e0ab0",
+      "finalSha256": "f79d9c3699bfdaf5600ea6398d6f9ac458a91b63add42d4254b0e8cf46053816"
+    },
+    {
+      "file": "src/player/app/stats/StatsService.ts",
+      "baselineSha256": "8b3eb5dfba878e0ee300802a56ed742517a37d74cca630034802efcaad65817f",
+      "finalSha256": "30d68c32cac1a2f250b3fc2a78c07882ec87cc54009e8f4fd7e96d5981fd8470"
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.ts",
+      "baselineSha256": "d25be7721f3e68138a6a864e637c371653850a70c688a5fb8423b87d58716132",
+      "finalSha256": "f5c73830098ce6cd550204828914d022d781d6c2e1f8a3be2a50425ed8335bbd"
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.test.ts",
+      "baselineSha256": "07f5f2f6b8c1f6e6166da51b775ece47972833defc50080deb56992f9ca42bce",
+      "finalSha256": "d26a7ba59a4c59a44258242ce9f03ae11193ba3e268c84305c2179be326547a1"
+    },
+    {
+      "file": "src/player/app/session/SessionService.ts",
+      "baselineSha256": "0f0f7ee8c364f2beaee7d3330e9bc573818dc0007c16354f9b0b6928c911c179",
+      "finalSha256": "361a233f54bc2c481670212bb82693e90d7a0452a87c7a34eb8fe80b6eedc76c"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-reader.ts",
+      "baselineSha256": "b104d905b4fe8bab816a3b1b2da6d00640ac5caaf67a25b6281d4c2313114892",
+      "finalSha256": "92c2657382d73cdb52d213de58009a9295bbc2637ddc52ee057cd2ed01735fb4"
+    },
+    {
+      "file": "src/player/infra/render/video-frame-source.ts",
+      "baselineSha256": "5981091adb7f7e5121d1d2e6be63478abd4a222d111bc60a1ff22dfa2f9fa85f",
+      "finalSha256": "a7769acbf63bb7312af25d7d8d9082a305abcf7bf382fe6d55fd7446b2ce67fe"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+      "baselineSha256": "d5b7dd1959c8fad34614995f158c25280fb7a0df7f417e62065752fe0634f1b9",
+      "finalSha256": "71930468f22dcd61cd6606e38b5899915d63a60d6e2a68adb28e385853ee538a"
+    },
+    {
+      "file": "src/player/infra/render/frame-capture-queue.ts",
+      "baselineSha256": "9e94d5fa7b0165acade860e6b7a4608005c8c616403e5f95b70dc37528caf710",
+      "finalSha256": "0174342f3bb1a87ce2fce796b55ff2251870ebba06ab3144f35f4e565977c1dc"
+    },
+    {
+      "file": "src/player/infra/render/realtime-frame-copy-contract.test.ts",
+      "baselineSha256": "92fe58a868a049712fb6265ecb082614009ef5befab4602649af3312ee52deb9",
+      "finalSha256": "74de7c95793da33f6a9328b13843faed4f2666b01cd9e963c9f766c31a5602e7"
+    },
+    {
+      "file": "src/player/infra/render/Renderers.ts",
+      "baselineSha256": "8a041ca6ee146188ce3c5010fe594c987547d87fc722fdad4ad218abf44e186e",
+      "finalSha256": "f760675072c86d76db18fe8094fafc87ba6fe8e416c5eef51895dc663d30aa37"
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker.ts",
+      "baselineSha256": "7433e753760ed6ac87f434f8aa084724fc8c2d15924630b875910738e05b9ffd",
+      "finalSha256": "f4f2649caa9f6d375396925af4fff0e4e90b56c33b12f2be04615cf57f91db5e"
+    },
+    {
+      "file": "src/player/infra/render/render-observation.ts",
+      "baselineSha256": "86ad717a3dd350be98d034ee402ace902b8a270bd9b02bcf95d0d936ed6b0431",
+      "finalSha256": "00fd0b38e4144855e0bf9b9ea4dd012b87d3caac3acb135462ace4c08ae60697"
+    },
+    {
+      "file": "src/player/infra/render/webgl-frame-capture.ts",
+      "baselineSha256": "1a49a61378b77948f0bfe78b18e88c0ce395913982471dcb8b3ce4026ce3e651",
+      "finalSha256": "ae52a09d3773cdcb0b371447fab5c0303efb5540f9ddff382d30a64749942d96"
+    },
+    {
+      "file": "src/player/infra/webrtc/DataChannelHub.ts",
+      "baselineSha256": "32cc310b1d301a6418aa1105dcffd12e04f3504e861932562603e5539ce569e8",
+      "finalSha256": "8ca00d07c100927b52d775676e939952a0db9faeee4ca15acfb680308690f713"
+    },
+    {
+      "file": "src/player/infra/webrtc/WebRtcTransport.test.ts",
+      "baselineSha256": "8b822b5b7221a952dd5b27aa6e4945329a6c250730cab18f1abbeee79bc4662c",
+      "finalSha256": "7193c0ff10ac5b134b55123f765fd1113bfa33065698f53fa63f3b80da0ee056"
+    },
+    {
+      "file": "src/player/infra/webrtc/WebRtcTransport.ts",
+      "baselineSha256": "d0cf8affd9076d9196d01680df6de0f23057a97024b7fdaeb8313681790a6a90",
+      "finalSha256": "be2f89c6111620a76ab1e0adb5400105971b6bdda49327b8bce1442b511ac840"
+    },
+    {
+      "file": "src/streaming/runtime/playback-health.test.ts",
+      "baselineSha256": "67542ef2d5534bf029a8c1719ced18cc392d776cec004b5da2f7817e94af5165",
+      "finalSha256": "8f2b2b3aee5eab37af6582e6701bc1ab9529d2426fc6952159a3e1f0046dfd1a"
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.ts",
+      "baselineSha256": "f0e5ae469294826c11b32d0d8d49b466c9cecb8da04451eff344462ecea03c86",
+      "finalSha256": "dd2b7593ce185a39b0ab69e21acdbe787ea4563fbef5fa826827a559c6b48c4f"
+    },
+    {
+      "file": "src/streaming/runtime/playback-health.ts",
+      "baselineSha256": "7b701e73e1c7c7fade53479c71a582f72937857ea47de99c3147daa569cfad7d",
+      "finalSha256": "53bce1fef79ad05b1feb93caaaec53da8d264069419cfbf9197f8dc99e52f646"
+    },
+    {
+      "file": "src/shared/diagnostics/production-trace.fixture.json",
+      "baselineSha256": "1ab662095a7dcb43552c9943e0f48aab3a0f237d77075f78ac748a79df8c8340",
+      "finalSha256": "ef26d992196d14b622cd93ca91943fbd141acef7356f795add88e5b398a632b1"
+    },
+    {
+      "file": "src/shared/diagnostics/production-trace-contract.json",
+      "baselineSha256": "27b61386f7cc740eb1e446d98d4c43898fc1b7090c9c2c3196888cd26a4573d0",
+      "finalSha256": "7634a02747dd1d29b01675c00685d29dd8c2e277d3628348899b1603232806c2"
+    },
+    {
+      "file": "docs/project-task.md",
+      "baselineSha256": "acf83b949f0ca32920ff7f53e34a73e8bb0218a558338dedd592a6a83f244322",
+      "finalSha256": "720f0205597fe8d92fbfdd3ea3327f67418dac6052e64d4b2bf0ceb2be04c36d"
+    },
+    {
+      "file": "docs/rfcs/2026-11-26-pc-streaming-execution-domains.md",
+      "baselineSha256": "7fbafaa09684383efa5c1ff1fb69ae0ea167c7cdf5c9de8b68a70cf144082672",
+      "finalSha256": "3888af21990634873df726714e85bd592e8cc7cdb70f4a38041e280dd6c0c129"
+    },
+    {
+      "file": "src-tauri/src/mods/runtime_trace/trace_contract.rs",
+      "baselineSha256": "851a164dd1cea15d7eccc82af4dc968c550302e656f28de81ffd1c9afbf1614b",
+      "finalSha256": "2750396ae65bc3c0b1b4fdd042e0f0320bf295b02311f7a841790e61d0db6671"
+    }
+  ],
+  "changedOutsideTaskFromLint": [],
+  "changedOutsideTaskFromFmt": []
+}

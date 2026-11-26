@@ -1,0 +1,67 @@
+{
+  "commands": [
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0,
+      "runs": 1
+    },
+    {
+      "command": "pnpm exec vitest run src/player/infra/render/Renderers.test.ts src/player/infra/render/renderer-scheduling.test.ts",
+      "exitCode": 0,
+      "runs": 1
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "runs": 1
+    },
+    {
+      "command": "git diff --check -- task paths",
+      "exitCode": 0,
+      "runs": 1
+    }
+  ],
+  "sourceChanges": [
+    {
+      "file": "src/player/infra/render/Renderers.ts",
+      "baselineSha256": "2b0ad8b7501271650c83320869eaca96b0a8036034f2d1dcbb43eaea897214ac",
+      "finalSha256": "8a041ca6ee146188ce3c5010fe594c987547d87fc722fdad4ad218abf44e186e",
+      "addedLines": 9,
+      "removedLines": 53
+    },
+    {
+      "file": "src/player/infra/render/renderer-scheduling.test.ts",
+      "baselineSha256": "3f054570b4b958e155cad712dc39b96ab9428244544272c32f03f8c93d51b664",
+      "finalSha256": "2ce0a16c3fc4ee6772b3c92c698e07580086e6fd8dfc6760ed3bbad9a41fddc3",
+      "addedLines": 36,
+      "removedLines": 45
+    }
+  ],
+  "frontendFilesChangedOutsideTask": [],
+  "policyCheck": "新帧完整导入、同帧缓存复用、子上传计数恒为0",
+  "testFailures": [],
+  "temporaryDirectory": "/private/tmp/xbxrc-pc-teximage-restore-20261126-dxvpg9mu",
+  "cleanup": {
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-teximage-restore-20261126-dxvpg9mu",
+    "removed": true,
+    "removedFileBytes": 2977878,
+    "freeBeforeBytes": 92160000000,
+    "freeAfterBytes": 92160000000,
+    "contents": [
+      "baseline",
+      "manifest.json",
+      "pre-lint-src.json",
+      "lint-fix.log",
+      "lint-scope.json",
+      "renderer-smoke.json",
+      "renderer-smoke.log",
+      "typecheck.log"
+    ],
+    "processState": "lint、117项渲染测试与typecheck均已返回exitCode=0，相关工具会话已完成",
+    "retainedFiles": [
+      "README.md",
+      "renderer-smoke-summary.json",
+      "checks.json"
+    ]
+  }
+}

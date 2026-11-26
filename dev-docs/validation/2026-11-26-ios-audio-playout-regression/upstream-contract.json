@@ -1,0 +1,66 @@
+{
+  "webrtcVersion": "137.7151.04",
+  "commit": "cec4daea7ed5da94fc38d790bd12694c86865447",
+  "nativePCM": "16-bit mono",
+  "preferredIOBufferMs": 20,
+  "preferredSampleRate": 48000,
+  "actualSampleRateAndBufferOwner": "AudioDeviceIOS.SetupAudioBuffersForActiveAudioSession",
+  "snippets": [
+    {
+      "file": "RTCAudioSessionConfiguration.m",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/components/audio/RTCAudioSessionConfiguration.m?format=TEXT",
+      "sha256": "7acd0ec13ae915128a4669b47fb663487723f9cb22975b5eacf515f67018b634",
+      "startLine": 17,
+      "endLine": 41,
+      "excerpt": "// Try to use mono to save resources. Also avoids channel format conversion\n// in the I/O audio unit. Initial tests have shown that it is possible to use\n// mono natively for built-in microphones and for BT headsets but not for\n// wired headsets. Wired headsets only support stereo as native channel format\n// but it is a low cost operation to do a format conversion to mono in the\n// audio unit. Hence, we will not hit a RTC_CHECK in\n// VerifyAudioParametersForActiveAudioSession() for a mismatch between the\n// preferred number of channels and the actual number of channels.\nconst int kRTCAudioSessionPreferredNumberOfChannels = 1;\n\n// Preferred hardware sample rate (unit is in Hertz). The client sample rate\n// will be set to this value as well to avoid resampling the the audio unit's\n// format converter. Note that, some devices, e.g. BT headsets, only supports\n// 8000Hz as native sample rate.\nconst double kRTCAudioSessionHighPerformanceSampleRate = 48000.0;\n\n// Use a hardware I/O buffer size (unit is in seconds) that matches the 10ms\n// size used by WebRTC. The exact actual size will differ between devices.\n// Example: using 48kHz on iPhone 6 results in a native buffer size of\n// ~10.6667ms or 512 audio frames per buffer. The FineAudioBuffer instance will\n// take care of any buffering required to convert between native buffers and\n// buffers used by WebRTC. It is beneficial for the performance if the native\n// size is as an even multiple of 10ms as possible since it results in \"clean\"\n// callback sequence without bursts of callbacks back to back.\nconst double kRTCAudioSessionHighPerformanceIOBufferDuration = 0.02;"
+    },
+    {
+      "file": "RTCAudioSessionConfiguration.m",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/components/audio/RTCAudioSessionConfiguration.m?format=TEXT",
+      "sha256": "7acd0ec13ae915128a4669b47fb663487723f9cb22975b5eacf515f67018b634",
+      "startLine": 65,
+      "endLine": 79,
+      "excerpt": "    // Specify mode for two-way voice communication (e.g. VoIP).\n    _mode = AVAudioSessionModeVoiceChat;\n\n    // Use best sample rate and buffer duration if the CPU has more than one\n    // core.\n    _sampleRate = kRTCAudioSessionHighPerformanceSampleRate;\n    _ioBufferDuration = kRTCAudioSessionHighPerformanceIOBufferDuration;\n\n    // We try to use mono in both directions to save resources and format\n    // conversions in the audio unit. Some devices does only support stereo;\n    // e.g. wired headset on iPhone 6.\n    // TODO(henrika): add support for stereo if needed.\n    _inputNumberOfChannels = kRTCAudioSessionPreferredNumberOfChannels;\n    _outputNumberOfChannels = kRTCAudioSessionPreferredNumberOfChannels;\n  }"
+    },
+    {
+      "file": "RTCAudioSessionConfiguration.m",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/components/audio/RTCAudioSessionConfiguration.m?format=TEXT",
+      "sha256": "7acd0ec13ae915128a4669b47fb663487723f9cb22975b5eacf515f67018b634",
+      "startLine": 101,
+      "endLine": 115,
+      "excerpt": "\n+ (instancetype)webRTCConfiguration {\n  @synchronized(self) {\n    return (RTC_OBJC_TYPE(RTCAudioSessionConfiguration) *)gWebRTCConfiguration;\n  }\n}\n\n+ (void)setWebRTCConfiguration:\n    (RTC_OBJC_TYPE(RTCAudioSessionConfiguration) *)configuration {\n  @synchronized(self) {\n    gWebRTCConfiguration = configuration;\n  }\n}\n\n@end"
+    },
+    {
+      "file": "audio_device_ios.mm",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/native/src/audio/audio_device_ios.mm?format=TEXT",
+      "sha256": "fbe182ac644de6a2cd73eb6c740d907ded9c93334146bc63a8fc14b42282bb1d",
+      "startLine": 469,
+      "endLine": 487,
+      "excerpt": "  RTC_DCHECK_EQ(1, audio_buffer->mNumberChannels);\n\n  // Produce silence and give audio unit a hint about it if playout is not\n  // activated.\n  if (!playing_.load(std::memory_order_acquire)) {\n    const size_t size_in_bytes = audio_buffer->mDataByteSize;\n    RTC_CHECK_EQ(size_in_bytes / VoiceProcessingAudioUnit::kBytesPerSample,\n                 num_frames);\n    *flags |= kAudioUnitRenderAction_OutputIsSilence;\n    memset(static_cast<int8_t*>(audio_buffer->mData), 0, size_in_bytes);\n    return noErr;\n  }\n\n  // Measure time since last call to OnGetPlayoutData() and see if it is larger\n  // than a well defined threshold which depends on the current IO buffer size.\n  // If so, we have an indication of a glitch in the output audio since the\n  // core audio layer will most likely run dry in this state.\n  ++num_playout_callbacks_;\n  const int64_t now_time = webrtc::TimeMillis();"
+    },
+    {
+      "file": "audio_device_ios.mm",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/native/src/audio/audio_device_ios.mm?format=TEXT",
+      "sha256": "fbe182ac644de6a2cd73eb6c740d907ded9c93334146bc63a8fc14b42282bb1d",
+      "startLine": 741,
+      "endLine": 804,
+      "excerpt": "  LOGI() << \"UpdateAudioDevicebuffer\";\n  // AttachAudioBuffer() is called at construction by the main class but check\n  // just in case.\n  RTC_DCHECK(audio_device_buffer_) << \"AttachAudioBuffer must be called first\";\n  RTC_DCHECK_GT(playout_parameters_.sample_rate(), 0);\n  RTC_DCHECK_GT(record_parameters_.sample_rate(), 0);\n  RTC_DCHECK_EQ(playout_parameters_.channels(), 1);\n  RTC_DCHECK_EQ(record_parameters_.channels(), 1);\n  // Inform the audio device buffer (ADB) about the new audio format.\n  audio_device_buffer_->SetPlayoutSampleRate(playout_parameters_.sample_rate());\n  audio_device_buffer_->SetPlayoutChannels(playout_parameters_.channels());\n  audio_device_buffer_->SetRecordingSampleRate(\n      record_parameters_.sample_rate());\n  audio_device_buffer_->SetRecordingChannels(record_parameters_.channels());\n}\n\nvoid AudioDeviceIOS::SetupAudioBuffersForActiveAudioSession() {\n  LOGI() << \"SetupAudioBuffersForActiveAudioSession\";\n  // Verify the current values once the audio session has been activated.\n  RTC_OBJC_TYPE(RTCAudioSession)* session =\n      [RTC_OBJC_TYPE(RTCAudioSession) sharedInstance];\n  double sample_rate = session.sampleRate;\n  NSTimeInterval io_buffer_duration = session.IOBufferDuration;\n  RTCLog(@\"%@\", session);\n\n  // Log a warning message for the case when we are unable to set the preferred\n  // hardware sample rate but continue and use the non-ideal sample rate after\n  // reinitializing the audio parameters. Most BT headsets only support 8kHz or\n  // 16kHz.\n  RTC_OBJC_TYPE(RTCAudioSessionConfiguration)* webRTCConfig =\n      [RTC_OBJC_TYPE(RTCAudioSessionConfiguration) webRTCConfiguration];\n  if (sample_rate != webRTCConfig.sampleRate) {\n    RTC_LOG(LS_WARNING) << \"Unable to set the preferred sample rate\";\n  }\n\n  // Crash reports indicates that it can happen in rare cases that the reported\n  // sample rate is less than or equal to zero. If that happens and if a valid\n  // sample rate has already been set during initialization, the best guess we\n  // can do is to reuse the current sample rate.\n  if (sample_rate <= DBL_EPSILON && playout_parameters_.sample_rate() > 0) {\n    RTCLogError(@\"Reported rate is invalid: %f. \"\n                 \"Using %d as sample rate instead.\",\n                sample_rate,\n                playout_parameters_.sample_rate());\n    sample_rate = playout_parameters_.sample_rate();\n  }\n\n  // At this stage, we also know the exact IO buffer duration and can add\n  // that info to the existing audio parameters where it is converted into\n  // number of audio frames.\n  // Example: IO buffer size = 0.008 seconds <=> 128 audio frames at 16kHz.\n  // Hence, 128 is the size we expect to see in upcoming render callbacks.\n  playout_parameters_.reset(\n      sample_rate, playout_parameters_.channels(), io_buffer_duration);\n  RTC_DCHECK(playout_parameters_.is_complete());\n  record_parameters_.reset(\n      sample_rate, record_parameters_.channels(), io_buffer_duration);\n  RTC_DCHECK(record_parameters_.is_complete());\n  RTC_LOG(LS_INFO) << \" frames per I/O buffer: \"\n                   << playout_parameters_.frames_per_buffer();\n  RTC_LOG(LS_INFO) << \" bytes per I/O buffer: \"\n                   << playout_parameters_.GetBytesPerBuffer();\n  RTC_DCHECK_EQ(playout_parameters_.GetBytesPerBuffer(),\n                record_parameters_.GetBytesPerBuffer());"
+    },
+    {
+      "file": "audio_device_ios.mm",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/native/src/audio/audio_device_ios.mm?format=TEXT",
+      "sha256": "fbe182ac644de6a2cd73eb6c740d907ded9c93334146bc63a8fc14b42282bb1d",
+      "startLine": 1189,
+      "endLine": 1204,
+      "excerpt": "int32_t AudioDeviceIOS::StereoPlayoutIsAvailable(bool& available) {\n  available = false;\n  return 0;\n}\n\nint32_t AudioDeviceIOS::SetStereoPlayout(bool enable) {\n  RTC_LOG_F(LS_WARNING) << \"Not implemented\";\n  return -1;\n}\n\nint32_t AudioDeviceIOS::StereoPlayout(bool& enabled) const {\n  enabled = false;\n  return 0;\n}\n\nint32_t AudioDeviceIOS::MicrophoneVolumeIsAvailable(bool& available) {"
+    },
+    {
+      "file": "voice_processing_audio_unit.mm",
+      "url": "https://webrtc.googlesource.com/src/+/cec4daea7ed5da94fc38d790bd12694c86865447/sdk/objc/native/src/audio/voice_processing_audio_unit.mm?format=TEXT",
+      "sha256": "e56d62a71b80e78e21dab9a2259a9275f2bd64b83ec8e6643f47244771a419f1",
+      "startLine": 529,
+      "endLine": 547,
+      "excerpt": "  // - use same format in both directions\n  // - avoid resampling in the I/O unit by using the hardware sample rate\n  // - linear PCM => noncompressed audio data format with one frame per packet\n  // - no need to specify interleaving since only mono is supported\n  AudioStreamBasicDescription format;\n  RTC_DCHECK_EQ(1, kRTCAudioSessionPreferredNumberOfChannels);\n  format.mSampleRate = sample_rate;\n  format.mFormatID = kAudioFormatLinearPCM;\n  format.mFormatFlags =\n      kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;\n  format.mBytesPerPacket = kBytesPerSample;\n  format.mFramesPerPacket = 1;  // uncompressed.\n  format.mBytesPerFrame = kBytesPerSample;\n  format.mChannelsPerFrame = kRTCAudioSessionPreferredNumberOfChannels;\n  format.mBitsPerChannel = 8 * kBytesPerSample;\n  return format;\n}\n\nvoid VoiceProcessingAudioUnit::DisposeAudioUnit() {"
+    }
+  ]
+}

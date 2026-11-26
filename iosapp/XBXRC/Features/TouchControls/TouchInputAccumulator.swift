@@ -41,7 +41,9 @@ struct TouchGamepadSnapshot: Codable, Equatable, Sendable {
   let rightThumbY: Float
   let leftTrigger: Float
   let rightTrigger: Float
-  init(_ state: IOSStreamGamepadState) {
+  var sourceActive: Bool?
+  init(_ state: IOSStreamGamepadState, sourceActive: Bool? = nil) {
+    self.sourceActive = sourceActive
     buttonMask = state.buttonMask
     leftThumbX = state.leftThumbX
     leftThumbY = state.leftThumbY
@@ -52,7 +54,7 @@ struct TouchGamepadSnapshot: Codable, Equatable, Sendable {
   }
 }
 
-struct TouchInputFrame: Encodable {
+struct TouchInputFrame: Encodable, Sendable {
   let layoutID: String?
   let sequence: UInt64
   let timestamp: TimeInterval
@@ -132,7 +134,9 @@ final class TouchInputAccumulator {
     let previousState = gamepad
     gamepad = aggregate()
     let completedAt = clock()
-    let transitions: [TouchGamepadSnapshot] = previousState == gamepad ? [] : [.init(gamepad)]
+    let transitions: [TouchGamepadSnapshot] =
+      previousState == gamepad
+      ? [] : [.init(gamepad, sourceActive: !positions.isEmpty || gamepad != .neutral)]
     if previousState != gamepad { diagnostics.stateChanged(at: completedAt) }
     publish(
       events: [], transitions: transitions,
@@ -156,7 +160,9 @@ final class TouchInputAccumulator {
     updateLayers()
     gamepad = aggregate()
     let now = clock()
-    let transitions: [TouchGamepadSnapshot] = previousState == gamepad ? [] : [.init(gamepad)]
+    let transitions: [TouchGamepadSnapshot] =
+      previousState == gamepad
+      ? [] : [.init(gamepad, sourceActive: !positions.isEmpty || gamepad != .neutral)]
     publish(
       events: [], transitions: transitions,
       transitionTimestamps: transitions.isEmpty ? [] : [now], reason: "contextChanged",
@@ -283,7 +289,7 @@ final class TouchInputAccumulator {
     gamepad = aggregate()
     let stateCompletedAt = clock()
     if gamepad != previousState {
-      transitions.append(.init(gamepad))
+      transitions.append(.init(gamepad, sourceActive: !positions.isEmpty || gamepad != .neutral))
       transitionTimestamps.append(stateCompletedAt)
       diagnostics.stateChanged(at: stateCompletedAt)
     }

@@ -1,0 +1,72 @@
+{
+  "rows": 1838,
+  "timeRangeMs": {
+    "first": 1795678668580,
+    "last": 1795678843544,
+    "duration": 174964
+  },
+  "counts": {
+    "traceModes": {
+      "dev": 1838
+    },
+    "traceProfiles": {
+      "dev": 1838
+    },
+    "dimensions": {
+      "core": 31,
+      "lifecycle": 217,
+      "input": 822,
+      "frontend": 554,
+      "network": 12,
+      "presentation": 134,
+      "media_supply": 68
+    },
+    "importance": {
+      "essential": 45,
+      "key": 1342,
+      "debug": 451
+    },
+    "traceBudgetNotices": 0,
+    "categories": {
+      "state": 33,
+      "event": 1543,
+      "snapshot": 261,
+      "decision": 1
+    },
+    "domains": {
+      "trace": 5,
+      "app": 1,
+      "auth": 45,
+      "gamepad-shell": 1,
+      "streaming-runtime-host": 1607,
+      "data": 13,
+      "streaming": 166
+    },
+    "eventsTop": {
+      "event/streaming-runtime-host/gamepadFrameSent": 500,
+      "event/streaming-runtime-host/browserWebRtcStatsObserved": 223,
+      "event/streaming-runtime-host/gamepadSamplingObserved": 158,
+      "event/streaming-runtime-host/browserObservationConsumed": 76,
+      "snapshot/streaming-runtime-host/browserPlaybackHealthObserved": 72,
+      "snapshot/streaming-runtime-host/decodedFrameSupplyObserved": 68,
+      "event/streaming/sessionStatePolled": 67,
+      "snapshot/streaming/sessionMonitorSnapshot": 67,
+      "event/streaming-runtime-host/resolutionFeedbackObserved": 63,
+      "event/streaming-runtime-host/gamepadInputDeliveryObserved": 63,
+      "event/streaming-runtime-host/recoveryCauseClassified": 53,
+      "event/streaming-runtime-host/renderTelemetryObserved": 53,
+      "snapshot/streaming-runtime-host/browserPlaybackAnomalySample": 31,
+      "event/auth/authOperationStage": 26,
+      "state/streaming-runtime-host/browserPlaybackAnomalyObserved": 23,
+      "event/streaming-runtime-host/panelStatsObserved": 23,
+      "event/streaming-runtime-host/browserMediaResourcesSnapshot": 23,
+      "event/streaming-runtime-host/browserWebRtcTimelineObserved": 20,
+      "event/streaming-runtime-host/gamepadInputChanged": 16,
+      "event/streaming-runtime-host/inputUiInteractionObserved": 15
+    },
+    "phaseSegments": 0,
+    "longGaps": 23,
+    "anomalyWindows": 2,
+    "suspiciousRows": 1246
+  }
+}

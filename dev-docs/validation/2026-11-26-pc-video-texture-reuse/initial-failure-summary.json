@@ -1,0 +1,52 @@
+{
+  "success": false,
+  "numTotalTests": 117,
+  "numPassedTests": 112,
+  "numFailedTests": 5,
+  "numPendingTests": 0,
+  "files": [
+    {
+      "file": "Renderers.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "failed": []
+    },
+    {
+      "file": "renderer-scheduling.test.ts",
+      "status": "failed",
+      "tests": 106,
+      "failed": [
+        {
+          "name": "webgl2 new-frame scheduling keeps sparse candidate delivery identical with diagnostic pixels / static false",
+          "messages": [
+            "AssertionError: expected [ 1 ] to have a length of 600 but got 1\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1389:20)\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1700:25)\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts:415:24\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        },
+        {
+          "name": "webgl2 new-frame scheduling keeps sparse candidate delivery identical with diagnostic pixels / static true",
+          "messages": [
+            "AssertionError: expected [ 1 ] to have a length of 600 but got 1\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1389:20)\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1700:25)\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts:415:24\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        },
+        {
+          "name": "webgl2_sr new-frame scheduling keeps sparse candidate delivery identical with diagnostic pixels / static false",
+          "messages": [
+            "AssertionError: expected [ 1 ] to have a length of 600 but got 1\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1389:20)\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1700:25)\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts:415:24\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        },
+        {
+          "name": "webgl2_sr new-frame scheduling keeps sparse candidate delivery identical with diagnostic pixels / static true",
+          "messages": [
+            "AssertionError: expected [ 1 ] to have a length of 600 but got 1\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1389:20)\n    at Proxy.<anonymous> (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+expect@4.1.4/node_modules/@vitest/expect/dist/index.js:1156:15)\n    at Proxy.methodWrapper (file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1700:25)\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts:415:24\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        },
+        {
+          "name": "submits every zero-timestamp decoded frame in the original picture path before RVFC",
+          "messages": [
+            "AssertionError: expected last \"vi.fn()\" call to have been called with [ Array(6) ]\n    at /Users/guo.xu/Documents/code/games/xbxrc/src/player/infra/render/renderer-scheduling.test.ts:919:29\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file:///Users/guo.xu/Documents/code/games/xbxrc/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"
+          ]
+        }
+      ]
+    }
+  ]
+}

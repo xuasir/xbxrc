@@ -3,11 +3,11 @@
  * Must run in the same synchronous turn as the last draw to that framebuffer
  * when `preserveDrawingBuffer` is false.
  */
-export function readWebglDefaultFramebufferToCanvas(
+export function readWebglDefaultFramebufferToPixels(
   gl: WebGL2RenderingContext,
   width: number,
   height: number,
-): HTMLCanvasElement {
+): { width: number, height: number, pixels: Uint8ClampedArray<ArrayBuffer> } {
   const rowBytes = width * 4
   const raw = new Uint8Array(rowBytes * height)
   gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, raw)
@@ -18,6 +18,11 @@ export function readWebglDefaultFramebufferToCanvas(
       (height - 1 - row) * rowBytes,
     )
   }
+  return { width, height, pixels: flipped }
+}
+
+export function readWebglDefaultFramebufferToCanvas(gl: WebGL2RenderingContext, width: number, height: number): HTMLCanvasElement {
+  const { pixels } = readWebglDefaultFramebufferToPixels(gl, width, height)
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -25,7 +30,7 @@ export function readWebglDefaultFramebufferToCanvas(
   if (ctx === null) {
     throw new Error('readback2dContextUnavailable')
   }
-  ctx.putImageData(new ImageData(flipped, width, height), 0, 0)
+  ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
   return canvas
 }
 

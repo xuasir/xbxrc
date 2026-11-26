@@ -1,0 +1,65 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+    "ranges": [
+      "18:18",
+      "32:32",
+      "71:71",
+      "73:73",
+      "85:85",
+      "186:186",
+      "194:195",
+      "212:214",
+      "223:223",
+      "227:227",
+      "231:235",
+      "288:288",
+      "292:293",
+      "303:304",
+      "306:306",
+      "308:308",
+      "312:312",
+      "315:316",
+      "325:325",
+      "327:327"
+    ],
+    "exitCode": 0,
+    "output": "2026-11-26 21:04:23.931 xcodebuild[75106:2255981]  DVTFilePathFSEvents: Failed to start fs event stream.\n2026-11-26 21:04:24.133 xcodebuild[75106:2255980] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 \"Input/output error\". Using NSCachesDirectory instead.\n2026-11-26 21:04:24.668 xcodebuild[75107:2255991]  DVTFilePathFSEvents: Failed to start fs event stream.\n2026-11-26 21:04:24.804 xcodebuild[75107:2255990] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 \"Input/output error\". Using NSCachesDirectory instead.\n"
+  },
+  {
+    "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift",
+    "ranges": [
+      "3:3",
+      "8:8",
+      "11:14",
+      "18:18",
+      "26:29"
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift",
+    "ranges": [
+      "3:4",
+      "151:155",
+      "159:162",
+      "180:182",
+      "185:186",
+      "192:192",
+      "196:200",
+      "202:238",
+      "263:285"
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "ranges": [
+      "3285:3285"
+    ],
+    "exitCode": 0,
+    "output": ""
+  }
+]

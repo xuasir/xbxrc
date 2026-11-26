@@ -70,6 +70,7 @@ const testState = vi.hoisted(() => {
     }))
 
     readonly rebuildVideoPlayback = vi.fn(() => true)
+    readonly retryRendering = vi.fn()
 
     readonly bind = vi.fn()
     readonly createOffer = vi.fn(async () => ({ type: 'offer', sdp: 'v=0\r\n' }))
@@ -370,6 +371,73 @@ describe('browser-runtime super resolution state', () => {
       },
       getElementById: vi.fn(() => null),
     } as unknown as Document
+  })
+
+  it.each(['decode', 'presentation'] as const)('executes confirmed Rust local %s recovery through its existing owner', async (domain) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+    try {
+      await runtime.launch(createLaunchSpec({ pipelinePreference: domain === 'decode' ? 'video' : 'webgl2' }))
+      const client = getClient()
+      client.statsController.snapshot.mockResolvedValue({ inboundVideoFps: 60, decodeFps: 60, presentFps: 60, presentAgeMs: 0 })
+      client.eventBus.emit('transport.connectionState', { state: 'connected' })
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+      await vi.advanceTimersByTimeAsync(16)
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+      await vi.advanceTimersByTimeAsync(19984)
+      client.eventBus.emit('media.videoFramePresented', { newFrame: true, droppedLike: false })
+      const kind = domain === 'decode' ? 'video' : 'webgl2'
+      client.statsController.snapshot.mockResolvedValue({
+        statsSampleId: 'local-stall',
+        inboundVideoFps: 60,
+        decodeFps: domain === 'decode' ? 0 : 60,
+        presentFps: 0,
+        videoPresentFramesTotal: 60,
+        rendererSubmittedFramesTotal: 60,
+        videoPresentAgeMs: 2500,
+        rendererSubmitAgeMs: 2500,
+        rendererKind: kind,
+      })
+      client.eventBus.emit('stats.browserWebRtc', {
+        sampleId: 'local-stall',
+        peerGeneration: 1,
+        sampledAtMs: 21000,
+        inboundVideo: { framesReceived: 1200, framesDecoded: domain === 'decode' ? 0 : 1200, packetsReceived: 12000 },
+      })
+      testState.rpc.streaming.decideRecovery.mockResolvedValue({
+        shouldReconnect: false,
+        supervision: {
+          fresh: true,
+          duplicate: false,
+          stallThresholdMs: 1500,
+          hasInboundProgress: true,
+          decodeRecoveryEligible: false,
+          decodePressureSustainedMs: 0,
+          healthyEpisodeComplete: false,
+          mediaConnectionEligible: false,
+          networkPressure: 'stable',
+          localStall: { domain, action: domain === 'decode' ? 'keyframeRequest' : 'playbackRebuild', ageMs: 2500, coverageMs: 2000, eligible: true, reason: 'confirmedLocalStall' },
+        },
+      })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(testState.rpc.streaming.decideRecovery).toHaveBeenCalledWith(expect.objectContaining({
+        fact: expect.objectContaining({ sample: expect.objectContaining({
+          localCounters: expect.objectContaining({ received: 1200, packetsReceived: 12000 }),
+          hasPresentedMedia: true,
+        }) }),
+      }))
+      expect(client.requestVideoKeyframe).toHaveBeenCalledTimes(domain === 'decode' ? 1 : 0)
+      expect(client.retryRendering).toHaveBeenCalledTimes(domain === 'presentation' ? 1 : 0)
+      expect(client.rebuildVideoPlayback).toHaveBeenCalledTimes(0)
+      expect(testState.MockPlayerClient.instances).toHaveLength(1)
+    }
+    finally {
+      await runtime.stop()
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
   })
 
   it('keeps renderer updates at zero while the effective display configuration stays unchanged', async () => {

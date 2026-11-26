@@ -432,12 +432,20 @@ final class StreamingDisplayCallbackTests: XCTestCase {
         XCTAssertTrue(readiness.isEmpty)
         XCTAssertEqual(accepted, 0)
         surface.setPresentationActive(true)
+        for _ in 0..<100 {
+            if readiness.count >= 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertEqual(readiness, [context])
         surface.setPresentationActive(true)
         surface.updateTraceContext(context)
         XCTAssertEqual(readiness, [context])
         surface.setPresentationActive(false)
         surface.setPresentationActive(true)
+        for _ in 0..<100 {
+            if readiness.count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertEqual(readiness, [context, context])
         XCTAssertEqual(accepted, 0)
     }
@@ -466,6 +474,10 @@ final class StreamingDisplayCallbackTests: XCTestCase {
             if case .displayPipelineReady(let context) = event { readiness.append(context) }
         }
         surface.presentationEventSink = sink
+        for _ in 0..<100 {
+            if !readiness.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertEqual(readiness, [current])
         surface.presentationEventSink = sink
         XCTAssertEqual(readiness, [current])
@@ -474,19 +486,21 @@ final class StreamingDisplayCallbackTests: XCTestCase {
     @MainActor
     private func startReadySession(
         resumeGate: StreamingAsyncGate? = nil, failResume: Bool = false,
-        snapshotGate: StreamingAsyncGate? = nil, presentsInitialFrame: Bool = true
+        snapshotGate: StreamingAsyncGate? = nil, presentsInitialFrame: Bool = true,
+        peerFactory: StreamingTestPeerFactory? = nil
     ) async throws -> (
         StreamSessionActor, StreamingPublicationRecorder, StreamingRuntimeRecorder
     ) {
-        let recorder = StreamingRuntimeRecorder()
+        let recorder = peerFactory?.recorder ?? StreamingRuntimeRecorder()
         let publication = StreamingPublicationRecorder()
         let session = StreamSessionActor(
             controlFactory: StreamingTestControlFactory(
                 session: StreamingTestControlSession(
                     recorder: recorder, resumeValidationGate: resumeGate,
                     failResumeValidation: failResume), recorder: recorder),
-            peerFactory: StreamingTestPeerFactory(
-                recorder: recorder, debugSnapshotGate: snapshotGate))
+            peerFactory: peerFactory
+                ?? StreamingTestPeerFactory(
+                    recorder: recorder, debugSnapshotGate: snapshotGate))
         try await session.start(
             request: StreamingLaunchRequest(
                 streamTitleID: "test-title", accessHandle: "test-access",
@@ -605,6 +619,50 @@ final class StreamingDisplayCallbackTests: XCTestCase {
         XCTAssertEqual(publication.states.last?.1, .playing)
         await gate.open()
         await foreground.value
+        await session.stop(generation: 1)
+    }
+
+    @MainActor
+    func testSupervisionCapturesFreshStatsAfterAsyncPeerSnapshot() async throws {
+        let gate = StreamingAsyncGate()
+        await gate.open()
+        let recorder = StreamingRuntimeRecorder()
+        let factory = StreamingTestPeerFactory(recorder: recorder, debugSnapshotGate: gate)
+        let (session, _, _) = try await startReadySession(peerFactory: factory)
+        defer {
+            Task {
+                await gate.open()
+                await session.stop(generation: 1)
+            }
+        }
+        await gate.close()
+        // 让监督 tick 停在异步快照，再投递时间更晚的接收事实。
+        try await Task.sleep(for: .milliseconds(1100))
+        var stats = StreamingPeerStats(
+            inboundVideoBytes: 12000, inboundAudioBytes: 4000, framesDecoded: 60,
+            framesDropped: 0, packetsLost: 0, roundTripTimeSeconds: 0.01)
+        let observedAt = StreamingFrameFeedbackClock.nowMilliseconds
+        stats.observedAtMilliseconds = observedAt
+        stats.videoTiming.jitterBufferMilliseconds = 42
+        factory.emitStats(stats)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await gate.waiterCount() < 2 {
+            guard ContinuousClock.now < deadline else { return XCTFail("接收事实未进入异步快照窗口") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await gate.open()
+        var observedSample: StreamingSupervisionSample?
+        while observedSample == nil {
+            observedSample = await recorder.recordedSupervisionSamples().first {
+                $0.sampledAtMs == UInt64(observedAt)
+            }
+            guard ContinuousClock.now < deadline else { return XCTFail("监督样本未接续新事实") }
+            if observedSample == nil { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        let sample = try XCTUnwrap(observedSample)
+        XCTAssertTrue(sample.observationFresh)
+        XCTAssertGreaterThanOrEqual(sample.nowMs, UInt64(observedAt))
+        XCTAssertEqual(sample.jitterBufferMs, 42)
         await session.stop(generation: 1)
     }
 
@@ -760,7 +818,7 @@ final class XBXRCTests: XCTestCase {
             await Task.detached { delivery.deliver() }.value
             try await Task.sleep(for: .milliseconds(20))
         }
-        try await Task.sleep(for: .milliseconds(200))
+        try await Task.sleep(for: .milliseconds(1_100))
         let tail = try XCTUnwrap(healthReports.last?.1)
         XCTAssertGreaterThan(tail.presentCount, 10)
         XCTAssertEqual(tail.submitCount, tail.presentCount)
@@ -4053,7 +4111,8 @@ extension XBXRCTests {
                 Self.streamingAccess(handle: "failed-access")
             }
             try await waitUntil {
-                if case .failed = store.state { return true }; return false
+                if case .failed = store.state { return true }
+                return false
             }
             XCTAssertEqual(store.canRetry, retryable)
             let snapshot = await recorder.snapshot()
@@ -4276,6 +4335,11 @@ private struct StreamingRuntimeRecorderSnapshot: Sendable {
 }
 
 private actor StreamingRuntimeRecorder {
+    private var supervisionSamples: [StreamingSupervisionSample] = []
+    func recordSupervision(_ sample: StreamingSupervisionSample) {
+        supervisionSamples.append(sample)
+    }
+    func recordedSupervisionSamples() -> [StreamingSupervisionSample] { supervisionSamples }
     private var startupContexts: [XboxStreamStartup] = []
     func recordStartupContext(_ context: XboxStreamStartup?) {
         if let context { startupContexts.append(context) }
@@ -4425,6 +4489,7 @@ private actor StreamingTestControlSession: StreamingControlSession {
     func supervise(_ sample: StreamingSupervisionSample) async throws
         -> StreamingSupervisionDecision
     {
+        await recorder.recordSupervision(sample)
         if let supervisionDecision { return supervisionDecision(sample) }
         var decision = StreamingSupervisionDecision.unavailable
         decision.connectionRecoveryAllowed =

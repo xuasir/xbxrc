@@ -1,0 +1,253 @@
+{
+  "file": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/runtime-trace-1795692428673-1.jsonl",
+  "rows": 5483,
+  "timeRangeMs": {
+    "first": 1795692428673,
+    "last": 1795692692955,
+    "duration": 264282
+  },
+  "filters": {
+    "sessionId": null,
+    "domain": null,
+    "phase": null,
+    "metric": null,
+    "timeWindow": null
+  },
+  "counts": {
+    "traceModes": {
+      "dev": 5483
+    },
+    "traceProfiles": {
+      "dev": 5483
+    },
+    "dimensions": {
+      "core": 25,
+      "lifecycle": 435,
+      "input": 2568,
+      "frontend": 1783,
+      "network": 18,
+      "presentation": 450,
+      "media_supply": 202,
+      "recovery": 2
+    },
+    "importance": {
+      "essential": 66,
+      "key": 3727,
+      "debug": 1690
+    },
+    "traceBudgetNotices": 0,
+    "categories": {
+      "state": 51,
+      "event": 4612,
+      "snapshot": 817,
+      "decision": 3
+    },
+    "domains": {
+      "trace": 5,
+      "app": 1,
+      "auth": 14,
+      "gamepad-shell": 1,
+      "streaming-runtime-host": 5037,
+      "data": 7,
+      "streaming": 418
+    },
+    "eventsTop": {
+      "event/streaming-runtime-host/gamepadFrameSent": 1862,
+      "event/streaming-runtime-host/browserWebRtcStatsObserved": 819,
+      "event/streaming-runtime-host/browserObservationConsumed": 291,
+      "event/streaming-runtime-host/gamepadSamplingObserved": 250,
+      "snapshot/streaming-runtime-host/browserPlaybackHealthObserved": 233,
+      "event/streaming-runtime-host/resolutionFeedbackObserved": 212,
+      "event/streaming-runtime-host/gamepadInputDeliveryObserved": 212,
+      "snapshot/streaming-runtime-host/decodedFrameSupplyObserved": 201,
+      "event/streaming-runtime-host/recoveryCauseClassified": 200,
+      "event/streaming-runtime-host/renderTelemetryObserved": 200,
+      "event/streaming/sessionStatePolled": 189,
+      "snapshot/streaming/sessionMonitorSnapshot": 189,
+      "snapshot/streaming-runtime-host/browserPlaybackAnomalySample": 167,
+      "event/streaming-runtime-host/panelStatsObserved": 90,
+      "event/streaming-runtime-host/browserMediaResourcesSnapshot": 90,
+      "state/streaming-runtime-host/browserPlaybackAnomalyObserved": 40,
+      "event/streaming-runtime-host/browserWebRtcTimelineObserved": 20,
+      "event/streaming-runtime-host/bandwidthStateChanged": 19,
+      "event/streaming-runtime-host/inputUiInteractionObserved": 15,
+      "event/streaming-runtime-host/gamepadInputChanged": 13
+    },
+    "phaseSegments": 0,
+    "longGaps": 53,
+    "anomalyWindows": 2,
+    "suspiciousRows": 4232
+  },
+  "recoveryAudit": {
+    "structuredRecoveryTrace": {
+      "pictureRecoveryTransition": {
+        "count": 0,
+        "phaseCounts": {},
+        "toPhaseCounts": {},
+        "causeCounts": {},
+        "events": []
+      },
+      "pictureRecoveryBlockerObserved": {
+        "count": 0,
+        "gateCounts": {},
+        "blockerKindCounts": {},
+        "severityCounts": {},
+        "events": []
+      },
+      "videoIngressTermination": {
+        "count": 0,
+        "kindCounts": {},
+        "causeCounts": {},
+        "upstreamCauseCounts": {},
+        "events": []
+      },
+      "firstFrameLatencyObserved": {
+        "count": 0,
+        "terminalPhaseCounts": {},
+        "incompleteReasonCounts": {},
+        "events": []
+      },
+      "h264InspectionObserved": {
+        "count": 0,
+        "rejectClassificationCounts": {},
+        "postRecoveryDegradationCount": 0,
+        "events": []
+      }
+    },
+    "recoveryLedgerRows": 0,
+    "connectingWindows": 0,
+    "silenceThresholdMs": 3000,
+    "silenceBreachCount": 0,
+    "silenceBreaches": [],
+    "failedTerminalCount": 0,
+    "failedTerminalReasons": {},
+    "failedTerminalEntries": [],
+    "unlockEvidence": [],
+    "successfulActionSamples": 0,
+    "successfulActionIncrements": 0,
+    "controlPlaneHealth": {
+      "keyframeEpisodeCount": 0,
+      "keyframeSentCount": 0,
+      "keyframeDeferredCount": 0,
+      "keyframeSentRate": 0.0,
+      "twccReceiverMappingMissingCount": 0,
+      "twccInboundExtensionSeenCount": 0,
+      "twccReceiverMappingMissingRate": 0.0,
+      "feedbackTargetAvailabilityChangedCount": 0,
+      "feedbackTargetStateCounts": {},
+      "feedbackTargetReasonCounts": {}
+    },
+    "ingressHealth": {
+      "terminationCount": 0,
+      "rxClosedCount": 0,
+      "upstreamSenderDroppedCount": 0,
+      "unknownUpstreamCauseCount": 0,
+      "unknownUpstreamCauseRate": 0.0,
+      "causeCounts": {},
+      "upstreamCauseCounts": {}
+    },
+    "firstFrameHealth": {
+      "observationCount": 0,
+      "controlReadyToPliSentMsCount": 0,
+      "pliSentToFirstIdrPacketMsCount": 0,
+      "firstIdrPacketToFirstDecodeMsCount": 0,
+      "firstDecodeToCleanAnchorCommittedMsCount": 0,
+      "cleanAnchorCommittedToDisplayStableMsCount": 0,
+      "avgControlReadyToPliSentMs": null,
+      "avgPliSentToFirstIdrPacketMs": null,
+      "avgFirstIdrPacketToFirstDecodeMs": null,
+      "avgFirstDecodeToCleanAnchorCommittedMs": null,
+      "avgCleanAnchorCommittedToDisplayStableMs": null,
+      "terminalPhaseCounts": {},
+      "incompleteReasonCounts": {}
+    },
+    "bootstrapHealth": {
+      "observationCount": 0,
+      "acceptedCount": 0,
+      "bootstrapMissingIdrCount": 0,
+      "bootstrapRejectReasonCounts": {},
+      "rejectClassificationCounts": {},
+      "continuationProfileCounts": {},
+      "postRecoveryDegradationCount": 0
+    },
+    "presentationHealth": {
+      "hostMailboxStateCount": 0,
+      "displayedFrameStaleCount": 0,
+      "retainedOldFrameRiskCount": 0,
+      "cadencePhaseCounts": {},
+      "noPendingPressureLevelCounts": {},
+      "frameDropEventCount": 0,
+      "frameDropReasonCounts": {},
+      "frameDropStageCounts": {},
+      "frameDropDetailCounts": {},
+      "scheduledFrameStaleCount": 0,
+      "submittedFrameStaleCount": 0,
+      "recoveryValuedFrameDropCount": 0,
+      "hostPresentSamples": [],
+      "frameDropSamples": []
+    },
+    "keyframeEffectiveness": {
+      "episodeCount": 0,
+      "statusCounts": {},
+      "requestReasonCounts": {},
+      "requestKindCounts": {},
+      "responseVerdictCounts": {},
+      "sentCount": 0,
+      "responseObservedCount": 0,
+      "packetSeenCount": 0,
+      "decodedCount": 0,
+      "missedCount": 0,
+      "invalidResponseCount": 0,
+      "chainRecoveredCount": 0,
+      "chainBuildSuccessRate": 0.0,
+      "chainFailedAfterSuccessCount": 0,
+      "effectiveCount": 0,
+      "effectiveRate": 0.0,
+      "suppressionCounts": {},
+      "failureReasons": {},
+      "effectiveFailureReasons": {},
+      "episodes": [],
+      "suppressionSamples": []
+    },
+    "nackEffectiveness": {
+      "eventCount": 0,
+      "actionCounts": {},
+      "sourceCounts": {},
+      "dispositionCounts": {},
+      "unrecoverableReasonCounts": {},
+      "sentCount": 0,
+      "recoveredCount": 0,
+      "recoveredLateCount": 0,
+      "skippedCount": 0,
+      "expiredCount": 0,
+      "effectiveCount": 0,
+      "ineffectiveCount": 0,
+      "effectiveRate": 0.0,
+      "events": []
+    },
+    "repairabilityPersistence": {
+      "sampleCount": 0,
+      "samples": [],
+      "persistence": {
+        "presentRowRatio": 0.0,
+        "longestMissingGapMs": 0,
+        "maxMissingStreakRows": 5483
+      }
+    },
+    "recoveryEffectiveness": {
+      "score": 0.0,
+      "components": {
+        "keyframeEffectiveRate": 0.0,
+        "chainBuildSuccessRate": 0.0,
+        "nackEffectiveRate": 0.0,
+        "repairabilityPersistenceRate": 0.0
+      },
+      "weights": {
+        "keyframeEffectiveRate": 0.3,
+        "chainBuildSuccessRate": 0.35,
+        "nackEffectiveRate": 0.25,
+        "repairabilityPersistenceRate": 0.1
+      }
+    }
+  }
+}

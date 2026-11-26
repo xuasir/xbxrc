@@ -85,6 +85,7 @@ export class PlayerClient {
       uiVersion: options.uiVersion ?? defaults.uiVersion,
     }
     const nextInputDriver = this.resolveInputDriverOption(options.inputDriver)
+    this.options.audio.requestedChannelCount = this.options.transport.forceMonoAudio ? 1 : 2
     this.gamepadDriver = this.createInputDriver(nextInputDriver)
     this.inputService = new InputService(this.gamepadDriver, this.emitter, this.options.input)
     if (nextInputDriver && typeof nextInputDriver.setApplication === 'function') {
@@ -104,7 +105,7 @@ export class PlayerClient {
       this.mediaService,
       this.emitter,
     )
-    this.statsService = new StatsService(() => this.sessionService.getPeer(), this.emitter, () => this.mediaService.snapshotRendererObservation())
+    this.statsService = new StatsService(() => this.sessionService.getPeer(), this.emitter, () => this.mediaService.snapshotRendererObservation(), () => this.mediaService.snapshotAudioObservation())
     this.statsService.start()
   }
 
@@ -221,6 +222,8 @@ export class PlayerClient {
 
   updateTransportConfig(config: Partial<TransportRuntimeConfig>): void {
     this.options.transport = { ...this.options.transport, ...config }
+    if (config.forceMonoAudio !== undefined)
+      this.updateAudioConfig({ requestedChannelCount: config.forceMonoAudio ? 1 : 2 })
   }
 
   getTransportConfig(): TransportRuntimeConfig {

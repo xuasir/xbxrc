@@ -665,6 +665,8 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         var mediaSamples = StreamingMediaSampleTracker()
         var lastVideoBytes: UInt64?
         var lastObservedAtMilliseconds: Double?
+        var videoTiming = StreamingMediaTimingTracker()
+        var audioTiming = StreamingMediaTimingTracker()
     }
 
     private static let factory: RTCPeerConnectionFactory = {
@@ -740,7 +742,9 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             StreamingFrameFeedbackSession(
                 preventResolutionDrops: prepared.webRtcPlan.preventResolutionDrops)
         try await runOnAPIQueue { [self] in
-            try audioLifecycle.start(audioDirection: prepared.webRtcPlan.audioDirection)
+            try audioLifecycle.start(
+                audioDirection: prepared.webRtcPlan.audioDirection,
+                stereoAudio: prepared.webRtcPlan.stereoAudio)
             statsProjectionState = StatsProjectionState()
             let configuration = RTCConfiguration()
             configuration.sdpSemantics = .unifiedPlan
@@ -806,6 +810,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
                 frameFeedback: self.frameFeedback,
                 targetVideoWidth: prepared.webRtcPlan.targetVideoWidth,
                 targetVideoHeight: prepared.webRtcPlan.targetVideoHeight,
+                apiQueue: self.apiQueue,
                 eventSink: { [weak self] label, event in
                     IOSRuntimeTrace.state(
                         domain: "ios-streaming",
@@ -855,7 +860,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         }
         dataChannels = channels
         eventSink(.dataChannelEvent(label: "all", event: "profilesCreated"))
-        let dataChannelSnapshot = await MainActor.run { channels.debugSnapshot() }
+        let dataChannelSnapshot = channels.debugSnapshot()
         let runtimeConfigurationPayload = Self.runtimeConfigurationPayload(
             plan: prepared.webRtcPlan,
             peer: peer,
@@ -924,7 +929,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             throw StreamingRuntimeError.peerConnectionCreationFailed
         }
         let startedAt = Date()
-        let dataChannelSnapshot = await MainActor.run { dataChannels?.debugSnapshot() }
+        let dataChannelSnapshot = dataChannels?.debugSnapshot()
         let peerSnapshot = Self.peerSnapshotPayload(
             peerConnection: peerConnection,
             dataChannelSnapshot: dataChannelSnapshot
@@ -1009,6 +1014,9 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             importance: .key
         )
         _ = try await runOnAPIQueue { [self] in
+            audioLifecycle.updateNegotiatedOutputChannels(
+                StreamingAudioOutputPreferences.negotiatedChannels(
+                    in: sdp, stereoRequested: activePlan?.stereoAudio ?? true))
             remoteVideoCapKbps = StreamingOfferSdpProjector.videoBitrateCapKbps(in: sdp)
             if let plan = pendingQualityPlan, let requested = plan.maxVideoBitrateKbps,
                 let cap = remoteVideoCapKbps,
@@ -1084,9 +1092,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
 
     func debugSnapshot() async -> StreamingPeerDebugSnapshot {
         let transceivers = peerConnection?.transceivers ?? []
-        let dataChannelSnapshot = await MainActor.run {
-            dataChannels?.debugSnapshot()
-        }
+        let dataChannelSnapshot = dataChannels?.debugSnapshot()
         return StreamingPeerDebugSnapshot(
             signalingState: peerConnection.map(Self.signalingStateName) ?? "missing",
             iceConnectionState: peerConnection.map(Self.iceConnectionStateName) ?? "missing",
@@ -1378,9 +1384,11 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
             else { return }
             peerConnection.statistics { [weak self] report in
                 guard let self else { return }
+                let observedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
                 self.apiQueue.async {
                     guard self.statsRequestGate.complete(generation: generation) else { return }
-                    let stats = self.projectStats(report)
+                    let stats = self.projectStats(
+                        report, observedAtMilliseconds: observedAtMilliseconds)
                     if stats.framesDecoded > 0 || stats.inboundVideoBytes > 0 {
                         self.attachExistingReceiverTracks(
                             on: peerConnection,
@@ -1393,8 +1401,9 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         }
     }
 
-    private func projectStats(_ report: RTCStatisticsReport) -> StreamingPeerStats {
-        let observedAtMilliseconds = StreamingFrameFeedbackClock.nowMilliseconds
+    private func projectStats(
+        _ report: RTCStatisticsReport, observedAtMilliseconds: Double
+    ) -> StreamingPeerStats {
         var inboundVideoBytes: UInt64 = 0
         var inboundAudioBytes: UInt64 = 0
         var framesDecoded: UInt64 = 0
@@ -1416,17 +1425,32 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         var selectedCandidatePairAddressFamily: String?
         var selectedLocalCandidateType: String?
         var selectedRemoteCandidateType: String?
+        var videoTimingStreams: [String: StreamingMediaTimingCounters] = [:]
+        var audioTimingStreams: [String: StreamingMediaTimingCounters] = [:]
         for statistic in report.statistics.values {
             if statistic.type == "inbound-rtp" {
                 let kind =
                     Self.stringValue(statistic.values["kind"])
                     ?? Self.stringValue(statistic.values["mediaType"])
                 let bytes = Self.uintValue(statistic.values["bytesReceived"])
+                let timing = StreamingMediaTimingCounters(
+                    jitterBufferDelaySeconds: Self.doubleValue(
+                        statistic.values["jitterBufferDelay"]),
+                    jitterBufferEmittedCount: Self.optionalUIntValue(
+                        statistic.values["jitterBufferEmittedCount"]),
+                    jitterBufferTargetDelaySeconds: Self.doubleValue(
+                        statistic.values["jitterBufferTargetDelay"]),
+                    jitterBufferMinimumDelaySeconds: Self.doubleValue(
+                        statistic.values["jitterBufferMinimumDelay"]),
+                    totalDecodeTimeSeconds: Self.doubleValue(statistic.values["totalDecodeTime"]),
+                    framesDecoded: Self.optionalUIntValue(statistic.values["framesDecoded"])
+                )
                 videoPackets.observe(
                     kind: kind,
                     received: Self.uintValue(statistic.values["packetsReceived"]),
                     lost: (statistic.values["packetsLost"] as? NSNumber)?.int64Value)
                 if kind == "video" {
+                    videoTimingStreams[statistic.id] = timing
                     inboundVideoBytes += bytes
                     framesDecoded += Self.uintValue(statistic.values["framesDecoded"])
                     if let count = Self.optionalUIntValue(statistic.values["framesDecoded"]) {
@@ -1449,6 +1473,7 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
                     pliCount = Self.optionalUIntValue(statistic.values["pliCount"])
                     firCount = Self.optionalUIntValue(statistic.values["firCount"])
                 } else if kind == "audio" {
+                    audioTimingStreams[statistic.id] = timing
                     inboundAudioBytes += bytes
                 }
             } else if statistic.type == "candidate-pair",
@@ -1518,6 +1543,10 @@ private final class LibWebRTCPeerRuntime: NSObject, StreamingPeerRuntime, @unche
         projected.observedFramesDecoded = observedFramesDecoded
         projected.videoPacketsLost = videoPacketsLost
         projected.selectedCandidatePairID = pairID
+        projected.videoTiming = statsProjectionState.videoTiming.observe(
+            streams: videoTimingStreams, atMilliseconds: observedAtMilliseconds)
+        projected.audioTiming = statsProjectionState.audioTiming.observe(
+            streams: audioTimingStreams, atMilliseconds: observedAtMilliseconds)
         return projected
     }
 

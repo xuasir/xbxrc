@@ -1,8 +1,6 @@
 import type { DecodedFrameSupplyObservation } from '../../domain/media'
 import type { WorkerClockReply } from './decoded-frame-clock'
-import { LatencyWindow } from '../../../shared/latency-window'
-import { DecodedFrameClock, FRAME_CLOCK_QUANTIZATION_MS } from './decoded-frame-clock'
-import { FrameSupplyDiagnostics } from './frame-supply-diagnostics'
+import { DecodedFrameObserver } from './decoded-frame-observer'
 
 export type DecodedFrameMode = 'initializing' | 'main-thread' | 'worker' | 'presentation'
 export type DecodedFrameFallback = 'trackUnavailable' | 'unsupported' | 'initializationFailed' | 'initializationTimeout' | 'firstFrameTimeout' | 'readerFailed' | 'trackEnded'
@@ -42,42 +40,24 @@ export interface DecodedFrameDelivery {
   clockUncertaintyMs?: number
 }
 
-export const DECODED_FRAME_DELIVERY_BUDGET_MS = 50
+export { DECODED_FRAME_DELIVERY_BUDGET_MS } from './decoded-frame-observer'
 
 /** 视频轨的标准解码输出；clone、reader 和在途帧由本入口统一持有。 */
 export class DecodedVideoFrameReader {
   mode: DecodedFrameMode = 'initializing'
   fallbackReason?: DecodedFrameFallback
-  receivedFrames = 0
+  get receivedFrames(): number { return this.observer.receivedFrames }
   private sourceTrack?: MediaStreamTrack
   private track?: MediaStreamTrack
   private reader?: ReadableStreamDefaultReader<VideoFrame>
   private worker?: Worker
   private clockTimer?: ReturnType<typeof setTimeout>
-  private readonly clock = new DecodedFrameClock()
-  private readonly diagnostics = new FrameSupplyDiagnostics()
-  private unknownClockCount = 0
-  private adjustedClockCount = 0
-  private framePixelFormat?: VideoPixelFormat | null
-  private readonly invalidClockReasons: Record<string, number> = {}
+  private readonly observer = new DecodedFrameObserver()
+  private readonly clock = this.observer.clock
   private timeout?: ReturnType<typeof setTimeout>
   private processorReady = false
   private mediaStarted = false
   private stopped = false
-  private receivedMessages = 0
-  private staleFrameDropCount = 0
-  private invalidClockCount = 0
-  private lastReceivedAtMs?: number
-  private workerTiming?: DecodedFrameWorkerTiming
-  private readonly timing = {
-    readWait: new LatencyWindow(),
-    pendingWait: new LatencyWindow(),
-    transfer: new LatencyWindow(),
-    consume: new LatencyWindow(),
-    receiveInterval: new LatencyWindow(),
-    ackRoundTrip: new LatencyWindow(),
-    ackDelivery: new LatencyWindow(),
-  }
 
   private readonly onUnmute = () => this.observeMediaProgress()
   private readonly onTrackEnded = () => this.fail('trackEnded')
@@ -146,139 +126,20 @@ export class DecodedVideoFrameReader {
   }
 
   snapshot(): DecodedFrameSupplyObservation {
-    const atMs = performance.now()
-    const epoch = performance.timeOrigin + atMs
-    const sent = this.workerTiming ? this.clock.convert(this.workerTiming.sentAtEpochMs, epoch) : undefined
-    const workerAgeMs = sent ? epoch - sent.atMs : Number.NaN
-    return {
-      schemaVersion: 1,
-      clockDomain: 'performanceEpoch',
-      observedAtMs: performance.timeOrigin + atMs,
-      receivedMessages: this.receivedMessages,
-      deliveredFrames: this.receivedFrames,
-      staleFrameDropCount: this.staleFrameDropCount,
-      invalidClockCount: this.invalidClockCount,
-      unknownClockCount: this.unknownClockCount,
-      adjustedClockCount: this.adjustedClockCount,
-      invalidClockReasons: { ...this.invalidClockReasons },
-      clock: this.clock.snapshot(epoch),
-      diagnostics: this.diagnostics.snapshot(),
-      ackDeliveryStatus: this.workerTiming?.lastAckDeliveryStatus,
-      framePixelFormat: this.framePixelFormat,
-      deliveryBudgetMs: DECODED_FRAME_DELIVERY_BUDGET_MS,
-      workerReadFrames: this.workerTiming?.readCount ?? 0,
-      workerSentFrames: this.workerTiming?.sentCount ?? 0,
-      workerOverwriteCount: this.workerTiming?.overwriteCount ?? 0,
-      workerAckCount: this.workerTiming?.ackCount ?? 0,
-      lastReadSequence: this.workerTiming?.sequence,
-      receiveAgeMs: this.lastReceivedAtMs === undefined ? undefined : Math.max(0, atMs - this.lastReceivedAtMs),
-      workerObservationAgeMs: Number.isFinite(workerAgeMs) && workerAgeMs >= 0 ? workerAgeMs : undefined,
-      timing: {
-        readWait: this.timing.readWait.snapshot(),
-        pendingWait: this.timing.pendingWait.snapshot(),
-        transfer: this.timing.transfer.snapshot(),
-        consume: this.timing.consume.snapshot(),
-        receiveInterval: this.timing.receiveInterval.snapshot(),
-        ackRoundTrip: this.timing.ackRoundTrip.snapshot(),
-        ackDelivery: this.timing.ackDelivery.snapshot(),
-      },
-    }
+    return this.observer.snapshot()
   }
 
-  private accept(frame: VideoFrame, mode: 'main-thread' | 'worker', workerTiming?: DecodedFrameWorkerTiming): void {
+  private accept(frame: VideoFrame, mode: 'main-thread' | 'worker', timing?: DecodedFrameWorkerTiming): void {
     if (this.stopped || this.mode === 'presentation') {
       frame.close()
       return
     }
-    const receivedAtMs = performance.now()
-    this.framePixelFormat = frame.format
-    const receivedAtEpochMs = performance.timeOrigin + receivedAtMs
-    const receiveIntervalMs = this.lastReceivedAtMs === undefined ? 0 : receivedAtMs - this.lastReceivedAtMs
-    const startup = this.receivedFrames === 0
-    this.receivedMessages++
-    if (this.lastReceivedAtMs !== undefined)
-      this.timing.receiveInterval.record(receivedAtMs - this.lastReceivedAtMs)
-    this.lastReceivedAtMs = receivedAtMs
-    let readFinishedAtEpochMs: number | undefined
-    let clockUncertaintyMs: number | undefined
-    let readWaitMs = 0
-    let transferMs = 0
-    let stale = false
-    let clockReason: string | undefined
-    if (workerTiming) {
-      this.workerTiming = workerTiming
-      if (workerTiming.lastAckSequence !== undefined && workerTiming.lastAckReceivedAtEpochMs !== undefined)
-        this.diagnostics.ackReceived(workerTiming.lastAckSequence, workerTiming.lastAckReceivedAtEpochMs)
-      this.timing.ackRoundTrip.record(workerTiming.lastAckRoundTripMs ?? Number.NaN)
-      this.timing.ackDelivery.record(workerTiming.lastAckDeliveryMs ?? Number.NaN)
-      const { readStartedAtEpochMs } = workerTiming
-      const rawFinished = workerTiming.readFinishedAtEpochMs
-      const rawSent = workerTiming.sentAtEpochMs
-      const valid = [readStartedAtEpochMs, rawFinished, rawSent, receivedAtEpochMs].every(Number.isFinite)
-        && readStartedAtEpochMs - rawFinished <= FRAME_CLOCK_QUANTIZATION_MS
-        && rawFinished - rawSent <= FRAME_CLOCK_QUANTIZATION_MS
-      if (valid) {
-        const finished = Math.max(readStartedAtEpochMs, rawFinished)
-        const sentAtEpochMs = Math.max(finished, rawSent)
-        if (finished !== rawFinished || sentAtEpochMs !== rawSent)
-          this.adjustedClockCount++
-        readWaitMs = finished - readStartedAtEpochMs
-        this.timing.readWait.record(readWaitMs)
-        this.timing.pendingWait.record(sentAtEpochMs - finished)
-        const sent = this.clock.convert(sentAtEpochMs, receivedAtEpochMs)
-        if (sent) {
-          transferMs = receivedAtEpochMs - sent.atMs
-          clockUncertaintyMs = sent.uncertaintyMs
-          if (transferMs >= -sent.uncertaintyMs) {
-            if (transferMs < 0)
-              this.adjustedClockCount++
-            this.timing.transfer.record(Math.max(0, transferMs))
-            readFinishedAtEpochMs = finished + (sent.atMs - sentAtEpochMs)
-            // 有界误差下只释放年龄下界已超预算的帧。
-            stale = receivedAtEpochMs - readFinishedAtEpochMs - sent.uncertaintyMs > DECODED_FRAME_DELIVERY_BUDGET_MS
-          }
-          else { clockReason = 'outsideCalibration' }
-        }
-        else { clockReason = this.clock.snapshot(receivedAtEpochMs).state }
-      }
-      else { clockReason = 'workerOrderOrNonFinite' }
-      if (clockReason === 'outsideCalibration' || clockReason === 'workerOrderOrNonFinite') {
-        this.invalidClockCount++
-        this.invalidClockReasons[clockReason] = (this.invalidClockReasons[clockReason] ?? 0) + 1
-      }
-      else if (clockReason) {
-        this.unknownClockCount++
-      }
-      if (stale)
-        this.staleFrameDropCount++
-    }
-    const consumeStartedAtMs = performance.now()
-    try {
-      if (stale) {
-        frame.close()
-        return
-      }
+    this.observer.accept(frame, (value, delivery) => {
       this.clearTimeout()
       this.processorReady = true
       this.mode = mode
-      this.receivedFrames++
-      this.consume(frame, { receivedAtMs, readFinishedAtEpochMs, clockUncertaintyMs })
-    }
-    catch (error) {
-      frame.close()
-      throw error
-    }
-    finally {
-      const finishedAtMs = performance.now()
-      this.timing.consume.record(finishedAtMs - consumeStartedAtMs)
-      if (workerTiming && (readWaitMs > 1000 / 30 || receiveIntervalMs > 1000 / 30 || transferMs > 1000 / 30
-        || finishedAtMs - consumeStartedAtMs > 1000 / 30 || stale || clockReason)) {
-        const c = this.clock.snapshot(receivedAtEpochMs)
-        this.diagnostics.record({ sequence: workerTiming.sequence, atMs: receivedAtMs, startup, reasons: [readWaitMs > 1000 / 30 ? 'readWait' : '', receiveIntervalMs > 1000 / 30 ? 'receiveGap' : '', transferMs > 1000 / 30 ? 'transfer' : '', finishedAtMs - consumeStartedAtMs > 1000 / 30 ? 'consume' : '', stale ? 'staleDrop' : '', clockReason ?? ''].filter(Boolean),
-          // [Worker read开始/完成/send，main receive/consume结束/ACK发送，Worker同序号ACK接收]
-          times: [workerTiming.readStartedAtEpochMs, workerTiming.readFinishedAtEpochMs, workerTiming.sentAtEpochMs, receivedAtEpochMs, performance.timeOrigin + finishedAtMs, 0, 0], offsetMs: c.offsetMs, uncertaintyMs: c.uncertaintyMs })
-      }
-    }
+      this.consume(value, delivery)
+    }, timing)
   }
 
   private probeClock(): void {
@@ -341,7 +202,7 @@ export class DecodedVideoFrameReader {
         try {
           this.worker?.postMessage(ack)
           if (message.timing)
-            this.diagnostics.ackSent(message.timing.sequence, epoch)
+            this.observer.ackSent(message.timing.sequence, epoch)
         }
         catch {
           this.fail('readerFailed')
@@ -370,7 +231,7 @@ export class DecodedVideoFrameReader {
     if (this.clockTimer !== undefined)
       clearTimeout(this.clockTimer)
     this.clockTimer = undefined
-    this.diagnostics.dispose()
+    this.observer.dispose()
     this.sourceTrack?.removeEventListener?.('unmute', this.onUnmute)
     this.sourceTrack?.removeEventListener?.('ended', this.onTrackEnded)
     this.sourceTrack = undefined

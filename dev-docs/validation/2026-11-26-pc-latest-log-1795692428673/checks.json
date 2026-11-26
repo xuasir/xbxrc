@@ -1,0 +1,102 @@
+{
+  "status": "PASS",
+  "verifiedAt": "2026-11-26T19:52:55.399006+08:00",
+  "checks": {
+    "snapshotHash": "PASS",
+    "compressedHash": "PASS",
+    "jsonRows": "PASS",
+    "continuousSequence": "PASS",
+    "artifactJsonsParsed": 6,
+    "workerFrameAccounting": "PASS",
+    "uploadCounters": "PASS",
+    "analyzerMalformedRows": 0,
+    "analyzerDuplicateRows": 0,
+    "cleanSessionEnding": "PASS"
+  },
+  "workerFrameAccounting": {
+    "read": 11362,
+    "delivered": 11340,
+    "overwrites": 21,
+    "staleDrops": 1,
+    "canvasSubmitted": 11340
+  },
+  "sourceTrace": {
+    "present": true,
+    "bytes": 15303638,
+    "unchangedAtClosure": true
+  },
+  "analysisCommands": [
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/summarize_runtime_trace.py <frozen-trace> --json --exclude-categories log",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_production_health_report.py <frozen-trace> --output production-health.json",
+      "exitCode": 0,
+      "gate": "FAIL"
+    },
+    {
+      "command": "python3 -B .agents/skills/analyze-runtime-logs/scripts/trace_browser_webrtc_behavior_report.py <frozen-trace> --require-stability",
+      "exitCode": 2,
+      "gate": "FAIL",
+      "reason": "中段 source supply deficit 和 submit age 长尾"
+    }
+  ],
+  "cleanup": {
+    "analysisProcessesCompleted": true,
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj",
+    "temporaryFiles": [
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/browser-behavior-summary.json",
+        "bytes": 16456
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/browser-behavior.json",
+        "bytes": 211055
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/evidence-anchors.json",
+        "bytes": 110085
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/facts.json",
+        "bytes": 114869
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/manifest.json",
+        "bytes": 770
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/production-health-stdout.txt",
+        "bytes": 0
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/production-health.json",
+        "bytes": 80152
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/runtime-trace-1795692428673-1.jsonl",
+        "bytes": 15303638
+      },
+      {
+        "path": "/private/tmp/xbxrc-pc-latest-20261126-n9g2kxfj/trace-summary.json",
+        "bytes": 7626
+      }
+    ],
+    "removedBytes": 15844651,
+    "directoryRemoved": true,
+    "freeDiskBytesBefore": 92160000000,
+    "freeDiskBytesAfter": 92160000000,
+    "retained": [
+      "README.md",
+      "manifest.json",
+      "facts.json",
+      "evidence-anchors.json",
+      "trace-summary.json",
+      "production-health.json",
+      "browser-behavior-summary.json",
+      "runtime-trace-1795692428673-1.jsonl.gz"
+    ],
+    "originalApplicationTracePreserved": true
+  }
+}

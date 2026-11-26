@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "xbox-streaming",
+    "session::recovery::supervision",
+    "--",
+    "--nocapture"
+  ],
+  "exitCode": 0,
+  "elapsedSeconds": 8.19
+}

@@ -40,6 +40,7 @@ struct StreamingPlayerView: View {
             Color.black.ignoresSafeArea()
             StreamingVideoSurface(
                 track: track,
+                renderResources: store.renderResources,
                 contentMode: contentMode,
                 picture: picture,
                 active: presentationActive,
@@ -172,6 +173,7 @@ private struct StreamingTouchInputLayer: View {
 
 private struct StreamingVideoSurface: UIViewRepresentable {
     let track: StreamingVideoTrackHandle?
+    let renderResources: StreamingRenderResourceCache
     let contentMode: StreamingVideoContentMode
     let picture: MobilePicturePreferences
     let active: Bool
@@ -180,7 +182,7 @@ private struct StreamingVideoSurface: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> StreamingMetalVideoSurfaceView {
-        let view = StreamingMetalVideoSurfaceView()
+        let view = StreamingMetalVideoSurfaceView(resources: renderResources)
         context.coordinator.view = view
         context.coordinator.contentMode = contentMode
         context.coordinator.picture = picture
@@ -218,26 +220,27 @@ private struct StreamingVideoSurface: UIViewRepresentable {
         var contentMode: StreamingVideoContentMode?
         var picture: MobilePicturePreferences?
         private var currentTrack: RTCVideoTrack?
+        private var currentRenderer: RTCVideoRenderer?
         private var videoGeneration: UInt64?
 
         func update(track handle: StreamingVideoTrackHandle?) {
             let nextTrack = handle?.rawValue
             let traceContext = handle?.traceContext
-            view?.updateTraceContext(traceContext)
-            view?.updateFrameFeedbackSession(handle?.frameFeedback)
+            view?.updateStreamHandle(handle)
+            let nextRenderer = view?.renderer
             guard
                 !streamingVideoTracksMatch(currentTrack, nextTrack)
                     || videoGeneration != traceContext?.videoGeneration
+                    || (currentRenderer as AnyObject?) !== (nextRenderer as AnyObject?)
             else {
                 return
             }
             videoGeneration = traceContext?.videoGeneration
-            if let currentTrack, let view {
-                currentTrack.remove(view.renderer)
-            }
+            if let currentTrack, let currentRenderer { currentTrack.remove(currentRenderer) }
             currentTrack = nextTrack
-            if let nextTrack, let view {
-                nextTrack.add(view.renderer)
+            currentRenderer = nextRenderer
+            if let nextTrack, let view, let nextRenderer {
+                nextTrack.add(nextRenderer)
                 IOSRuntimeTrace.state(
                     domain: "ios-streaming",
                     event: "videoSurfaceAttached",
@@ -253,8 +256,9 @@ private struct StreamingVideoSurface: UIViewRepresentable {
         }
 
         func detach() {
-            if let currentTrack, let view { currentTrack.remove(view.renderer) }
+            if let currentTrack, let currentRenderer { currentTrack.remove(currentRenderer) }
             currentTrack = nil
+            currentRenderer = nil
             view?.updateTraceContext(nil)
             view?.shutdown()
             view = nil

@@ -1,0 +1,380 @@
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift
+@@ -15,7 +15,7 @@
+     private var activeAudioDirection: StreamingMediaDirection = .receiveOnly
+     private var stereoAudio = true
+     private var negotiatedOutputChannels: Int?
+-    private var outputPreferences: StreamingAudioOutputPreferences?
++    private var requestedAudioConfiguration: RTCAudioSessionConfiguration?
+ 
+     init(eventSink: @escaping EventSink) {
+         self.eventSink = eventSink
+@@ -29,7 +29,7 @@
+             activeAudioDirection = audioDirection
+             self.stereoAudio = stereoAudio
+             negotiatedOutputChannels = nil
+-            outputPreferences = nil
++            requestedAudioConfiguration = nil
+             if !observing {
+                 session.add(self)
+                 observing = true
+@@ -68,8 +68,9 @@
+ 
+     func updateNegotiatedOutputChannels(_ channels: Int?) {
+         queue.sync {
++            guard machine.generation != nil else { return }
+             negotiatedOutputChannels = channels
+-            calibrateOutput(reason: "remoteDescription")
++            observeOutput(reason: "remoteDescription")
+         }
+     }
+ 
+@@ -81,7 +82,7 @@
+             guard let self, let generation = self.machine.generation else { return }
+             let event = makeEvent(generation)
+             try? self.process(event, eventPayload: payload)
+-            if case .routeChanged = event { self.calibrateOutput(reason: "routeChanged") }
++            if case .routeChanged = event { self.observeOutput(reason: "routeChanged") }
+         }
+     }
+ 
+@@ -182,7 +183,7 @@
+         var acquiredActivationLease = false
+         do {
+             // 路由可限制首选声道/采样率；关键 category 与激活错误继续进入生命周期失败路径。
+-            session.ignoresPreferredAttributeConfigurationErrors = true
++            session.ignoresPreferredAttributeConfigurationErrors = audioDirection == .receiveOnly
+             try session.setConfiguration(configuration)
+             if !session.isActive {
+                 try session.setActive(true)
+@@ -190,7 +191,8 @@
+                 acquiredActivationLease = true
+             }
+             // WebRTC 仅在 active + voiceChat 下应用首选输入/输出通道。
+-            try applyOutputConfiguration(audioDirection: audioDirection)
++            try session.setConfiguration(configuration)
++            requestedAudioConfiguration = configuration
+             session.isAudioEnabled = true
+         } catch {
+             if acquiredActivationLease {
+@@ -207,9 +209,9 @@
+     }
+ 
+     static func makeConfiguration(
+-        for audioDirection: StreamingMediaDirection, stereoAudio: Bool = true,
+-        negotiatedOutputChannels: Int? = nil, maximumOutputChannels: Int? = nil,
+-        outputPortTypes: [String] = []
++        for _: StreamingMediaDirection, stereoAudio _: Bool = true,
++        negotiatedOutputChannels _: Int? = nil, maximumOutputChannels _: Int? = nil,
++        outputPortTypes _: [String] = []
+     ) -> RTCAudioSessionConfiguration {
+         let configuration = RTCAudioSessionConfiguration()
+         // M137 默认 VoiceProcessingIO 在 recvonly 播放初始化时也要求有效输入通道。
+@@ -218,58 +220,19 @@
+         configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
+         configuration.categoryOptions = [
+             .defaultToSpeaker,
++            .allowBluetoothHFP,
+             .allowBluetoothA2DP,
+             .allowAirPlay,
+         ]
+-        if audioDirection == .sendReceive {
+-            configuration.categoryOptions.insert(.allowBluetoothHFP)
+-        }
+-        let preferences = StreamingAudioOutputPreferences(
+-            stereoAudio: stereoAudio, negotiatedChannels: negotiatedOutputChannels,
+-            maximumChannels: maximumOutputChannels, outputPortTypes: outputPortTypes)
+-        configuration.inputNumberOfChannels = 1
+-        configuration.outputNumberOfChannels = preferences.preferredChannels
+-        configuration.sampleRate = preferences.sampleRate
+-        configuration.ioBufferDuration = preferences.ioBufferDuration
++        // 本地 PCM 与 I/O 周期消费默认 ADM 合同；远端声道和路由用于观测。
+         return configuration
+     }
+ 
+-    private func applyOutputConfiguration(audioDirection: StreamingMediaDirection) throws {
+-        let ports = session.currentRoute.outputs.map { $0.portType.rawValue }
+-        let maximumChannels = max(1, session.maximumOutputNumberOfChannels)
+-        let preferences = StreamingAudioOutputPreferences(
+-            stereoAudio: stereoAudio, negotiatedChannels: negotiatedOutputChannels,
+-            maximumChannels: maximumChannels, outputPortTypes: ports)
+-        let configuration = Self.makeConfiguration(
+-            for: audioDirection, stereoAudio: stereoAudio,
+-            negotiatedOutputChannels: negotiatedOutputChannels,
+-            maximumOutputChannels: maximumChannels, outputPortTypes: ports)
+-        RTCAudioSessionConfiguration.setWebRTC(configuration)
+-        try session.setConfiguration(configuration)
+-        outputPreferences = preferences
+-    }
+-
+-    private func calibrateOutput(reason: String) {
+-        guard machine.state == .active, session.isActive else { return }
+-        session.lockForConfiguration()
+-        defer { session.unlockForConfiguration() }
+-        let preferences = StreamingAudioOutputPreferences(
+-            stereoAudio: stereoAudio, negotiatedChannels: negotiatedOutputChannels,
+-            maximumChannels: max(1, session.maximumOutputNumberOfChannels),
+-            outputPortTypes: session.currentRoute.outputs.map { $0.portType.rawValue })
+-        do {
+-            if outputPreferences != preferences {
+-                try applyOutputConfiguration(audioDirection: activeAudioDirection)
+-            }
+-            var payload = sessionPayload()
+-            payload["calibrationReason"] = .string(reason)
+-            emitDirect("audioOutputCalibrated", payload: payload)
+-        } catch {
+-            var payload = sessionPayload()
+-            payload.merge(errorPayload(error, generation: machine.generation ?? 0)) { _, new in new
+-            }
+-            emitDirect("audioOutputCalibrationFailed", payload: payload)
+-        }
++    private func observeOutput(reason: String) {
++        guard machine.generation != nil else { return }
++        var payload = sessionPayload()
++        payload["observationReason"] = .string(reason)
++        eventSink("audioOutputObserved", payload)
+     }
+ 
+     private func deactivate() -> Error? {
+@@ -322,11 +285,13 @@
+ 
+     private func sessionPayload() -> [String: IOSRuntimeTraceValue] {
+         let route = session.currentRoute
+-        let actualRoute = StreamingAudioOutputPreferences(
++        let observation = StreamingAudioOutputPreferences(
+             stereoAudio: stereoAudio, negotiatedChannels: negotiatedOutputChannels,
+             maximumChannels: max(1, session.maximumOutputNumberOfChannels),
+             outputPortTypes: route.outputs.map { $0.portType.rawValue }
+-        ).route
++        )
++        let requested =
++            requestedAudioConfiguration ?? Self.makeConfiguration(for: activeAudioDirection)
+         return [
+             "isActive": .bool(session.isActive),
+             "useManualAudio": .bool(session.useManualAudio),
+@@ -336,18 +301,20 @@
+             "mode": .string(session.mode),
+             "audioDirection": .string(activeAudioDirection.rawValue),
+             "stereoAudioRequested": .bool(stereoAudio),
++            "audioConfigurationOwner": .string("libwebrtcDefaultADM"),
++            "nativePlayoutChannels": .integer(Int64(requested.outputNumberOfChannels)),
+             "negotiatedOutputChannels": .integer(
+-                Int64(outputPreferences?.negotiatedChannels ?? (stereoAudio ? 2 : 1))),
++                Int64(observation.negotiatedChannels)),
+             "preferredOutputChannels": .integer(
+-                Int64(outputPreferences?.preferredChannels ?? (stereoAudio ? 2 : 1))),
++                Int64(requested.outputNumberOfChannels)),
+             "maximumOutputChannels": .integer(Int64(session.maximumOutputNumberOfChannels)),
+             "outputChannelPreferenceSatisfied": .bool(
+                 session.outputNumberOfChannels
+-                    >= (outputPreferences?.preferredChannels ?? (stereoAudio ? 2 : 1))),
++                    >= requested.outputNumberOfChannels),
+             "negotiatedOutputChannelMatch": .bool(
+                 session.outputNumberOfChannels
+-                    >= (outputPreferences?.negotiatedChannels ?? (stereoAudio ? 2 : 1))),
+-            "outputRoute": .string(actualRoute),
++                    >= observation.negotiatedChannels),
++            "outputRoute": .string(observation.route),
+             "outputPortTypes": .array(route.outputs.map { .string($0.portType.rawValue) }),
+             "inputPortTypes": .array(route.inputs.map { .string($0.portType.rawValue) }),
+             "inputAvailable": .bool(session.inputAvailable),
+@@ -356,9 +323,9 @@
+             "outputVolume": .double(Double(session.outputVolume)),
+             "sampleRate": .double(session.sampleRate),
+             "preferredSampleRate": .double(session.preferredSampleRate),
+-            "requestedSampleRate": .double(outputPreferences?.sampleRate ?? 48_000),
++            "requestedSampleRate": .double(requested.sampleRate),
+             "requestedIOBufferDurationMs": .double(
+-                (outputPreferences?.ioBufferDuration ?? 0.005) * 1_000),
++                requested.ioBufferDuration * 1_000),
+             "preferredIOBufferDurationMs": .double(session.preferredIOBufferDuration * 1_000),
+             "ioBufferDurationMs": .double(session.ioBufferDuration * 1_000),
+             "outputLatencyMs": .double(session.outputLatency * 1_000),
+--- a/iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift
++++ b/iosapp/XBXRC/Platform/Streaming/StreamingAudioOutput.swift
+@@ -1,16 +1,24 @@
+ import AVFoundation
+ import Foundation
++@preconcurrency import WebRTC
+ 
+ struct StreamingAudioOutputPreferences: Equatable, Sendable {
+     let negotiatedChannels: Int
+     let preferredChannels: Int
+-    let sampleRate: Double = 48_000
++    let sampleRate: Double
+     let ioBufferDuration: Double
+     let route: String
++    private static let nativeDefaults: (channels: Int, sampleRate: Double, buffer: Double) = {
++        let configuration = RTCAudioSessionConfiguration()
++        return (
++            configuration.outputNumberOfChannels, configuration.sampleRate,
++            configuration.ioBufferDuration
++        )
++    }()
+ 
+     init(
+         stereoAudio: Bool, negotiatedChannels: Int? = nil,
+-        maximumChannels: Int? = nil, outputPortTypes: [String] = []
++        maximumChannels _: Int? = nil, outputPortTypes: [String] = []
+     ) {
+         let ports = Set(outputPortTypes)
+         let hfp = ports.contains(AVAudioSession.Port.bluetoothHFP.rawValue)
+@@ -18,8 +26,10 @@
+             hfp || ports.contains(AVAudioSession.Port.bluetoothA2DP.rawValue)
+             || ports.contains(AVAudioSession.Port.bluetoothLE.rawValue)
+         self.negotiatedChannels = stereoAudio ? min(2, max(1, negotiatedChannels ?? 2)) : 1
+-        preferredChannels = hfp ? 1 : min(self.negotiatedChannels, max(1, maximumChannels ?? 2))
+-        ioBufferDuration = bluetooth ? 0.010 : 0.005
++        // 远端 Opus 能力单独保留；本地格式与默认 ADM 的 PCM 声道/周期一致。
++        preferredChannels = Self.nativeDefaults.channels
++        sampleRate = Self.nativeDefaults.sampleRate
++        ioBufferDuration = Self.nativeDefaults.buffer
+         route =
+             hfp
+             ? "bluetoothHFP"
+--- a/iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift
++++ b/iosapp/XBXRCTests/StreamingMediaCalibrationTests.swift
+@@ -1,5 +1,7 @@
+ import AVFoundation
+ import CoreVideo
++import Foundation
++@preconcurrency import WebRTC
+ import XCTest
+ import simd
+ 
+@@ -146,13 +148,18 @@
+             .bt601)
+     }
+ 
+-    func testAudioPreferencesRespectStereoMonoAndRouteLimits() {
++    func testAudioPreferencesKeepDefaultADMFormatAcrossStereoAndRoutes() {
++        let defaults = RTCAudioSessionConfiguration()
++        XCTAssertEqual(defaults.inputNumberOfChannels, 1)
++        XCTAssertEqual(defaults.outputNumberOfChannels, 1)
++        XCTAssertEqual(defaults.ioBufferDuration, 0.020, accuracy: 0.000001)
+         let speaker = StreamingAudioOutputPreferences(
+             stereoAudio: true, maximumChannels: 2,
+             outputPortTypes: [AVAudioSession.Port.builtInSpeaker.rawValue])
+-        XCTAssertEqual(speaker.preferredChannels, 2)
+-        XCTAssertEqual(speaker.sampleRate, 48_000)
+-        XCTAssertEqual(speaker.ioBufferDuration, 0.005)
++        XCTAssertEqual(speaker.negotiatedChannels, 2)
++        XCTAssertEqual(speaker.preferredChannels, defaults.outputNumberOfChannels)
++        XCTAssertEqual(speaker.sampleRate, defaults.sampleRate)
++        XCTAssertEqual(speaker.ioBufferDuration, defaults.ioBufferDuration)
+         XCTAssertEqual(
+             StreamingAudioOutputPreferences(stereoAudio: true, maximumChannels: 1)
+                 .preferredChannels, 1)
+@@ -170,22 +177,67 @@
+             stereoAudio: true, maximumChannels: 2,
+             outputPortTypes: [AVAudioSession.Port.bluetoothA2DP.rawValue])
+         XCTAssertEqual(hfp.preferredChannels, 1)
+-        XCTAssertEqual(hfp.ioBufferDuration, 0.010)
+-        XCTAssertEqual(a2dp.preferredChannels, 2)
+-    }
+-
+-    func testAudioConfigurationsConsumeDirectionAndNegotiatedChannels() {
++        XCTAssertEqual(hfp.ioBufferDuration, defaults.ioBufferDuration)
++        XCTAssertEqual(a2dp.preferredChannels, defaults.outputNumberOfChannels)
++        XCTAssertEqual(a2dp.ioBufferDuration, defaults.ioBufferDuration)
++    }
++
++    func testAudioConfigurationsKeepDefaultPCMAndBufferWithStereoNegotiation() {
++        let defaults = RTCAudioSessionConfiguration()
+         let listen = StreamingAudioLifecycleCoordinator.makeConfiguration(
+             for: .receiveOnly, stereoAudio: true, maximumOutputChannels: 2)
+         let voice = StreamingAudioLifecycleCoordinator.makeConfiguration(
+             for: .sendReceive, stereoAudio: true, negotiatedOutputChannels: 1,
+             maximumOutputChannels: 2)
+-        XCTAssertEqual(listen.outputNumberOfChannels, 2)
++        XCTAssertEqual(listen.outputNumberOfChannels, defaults.outputNumberOfChannels)
+         XCTAssertEqual(voice.outputNumberOfChannels, 1)
+         XCTAssertEqual(listen.inputNumberOfChannels, 1)
+         XCTAssertEqual(listen.mode, AVAudioSession.Mode.voiceChat.rawValue)
+-        XCTAssertFalse(listen.categoryOptions.contains(.allowBluetoothHFP))
++        XCTAssertEqual(listen.sampleRate, defaults.sampleRate)
++        XCTAssertEqual(listen.ioBufferDuration, defaults.ioBufferDuration)
++        XCTAssertEqual(voice.sampleRate, defaults.sampleRate)
++        XCTAssertEqual(voice.ioBufferDuration, defaults.ioBufferDuration)
++        XCTAssertTrue(listen.categoryOptions.contains(.allowBluetoothHFP))
+         XCTAssertTrue(voice.categoryOptions.contains(.allowBluetoothHFP))
++    }
++
++    func testNativeNegotiationAndHealthyRouteOnlyUpdateObservations() async throws {
++        let recorder = StreamingAudioRegressionEventRecorder()
++        let routeObserved = expectation(description: "健康路由只更新音频观测")
++        let coordinator = StreamingAudioLifecycleCoordinator { event, payload in
++            recorder.record(event, payload: payload)
++            if event == "audioRouteChanged",
++                payload["routeChangeReason"] == .string("wakeFromSleep")
++            {
++                routeObserved.fulfill()
++            }
++        }
++        try coordinator.start(audioDirection: .receiveOnly, stereoAudio: true)
++        defer { coordinator.stop() }
++        let session = RTCAudioSession.sharedInstance()
++        let initial = RTCAudioSessionConfiguration.webRTC()
++        XCTAssertEqual(initial.outputNumberOfChannels, 1)
++        XCTAssertEqual(initial.inputNumberOfChannels, 1)
++        XCTAssertEqual(initial.ioBufferDuration, 0.020, accuracy: 0.000001)
++        XCTAssertFalse(session.currentRoute.outputs.isEmpty)
++        let activationCount = recorder.count("audioSessionActivationStarted")
++        for channels in [2, 1, 2] {
++            coordinator.updateNegotiatedOutputChannels(channels)
++            XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === initial)
++            let payload = try XCTUnwrap(recorder.latest("audioOutputObserved"))
++            XCTAssertEqual(payload["negotiatedOutputChannels"], .integer(Int64(channels)))
++            XCTAssertEqual(payload["nativePlayoutChannels"], .integer(1))
++            XCTAssertEqual(payload["requestedIOBufferDurationMs"], .double(20))
++            XCTAssertTrue(session.isAudioEnabled)
++        }
++        coordinator.audioSessionDidChangeRoute(
++            session, reason: .wakeFromSleep, previousRoute: session.currentRoute)
++        await fulfillment(of: [routeObserved], timeout: 2)
++        // sync 观测同时作为队列屏障，确保路由事件及后续观测处理完成。
++        coordinator.updateNegotiatedOutputChannels(2)
++        XCTAssertTrue(RTCAudioSessionConfiguration.webRTC() === initial)
++        XCTAssertEqual(recorder.count("audioSessionActivationStarted"), activationCount)
++        XCTAssertTrue(session.isAudioEnabled)
+     }
+ 
+     func testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio() {
+@@ -210,3 +262,26 @@
+                 in: "m=audio 0 RTP/SAVPF 111\na=rtpmap:111 opus/48000/2", stereoRequested: true))
+     }
+ }
++
++private final class StreamingAudioRegressionEventRecorder: @unchecked Sendable {
++    private let lock = NSLock()
++    private var events: [(String, [String: IOSRuntimeTraceValue])] = []
++
++    func record(_ event: String, payload: [String: IOSRuntimeTraceValue]) {
++        lock.lock()
++        defer { lock.unlock() }
++        events.append((event, payload))
++    }
++
++    func count(_ event: String) -> Int {
++        lock.lock()
++        defer { lock.unlock() }
++        return events.filter { $0.0 == event }.count
++    }
++
++    func latest(_ event: String) -> [String: IOSRuntimeTraceValue]? {
++        lock.lock()
++        defer { lock.unlock() }
++        return events.last { $0.0 == event }?.1
++    }
++}
+--- a/iosapp/XBXRCTests/XBXRCTests.swift
++++ b/iosapp/XBXRCTests/XBXRCTests.swift
+@@ -3282,7 +3282,7 @@
+         XCTAssertEqual(receiveOnly.mode, AVAudioSession.Mode.voiceChat.rawValue)
+         XCTAssertEqual(
+             receiveOnly.categoryOptions,
+-            [.defaultToSpeaker, .allowBluetoothA2DP, .allowAirPlay]
++            [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay]
+         )
+         XCTAssertEqual(sendReceive.category, AVAudioSession.Category.playAndRecord.rawValue)
+         XCTAssertEqual(sendReceive.mode, AVAudioSession.Mode.voiceChat.rawValue)

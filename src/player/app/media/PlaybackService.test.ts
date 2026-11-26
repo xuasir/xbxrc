@@ -82,6 +82,24 @@ afterEach(() => {
 })
 
 describe('playback resource ownership', () => {
+  it('rebuilds a failed Worker renderer on Main with the same SR and color intent', async () => {
+    const { service, stream } = fixture()
+    const sr = { ...config, pipelineType: 'webgl2' as const, mode: 'webgl2' as const, superResolutionEnabled: true, sharpness: 3, brightness: 105, saturation: 110 }
+    service.updateRendererState(sr, deriveRendererAttachSpec(sr))
+    service.attachVideoStream(stream)
+    await flush()
+    const worker = mocks.resources[0]!
+    worker.config.rendererFrameReadyNotifier?.()
+    worker.config.rendererRuntimeFailureNotifier?.('renderWorker:workerError')
+    await flush()
+    const fallback = mocks.resources[1]!
+    expect(fallback.kind).toBe('webgl2_sr')
+    expect(fallback.config).toMatchObject({ renderExecution: 'main', sharpness: 3, brightness: 105, saturation: 110, superResolutionEnabled: true })
+    expect(worker.destroy).toHaveBeenCalledTimes(1)
+    fallback.config.rendererFrameReadyNotifier?.()
+    expect(service.snapshotRendererObservation()?.generation).toBe(2)
+    service.destroy()
+  })
   it('separates attach call, asynchronous readiness and previous release using owned generation clocks', async () => {
     const { service, stream } = fixture()
     let now = 100

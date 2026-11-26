@@ -1,0 +1,73 @@
+{
+  "browserWebRtcBehaviorGate": "PASS",
+  "failures": [],
+  "selectedRemoteAnswer": {
+    "seq": 277,
+    "tsMs": 1795678767836,
+    "observedAtMs": 97172.0,
+    "elapsedSinceBindMs": 2102.0,
+    "selectedPayloadType": "98",
+    "selectedMimeType": "video/H264",
+    "selectedProfileLevelId": "42e02a",
+    "profileFamily": "constrained-baseline"
+  },
+  "firstFrameLatencies": {
+    "connectedToFirstInboundPacketMs": 0.0,
+    "connectedToFirstDecodedMs": 1000.0,
+    "connectedToFirstKeyframeDecodedMs": 1000.0,
+    "connectedToFirstPresentedMs": 854.0,
+    "bindToRemoteAnswerSetMs": 2102.0
+  },
+  "stats": {
+    "source": "productionBucket",
+    "sampleCount": 72,
+    "inboundSampleCount": 65,
+    "firstSample": {
+      "seq": 266,
+      "sampledAtMs": 96118.0,
+      "framesDecoded": null,
+      "keyFramesDecoded": null,
+      "frameWidth": null,
+      "frameHeight": null,
+      "delta": {
+        "packetsReceivedDelta": null,
+        "bytesReceivedDelta": null,
+        "framesDecodedDelta": null,
+        "keyFramesDecodedDelta": null,
+        "framesDroppedDelta": null,
+        "pliCountDelta": null,
+        "firCountDelta": null,
+        "nackCountDelta": null
+      }
+    },
+    "latestSample": {
+      "seq": 1797,
+      "sampledAtMs": 166509.0,
+      "framesDecoded": 4004,
+      "keyFramesDecoded": 7,
+      "frameWidth": 2560,
+      "frameHeight": 1440,
+      "delta": {
+        "packetsReceivedDelta": 496,
+        "bytesReceivedDelta": 541630,
+        "framesDecodedDelta": 15,
+        "keyFramesDecodedDelta": 0,
+        "framesDroppedDelta": 0,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "nackCountDelta": 1
+      }
+    },
+    "deltaTotals": {
+      "packetsReceivedDelta": 163394.0,
+      "bytesReceivedDelta": 179167526.0,
+      "framesDecodedDelta": 3822.0,
+      "keyFramesDecodedDelta": 7.0,
+      "framesDroppedDelta": 0,
+      "pliCountDelta": 1.0,
+      "firCountDelta": 0,
+      "nackCountDelta": 28.0
+    }
+  },
+  "interpretation": "firstFrameLatencies为现有report按production采样推导；实际事件定位以evidence-anchors和facts中的原始时间为准。"
+}

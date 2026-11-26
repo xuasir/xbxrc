@@ -17,8 +17,10 @@ import type {
   BrowserWebRtcTimelineEvent,
   BrowserWebRtcTransceiverSnapshot,
 } from '../../domain/stats'
+import type { InputWorkerHost } from '../input/input-worker-host'
 import type { InputService } from '../input/InputService'
 import type { MediaService } from '../media/MediaService'
+import { resolveAudioPlaybackFormat } from '../../infra/webrtc/audio-sdp'
 import { DataChannelHub } from '../../infra/webrtc/DataChannelHub'
 import { parseSdpImageAttributes } from '../../infra/webrtc/sdp-image-attributes'
 import { SdpManipulator } from '../../infra/webrtc/SdpManipulator'
@@ -38,7 +40,12 @@ export class SessionService {
   private readonly transport = new WebRtcTransport()
   private readonly sdpManipulator = new SdpManipulator()
   private channelHub?: DataChannelHub
+  private channelsReady: Promise<void> = Promise.resolve()
   private bindObservedAtMs?: number
+  private audioTrack?: MediaStreamTrack
+  private audioMid?: string
+  private audioAnswerSdp?: string
+  private audioAnswerVersion = 0
 
   constructor(
     private readonly options: PlayerClientOptions,
@@ -61,7 +68,7 @@ export class SessionService {
         this.transition('failed')
       }
     })
-    this.transport.on('track', ({ kind, stream }) => {
+    this.transport.on('track', ({ kind, stream, track, mid }) => {
       this.emitter.emit('transport.track', { kind, stream })
       this.emitWebRtcTimeline({
         kind: 'trackReceived',
@@ -72,18 +79,25 @@ export class SessionService {
         this.mediaService.attachVideoStream(stream)
       }
       else {
-        this.mediaService.attachAudioStream(stream)
+        this.audioTrack = track ?? stream.getAudioTracks?.()[0]
+        this.audioMid = mid
+        this.mediaService.attachAudioStream(stream, this.audioPlaybackFormat(), this.audioTrack)
       }
     })
   }
 
   bind(turnServer?: { url: string, username?: string, credential?: string }): void {
     this.assertState('bind', ['idle', 'closed', 'failed'])
+    this.audioAnswerVersion++
+    this.audioTrack = undefined
+    this.audioMid = undefined
+    this.audioAnswerSdp = undefined
     if (this.channelHub) {
-      this.inputService.stop()
+      const inputBarrier = this.inputService.stopWithBarrier()
       this.mediaService.destroy()
-      this.channelHub.clear()
+      this.channelHub.clear(inputBarrier)
       this.channelHub = undefined
+      this.transport.close(inputBarrier)
     }
     this.transition('binding')
     debugLog('[player][session] bind start', {
@@ -97,6 +111,26 @@ export class SessionService {
       peerSnapshot: summarizePeerForTrace(peer),
     })
     this.observePeerState(peer)
+    const preparation = this.inputService.prepareInputWorker()
+    if (preparation) {
+      this.channelsReady = preparation.then((prepared) => {
+        if (this.getPeer() !== peer || this.state === 'closed') {
+          prepared?.close()
+          return
+        }
+        this.bindChannels(prepared)
+        return prepared?.whenAttached()
+      })
+      // 后续 createOffer 消费同一个准备结果，关闭时也有拒绝处理器。
+      void this.channelsReady.catch(() => {})
+    }
+    else {
+      this.bindChannels()
+      this.channelsReady = Promise.resolve()
+    }
+  }
+
+  private bindChannels(preparedWorker?: InputWorkerHost): void {
     this.channelHub = new DataChannelHub(this.transport)
     const inputChannel = this.channelHub.register(
       STREAM_DATA_CHANNEL_PROFILES[0].name,
@@ -105,6 +139,7 @@ export class SessionService {
         protocol: STREAM_DATA_CHANNEL_PROFILES[0].protocol,
       },
       context => new InputChannel(context, this.inputService),
+      preparedWorker ? channel => this.inputService.adoptPreparedInputWorker(preparedWorker, channel) : undefined,
     ) as InputChannel
     const controlChannel = this.channelHub.register(
       STREAM_DATA_CHANNEL_PROFILES[1].name,
@@ -168,6 +203,8 @@ export class SessionService {
         throw new Error('streamRuntimeSuperseded')
     }
     assertCurrent()
+    await this.channelsReady
+    assertCurrent()
     const restarting = options?.iceRestart === true
     this.assertState(
       'createOffer',
@@ -218,9 +255,7 @@ export class SessionService {
           )
         }
       }
-      if (!this.options.transport.forceMonoAudio) {
-        nextSdp = nextSdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1')
-      }
+      nextSdp = this.sdpManipulator.setAudioChannelCount(nextSdp, this.options.transport.forceMonoAudio ? 1 : 2)
       offer = { ...offer, sdp: nextSdp }
       debugLog('[player][session] local offer after sdp manipulation', summarizeSdp(nextSdp))
       debugLog(`[player][session] local offer after sdp manipulation raw\n${nextSdp}`)
@@ -238,14 +273,34 @@ export class SessionService {
 
   async setRemoteAnswer(sdp: string): Promise<void> {
     this.assertState('setRemoteAnswer', ['negotiating', 'connecting', 'connected'])
+    const peer = this.getPeer()
+    const version = ++this.audioAnswerVersion
     const observation = summarizeSdpForTrace('remoteAnswer', sdp)
     this.emitter.emit('transport.sdpObserved', observation)
     await this.transport.setRemoteAnswer(sdp)
+    if (this.getPeer() !== peer || version !== this.audioAnswerVersion)
+      return
+    this.audioAnswerSdp = sdp
+    this.mediaService.updateAudioPlaybackFormat(this.audioPlaybackFormat())
     this.emitWebRtcTimeline({
       kind: 'remoteAnswerSet',
       sdpStage: 'remoteAnswer',
       ...projectSelectedH264PayloadForTimeline(observation),
       peerSnapshot: this.resolvePeerSnapshot(),
+    })
+  }
+
+  private audioPlaybackFormat() {
+    let sourceChannelCount: number | undefined
+    try {
+      sourceChannelCount = this.audioTrack?.getSettings?.().channelCount
+    }
+    catch {}
+    return resolveAudioPlaybackFormat({
+      requestedChannelCount: this.options.transport.forceMonoAudio ? 1 : 2,
+      sdp: this.audioAnswerSdp ?? this.getPeer()?.remoteDescription?.sdp ?? undefined,
+      mid: this.audioMid,
+      sourceChannelCount,
     })
   }
 
@@ -342,11 +397,11 @@ export class SessionService {
   }
 
   close(): void {
-    this.inputService.stop()
+    const inputBarrier = this.inputService.stopWithBarrier()
     this.mediaService.destroy()
-    this.channelHub?.clear()
+    this.channelHub?.clear(inputBarrier)
     this.channelHub = undefined
-    this.transport.close()
+    this.transport.close(inputBarrier)
     this.transition('closed')
   }
 

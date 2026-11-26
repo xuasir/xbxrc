@@ -1,0 +1,632 @@
+{
+  "taskDate": "2026-11-26",
+  "baselines": [
+    {
+      "metricsFile": "dev-docs/validation/2026-11-10-decoded-supply-latest-trace-analysis.metrics.json",
+      "metricsSha256": "e5d07f3dff9702e735763672549629c9e495c75b3ede528a0d5dd0934b090e7a",
+      "traceSource": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794280647769-1.jsonl",
+      "traceSha256": "66be2ef3c70c17cc61f7464ccf81b0c0803e68bdd69ecf398cf7705b53f13af3",
+      "traceAvailable": false,
+      "snapshotAvailable": false,
+      "build": {
+        "buildTimestampUnixMs": "1794280632326",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "76a1ea69",
+        "sourceFingerprintSha256": "6be9987d2344adba8fdbc95a0ab849dc6ce1a5869f2d205ff211f655f4072383",
+        "workspaceDirty": true
+      },
+      "method": "texImage2D",
+      "methodEvidence": "历史实机报告记录逐帧texImage2D，基线提交与同源码WKWebView夹具确认导入入口",
+      "range": [
+        "2026-11-10T11:20:49.758+08:00",
+        "2026-11-10T11:21:20.547+08:00"
+      ],
+      "seqRange": [
+        2067,
+        2715
+      ],
+      "actualSourceSize": [
+        2560,
+        1440
+      ],
+      "actualOutputSize": [
+        2560,
+        1440
+      ],
+      "state": {
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualPipeline": "webgl2",
+        "actualProcessing": "usm",
+        "actualProcessingMode": "quality",
+        "actualSaturation": 100,
+        "actualSharpness": 3,
+        "actualSuperResolutionActive": false,
+        "actualTargetFps": 60
+      },
+      "rendererSources": {
+        "worker": 31
+      },
+      "cpuCostDelta": {
+        "frames": 1799,
+        "drawDurationTotalMs": 620,
+        "drawDurationMsAvg": 0.34463590883824347,
+        "uploadDurationTotalMs": 586,
+        "uploadDurationMsAvg": 0.3257365202890495,
+        "submitDurationTotalMs": 31,
+        "submitDurationMsAvg": 0.017231795441912175
+      },
+      "uploadP95AcrossWindowsMs": {
+        "samples": 40,
+        "min": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "uploadRatioCurrentToBaseline": 25.602901365187712,
+      "uploadRatioSteadyCurrentToBaseline": 25.462438676448024,
+      "network": {
+        "samples": 121,
+        "coverageMs": 30512,
+        "framesReceivedDelta": 1829,
+        "framesDecodedDelta": 1829,
+        "framesDroppedDelta": 0,
+        "bytesReceivedDelta": 66123438,
+        "packetsLostDelta": 119,
+        "packetsReceivedDelta": 60376,
+        "nackCountDelta": 19,
+        "pliCountDelta": 0,
+        "firCountDelta": 0,
+        "keyFramesDecodedDelta": 1,
+        "retransmittedPacketsReceivedDelta": 119,
+        "freezeCountDelta": 0,
+        "totalFreezesDurationDelta": 0,
+        "pauseCountDelta": 0,
+        "receivedFps": 59.94362873623492,
+        "decodedFps": 59.94362873623492,
+        "bitrateMbps": 17.33703146303094,
+        "decodeMsAvg": 4.255589939857847,
+        "jitterBufferMsAvg": 4.131313832695462,
+        "rttMs": {
+          "samples": 121,
+          "min": 0,
+          "p95": 16.0,
+          "max": 16.0
+        },
+        "jitterMs": {
+          "samples": 121,
+          "min": 1.0,
+          "p95": 8.0,
+          "max": 10.0
+        },
+        "receiveEmptyWindows": []
+      },
+      "frameSupply": {
+        "startSeq": 2082,
+        "endSeq": 2702,
+        "fromSampleId": "1:306",
+        "toSampleId": "1:425",
+        "coverageMs": 30008,
+        "receivedFrames": 1800,
+        "decodedFrames": 1800,
+        "submittedFrames": 1800,
+        "decodeSubmitDeficitFrames": 0,
+        "receivedFps": 59.984004265529194,
+        "decodedFps": 59.984004265529194,
+        "submittedFps": 59.984004265529194,
+        "counterGapLevels": {
+          "samples": 31,
+          "min": 12,
+          "p95": 12,
+          "max": 12
+        }
+      },
+      "submission": {
+        "startSeq": 2067,
+        "endSeq": 2702,
+        "coverageMs": 30677,
+        "frames": 1839,
+        "fps": 59.94719170714216
+      }
+    },
+    {
+      "metricsFile": "dev-docs/validation/2026-11-10-worker-freshness-latest-trace-analysis.metrics.json",
+      "metricsSha256": "f0e9e6ef521958a5b15971bfc0538c904b626e896e3c4870913ca0add1ca564a",
+      "traceSource": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1794285015731-1.jsonl",
+      "traceSha256": "9f21810d88716cbdc19de0fc8a3fd722c73fcfa125f9b98bb3dfae9c084062ae",
+      "traceAvailable": false,
+      "snapshotAvailable": false,
+      "build": {
+        "buildTimestampUnixMs": "1794285001479",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "76a1ea69",
+        "sourceFingerprintSha256": "de93f89e2eb119c2083bc37e68b52cce4177ce4cedca9d3005ae79db75f6d3a2",
+        "workspaceDirty": true
+      },
+      "method": "texImage2D",
+      "methodEvidence": "历史实机报告记录逐帧texImage2D，基线提交与同源码WKWebView夹具确认导入入口",
+      "range": [
+        "2026-11-10T12:31:10.037+08:00",
+        "2026-11-10T12:31:43.251+08:00"
+      ],
+      "seqRange": [
+        210,
+        938
+      ],
+      "actualSourceSize": [
+        2560,
+        1440
+      ],
+      "actualOutputSize": [
+        2560,
+        1440
+      ],
+      "state": {
+        "actualBrightness": 100,
+        "actualContrast": 100,
+        "actualPipeline": "webgl2_sr",
+        "actualProcessing": "usm",
+        "actualProcessingMode": "quality",
+        "actualSaturation": 100,
+        "actualSharpness": 3,
+        "actualSuperResolutionActive": false,
+        "actualTargetFps": 60
+      },
+      "rendererSources": {
+        "worker": 33
+      },
+      "cpuCostDelta": {
+        "frames": 1954,
+        "drawDurationTotalMs": 629,
+        "drawDurationMsAvg": 0.3219037871033777,
+        "uploadDurationTotalMs": 585,
+        "uploadDurationMsAvg": 0.2993858751279427,
+        "submitDurationTotalMs": 38,
+        "submitDurationMsAvg": 0.019447287615148412
+      },
+      "uploadP95AcrossWindowsMs": {
+        "samples": 43,
+        "min": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "uploadRatioCurrentToBaseline": 27.85635760683761,
+      "uploadRatioSteadyCurrentToBaseline": 27.703532001952418,
+      "actualSizeEvidence": {
+        "2560x1440": 132
+      },
+      "sourceMatchesRuntime": true,
+      "finalRendererTiming": {
+        "duration": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 6,
+          "meanMs": 0.3359375,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "interval": {
+          "capacity": 256,
+          "count": 1954,
+          "maxMs": 57,
+          "maxObservedMs": 89,
+          "meanMs": 16.68359375,
+          "p50Ms": 16,
+          "p95Ms": 25,
+          "p99Ms": 42,
+          "retained": 256
+        },
+        "readToSubmit": {
+          "capacity": 256,
+          "count": 1940,
+          "maxMs": 4,
+          "maxObservedMs": 41,
+          "meanMs": 0.5234375,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 3,
+          "retained": 256
+        },
+        "receiveToSubmit": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 6,
+          "meanMs": 0.37890625,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        },
+        "submit": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 1,
+          "meanMs": 0.0078125,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 0,
+          "retained": 256
+        },
+        "upload": {
+          "capacity": 256,
+          "count": 1955,
+          "maxMs": 1,
+          "maxObservedMs": 5,
+          "meanMs": 0.328125,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "p99Ms": 1,
+          "retained": 256
+        }
+      },
+      "workerFinal": {
+        "seq": 918,
+        "event": "browserMediaResourcesSnapshot",
+        "atMs": 86656,
+        "submittedFrames": 1955,
+        "workerReadFrames": 1962,
+        "workerSentFrames": 1956,
+        "receivedMessages": 1956,
+        "deliveredFrames": 1955,
+        "workerOverwriteCount": 6,
+        "staleFrameDropCount": 1,
+        "workerAckCount": 1955,
+        "invalidClockCount": 15,
+        "workerObservationAgeMs": 16
+      }
+    }
+  ],
+  "current": {
+    "source": {
+      "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795678668580-1.jsonl",
+      "sha256": "0f291173f64286d3cf6552863f3ca97e2812b32f2b72a5397142741a442446b0",
+      "bytes": 4056899,
+      "rows": 1838,
+      "rangeLocal": [
+        "2026-11-26T15:37:48.580+08:00",
+        "2026-11-26T15:40:43.544+08:00"
+      ],
+      "schemaVersion": 3,
+      "profile": "dev",
+      "build": {
+        "buildTimestampUnixMs": "1795678648728",
+        "cargoProfile": "debug",
+        "edition": "browser",
+        "gitCommitShort": "37e4fb43",
+        "sourceFingerprintSha256": "04bd830752759c0f892fc4591e5794847195a049088fb8924f579357c8a04a29",
+        "workspaceDirty": true
+      },
+      "configuration": {
+        "bitrateCapKbps": 100000,
+        "brightness": 100,
+        "contrast": 100,
+        "displayRefreshHz": 60,
+        "displayRefreshSource": "rafEstimate",
+        "expectedFps": 60,
+        "outputHeight": 1440,
+        "outputWidth": 2560,
+        "pipelineType": "webgl2",
+        "preventResolutionDrops": true,
+        "processing": "usm",
+        "processingMode": "quality",
+        "rendererFrameSource": "worker",
+        "rendererKind": "webgl2",
+        "rendererTargetFps": 60,
+        "requestedFps": 60,
+        "requestedHeight": 1440,
+        "requestedWidth": 2560,
+        "resolutionFeedbackState": "active",
+        "saturation": 100,
+        "sharpness": 3,
+        "sourceHeight": 1440,
+        "sourceWidth": 2560,
+        "superResolution": false
+      },
+      "retainedInput": "runtime-trace-1795678668580-1.jsonl.gz",
+      "originalSourceAvailableAtClosure": false
+    },
+    "upload": {
+      "seq": 1748,
+      "method": "texSubImage2D",
+      "fullUploads": 1,
+      "subUploads": 3789,
+      "reuseCount": 0,
+      "fallbackReason": null,
+      "captureDraws": 0,
+      "duplicateDraws": 0,
+      "sampleCount": 3790,
+      "meanUploadMs": 8.3398,
+      "meanDrawMs": 8.4285,
+      "meanSubmitMs": 0.0858,
+      "uploadShareOfDrawPercent": 98.948,
+      "latestRollingTimingSeq": 1779,
+      "latestRollingTiming": {
+        "duration": {
+          "capacity": 256,
+          "count": 3850,
+          "maxMs": 14,
+          "maxObservedMs": 67,
+          "meanMs": 8.28515625,
+          "p50Ms": 8,
+          "p95Ms": 9,
+          "p99Ms": 12,
+          "retained": 256
+        },
+        "interval": {
+          "capacity": 256,
+          "count": 1824,
+          "maxMs": 39,
+          "maxObservedMs": 129,
+          "meanMs": 16.68359375,
+          "p50Ms": 16,
+          "p95Ms": 21,
+          "p99Ms": 30,
+          "retained": 256
+        },
+        "readToSubmit": {
+          "capacity": 256,
+          "count": 3850,
+          "maxMs": 15,
+          "maxObservedMs": 69.5,
+          "meanMs": 6.703125,
+          "p50Ms": 6,
+          "p95Ms": 9,
+          "p99Ms": 11,
+          "retained": 256
+        },
+        "receiveToSubmit": {
+          "capacity": 256,
+          "count": 3850,
+          "maxMs": 14,
+          "maxObservedMs": 67,
+          "meanMs": 8.3125,
+          "p50Ms": 8,
+          "p95Ms": 9,
+          "p99Ms": 12,
+          "retained": 256
+        },
+        "submit": {
+          "capacity": 256,
+          "count": 3850,
+          "maxMs": 5,
+          "maxObservedMs": 7,
+          "meanMs": 0.078125,
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "p99Ms": 4,
+          "retained": 256
+        },
+        "upload": {
+          "capacity": 256,
+          "count": 3850,
+          "maxMs": 10,
+          "maxObservedMs": 67,
+          "meanMs": 8.20703125,
+          "p50Ms": 8,
+          "p95Ms": 9,
+          "p99Ms": 9,
+          "retained": 256
+        }
+      },
+      "gpuTiming": {
+        "completion": {
+          "completed": 1,
+          "failureReason": "overBudget",
+          "fenceCount": 0,
+          "insertionCpuMaxMs": 5,
+          "latest": {
+            "insertedAtMs": 100170,
+            "lowerBoundMs": 0,
+            "observedAtMs": 100179,
+            "polls": 1,
+            "submittedAtMs": 100169,
+            "upperBoundMs": 10
+          },
+          "source": "webglFenceCompletionBounds",
+          "state": "failed",
+          "timeouts": 0,
+          "upperBound": {
+            "capacity": 256,
+            "count": 1,
+            "maxMs": 10,
+            "maxObservedMs": 10,
+            "meanMs": 10,
+            "p50Ms": 10,
+            "p95Ms": 10,
+            "p99Ms": 10,
+            "retained": 1
+          }
+        },
+        "disjointCount": 0,
+        "duration": {
+          "capacity": 256,
+          "count": 0,
+          "retained": 0
+        },
+        "queryCount": 0,
+        "source": "EXT_disjoint_timer_query_webgl2",
+        "state": "unavailable"
+      }
+    },
+    "stableDelta": {
+      "firstSeq": 1033,
+      "lastSeq": 1748,
+      "samples": 1646,
+      "uploadTotalDeltaMs": 13652,
+      "meanUploadMs": 8.29404617253949
+    },
+    "network": {
+      "visibleBucketDistribution": {
+        "rttMs": {
+          "samples": 55,
+          "p50": 16,
+          "p95": 33,
+          "max": 105
+        },
+        "jitterMs": {
+          "samples": 55,
+          "p50": 5,
+          "p95": 12,
+          "max": 15
+        },
+        "jitterBufferMs": {
+          "samples": 55,
+          "p50": 5.4,
+          "p95": 30.97,
+          "max": 39.25
+        },
+        "packetLossRatio": {
+          "samples": 55,
+          "p50": 0,
+          "p95": 0.004,
+          "max": 0.1104
+        }
+      },
+      "finalCumulativeLossPercent": 0.2826,
+      "packetsLost": 491,
+      "packetsReceived": 173254,
+      "path": "srflx/udp",
+      "rawFirstInboundDeltaMs": 580
+    },
+    "recovery": {
+      "freezes": 2,
+      "freezesDurationSeconds": 0.457,
+      "keyframesDecoded": 7,
+      "pli": 2,
+      "fir": 0,
+      "nack": 34,
+      "retransmittedPackets": 707,
+      "nativeReferenceChain": "UNSUPPORTED",
+      "physicalScanout": "UNSUPPORTED",
+      "nativeRequestOutcomeRates": null,
+      "repairabilityPersistence": null,
+      "recoveryEffectivenessScore": null
+    },
+    "frameSupply": {
+      "totals": {
+        "callbacks": 2913,
+        "decoded": 4004,
+        "fir": 0,
+        "framesDropped": 0,
+        "freezeCount": 2,
+        "keyframes": 7,
+        "nack": 34,
+        "pli": 2,
+        "received": 4005,
+        "rendererSubmit": 3881,
+        "videoPresent": 3991
+      },
+      "latestLongWindow": {
+        "callbackFpsAvg": 51.87,
+        "coverageMs": 15000,
+        "decodeFpsAvg": 59.92,
+        "durationMs": 15000,
+        "inboundFpsAvg": 59.99,
+        "rendererSubmitFpsAvg": 58.86,
+        "sampleCount": 59,
+        "videoPresentFpsAvg": 59.92
+      },
+      "latestShortWindow": {
+        "callbackFpsAvg": 49.89,
+        "coverageMs": 3000,
+        "decodeFpsAvg": 59.94,
+        "durationMs": 3000,
+        "inboundFpsAvg": 59.94,
+        "rendererSubmitFpsAvg": 59.94,
+        "sampleCount": 12,
+        "videoPresentFpsAvg": 59.94
+      },
+      "decodeToRendererDeficit": 123,
+      "observedOverwrites": 79,
+      "observedStaleDrops": 1,
+      "pauseBucket": {
+        "seq": 993,
+        "window": {
+          "elapsedMs": 986,
+          "endMs": 135153,
+          "firstSampleId": "1:105",
+          "lastSampleId": "1:108",
+          "partial": true,
+          "resetReasons": [
+            "generationReset"
+          ],
+          "sampleCount": 3,
+          "startMs": 134167,
+          "validSampleCount": 3
+        },
+        "delta": {
+          "bytesReceived": 3110114,
+          "callbackGaps": 0,
+          "callbacks": 37,
+          "decoded": 59,
+          "duplicates": 0,
+          "fir": 0,
+          "framesDropped": 0,
+          "freezeCount": 0,
+          "keyframes": 0,
+          "nack": 2,
+          "overwrites": 0,
+          "packetsReceived": 2830,
+          "pli": 0,
+          "presentedJumps": 18,
+          "rateLimitDrops": 0,
+          "received": 59,
+          "rendererSubmit": 16,
+          "submitFailures": 0,
+          "videoPresent": 59
+        },
+        "decodeToSubmitDeficit": 43
+      }
+    }
+  },
+  "supplementaryWkWebViewFixture": {
+    "file": "dev-docs/validation/2026-11-10-browser-frame-freshness-clock-and-diagnostics/webkit-result.json",
+    "sha256": "bb32d4d211ef156944d3bca49c852c5fb5e9c2eb74cabeda3b3353a43fd42de7",
+    "environment": {
+      "capabilities": {
+        "trackGenerator": "undefined",
+        "trackProcessor": "undefined",
+        "videoDecoder": "function",
+        "videoFrame": "function",
+        "worker": {
+          "trackGenerator": "undefined",
+          "trackProcessor": "function",
+          "videoDecoder": "function",
+          "videoFrame": "function"
+        }
+      },
+      "height": 1440,
+      "input": "local H264 WebRTC",
+      "qualification": "source supply measured per run; fence latency includes queue and polling; no-upload/scissor are isolated diagnostic controls",
+      "targetFps": 60,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+      "visible": "visible",
+      "width": 2560
+    },
+    "method": "texImage2D",
+    "meanUploadMs": 0.3783303730017762,
+    "rollingUpload": {
+      "capacity": 256,
+      "count": 563,
+      "maxMs": 1,
+      "maxObservedMs": 6,
+      "meanMs": 0.3828125,
+      "p50Ms": 0,
+      "p95Ms": 1,
+      "p99Ms": 1,
+      "retained": 256
+    }
+  },
+  "conclusion": {
+    "observation": "当前同步导入开销较历史实机基线约25–28倍，末段P95由1ms升为9ms；优先按性能回退处理新增子上传路径。",
+    "timingContract": "两边使用performance.now包围纹理绑定与VideoFrame导入，再记录uploadFinishedAtMs-uploadStartedAtMs；平均值均由uploadDurationTotalMs/计数或对应稳定段增量计算。",
+    "attributionScope": "旧样本与当前相隔16天，构建及协商设置有变化；历史证据足以确定开销回退，API单变量因果与系统/驱动内部路径需进一步取证。",
+    "recommendation": "恢复texImage2D(VideoFrame)作为新帧导入入口，保留同帧缓存复用；用一次定向验证确认生命周期与截图合同。"
+  }
+}

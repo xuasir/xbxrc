@@ -1,0 +1,233 @@
+{
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "validationKind": "single documentation and SDK declaration smoke",
+  "runs": 2,
+  "engineeringStatus": "planned",
+  "planningStatus": "completed",
+  "checks": {
+    "engineering_status_planned": true,
+    "task_row_unique_and_planned": true,
+    "four_milestones_defined": true,
+    "input_and_render_have_independent_serial_ownership": true,
+    "mainactor_owns_ui_touch_and_layer_configuration": true,
+    "input_batches_preserve_per_transition_source_activity": true,
+    "digital_queue_neutral_and_lifetime_budgets_defined": true,
+    "render_selects_latest_after_drawable_acquisition": true,
+    "gpu_resource_lifetime_and_epoch_defined": true,
+    "actual_display_and_gpu_completion_have_distinct_facts": true,
+    "shared_display_extension_is_optional": true,
+    "receive_and_display_windows_have_distinct_scopes": true,
+    "recovery_singleflight_budget_and_ack_defined": true,
+    "validation_covers_six_streaming_health_dimensions": true,
+    "all_local_document_links_resolve": true,
+    "mermaid_basic_structure_balanced": true,
+    "documents_have_no_trailing_whitespace": true,
+    "sdk_controller_input_available": true,
+    "sdk_buffered_input_queue_and_depth_available": true,
+    "sdk_drawable_timeout_is_accounted_for": true,
+    "sdk_actual_presentation_callback_available": true,
+    "deployment_target_covers_proposed_input_api": true,
+    "task_ledger_diff_whitespace_check": true
+  },
+  "linkIssues": [],
+  "ledgerDiffCheck": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "documents": [
+    {
+      "path": "docs/rfcs/2026-11-26-ios-streaming-latency-threading.md",
+      "sha256": "84df6538a3bc7a9b2e09ea35b7ef6eaf2a4b7893e1a1305e5e004a29d0069484"
+    },
+    {
+      "path": "dev-docs/validation/2026-11-26-ios-streaming-latency-threading/README.md",
+      "sha256": "69422adb8c9cfc50a5dac9634a228d9d1e408550467d5c8ed63dcee4f34f80db"
+    }
+  ],
+  "currentSourceFingerprints": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "sha256": "be102bbdd69c562cbf6e1428557fe73ad21e30af4fde5883374de8f77f5d0d2f"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+      "sha256": "a8de194a3e4c74f17e8c5ad033d505a2b701ff8b3bf8ec721b1e274e07f4013a"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+      "sha256": "349de9965bd272698d1f8a7247c85c5418e754a7b821a16fd719f7df7a0af2dc"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "28ed26442f99c54466d452ee82a24add0c00ff60b2d5db862e2946bc80ca8c33"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+      "sha256": "2a5f15bb1406200fbd50d39226b6d0fbb6e2af7536a31ecb92477b4193439f77"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "ceefab8dc5af7e67369fdf771948783305a6ef0246f0bbd84c89c9610813ed60"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "82b8ed4c618eb48cb0764a15756d8c344a7a74b03415b999482b9aca5e33f957"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "sha256": "d54c9c6addcf2eede08f7ffc224b8e13085b89bf6ef55f6c5836acd0b5b6697e"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "sha256": "1636f41a100bd6fd128161a6c312a1de01bfbe4c291a4c539e13c7729133c4ab"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+      "sha256": "4ecbc5cb642a30a89207c4d25cd2b2e99598c4cd34e6f08faa2a652a5c4ae4c6"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "16ee1a469f28b4939e55ae3789ca8e88d3eec6cfaf479b1c8bb20a5212058d6d"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "bdb0bbf2626e8aee8d86a9dc1defb220d1b5f97e544b986fd16320515b563eed"
+    }
+  ],
+  "sdkHeaders": [
+    {
+      "path": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/GameController.framework/Headers/GCController.h",
+      "sha256": "5a1c6162f8f1badbcb2219528241fe5751e49f49b7ce89bfbdc1ed9ebef27904"
+    },
+    {
+      "path": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/GameController.framework/Headers/GCDevicePhysicalInput.h",
+      "sha256": "6bb5620d56ce63756f72924f0a6ffed24bcd3669c42e174ed5e10132d976d017"
+    },
+    {
+      "path": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/QuartzCore.framework/Headers/CAMetalLayer.h",
+      "sha256": "074e50fdb4981d9da5f000b979bef047a78e00ac9bea682f85388e20bf47c73f"
+    },
+    {
+      "path": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLDrawable.h",
+      "sha256": "6ded45a7ca00e7ff0e8cfbe9799aedc0d84bcb65c35c679da2eadf0c5e777eaa"
+    }
+  ],
+  "runtimeFilesWrittenByThisTask": [],
+  "buildsExecuted": [],
+  "runtimeTestsExecuted": [],
+  "performanceMeasurements": [],
+  "temporaryArtifactsCreated": [],
+  "temporaryArtifactsRemaining": [],
+  "availableDiskGiB": 82.4,
+  "validationRounds": [
+    {
+      "scope": "initial threading plan",
+      "runs": 1,
+      "checks": {
+        "engineering_status_planned": true,
+        "task_row_unique_and_planned": true,
+        "four_milestones_defined": true,
+        "input_and_render_have_independent_serial_ownership": true,
+        "mainactor_owns_ui_touch_and_layer_configuration": true,
+        "input_batches_preserve_per_transition_source_activity": true,
+        "digital_queue_neutral_and_lifetime_budgets_defined": true,
+        "render_selects_latest_after_drawable_acquisition": true,
+        "gpu_resource_lifetime_and_epoch_defined": true,
+        "actual_display_and_gpu_completion_have_distinct_facts": true,
+        "shared_display_extension_is_optional": true,
+        "receive_and_display_windows_have_distinct_scopes": true,
+        "recovery_singleflight_budget_and_ack_defined": true,
+        "validation_covers_six_streaming_health_dimensions": true,
+        "all_local_document_links_resolve": true,
+        "mermaid_basic_structure_balanced": true,
+        "documents_have_no_trailing_whitespace": true,
+        "sdk_controller_input_available": true,
+        "sdk_buffered_input_queue_and_depth_available": true,
+        "sdk_drawable_timeout_is_accounted_for": true,
+        "sdk_actual_presentation_callback_available": true,
+        "deployment_target_covers_proposed_input_api": true,
+        "task_ledger_diff_whitespace_check": true
+      },
+      "documents": [
+        {
+          "path": "docs/rfcs/2026-11-26-ios-streaming-latency-threading.md",
+          "sha256": "a415091440c76b29f4ab4340e6ca71bb32f0a09f6ba0830bd61ad77d0ca03f18"
+        },
+        {
+          "path": "dev-docs/validation/2026-11-26-ios-streaming-latency-threading/README.md",
+          "sha256": "7957f584ed7e6d41c71209f9e8c6f0993db26c1334b70d387e05e5878ec2f976"
+        }
+      ]
+    },
+    {
+      "scope": "resource reuse extension",
+      "runs": 1,
+      "checks": {
+        "current_decoder_wrapper_retains_and_forwards_base": true,
+        "current_commandqueue_and_pipelines_reused_within_surface": true,
+        "current_cvmetal_texturecache_exists": true,
+        "current_metal_fx_resources_cached_by_size": true,
+        "current_worktree_color_uniform_cache_exists": true,
+        "current_simulator_plane_texture_allocation_path_exists": true,
+        "current_decode_expiry_rebuilds_dictionary": true,
+        "sdk_documents_cached_binding_and_retention": true,
+        "rfc_reuse_section_present": true,
+        "resource_cache_owner_lifetime_and_key_defined": true,
+        "shader_precompilation_added_to_m2": true,
+        "frame_import_ownership_correct": true,
+        "metal_fx_and_simulator_reuse_limits_defined": true,
+        "uniform_and_render_pass_descriptor_reuse_defined": true,
+        "single_use_submission_objects_and_gpu_retention_defined": true,
+        "bounded_timing_feedback_latency_storage_defined": true,
+        "allocation_and_reuse_observability_defined": true,
+        "reuse_validation_added_to_m2": true,
+        "planning_status_preserved": true,
+        "task_row_unique_and_updated": true,
+        "updated_document_links_resolve": true,
+        "updated_documents_have_no_trailing_whitespace": true,
+        "task_ledger_diff_whitespace_check": true
+      },
+      "sourceFingerprints": [
+        {
+          "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+          "sha256": "2baa85e110d58c70972f2bae1f1a483d242dd3b45799ff7b88a7afa61c7eef7c"
+        },
+        {
+          "path": "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+          "sha256": "2a5f15bb1406200fbd50d39226b6d0fbb6e2af7536a31ecb92477b4193439f77"
+        }
+      ],
+      "sdkFingerprint": {
+        "path": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/System/Library/Frameworks/CoreVideo.framework/Headers/CVMetalTextureCache.h",
+        "sha256": "11ba743ec92d3f7afc788292826be738013485d8d3c3640b9b8fd758a75b99f5"
+      }
+    }
+  ],
+  "resourceReuseChecks": {
+    "current_decoder_wrapper_retains_and_forwards_base": true,
+    "current_commandqueue_and_pipelines_reused_within_surface": true,
+    "current_cvmetal_texturecache_exists": true,
+    "current_metal_fx_resources_cached_by_size": true,
+    "current_worktree_color_uniform_cache_exists": true,
+    "current_simulator_plane_texture_allocation_path_exists": true,
+    "current_decode_expiry_rebuilds_dictionary": true,
+    "sdk_documents_cached_binding_and_retention": true,
+    "rfc_reuse_section_present": true,
+    "resource_cache_owner_lifetime_and_key_defined": true,
+    "shader_precompilation_added_to_m2": true,
+    "frame_import_ownership_correct": true,
+    "metal_fx_and_simulator_reuse_limits_defined": true,
+    "uniform_and_render_pass_descriptor_reuse_defined": true,
+    "single_use_submission_objects_and_gpu_retention_defined": true,
+    "bounded_timing_feedback_latency_storage_defined": true,
+    "allocation_and_reuse_observability_defined": true,
+    "reuse_validation_added_to_m2": true,
+    "planning_status_preserved": true,
+    "task_row_unique_and_updated": true,
+    "updated_document_links_resolve": true,
+    "updated_documents_have_no_trailing_whitespace": true,
+    "task_ledger_diff_whitespace_check": true
+  }
+}

@@ -14,179 +14,42 @@ pub(super) struct EventContract {
     pub max_row_bytes: usize,
 }
 
-const EVENTS: &[EventContract] = &[
-    EventContract {
-        event: "resolutionFeedbackObserved",
-        dimension: TraceDimension::Input,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 1000,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "homeConfigurationObserved",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 1000,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "remoteConsoleRegionDiscovered",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "decodedFrameSupplyObserved",
-        dimension: TraceDimension::MediaSupply,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 1000,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "sessionVideoConstraintsResolved",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "executionCleanupObserved",
-        dimension: TraceDimension::Lifecycle,
-        importance: TraceImportance::Essential,
-        category: "state",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "traceProducerDrainObserved",
-        dimension: TraceDimension::Core,
-        importance: TraceImportance::Essential,
-        category: "state",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "playbackObservationManifest",
-        dimension: TraceDimension::Presentation,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "browserPlaybackHealthObserved",
-        dimension: TraceDimension::Presentation,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 1000,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "browserPlaybackAnomalyObserved",
-        dimension: TraceDimension::Presentation,
-        importance: TraceImportance::Key,
-        category: "state",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "browserPlaybackAnomalySample",
-        dimension: TraceDimension::Presentation,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "inputUiHealthObserved",
-        dimension: TraceDimension::Input,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 1000,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "inputUiInteractionObserved",
-        dimension: TraceDimension::Input,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "sessionControlStateObserved",
-        dimension: TraceDimension::Lifecycle,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 0,
-        max_row_bytes: 2048,
-    },
-    EventContract {
-        event: "playbackSessionSummary",
-        dimension: TraceDimension::Lifecycle,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "traceProducerConfigurationObserved",
-        dimension: TraceDimension::Core,
-        importance: TraceImportance::Essential,
-        category: "state",
-        interval_ms: 0,
-        max_row_bytes: 1024,
-    },
-    EventContract {
-        event: "browserWebRtcTimelineObserved",
-        dimension: TraceDimension::Lifecycle,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "browserWebRtcSdpObserved",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "snapshot",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "exchangeOfferRequested",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "exchangeOfferResult",
-        dimension: TraceDimension::Network,
-        importance: TraceImportance::Key,
-        category: "event",
-        interval_ms: 0,
-        max_row_bytes: 4096,
-    },
-    EventContract {
-        event: "mediaObservationUnavailable",
-        dimension: TraceDimension::MediaSupply,
-        importance: TraceImportance::Key,
-        category: "state",
-        interval_ms: 1000,
-        max_row_bytes: 1024,
-    },
-];
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SharedEventContract {
+    event: String,
+    dimension: String,
+    importance: String,
+    category: String,
+    interval_ms: u64,
+    max_row_bytes: usize,
+}
+
+// 准入与前端投影从同一份描述表装配，新增执行域事件自动沿用相同预算。
+fn events() -> &'static [EventContract] {
+    static EVENTS: std::sync::OnceLock<Vec<EventContract>> = std::sync::OnceLock::new();
+    EVENTS.get_or_init(|| {
+        payload_contract()
+            .events
+            .iter()
+            .map(|event| EventContract {
+                event: event.event.as_str(),
+                dimension: TraceDimension::ALL
+                    .into_iter()
+                    .find(|dimension| dimension.as_str() == event.dimension)
+                    .expect("validated trace dimension"),
+                importance: TraceImportance::parse(&event.importance)
+                    .expect("validated trace importance"),
+                category: event.category.as_str(),
+                interval_ms: event.interval_ms,
+                max_row_bytes: event.max_row_bytes,
+            })
+            .collect()
+    })
+}
 
 pub(super) fn contract(event: &str) -> Option<&'static EventContract> {
-    EVENTS.iter().find(|contract| contract.event == event)
+    events().iter().find(|contract| contract.event == event)
 }
 
 pub(super) fn metadata(event: &str, payload: &Value) -> Option<TraceMetadata> {
@@ -215,7 +78,7 @@ pub(super) fn producer_policy(profile: RuntimeTraceProfile) -> Value {
         "profile": profile.as_str(), "productionContractVersion": PRODUCTION_CONTRACT_VERSION,
         "budget": { "maxInFlight": 4, "maxPendingRows": 32, "maxPendingBytes": 262144,
             "normalBytesPerMinute": 327680, "inputBytesPerMinute": 65536, "anomalyBytesPerMinute": 131072 },
-        "events": EVENTS.iter().map(|event| json!({
+        "events": events().iter().map(|event| json!({
             "event": event.event, "dimension": event.dimension.as_str(), "importance": event.importance.as_str(),
             "category": event.category, "intervalMs": event.interval_ms, "maxRowBytes": event.max_row_bytes,
         })).collect::<Vec<_>>()
@@ -224,6 +87,7 @@ pub(super) fn producer_policy(profile: RuntimeTraceProfile) -> Value {
 
 #[derive(serde::Deserialize)]
 struct PayloadContract {
+    events: Vec<SharedEventContract>,
     common: Vec<String>,
     roots: std::collections::HashMap<String, Vec<String>>,
     children: std::collections::HashMap<String, Vec<String>>,

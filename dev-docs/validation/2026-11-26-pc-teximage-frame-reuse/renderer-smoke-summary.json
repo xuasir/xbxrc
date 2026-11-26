@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "total": 117,
+  "passed": 117,
+  "failed": 0,
+  "pending": 0,
+  "files": [
+    {
+      "file": "Renderers.test.ts",
+      "status": "passed",
+      "tests": 11,
+      "failed": []
+    },
+    {
+      "file": "renderer-scheduling.test.ts",
+      "status": "passed",
+      "tests": 106,
+      "failed": []
+    }
+  ]
+}

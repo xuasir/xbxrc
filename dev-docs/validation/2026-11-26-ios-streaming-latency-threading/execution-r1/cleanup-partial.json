@@ -1,0 +1,27 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-threading-20261126-ra23942o",
+  "removedPaths": [
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/device-module-cache",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData/Build/Intermediates.noindex",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData/Index.noindex",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData/ModuleCache.noindex",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData/Logs",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/sdk-input.swift",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/rust-supervision.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/device-final.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/device-typecheck.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/build-r2.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/device-typecheck-r2.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/build-r3.log",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/build.log"
+  ],
+  "removedPathsConfirmedAbsent": true,
+  "releasedAllocatedBytes": 425447424,
+  "availableDiskBytes": 91340800000,
+  "keptPaths": [
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/DerivedData/Build/Products",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/baseline",
+    "/private/tmp/xbxrc-ios-threading-20261126-ra23942o/test-command.json"
+  ],
+  "reason": "compiled XCTest products retained pending required simulator authorization"
+}

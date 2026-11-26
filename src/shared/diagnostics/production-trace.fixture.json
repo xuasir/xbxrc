@@ -512,5 +512,93 @@
         }
       }
     }
+  },
+  {
+    "event": "renderExecutionStopped",
+    "input": {
+      "rendererGeneration": 2,
+      "execution": {
+        "mode": "worker-direct",
+        "state": "stopped",
+        "scope": {
+          "surfaceGeneration": 2,
+          "videoGeneration": 1,
+          "readerGeneration": 4,
+          "linkEpoch": 2
+        },
+        "renderEpoch": 1,
+        "link": {
+          "heldFrames": 0,
+          "applicationFrameLimit": 3,
+          "frameQueueLimit": 1
+        },
+        "stop": {
+          "acknowledged": true,
+          "heldFrames": 0,
+          "gpuObjects": 0
+        }
+      },
+      "gpuObjects": 0,
+      "frameRequests": 0,
+      "private": "removed"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "rendererGeneration": 2,
+      "execution": {
+        "mode": "worker-direct",
+        "state": "stopped",
+        "scope": {
+          "surfaceGeneration": 2,
+          "videoGeneration": 1,
+          "readerGeneration": 4,
+          "linkEpoch": 2
+        },
+        "renderEpoch": 1,
+        "link": {
+          "heldFrames": 0,
+          "applicationFrameLimit": 3,
+          "frameQueueLimit": 1
+        },
+        "stop": {
+          "acknowledged": true,
+          "heldFrames": 0,
+          "gpuObjects": 0
+        }
+      },
+      "gpuObjects": 0,
+      "frameRequests": 0
+    }
+  },
+  {
+    "event": "inputExecutionStopped",
+    "input": {
+      "channelGeneration": 3,
+      "inputEpoch": 8,
+      "stop": {
+        "active": true,
+        "neutralAccepted": true,
+        "pendingInputs": 0,
+        "pendingFeedback": 0
+      },
+      "pendingHandoff": 0,
+      "messagesSent": 100,
+      "messagesReceived": 80,
+      "token": "removed"
+    },
+    "expected": {
+      "productionContractVersion": 1,
+      "channelGeneration": 3,
+      "inputEpoch": 8,
+      "stop": {
+        "active": true,
+        "neutralAccepted": true,
+        "pendingInputs": 0,
+        "pendingFeedback": 0
+      },
+      "pendingHandoff": 0,
+      "messagesSent": 100,
+      "messagesReceived": 80
+    }
   }
 ]

@@ -168,6 +168,62 @@
       "category": "event",
       "intervalMs": 0,
       "maxRowBytes": 1024
+    },
+    {
+      "event": "localStallObserved",
+      "dimension": "recovery",
+      "importance": "key",
+      "category": "state",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
+    },
+    {
+      "event": "audioPlaybackStateObserved",
+      "dimension": "presentation",
+      "importance": "key",
+      "category": "state",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
+    },
+    {
+      "event": "renderExecutionObserved",
+      "dimension": "presentation",
+      "importance": "key",
+      "category": "snapshot",
+      "intervalMs": 1000,
+      "maxRowBytes": 2048
+    },
+    {
+      "event": "renderExecutionStopped",
+      "dimension": "presentation",
+      "importance": "key",
+      "category": "event",
+      "intervalMs": 0,
+      "maxRowBytes": 2048
+    },
+    {
+      "event": "inputExecutionObserved",
+      "dimension": "input",
+      "importance": "key",
+      "category": "snapshot",
+      "intervalMs": 1000,
+      "maxRowBytes": 2048
+    },
+    {
+      "event": "inputExecutionStopped",
+      "dimension": "input",
+      "importance": "key",
+      "category": "event",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
+    },
+    {
+      "event": "inputExecutionCapabilityObserved",
+      "dimension": "input",
+      "importance": "key",
+      "category": "event",
+      "intervalMs": 0,
+      "maxRowBytes": 1024
     }
   ],
   "common": [
@@ -204,7 +260,8 @@
       "coverage",
       "visibility",
       "expectedFps",
-      "collection"
+      "collection",
+      "audio"
     ],
     "playbackObservationManifest": [
       "reason",
@@ -416,7 +473,8 @@
       "decodedSupply",
       "timingScope",
       "rendererFrameSource",
-      "sampleAgeMs"
+      "sampleAgeMs",
+      "execution"
     ],
     "resolutionFeedbackObserved": [
       "mode",
@@ -428,7 +486,8 @@
       "rawFeedbackDeltaMs",
       "decodeTimingSource",
       "processingDurationMs",
-      "processingSamples"
+      "processingSamples",
+      "feedbackDelivery"
     ],
     "homeConfigurationObserved": [
       "generation",
@@ -444,6 +503,87 @@
       "regionName",
       "consoleCount",
       "targeted"
+    ],
+    "audioPlaybackStateObserved": [
+      "state",
+      "route",
+      "audioGeneration",
+      "contextState",
+      "trackState",
+      "trackMuted",
+      "requestedChannelCount",
+      "effectiveChannelCount",
+      "codecChannelCount",
+      "sourceChannelCount",
+      "channelSource",
+      "outputChannelCount",
+      "channelFallbackReason",
+      "intentionallySilent",
+      "recoveryAttempts",
+      "recoveryReason",
+      "errorKind",
+      "audioStats",
+      "observedAtMs"
+    ],
+    "localStallObserved": [
+      "state",
+      "domain",
+      "action",
+      "ageMs",
+      "coverageMs",
+      "eligible",
+      "reason",
+      "sampleId",
+      "peerGeneration",
+      "videoGeneration",
+      "rendererGeneration"
+    ],
+    "renderExecutionObserved": [
+      "rendererGeneration",
+      "execution",
+      "gpuObjects",
+      "frameRequests",
+      "captureWaiters"
+    ],
+    "renderExecutionStopped": [
+      "rendererGeneration",
+      "execution",
+      "gpuObjects",
+      "frameRequests",
+      "captureWaiters"
+    ],
+    "inputExecutionObserved": [
+      "channelGeneration",
+      "inputEpoch",
+      "observedAtEpochMs",
+      "readyState",
+      "bufferedAmount",
+      "pendingInputs",
+      "feedbackState",
+      "feedback",
+      "traceOverflows",
+      "handoff",
+      "stop",
+      "clock",
+      "pendingHandoff",
+      "handoffInFlight",
+      "stagedOverflows",
+      "messagesSent",
+      "messagesReceived"
+    ],
+    "inputExecutionStopped": [
+      "channelGeneration",
+      "inputEpoch",
+      "stop",
+      "pendingHandoff",
+      "messagesSent",
+      "messagesReceived"
+    ],
+    "inputExecutionCapabilityObserved": [
+      "mode",
+      "reason",
+      "channelGeneration",
+      "clock"
     ]
   },
   "children": {
@@ -702,7 +842,11 @@
       "keyframes",
       "pli",
       "fir",
-      "nack"
+      "nack",
+      "read",
+      "delivered",
+      "readerOverwrites",
+      "staleDrops"
     ],
     "totals": [
       "received",
@@ -724,7 +868,11 @@
       "keyframes",
       "pli",
       "fir",
-      "nack"
+      "nack",
+      "read",
+      "delivered",
+      "readerOverwrites",
+      "staleDrops"
     ],
     "coverage": [
       "expectedSamples",
@@ -812,7 +960,8 @@
       "requestedHeight",
       "displayRefreshSource",
       "preventResolutionDrops",
-      "resolutionFeedbackState"
+      "resolutionFeedbackState",
+      "rendererExecutionMode"
     ],
     "capabilities": [
       "mediaBackend",
@@ -821,7 +970,8 @@
       "gpuTiming",
       "decoderImplementation",
       "powerEfficientDecoder",
-      "trackingSource"
+      "trackingSource",
+      "rendererExecutionMode"
     ],
     "cadence": [
       "collectionMs",
@@ -832,7 +982,14 @@
     "clock": [
       "monotonicMs",
       "wallTimeMs",
-      "timeOriginMs"
+      "timeOriginMs",
+      "state",
+      "probes",
+      "samples",
+      "rejected",
+      "offsetMs",
+      "uncertaintyMs",
+      "ageMs"
     ],
     "anomalies": [
       "count",
@@ -1003,7 +1160,25 @@
       "fir",
       "remb",
       "accepted",
-      "status"
+      "status",
+      "state",
+      "route",
+      "audioGeneration",
+      "contextState",
+      "trackState",
+      "trackMuted",
+      "requestedChannelCount",
+      "effectiveChannelCount",
+      "codecChannelCount",
+      "sourceChannelCount",
+      "channelSource",
+      "outputChannelCount",
+      "channelFallbackReason",
+      "intentionallySilent",
+      "recoveryAttempts",
+      "recoveryReason",
+      "errorKind",
+      "audioStats"
     ],
     "wire": [],
     "collection": [
@@ -1160,6 +1335,120 @@
       "lowerBoundMs",
       "upperBoundMs",
       "polls"
+    ],
+    "audioStats": [
+      "coverageMs",
+      "progressObserved",
+      "samplesPerSecond",
+      "jitterBufferMs",
+      "concealedRatio",
+      "packetsReceivedTotal",
+      "samplesReceivedTotal",
+      "concealedSamplesTotal",
+      "insertedSamplesTotal",
+      "removedSamplesTotal",
+      "playoutDeltaMs",
+      "playoutEstimateState",
+      "resetReason"
+    ],
+    "feedbackDelivery": [
+      "pendingFrames",
+      "sendAge",
+      "sentFrames",
+      "expiredFrames",
+      "overflowFrames",
+      "deadlineMisses",
+      "blockedReason",
+      "sendBudgetMs",
+      "retentionBudgetMs"
+    ],
+    "sendAge": [
+      "count",
+      "retained",
+      "capacity",
+      "meanMs",
+      "p50Ms",
+      "p95Ms",
+      "p99Ms",
+      "maxMs",
+      "maxObservedMs"
+    ],
+    "execution": [
+      "mode",
+      "state",
+      "scope",
+      "renderEpoch",
+      "observedAtMs",
+      "snapshotReceivedAtMs",
+      "snapshotAgeMs",
+      "skewMs",
+      "clock",
+      "sourceWidth",
+      "sourceHeight",
+      "latestSequence",
+      "link",
+      "observation",
+      "controlMessagesSent",
+      "controlMessagesReceived",
+      "controlBytesSent",
+      "controlBytesReceived",
+      "capabilityReason",
+      "stop"
+    ],
+    "scope": [
+      "surfaceGeneration",
+      "videoGeneration",
+      "readerGeneration",
+      "linkEpoch"
+    ],
+    "link": [
+      "frames",
+      "acknowledgements",
+      "rejectedFrames",
+      "heldFrames",
+      "frameQueueLimit",
+      "applicationFrameLimit",
+      "messagesReceived",
+      "messagesSent",
+      "bytesReceived",
+      "bytesSent",
+      "readFrames",
+      "deliveredFrames",
+      "overwrittenFrames",
+      "staleDrops"
+    ],
+    "observation": [
+      "snapshots",
+      "aggregateCount",
+      "cpuTotalMs",
+      "cpuMaxMs"
+    ],
+    "stop": [
+      "active",
+      "neutralAccepted",
+      "pendingInputs",
+      "pendingFeedback",
+      "acknowledged",
+      "elapsedMs",
+      "heldFrames",
+      "gpuObjects"
+    ],
+    "feedback": [
+      "pendingFrames",
+      "sendAge",
+      "sentFrames",
+      "expiredFrames",
+      "overflowFrames",
+      "deadlineMisses",
+      "blockedReason",
+      "sendBudgetMs",
+      "retentionBudgetMs"
+    ],
+    "handoff": [
+      "batches",
+      "states",
+      "lastAgeMs",
+      "maxAgeMs"
     ]
   },
   "enums": [
@@ -1512,6 +1801,63 @@
     "worker",
     "main-thread",
     "presentation",
-    "initializing"
+    "initializing",
+    "confirmed",
+    "cleared",
+    "decode",
+    "keyframeRequest",
+    "playbackRebuild",
+    "confirmedLocalStall",
+    "localActionCooldown",
+    "ineffectiveKeyframeUpgrade",
+    "renderer",
+    "playback",
+    "direct",
+    "web-audio",
+    "starting",
+    "waiting",
+    "paused",
+    "suspended",
+    "live",
+    "trackSettings",
+    "senderHint",
+    "audioGraphResumeFailed",
+    "audioGraphUnavailable",
+    "outputChannelLimit",
+    "audioChannelConfigurationFailed",
+    "userGesture",
+    "foreground",
+    "trackUnmuted",
+    "deviceChanged",
+    "contextStateChanged",
+    "attach",
+    "channelFormatChanged",
+    "channelConfigurationFallback",
+    "autoplayBlocked",
+    "elementPlaybackFailed",
+    "playbackFailed",
+    "operationTimeout",
+    "firstAudioSample",
+    "audioUnavailable",
+    "audioIdentityChanged",
+    "audioSampleGap",
+    "audioCounterReset",
+    "channelNotOpen",
+    "browserBufferFull",
+    "browserBufferAged",
+    "packetBudget",
+    "transportRejected",
+    "interrupted",
+    "main",
+    "worker-direct",
+    "window-read-worker-render",
+    "input-worker",
+    "awaiting-metadata",
+    "metadata-unavailable",
+    "dataChannelTransferRejected",
+    "workerDataChannelUnavailable",
+    "offscreenVideoFrameUnavailable",
+    "offscreenVideoFramePixelMismatch",
+    "offscreenProbeTimeout"
   ]
 }

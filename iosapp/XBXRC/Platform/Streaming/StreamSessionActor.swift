@@ -124,6 +124,7 @@ actor StreamSessionActor {
     private var latestPeerStats: StreamingPeerStats?
     private var latestAudioLifecycleState: String?
     private var latestAudioRoute: String?
+    private var latestAudioOutput: StreamingAudioOutputSnapshot?
     private var audioTrackReady = false
     private var requestedAudioMuted = false
     private var microphonePeerEpoch: UInt64 = 0
@@ -138,7 +139,12 @@ actor StreamSessionActor {
     private var firstFrameGuardTask: Task<Void, Never>?
     private var supervisionConnectedAtMs: UInt64 = 0
     private var supervisionEligibleSinceMs: UInt64 = 0
-    private var lastVideoActivityAtMs: UInt64 = 0
+    private var lastDecodeActivityAtMs: UInt64 = 0
+    private var displayResetTask: Task<Void, Never>?
+    private var displayResetDeadlineTask: Task<Void, Never>?
+    private var displayResetActionID: UInt64?
+    private var displayResetScope: StreamExecutionScope?
+    private var displayRecoveryCompletion: StreamingDisplayRecoveryCompletion?
     private var lastLocalActionAtMs: UInt64?
     private var recoveryProbe: StreamingRecoveryProbe?
     private var keyframeBudget = 2
@@ -252,6 +258,7 @@ actor StreamSessionActor {
         displayTraceWindow = StreamingTraceCounterWindow()
         latestAudioLifecycleState = nil
         latestAudioRoute = nil
+        latestAudioOutput = nil
         audioTrackReady = false
 
         await publish(.creatingSession, generation: request.sessionGeneration)
@@ -480,6 +487,7 @@ actor StreamSessionActor {
         visibilityRevision &+= 1
         let revision = visibilityRevision
         visible = value
+        if !value { cancelDisplayRecovery() }
         latestPeerStats = nil
         rtcTraceWindow = StreamingTraceCounterWindow()
         displayTraceWindow = StreamingTraceCounterWindow()
@@ -509,7 +517,7 @@ actor StreamSessionActor {
         guard peerRuntime != nil else { return }
         let peerEpoch = activePeerEpoch
         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
-        lastVideoActivityAtMs = Self.nowMs
+        lastDecodeActivityAtMs = Self.nowMs
         trace(
             "presentationResumed", payload: ["logicalSessionRetained": .bool(true)],
             dimension: .lifecycle)
@@ -613,12 +621,14 @@ actor StreamSessionActor {
             context.peerEpoch == activePeerEpoch
         else { return }
         guard context.videoGeneration == videoGeneration else { return }
-        latestDisplayHealthSnapshot = snapshot
-        if let presented = snapshot.lastPresentAtMilliseconds {
-            lastVideoActivityAtMs = max(lastVideoActivityAtMs, UInt64(max(0, presented)))
+        if let current = currentVideoHandle?.presentation.snapshot,
+            current.scope.renderEpoch != snapshot.renderEpoch
+        {
+            return
         }
+        latestDisplayHealthSnapshot = snapshot
         if let resumedAtMilliseconds,
-            let presentedAt = snapshot.lastPresentAtMilliseconds,
+            let presentedAt = snapshot.lastDisplayedAtMs,
             presentedAt > resumedAtMilliseconds
         {
             playbackReadiness.mark(.framePresented)
@@ -639,6 +649,7 @@ actor StreamSessionActor {
     ) async {
         guard isCurrent(generation), peerEpoch == activePeerEpoch else { return }
         if case .audioLifecycle(let event, let payload) = event {
+            latestAudioOutput = StreamingAudioOutputSnapshot(payload: payload) ?? latestAudioOutput
             latestAudioLifecycleState =
                 Self.stringValue(payload["state"])
                 ?? latestAudioLifecycleState
@@ -701,11 +712,11 @@ actor StreamSessionActor {
                         generation: generation,
                         peerEpoch: peerEpoch, videoGeneration: videoGeneration
                     ),
-                    frameFeedback: track.frameFeedback
+                    frameFeedback: track.frameFeedback, presentation: track.presentation
                 )
             )
         case .firstVideoFrame:
-            lastVideoActivityAtMs = Self.nowMs
+            lastDecodeActivityAtMs = Self.nowMs
             firstFrameGuardTask?.cancel()
             firstFrameGuardTask = nil
             let isFirstFrame = playbackReadiness.mark(.firstVideoFrame)
@@ -720,7 +731,9 @@ actor StreamSessionActor {
         case .audioLifecycle:
             break
         case .stats(let stats):
-            if stats.frameSupplyDelta.map({ $0 > 0 }) == true { lastVideoActivityAtMs = Self.nowMs }
+            if stats.frameSupplyDelta.map({ $0 > 0 }) == true {
+                lastDecodeActivityAtMs = Self.nowMs
+            }
             latestPeerStats = stats
             let sampledAt = stats.observedAtMilliseconds ?? Double(Self.nowMs)
             let sampleScope = "\(activePeerEpoch):\(videoGeneration)"
@@ -733,45 +746,47 @@ actor StreamSessionActor {
                     "packetsLost": stats.videoPacketsLost,
                 ])
             var rtcPayload: [String: IOSRuntimeTraceValue] = [
-                    "inboundVideoBytes": .integer(Int64(clamping: stats.inboundVideoBytes)),
-                    "inboundAudioBytes": .integer(Int64(clamping: stats.inboundAudioBytes)),
-                    "framesDecoded": .integer(Int64(clamping: stats.framesDecoded)),
-                    "framesDropped": .integer(Int64(clamping: stats.framesDropped)),
-                    "packetsLost": .integer(stats.packetsLost),
+                "inboundVideoBytes": .integer(Int64(clamping: stats.inboundVideoBytes)),
+                "inboundAudioBytes": .integer(Int64(clamping: stats.inboundAudioBytes)),
+                "framesDecoded": .integer(Int64(clamping: stats.framesDecoded)),
+                "framesDropped": .integer(Int64(clamping: stats.framesDropped)),
+                "packetsLost": .integer(stats.packetsLost),
                 "packetStatisticsScope": .string("video"),
-                    "packetsReceived": .integer(Int64(clamping: stats.packetsReceived)),
-                    "rttMs": stats.roundTripTimeSeconds.map { .double($0 * 1_000) } ?? .null,
-                    "jitterMs": stats.jitterSeconds.map { .double($0 * 1_000) } ?? .null,
-                    "receiveBitrateBps": stats.receiveBitrateBps.map(IOSRuntimeTraceValue.double)
-                        ?? .null,
-                    "freezeCount": stats.freezeCount.map { .integer(Int64(clamping: $0)) } ?? .null,
-                    "freezeDurationMs": stats.freezeDurationSeconds.map {
-                        .double($0 * 1_000)
-                    } ?? .null,
-                    "nackCount": stats.nackCount.map { .integer(Int64(clamping: $0)) } ?? .null,
-                    "pliCount": stats.pliCount.map { .integer(Int64(clamping: $0)) } ?? .null,
-                    "firCount": stats.firCount.map { .integer(Int64(clamping: $0)) } ?? .null,
-                    "selectedCandidatePairProtocol": stats.selectedCandidatePairProtocol.map(
-                        IOSRuntimeTraceValue.string
-                    ) ?? .string("unsupported"),
-                    "selectedCandidatePairAddressFamily": stats
-                        .selectedCandidatePairAddressFamily.map(IOSRuntimeTraceValue.string)
-                        ?? .string("unsupported"),
-                    "selectedLocalCandidateType": stats.selectedLocalCandidateType.map(
-                        IOSRuntimeTraceValue.string
-                    ) ?? .string("unsupported"),
-                    "selectedRemoteCandidateType": stats.selectedRemoteCandidateType.map(
-                        IOSRuntimeTraceValue.string
-                    ) ?? .string("unsupported"),
-                    "firstMediaAtMs": stats.firstMediaAtMilliseconds.map(
-                        IOSRuntimeTraceValue.double
-                    ) ?? .null,
-                    "lastMediaAtMs": stats.lastMediaAtMilliseconds.map(
-                        IOSRuntimeTraceValue.double
-                    ) ?? .null,
-                    "frameSupplyDelta": stats.frameSupplyDelta.map(IOSRuntimeTraceValue.integer)
-                        ?? .null,
+                "packetsReceived": .integer(Int64(clamping: stats.packetsReceived)),
+                "rttMs": stats.roundTripTimeSeconds.map { .double($0 * 1_000) } ?? .null,
+                "jitterMs": stats.jitterSeconds.map { .double($0 * 1_000) } ?? .null,
+                "receiveBitrateBps": stats.receiveBitrateBps.map(IOSRuntimeTraceValue.double)
+                    ?? .null,
+                "freezeCount": stats.freezeCount.map { .integer(Int64(clamping: $0)) } ?? .null,
+                "freezeDurationMs": stats.freezeDurationSeconds.map {
+                    .double($0 * 1_000)
+                } ?? .null,
+                "nackCount": stats.nackCount.map { .integer(Int64(clamping: $0)) } ?? .null,
+                "pliCount": stats.pliCount.map { .integer(Int64(clamping: $0)) } ?? .null,
+                "firCount": stats.firCount.map { .integer(Int64(clamping: $0)) } ?? .null,
+                "selectedCandidatePairProtocol": stats.selectedCandidatePairProtocol.map(
+                    IOSRuntimeTraceValue.string
+                ) ?? .string("unsupported"),
+                "selectedCandidatePairAddressFamily": stats
+                    .selectedCandidatePairAddressFamily.map(IOSRuntimeTraceValue.string)
+                    ?? .string("unsupported"),
+                "selectedLocalCandidateType": stats.selectedLocalCandidateType.map(
+                    IOSRuntimeTraceValue.string
+                ) ?? .string("unsupported"),
+                "selectedRemoteCandidateType": stats.selectedRemoteCandidateType.map(
+                    IOSRuntimeTraceValue.string
+                ) ?? .string("unsupported"),
+                "firstMediaAtMs": stats.firstMediaAtMilliseconds.map(
+                    IOSRuntimeTraceValue.double
+                ) ?? .null,
+                "lastMediaAtMs": stats.lastMediaAtMilliseconds.map(
+                    IOSRuntimeTraceValue.double
+                ) ?? .null,
+                "frameSupplyDelta": stats.frameSupplyDelta.map(IOSRuntimeTraceValue.integer)
+                    ?? .null,
             ]
+            rtcPayload.merge(stats.videoTiming.tracePayload()) { _, new in new }
+            rtcPayload.merge(stats.audioTiming.tracePayload(prefix: "audio")) { _, new in new }
             rtcPayload["videoPacketsLost"] =
                 stats.videoPacketsLost.map(IOSRuntimeTraceValue.integer) ?? .null
             rtcPayload["framesReceived"] =
@@ -846,9 +861,12 @@ actor StreamSessionActor {
             updatedAtMilliseconds: ProcessInfo.processInfo.systemUptime * 1_000,
             supervision: latestDecision,
             requestedVideoBitrateKbps: preparedSignaling?.webRtcPlan.maxVideoBitrateKbps,
-            negotiatedVideoBitrateKbps: negotiatedBitrate
+            negotiatedVideoBitrateKbps: negotiatedBitrate,
+            audioOutput: latestAudioOutput
         )
-        await diagnosticsSink?(generation, snapshot)
+        if let sink = diagnosticsSink {
+            Task { @MainActor in sink(generation, snapshot) }
+        }
     }
 
     private static func stringValue(_ value: IOSRuntimeTraceValue?) -> String? {
@@ -927,7 +945,7 @@ actor StreamSessionActor {
             try await controlSession?.markConnected()
             guard isCurrent(generation), peerEpoch == activePeerEpoch else { return }
             supervisionConnectedAtMs = Self.nowMs
-            lastVideoActivityAtMs = Self.nowMs
+            lastDecodeActivityAtMs = Self.nowMs
             startSupervision(generation: generation)
             armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
             if microphoneRequested && microphonePeerEpoch != peerEpoch {
@@ -1059,17 +1077,36 @@ actor StreamSessionActor {
             let peer = peerRuntime
         else { return }
         let epoch = activePeerEpoch
-        let now = Self.nowMs
         let debug = await peer.debugSnapshot()
-        guard isCurrent(generation), epoch == activePeerEpoch else { return }
+        let qualitySupported = await peer.remoteVideoBitrateCapKbps() != nil
+        guard isCurrent(generation), epoch == activePeerEpoch, visible,
+            peerConnectionState == .connected, !reconnectInFlight
+        else { return }
+        // 所有异步依赖完成后取判定时间，后续事实快照在同一 actor 执行片段内完成。
+        let displayObservation = currentVideoHandle?.presentation.snapshot
+        let now = Self.nowMs
+        if let displayObservation,
+            displayObservation.scope.presentation?.peerEpoch == epoch,
+            displayObservation.scope.presentation?.videoGeneration == videoGeneration
+        {
+            latestDisplayHealthSnapshot = displayObservation.health
+        }
         var sample = StreamingSupervisionSample(nowMs: now)
+        sample.displayRecoveryCompletion = displayRecoveryCompletion
+        if let displayObservation,
+            displayObservation.scope.presentation?.peerEpoch == epoch,
+            displayObservation.scope.presentation?.videoGeneration == videoGeneration
+        {
+            sample.displayObservation = .init(displayObservation, now: Double(now))
+        }
         sample.peerGeneration = epoch
         sample.connectionState = peerConnectionState.rawValue
         sample.connectionRecoveryActionCompleted = connectionRecoveryAwaitingFrames
         sample.videoGeneration = videoGeneration
         sample.connectedElapsedMs =
             now >= supervisionConnectedAtMs ? now - supervisionConnectedAtMs : 0
-        sample.inactivityElapsedMs = now >= lastVideoActivityAtMs ? now - lastVideoActivityAtMs : 0
+        sample.inactivityElapsedMs =
+            now >= lastDecodeActivityAtMs ? now - lastDecodeActivityAtMs : 0
         sample.frameIntervalMs = latestDisplayHealthSnapshot?.frameIntervalMilliseconds
         sample.controlChannelState = debug.dataChannels?.readyStates["control"] ?? "unknown"
         sample.previousActionAtMs = lastLocalActionAtMs
@@ -1077,7 +1114,7 @@ actor StreamSessionActor {
         sample.warmupUntilMs = supervisionConnectedAtMs + 7000
         sample.probe = recoveryProbe
         sample.qualityLevel = qualityLevel
-        sample.qualitySupported = await peer.remoteVideoBitrateCapKbps() != nil
+        sample.qualitySupported = qualitySupported
         sample.qualityCompletion = qualityCompletion
         if let stats = latestPeerStats, let at = stats.observedAtMilliseconds,
             at.isFinite && at >= 0
@@ -1093,16 +1130,22 @@ actor StreamSessionActor {
                 packetsReceived: stats.packetsReceived, packetsLost: stats.videoPacketsLost)
             sample.rttMs = stats.roundTripTimeSeconds.map { $0 * 1000 }
             sample.jitterMs = stats.jitterSeconds.map { $0 * 1000 }
+            sample.jitterBufferMs = stats.videoTiming.jitterBufferMilliseconds
             sample.pathId = stats.selectedCandidatePairID
             sample.packetAgeMs = stats.lastMediaAtMilliseconds.map { max(0, Double(now) - $0) }
         }
-        sample.videoPresentAgeMs = latestDisplayHealthSnapshot?.lastPresentAtMilliseconds.map {
+        sample.videoPresentAgeMs = latestDisplayHealthSnapshot?.lastDisplayedAtMs.map {
             max(0, Double(now) - $0)
         }
         do {
             let decision = try await control.supervise(sample)
             guard isCurrent(generation), epoch == activePeerEpoch, visible else { return }
             latestDecision = decision
+            if let completion = sample.displayRecoveryCompletion,
+                displayRecoveryCompletion?.id == completion.id
+            {
+                displayRecoveryCompletion = nil
+            }
             await publishDiagnostics(generation: generation)
             guard isCurrent(generation), epoch == activePeerEpoch, visible else { return }
             if let effect = decision.probeEffect {
@@ -1127,6 +1170,13 @@ actor StreamSessionActor {
                     "decodePressureSustainedMs": .integer(
                         Int64(decision.decodePressureSustainedMs)),
                     "decodeRecoveryEligible": .bool(decision.decodeRecoveryEligible),
+                    "displayRecoveryEligible": .bool(decision.displayRecoveryEligible == true),
+                    "displayRecoveryActive": .bool(decision.displayRecovery?.active == true),
+                    "displayRecoveryReason": .string(
+                        decision.displayRecovery?.reason ?? "unobserved"),
+                    "displayAgeMs": .integer(Int64(clamping: decision.displayRecovery?.ageMs ?? 0)),
+                    "displayCoverageMs": .integer(
+                        Int64(clamping: decision.displayRecovery?.coverageMs ?? 0)),
                     "qualityState": .string(decision.quality?.state ?? "unknown"),
                     "qualityEffect": decision.quality?.effect.map(IOSRuntimeTraceValue.string)
                         ?? .null,
@@ -1157,8 +1207,36 @@ actor StreamSessionActor {
                 playbackBudget = 1
                 lastLocalActionAtMs = nil
             }
+            if decision.displayRecovery?.effect == "degraded" {
+                trace(
+                    "displayRecoveryFailed",
+                    payload: ["reason": .string(decision.displayRecovery?.reason ?? "unknown")],
+                    dimension: .recovery)
+                await fail(
+                    reason: .runtimeFailure, generation: generation,
+                    error: NSError(
+                        domain: "XBXRC.DisplayRecovery", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "画面呈现恢复失败，请重新连接"]))
+                return
+            }
+            if let action = decision.displayRecovery?.action,
+                let display = sample.displayObservation,
+                let source = currentVideoHandle?.presentation
+            {
+                startDisplayRecovery(
+                    action, observation: display, source: source,
+                    thresholdMs: decision.displayRecovery?.thresholdMs ?? 500,
+                    generation: generation, peerEpoch: epoch)
+            }
             if let action = decision.quality?.action, !qualityOperationInFlight {
                 await applyQualityAction(action, generation: generation, peerEpoch: epoch)
+                return
+            }
+            if decision.displayRecovery?.active == true {
+                if decision.mediaConnectionEligible {
+                    cancelDisplayRecovery()
+                    await recoverDisconnectedPeer(generation: generation, peerEpoch: epoch)
+                }
                 return
             }
             guard sample.inactivityElapsedMs >= decision.stallThresholdMs else { return }
@@ -1189,7 +1267,7 @@ actor StreamSessionActor {
                             traceContext: .init(
                                 attemptID: attemptID, generation: generation, peerEpoch: epoch,
                                 videoGeneration: videoGeneration),
-                            frameFeedback: handle.frameFeedback))
+                            frameFeedback: handle.frameFeedback, presentation: handle.presentation))
                     trace(
                         "recoveryActionExecuted", payload: ["action": .string("playbackRebuild")],
                         dimension: .recovery)
@@ -1954,6 +2032,101 @@ actor StreamSessionActor {
         }
     }
 
+    private func startDisplayRecovery(
+        _ action: StreamingDisplayRecoveryAction, observation: StreamingDisplayObservation,
+        source: StreamingPresentationSession, thresholdMs: UInt64, generation: UInt64,
+        peerEpoch: UInt64
+    ) {
+        guard displayResetActionID == nil, visible, isCurrent(generation),
+            activePeerEpoch == peerEpoch,
+            let current = source.snapshot,
+            current.scope.renderEpoch == action.renderEpoch,
+            current.scope.surfaceRevision == action.surfaceRevision,
+            current.scope.presentation?.videoGeneration == videoGeneration,
+            current.active, current.surfaceReady,
+            current.health.displayedCount == Int64(clamping: observation.displayed),
+            current.health.lastDisplayedAtMs.map({ Double(Self.nowMs) - $0 >= Double(thresholdMs) })
+                == true
+        else {
+            displayRecoveryCompletion = .init(
+                id: action.id, result: "superseded", completedAtMs: Self.nowMs,
+                renderEpoch: source.snapshot?.scope.renderEpoch ?? action.renderEpoch)
+            return
+        }
+        displayResetActionID = action.id
+        displayResetScope = current.scope
+        trace(
+            "displayRecoverySelected",
+            payload: [
+                "actionId": .integer(Int64(clamping: action.id)),
+                "renderEpoch": .integer(Int64(clamping: action.renderEpoch)),
+                "reason": .string(action.reason),
+            ], dimension: .recovery)
+        displayResetTask = Task { [weak self] in
+            let outcome = await source.reset(expected: current.scope, actionID: action.id)
+            await self?.displayResetCompleted(
+                actionID: action.id, outcome: outcome, timedOut: false,
+                source: source, generation: generation, peerEpoch: peerEpoch)
+        }
+        displayResetDeadlineTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(1_500)) } catch { return }
+            source.cancelReset(action.id)
+            await self?.displayResetCompleted(
+                actionID: action.id, outcome: .failed, timedOut: true,
+                source: source, generation: generation, peerEpoch: peerEpoch)
+        }
+    }
+
+    private func displayResetCompleted(
+        actionID: UInt64, outcome: StreamingPresentationResetOutcome, timedOut: Bool,
+        source: StreamingPresentationSession, generation: UInt64, peerEpoch: UInt64
+    ) async {
+        guard displayResetActionID == actionID, isCurrent(generation), activePeerEpoch == peerEpoch
+        else { return }
+        displayResetActionID = nil
+        displayResetTask = nil
+        displayResetDeadlineTask?.cancel()
+        displayResetDeadlineTask = nil
+        let current = source.snapshot
+        let acknowledged = outcome == .acknowledged
+        let superseded =
+            outcome == .superseded || !visible || current?.surfaceReady != true
+            || current?.active != true
+            || current?.scope.presentation != displayResetScope?.presentation
+            || current?.scope.surfaceRevision != displayResetScope?.surfaceRevision
+        let result =
+            superseded
+            ? "superseded" : acknowledged ? "acknowledged" : timedOut ? "timedOut" : "failed"
+        displayRecoveryCompletion = .init(
+            id: actionID, result: result, completedAtMs: Self.nowMs,
+            renderEpoch: source.snapshot?.scope.renderEpoch ?? 0)
+        trace(
+            "displayRecoveryActionCompleted",
+            payload: [
+                "actionId": .integer(Int64(clamping: actionID)),
+                "result": .string(result),
+            ], dimension: .recovery)
+        if !acknowledged, !superseded {
+            await fail(
+                reason: .runtimeFailure, generation: generation,
+                error: NSError(
+                    domain: "XBXRC.DisplayRecovery", code: timedOut ? 2 : 1,
+                    userInfo: [NSLocalizedDescriptionKey: "画面呈现恢复失败，请重新连接"]))
+        }
+    }
+
+    private func cancelDisplayRecovery() {
+        if let actionID = displayResetActionID {
+            currentVideoHandle?.presentation.cancelReset(actionID)
+        }
+        displayResetTask?.cancel()
+        displayResetTask = nil
+        displayResetDeadlineTask?.cancel()
+        displayResetDeadlineTask = nil
+        displayResetActionID = nil
+        displayResetScope = nil
+    }
+
     private func fail(
         reason: StreamingTerminalReason,
         generation: UInt64,
@@ -2001,6 +2174,8 @@ actor StreamSessionActor {
         terminalState: StreamingFeatureState? = nil
     ) async {
         supervisionTask?.cancel()
+        cancelDisplayRecovery()
+        displayRecoveryCompletion = nil
         initialNegotiationInFlight = false
         initialConnectionTask?.cancel()
         initialConnectionTask = nil
@@ -2074,6 +2249,7 @@ actor StreamSessionActor {
         displayTraceWindow = StreamingTraceCounterWindow()
         latestAudioLifecycleState = nil
         latestAudioRoute = nil
+        latestAudioOutput = nil
         audioTrackReady = false
         if let generation {
             // 先移交并解除会话归属，再发布终态，保证重入的协商回调沿旧代次退出。

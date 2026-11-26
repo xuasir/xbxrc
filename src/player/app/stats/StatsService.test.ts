@@ -1,4 +1,5 @@
 import type { PlayerEvents } from '../../api/events'
+import type { AudioPlaybackObservation } from '../../domain/media'
 import type { BrowserWebRtcStatsSample, BrowserWebRtcTimelineEvent } from '../../domain/stats'
 import type { RendererObservationSnapshot } from '../../infra/render/render-observation'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +7,37 @@ import { TypedEventEmitter } from '../../api/events'
 import { StatsService } from './StatsService'
 
 describe('statsService browser WebRTC sampling', () => {
+  it('selects the active audio track and publishes independent buffering and compensation samples', async () => {
+    let now = 1000
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const audio = { id: 'chosen-audio', timestamp: 1000, type: 'inbound-rtp', kind: 'audio', trackIdentifier: 'chosen', codecId: 'opus', ssrc: 1, packetsReceived: 100, bytesReceived: 1000, totalSamplesReceived: 100000, jitterBufferEmittedCount: 100000, jitterBufferDelay: 100, concealedSamples: 1000, insertedSamplesForDeceleration: 2, removedSamplesForAcceleration: 1 }
+    const report = new Map<string, RTCStats>([
+      ['opus', { id: 'opus', timestamp: 1000, type: 'codec', mimeType: 'audio/opus', clockRate: 48000, channels: 2 } as RTCStats],
+      ['old-audio', { ...audio, id: 'old-audio', trackIdentifier: 'old', packetsReceived: 99999 } as RTCStats],
+      ['chosen-audio', audio as RTCStats],
+    ])
+    const peer = { connectionState: 'connected', getStats: vi.fn(async () => report), getReceivers: () => [] } as unknown as RTCPeerConnection
+    const emitter = new TypedEventEmitter<PlayerEvents>()
+    const samples: BrowserWebRtcStatsSample[] = []
+    emitter.on('stats.browserWebRtc', sample => samples.push(sample))
+    const output = (): AudioPlaybackObservation => ({ generation: 1, observedAtMs: now, state: 'ready', route: 'direct', trackIdentifier: 'chosen', intentionallySilent: false, recoveryAttempts: 0 })
+    const service = new StatsService(() => peer, emitter, undefined, output)
+    try {
+      await service.sampleNow()
+      now = 2000
+      Object.assign(audio, { packetsReceived: 200, bytesReceived: 2000, totalSamplesReceived: 148000, jitterBufferEmittedCount: 148000, jitterBufferDelay: 1060, concealedSamples: 1480, insertedSamplesForDeceleration: 7, removedSamplesForAcceleration: 3 })
+      await service.sampleNow()
+      expect(samples.at(-1)?.inboundAudio?.id).toBe('chosen-audio')
+      expect(samples.at(-1)?.selectedAudioCodec).toMatchObject({ mimeType: 'audio/opus', channels: 2 })
+      expect((await service.snapshot()).audioStats).toMatchObject({ coverageMs: 1000, jitterBufferMs: 20, samplesPerSecond: 48000, concealedRatio: 0.01, insertedSamplesDelta: 5, removedSamplesDelta: 2 })
+      expect(peer.getStats).toHaveBeenCalledTimes(2)
+    }
+    finally {
+      service.dispose()
+      clock.mockRestore()
+    }
+  })
+
   it('emits codec, keyframe, feedback and candidate pair samples from getStats', async () => {
     const stats = new Map<string, RTCStats>([
       ['codec-124', {

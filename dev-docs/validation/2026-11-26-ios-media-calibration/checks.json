@@ -1,0 +1,35 @@
+{
+  "checks": [
+    {
+      "command": [
+        "sh",
+        "iosapp/scripts/check-streaming-session-boundary.sh"
+      ],
+      "exitCode": 0,
+      "output": "streaming session boundary check passed\n"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "output": ""
+    }
+  ],
+  "projectPlist": "plutil -lint passed",
+  "rustFormat": "cargo fmt -p xbox-streaming completed",
+  "swiftFormat": "format.json",
+  "finalDiffCheck": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  "temporaryRootExistsAfterCleanup": false,
+  "sharedCompatibilityPassed": 18
+}

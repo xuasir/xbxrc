@@ -1,0 +1,41 @@
+[
+  {
+    "exitCode": 0,
+    "files": [
+      "iosapp/XBXRC/Platform/Streaming/StreamingExecutionScope.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamInputCore.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingInputWorker.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingControllerInputDriver.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingSurfaceLease.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsActor.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingRenderResourceCache.swift",
+      "iosapp/XBXRC/Platform/Streaming/ImportedFrameResources.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingRenderWorker.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingMetalVideoSurfaceView.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingDisplayObservation.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingFrameFeedback.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingPlayerView.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "iosapp/XBXRCTests/StreamingExecutionTests.swift",
+      "iosapp/XBXRCTests/XBXRCTests.swift",
+      "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTrace.swift"
+    ],
+    "output": ""
+  },
+  {
+    "exitCode": 0,
+    "files": [
+      "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift"
+    ],
+    "output": ""
+  }
+]

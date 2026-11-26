@@ -1,6 +1,6 @@
-import type { DecodedFrameSupplyObservation } from '../../domain/media'
+import type { DecodedFrameClockObservation, DecodedFrameSupplyObservation, RendererGpuTiming } from '../../domain/media'
 import type { DecodedFrameFallback, DecodedFrameMode } from './decoded-video-frame-reader'
-import type { GpuFrameTimer } from './gpu-frame-timer'
+import type { FrameLinkScope, RenderWorkerSnapshot } from './render-worker-protocol'
 import type { ObservedVideoFrameMetadata } from './video-frame-source'
 import { LatencyWindow } from '../../../shared/latency-window'
 
@@ -41,7 +41,30 @@ export interface RendererResources {
   submitFailureCount?: number
   preparation?: RendererPreparationObservation
   timing?: ReturnType<RenderObservation['snapshot']>['timing']
-  gpuTiming?: ReturnType<GpuFrameTimer['snapshot']>
+  gpuTiming?: RendererGpuTiming
+  execution?: RenderExecutionObservation
+}
+
+export interface RenderExecutionObservation {
+  mode: 'main' | 'worker-direct' | 'window-read-worker-render'
+  state: 'initializing' | 'ready' | 'failed' | 'stopping' | 'stopped'
+  scope?: FrameLinkScope
+  renderEpoch?: number
+  observedAtMs?: number
+  snapshotReceivedAtMs?: number
+  snapshotAgeMs?: number
+  clock?: DecodedFrameClockObservation
+  sourceWidth?: number
+  sourceHeight?: number
+  latestSequence?: number
+  link?: RenderWorkerSnapshot['link']
+  observation?: RenderWorkerSnapshot['observation']
+  controlMessagesSent?: number
+  controlMessagesReceived?: number
+  controlBytesSent?: number
+  controlBytesReceived?: number
+  capabilityReason?: string
+  stop?: { acknowledged: boolean, elapsedMs: number, heldFrames?: number, gpuObjects?: number }
 }
 
 interface RendererPreparationObservation {
@@ -175,8 +198,12 @@ export class RenderObservation {
     }
   }
 
+  snapshotCounters() {
+    return { drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: 0, rateLimitDropCount: this.rateLimitDropCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
+  }
+
   snapshot() {
     const timing = { duration: this.duration.snapshot(), upload: this.upload.snapshot(), submit: this.submit.snapshot(), interval: this.interval.snapshot(), receiveToSubmit: this.receiveToSubmit.snapshot(), readToSubmit: this.readToSubmit.snapshot() }
-    return { timing, drawCount: this.drawCount, realtimeDrawCount: this.realtimeDrawCount, captureDrawCount: this.captureDrawCount, duplicateDrawCount: this.duplicateDrawCount, lastDrawSequence: this.lastDrawSequence, lastDrawAtMs: this.lastDrawAtMs, drawDurationTotalMs: this.drawDurationTotalMs, drawDurationMaxMs: this.drawDurationMaxMs, drawCostSampleCount: this.drawCostSampleCount, uploadDurationTotalMs: this.uploadDurationTotalMs, submitDurationTotalMs: this.submitDurationTotalMs, uploadDurationMaxMs: this.uploadDurationMaxMs, submitDurationMaxMs: this.submitDurationMaxMs, latestOverwriteCount: 0, rateLimitDropCount: this.rateLimitDropCount, submitFailureCount: this.submitFailureCount, preparation: { ...this.preparation } }
+    return { ...this.snapshotCounters(), timing }
   }
 }

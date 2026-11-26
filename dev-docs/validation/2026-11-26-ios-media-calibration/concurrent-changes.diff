@@ -1,0 +1,360 @@
+--- validated/crates/xbox-streaming/src/session/recovery/supervision.rs
++++ current/crates/xbox-streaming/src/session/recovery/supervision.rs
+@@ -2,6 +2,11 @@
+ use super::observation::{RuntimeMediaCounters, RuntimeWindowAccumulator};
+ use super::quality::{RuntimeQualityCompletion, RuntimeQualityDecision, RuntimeQualityState};
+ use serde::{Deserialize, Serialize};
++
++#[path = "local_stall.rs"]
++mod local_stall;
++use local_stall::LocalStallState;
++pub use local_stall::RuntimeLocalStallDecision;
+ 
+ pub const FIRST_FRAME_GUARD_MS: u64 = 4_000;
+ pub const SUPERVISION_INTERVAL_MS: u64 = 1_000;
+@@ -56,6 +61,16 @@
+     pub video_generation: u64,
+     pub warmup_until_ms: u64,
+     pub previous_action_at_ms: Option<u64>,
++    pub previous_action_kind: Option<String>,
++    pub previous_action_effect: Option<String>,
++    pub has_presented_media: bool,
++    pub local_counters: Option<RuntimeMediaCounters>,
++    pub renderer_generation: Option<u64>,
++    pub renderer_kind: Option<String>,
++    pub renderer_submitted_total: Option<u64>,
++    pub renderer_submit_age_ms: Option<f64>,
++    pub renderer_present_fps: Option<f64>,
++    pub renderer_present_coverage_ms: Option<u64>,
+     pub eligible_since_ms: u64,
+     pub short: RuntimeObservationWindow,
+     pub long: RuntimeObservationWindow,
+@@ -88,6 +103,7 @@
+     previous_action_at_ms: Option<u64>,
+     stall_evidence_observed: bool,
+     windows: RuntimeWindowAccumulator,
++    local_stall: LocalStallState,
+     quality: RuntimeQualityState,
+     connection_started_ms: Option<u64>,
+     connection_last_action_ms: Option<u64>,
+@@ -112,6 +128,7 @@
+     pub media_connection_eligible: bool,
+     pub network_pressure: String,
+     pub probe_effect: Option<RuntimeRecoveryEffect>,
++    pub local_stall: Option<RuntimeLocalStallDecision>,
+     pub short: RuntimeObservationWindow,
+     pub quality: RuntimeQualityDecision,
+     pub connection_recovery_allowed: bool,
+@@ -136,6 +153,8 @@
+     pub sample_id: Option<String>,
+     pub video_generation: Option<u64>,
+     pub peer_generation: Option<u64>,
++    pub renderer_generation: Option<u64>,
++    pub recovery_scope: Option<String>,
+     pub baseline: RuntimeRecoveryBaseline,
+ }
+ 
+@@ -249,6 +268,7 @@
+             media_connection_eligible: false,
+             network_pressure: "unknown".into(),
+             probe_effect: None,
++            local_stall: None,
+             short: RuntimeObservationWindow::default(),
+             quality: RuntimeQualityDecision::default(),
+             connection_recovery_allowed: false,
+@@ -348,6 +368,30 @@
+     let action_cooled = sample
+         .previous_action_at_ms
+         .is_none_or(|last| at.saturating_sub(last) >= STABLE_WINDOW_MS);
++    let probe_effect = sample
++        .probe
++        .as_ref()
++        .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate));
++    let mut local_stall = state.local_stall.observe(sample, fresh, duplicate);
++    if let Some(local) = &mut local_stall {
++        let effect = probe_effect
++            .as_ref()
++            .map(|effect| effect.result.as_str())
++            .or(sample.previous_action_effect.as_deref());
++        let upgrade = sample.previous_action_kind.as_deref() == Some("keyframeRequest")
++            && matches!(effect, Some("neutral" | "degraded"))
++            && sample
++                .previous_action_at_ms
++                .is_some_and(|last| at.saturating_sub(last) >= SOFT_WINDOW_MS);
++        local.eligible =
++            (action_cooled || upgrade) && (sample.probe.is_none() || probe_effect.is_some());
++        if upgrade {
++            local.action = "playbackRebuild".into();
++            local.reason = "ineffectiveKeyframeUpgrade".into();
++        } else if !local.eligible {
++            local.reason = "localActionCooldown".into();
++        }
++    }
+     let decode_recovery_eligible = fresh
+         && !duplicate
+         && action_cooled
+@@ -364,19 +408,20 @@
+         && sample.long.received_coverage_ms >= STABLE_WINDOW_MS - 1
+         && sample.long.decode_coverage_ms >= STABLE_WINDOW_MS - 1
+         && sample.long.video_coverage_ms >= STABLE_WINDOW_MS - 1;
+-    let has_inbound_progress = fresh
+-        && !duplicate
+-        && state.stall_evidence_observed
+-        && (sample
+-            .inbound_bytes_total
+-            .zip(state.inbound_bytes)
+-            .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)
+-            || sample
+-                .inbound_video_packet_count_total
+-                .zip(state.inbound_packets)
+-                .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)
+-            || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0
+-            || sample.decode_fps.unwrap_or(0.0) >= 1.0);
++    let has_inbound_progress = local_stall.is_some()
++        || (fresh
++            && !duplicate
++            && state.stall_evidence_observed
++            && (sample
++                .inbound_bytes_total
++                .zip(state.inbound_bytes)
++                .is_some_and(|(n, p)| n.saturating_sub(p) > 16 * 1024)
++                || sample
++                    .inbound_video_packet_count_total
++                    .zip(state.inbound_packets)
++                    .is_some_and(|(n, p)| n.saturating_sub(p) >= 12)
++                || sample.inbound_video_fps.unwrap_or(0.0) >= 1.0
++                || sample.decode_fps.unwrap_or(0.0) >= 1.0));
+     if fresh && !duplicate {
+         state.sample_id = sample.sample_id.clone();
+         state.sampled_at_ms = Some(at);
+@@ -495,10 +540,8 @@
+             "unknown"
+         }
+         .into(),
+-        probe_effect: sample
+-            .probe
+-            .as_ref()
+-            .and_then(|probe| evaluate_runtime_recovery_probe(probe, sample, fresh && !duplicate)),
++        probe_effect,
++        local_stall,
+         short: sample.short.clone(),
+         quality,
+         connection_recovery_allowed,
+@@ -535,17 +578,38 @@
+     } else {
+         probe.peer_generation == Some(sample.peer_generation)
+     };
++    let renderer_scope = probe.recovery_scope.as_deref() == Some("renderer");
+     let playback_valid = probe.action != "playbackRebuild"
+-        || probe
+-            .video_generation
+-            .is_some_and(|p| sample.video_generation != p);
++        || (renderer_scope
++            && probe
++                .renderer_generation
++                .is_some_and(|p| sample.renderer_generation.is_some_and(|n| n != p)))
++        || (!renderer_scope
++            && probe
++                .video_generation
++                .is_some_and(|p| sample.video_generation != p));
++    let presentation_coverage = if renderer_scope {
++        sample.renderer_present_coverage_ms.unwrap_or(0)
++    } else {
++        sample.short.video_coverage_ms
++    };
++    let presentation_fps = if renderer_scope {
++        sample.renderer_present_fps
++    } else {
++        sample.short.video_present_fps_avg
++    };
++    let presentation_age = if renderer_scope {
++        sample.renderer_submit_age_ms
++    } else {
++        sample.video_present_age_ms
++    };
+     let covered = fresh
+         && sample.sample_id != probe.sample_id
+         && sample
+             .sampled_at_ms
+             .is_some_and(|at| at.saturating_sub(SOFT_WINDOW_MS) >= probe.started_at_ms)
+         && sample.short.decode_coverage_ms >= SOFT_WINDOW_MS - 1
+-        && sample.short.video_coverage_ms >= SOFT_WINDOW_MS - 1
++        && presentation_coverage >= SOFT_WINDOW_MS - 1
+         && peer_valid
+         && playback_valid;
+     if !covered {
+@@ -555,13 +619,13 @@
+     let score = decode.zip(probe.baseline.decode_fps).map(|(n, p)| n - p);
+     let margin = 1.0_f64.max(probe.baseline.decode_fps.unwrap_or(0.0) * 0.1);
+     let new_frames = decode.unwrap_or(0.0) > 0.0
+-        && sample.short.video_present_fps_avg.unwrap_or(0.0) > 0.0
+-        && sample.video_present_age_ms.is_some_and(|n| n < 500.0);
++        && presentation_fps.unwrap_or(0.0) > 0.0
++        && presentation_age.is_some_and(|n| n < 500.0);
+     let improved = new_frames
+         && (matches!(probe.action.as_str(), "reconnect" | "playbackRebuild")
+             || score.is_some_and(|n| n > margin)
+             || probe.baseline.video_fps.is_some_and(|n| n < 1.0)
+-                && sample.short.video_present_fps_avg.unwrap_or(0.0) >= 1.0);
++                && presentation_fps.unwrap_or(0.0) >= 1.0);
+     Some(RuntimeRecoveryEffect {
+         result: if improved {
+             "improved"
+--- validated/crates/xbox-streaming/src/session/recovery/supervision.test.rs
++++ current/crates/xbox-streaming/src/session/recovery/supervision.test.rs
+@@ -1,4 +1,146 @@
+ use super::*;
++
++fn local_sample(at: u64, decoded: u64, submitted: u64) -> RuntimeSupervisionSample {
++    let mut result = sample(at, if decoded > 0 { 60.0 } else { 0.0 });
++    result.has_presented_media = true;
++    result.frame_interval_ms = Some(1000.0 / 60.0);
++    result.inactivity_elapsed_ms = 0;
++    result.renderer_kind = Some("webgl2".into());
++    result.renderer_generation = Some(1);
++    result.renderer_submitted_total = Some(submitted);
++    result.renderer_submit_age_ms = Some(at.saturating_sub(20_000) as f64);
++    result.local_counters = Some(RuntimeMediaCounters {
++        received: Some(at.saturating_sub(20_000) * 60 / 1_000),
++        decoded: Some(decoded),
++        presented: Some(0),
++        packets_received: Some(at.saturating_sub(20_000)),
++        packets_lost: None,
++    });
++    result
++}
++
++#[test]
++fn local_stall_recovers_30_and_60_fps_decode_after_two_seconds_of_fresh_supply() {
++    for interval in [1000.0 / 30.0, 1000.0 / 60.0] {
++        let mut state = RuntimeSupervisionState::default();
++        for at in (20_000..=22_000).step_by(1_000) {
++            let mut input = local_sample(at, 0, 0);
++            input.frame_interval_ms = Some(interval);
++            let decision = decide_runtime_supervision(&input, &mut state);
++            if at < 22_000 {
++                assert!(decision.local_stall.is_none());
++            } else {
++                let local = decision.local_stall.unwrap();
++                assert!(local.eligible);
++                assert_eq!(local.domain, "decode");
++                assert_eq!(local.action, "keyframeRequest");
++                assert_eq!(local.age_ms, 2_000);
++                assert!(!decision.decode_recovery_eligible);
++                assert!(!decision.media_connection_eligible);
++            }
++        }
++    }
++}
++
++#[test]
++fn local_stall_separates_renderer_stall_from_sparse_callbacks_and_reset_facts() {
++    let mut state = RuntimeSupervisionState::default();
++    for at in (20_000..=22_000).step_by(1_000) {
++        let decision = decide_runtime_supervision(&local_sample(at, at - 20_000, 0), &mut state);
++        if at == 22_000 {
++            let local = decision.local_stall.unwrap();
++            assert_eq!(local.domain, "presentation");
++            assert_eq!(local.action, "playbackRebuild");
++        }
++    }
++    let sparse = local_sample(23_000, 3_000, 60);
++    assert!(decide_runtime_supervision(&sparse, &mut state)
++        .local_stall
++        .is_none());
++    let mut reset = local_sample(24_000, 0, 0);
++    reset.video_generation = 2;
++    assert!(decide_runtime_supervision(&reset, &mut state)
++        .local_stall
++        .is_none());
++    reset.visible = false;
++    assert!(decide_runtime_supervision(&reset, &mut state)
++        .local_stall
++        .is_none());
++    reset.visible = true;
++    reset.now_ms = 25_000;
++    reset.sampled_at_ms = Some(25_000);
++    reset.sample_id = Some("after-visible".into());
++    assert!(decide_runtime_supervision(&reset, &mut state)
++        .local_stall
++        .is_none());
++}
++
++#[test]
++fn local_stall_upgrades_an_ineffective_keyframe_once_and_preserves_same_action_cooling() {
++    let mut state = RuntimeSupervisionState::default();
++    for at in (20_000..=25_000).step_by(1_000) {
++        let mut input = local_sample(at, 0, 0);
++        if at >= 23_000 {
++            input.previous_action_at_ms = Some(22_000);
++            input.previous_action_kind = Some("keyframeRequest".into());
++        }
++        if at == 25_000 {
++            input.previous_action_effect = Some("neutral".into());
++        }
++        let decision = decide_runtime_supervision(&input, &mut state);
++        if at == 24_000 {
++            assert!(!decision.local_stall.unwrap().eligible);
++        }
++        if at == 25_000 {
++            let local = decision.local_stall.unwrap();
++            assert!(local.eligible);
++            assert_eq!(local.action, "playbackRebuild");
++        }
++    }
++    let mut input = local_sample(26_000, 0, 0);
++    input.previous_action_at_ms = Some(25_000);
++    input.previous_action_kind = Some("playbackRebuild".into());
++    input.previous_action_effect = Some("neutral".into());
++    assert!(
++        !decide_runtime_supervision(&input, &mut state)
++            .local_stall
++            .unwrap()
++            .eligible
++    );
++}
++
++#[test]
++fn local_stall_renderer_probe_closes_on_new_renderer_submission_with_the_same_video() {
++    let mut input = local_sample(23_000, 60, 60);
++    input.renderer_generation = Some(2);
++    input.renderer_present_fps = Some(60.0);
++    input.renderer_present_coverage_ms = Some(3_000);
++    input.renderer_submit_age_ms = Some(20.0);
++    input.short.video_coverage_ms = 0;
++    let probe = RuntimeRecoveryProbe {
++        action: "playbackRebuild".into(),
++        started_at_ms: 20_000,
++        observe_ms: 3_000,
++        required_observe_ms: 3_000,
++        sample_id: Some("before-renderer".into()),
++        video_generation: Some(1),
++        peer_generation: Some(1),
++        renderer_generation: Some(1),
++        recovery_scope: Some("renderer".into()),
++        baseline: RuntimeRecoveryBaseline {
++            decode_fps: Some(60.0),
++            video_fps: Some(0.0),
++        },
++    };
++    assert_eq!(
++        evaluate_runtime_recovery_probe(&probe, &input, true)
++            .unwrap()
++            .result,
++        "improved"
++    );
++    input.renderer_generation = Some(1);
++    assert!(evaluate_runtime_recovery_probe(&probe, &input, true).is_none());
++}
+ 
+ fn delay_sample(at: u64, rtt: f64, first: f64, last: f64) -> RuntimeSupervisionSample {
+     let mut result = quality_sample(at, 0.0);
+@@ -327,6 +469,8 @@
+     let mut sample = sample(7_000, 60.0);
+     let probe = RuntimeRecoveryProbe {
+         action: "keyframeRequest".into(),
++        renderer_generation: None,
++        recovery_scope: None,
+         started_at_ms: 3_000,
+         observe_ms: 3_000,
+         required_observe_ms: 3_000,

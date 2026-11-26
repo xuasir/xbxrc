@@ -1,0 +1,553 @@
+{
+  "scope": {
+    "source": "/Users/guo.xu/Library/Logs/com.xuasir.xbxrc/runtime-logs/runtime-trace-1795678668580-1.jsonl",
+    "sha256": "0f291173f64286d3cf6552863f3ca97e2812b32f2b72a5397142741a442446b0",
+    "bytes": 4056899,
+    "rows": 1838,
+    "rangeLocal": [
+      "2026-11-26T15:37:48.580+08:00",
+      "2026-11-26T15:40:43.544+08:00"
+    ],
+    "schemaVersion": 3,
+    "profile": "dev",
+    "build": {
+      "buildTimestampUnixMs": "1795678648728",
+      "cargoProfile": "debug",
+      "edition": "browser",
+      "gitCommitShort": "37e4fb43",
+      "sourceFingerprintSha256": "04bd830752759c0f892fc4591e5794847195a049088fb8924f579357c8a04a29",
+      "workspaceDirty": true
+    },
+    "configuration": {
+      "bitrateCapKbps": 100000,
+      "brightness": 100,
+      "contrast": 100,
+      "displayRefreshHz": 60,
+      "displayRefreshSource": "rafEstimate",
+      "expectedFps": 60,
+      "outputHeight": 1440,
+      "outputWidth": 2560,
+      "pipelineType": "webgl2",
+      "preventResolutionDrops": true,
+      "processing": "usm",
+      "processingMode": "quality",
+      "rendererFrameSource": "worker",
+      "rendererKind": "webgl2",
+      "rendererTargetFps": 60,
+      "requestedFps": 60,
+      "requestedHeight": 1440,
+      "requestedWidth": 2560,
+      "resolutionFeedbackState": "active",
+      "saturation": 100,
+      "sharpness": 3,
+      "sourceHeight": 1440,
+      "sourceWidth": 2560,
+      "superResolution": false
+    },
+    "retainedInput": "runtime-trace-1795678668580-1.jsonl.gz",
+    "originalSourceAvailableAtClosure": false
+  },
+  "upload": {
+    "seq": 1748,
+    "method": "texSubImage2D",
+    "fullUploads": 1,
+    "subUploads": 3789,
+    "reuseCount": 0,
+    "fallbackReason": null,
+    "captureDraws": 0,
+    "duplicateDraws": 0,
+    "sampleCount": 3790,
+    "meanUploadMs": 8.3398,
+    "meanDrawMs": 8.4285,
+    "meanSubmitMs": 0.0858,
+    "uploadShareOfDrawPercent": 98.948,
+    "latestRollingTimingSeq": 1779,
+    "latestRollingTiming": {
+      "duration": {
+        "capacity": 256,
+        "count": 3850,
+        "maxMs": 14,
+        "maxObservedMs": 67,
+        "meanMs": 8.28515625,
+        "p50Ms": 8,
+        "p95Ms": 9,
+        "p99Ms": 12,
+        "retained": 256
+      },
+      "interval": {
+        "capacity": 256,
+        "count": 1824,
+        "maxMs": 39,
+        "maxObservedMs": 129,
+        "meanMs": 16.68359375,
+        "p50Ms": 16,
+        "p95Ms": 21,
+        "p99Ms": 30,
+        "retained": 256
+      },
+      "readToSubmit": {
+        "capacity": 256,
+        "count": 3850,
+        "maxMs": 15,
+        "maxObservedMs": 69.5,
+        "meanMs": 6.703125,
+        "p50Ms": 6,
+        "p95Ms": 9,
+        "p99Ms": 11,
+        "retained": 256
+      },
+      "receiveToSubmit": {
+        "capacity": 256,
+        "count": 3850,
+        "maxMs": 14,
+        "maxObservedMs": 67,
+        "meanMs": 8.3125,
+        "p50Ms": 8,
+        "p95Ms": 9,
+        "p99Ms": 12,
+        "retained": 256
+      },
+      "submit": {
+        "capacity": 256,
+        "count": 3850,
+        "maxMs": 5,
+        "maxObservedMs": 7,
+        "meanMs": 0.078125,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 4,
+        "retained": 256
+      },
+      "upload": {
+        "capacity": 256,
+        "count": 3850,
+        "maxMs": 10,
+        "maxObservedMs": 67,
+        "meanMs": 8.20703125,
+        "p50Ms": 8,
+        "p95Ms": 9,
+        "p99Ms": 9,
+        "retained": 256
+      }
+    },
+    "gpuTiming": {
+      "completion": {
+        "completed": 1,
+        "failureReason": "overBudget",
+        "fenceCount": 0,
+        "insertionCpuMaxMs": 5,
+        "latest": {
+          "insertedAtMs": 100170,
+          "lowerBoundMs": 0,
+          "observedAtMs": 100179,
+          "polls": 1,
+          "submittedAtMs": 100169,
+          "upperBoundMs": 10
+        },
+        "source": "webglFenceCompletionBounds",
+        "state": "failed",
+        "timeouts": 0,
+        "upperBound": {
+          "capacity": 256,
+          "count": 1,
+          "maxMs": 10,
+          "maxObservedMs": 10,
+          "meanMs": 10,
+          "p50Ms": 10,
+          "p95Ms": 10,
+          "p99Ms": 10,
+          "retained": 1
+        }
+      },
+      "disjointCount": 0,
+      "duration": {
+        "capacity": 256,
+        "count": 0,
+        "retained": 0
+      },
+      "queryCount": 0,
+      "source": "EXT_disjoint_timer_query_webgl2",
+      "state": "unavailable"
+    }
+  },
+  "network": {
+    "visibleBucketDistribution": {
+      "rttMs": {
+        "samples": 55,
+        "p50": 16,
+        "p95": 33,
+        "max": 105
+      },
+      "jitterMs": {
+        "samples": 55,
+        "p50": 5,
+        "p95": 12,
+        "max": 15
+      },
+      "jitterBufferMs": {
+        "samples": 55,
+        "p50": 5.4,
+        "p95": 30.97,
+        "max": 39.25
+      },
+      "packetLossRatio": {
+        "samples": 55,
+        "p50": 0,
+        "p95": 0.004,
+        "max": 0.1104
+      }
+    },
+    "finalCumulativeLossPercent": 0.2826,
+    "packetsLost": 491,
+    "packetsReceived": 173254,
+    "path": "srflx/udp",
+    "rawFirstInboundDeltaMs": 580
+  },
+  "recovery": {
+    "freezes": 2,
+    "freezesDurationSeconds": 0.457,
+    "keyframesDecoded": 7,
+    "pli": 2,
+    "fir": 0,
+    "nack": 34,
+    "retransmittedPackets": 707,
+    "nativeReferenceChain": "UNSUPPORTED",
+    "physicalScanout": "UNSUPPORTED",
+    "nativeRequestOutcomeRates": null,
+    "repairabilityPersistence": null,
+    "recoveryEffectivenessScore": null
+  },
+  "frameSupply": {
+    "finalSeq": 1797,
+    "totals": {
+      "callbacks": 2913,
+      "decoded": 4004,
+      "fir": 0,
+      "framesDropped": 0,
+      "freezeCount": 2,
+      "keyframes": 7,
+      "nack": 34,
+      "pli": 2,
+      "received": 4005,
+      "rendererSubmit": 3881,
+      "videoPresent": 3991
+    },
+    "decodeToRendererDeficit": 123,
+    "latestLongWindow": {
+      "callbackFpsAvg": 51.87,
+      "coverageMs": 15000,
+      "decodeFpsAvg": 59.92,
+      "durationMs": 15000,
+      "inboundFpsAvg": 59.99,
+      "rendererSubmitFpsAvg": 58.86,
+      "sampleCount": 59,
+      "videoPresentFpsAvg": 59.92
+    },
+    "latestShortWindow": {
+      "callbackFpsAvg": 49.89,
+      "coverageMs": 3000,
+      "decodeFpsAvg": 59.94,
+      "durationMs": 3000,
+      "inboundFpsAvg": 59.94,
+      "rendererSubmitFpsAvg": 59.94,
+      "sampleCount": 12,
+      "videoPresentFpsAvg": 59.94
+    },
+    "readerSegments": [
+      {
+        "firstSeq": 329,
+        "lastSeq": 964,
+        "last": {
+          "ackDeliveryMaxMs": 0,
+          "ackDeliveryP95Ms": 0,
+          "ackDeliveryStatus": "valid",
+          "ackRoundTripMaxMs": 21,
+          "ackRoundTripP95Ms": 13,
+          "acks": 2022,
+          "adjustedClocks": 1211,
+          "consumeMaxMs": 21,
+          "consumeP95Ms": 9,
+          "delivered": 2022,
+          "deliveryBudgetMs": 50,
+          "invalidClocks": 0,
+          "lastSequence": 2070,
+          "overwrites": 47,
+          "pendingWaitMaxMs": 9,
+          "pendingWaitP95Ms": 2,
+          "pixelFormat": "NV12",
+          "read": 2070,
+          "readWaitMaxMs": 36,
+          "readWaitP95Ms": 27,
+          "receiveAgeMs": 13,
+          "receiveIntervalMaxMs": 37,
+          "receiveIntervalP95Ms": 27,
+          "received": 2023,
+          "sent": 2023,
+          "staleDrops": 1,
+          "supplyClock": {
+            "offsetMs": 0,
+            "state": "calibrated",
+            "uncertaintyMs": 2
+          },
+          "transferMaxMs": 7,
+          "transferP95Ms": 4,
+          "unknownClocks": 0,
+          "workerObservationAgeMs": 13
+        },
+        "maxCounters": {
+          "read": 2070,
+          "sent": 2023,
+          "received": 2023,
+          "delivered": 2022,
+          "overwrites": 47,
+          "staleDrops": 1,
+          "invalidClocks": 0,
+          "unknownClocks": 0
+        }
+      },
+      {
+        "firstSeq": 992,
+        "lastSeq": 1796,
+        "last": {
+          "ackDeliveryMaxMs": 3,
+          "ackDeliveryP95Ms": 3,
+          "ackDeliveryStatus": "valid",
+          "ackRoundTripMaxMs": 16,
+          "ackRoundTripP95Ms": 11,
+          "acks": 1855,
+          "adjustedClocks": 360,
+          "consumeMaxMs": 13,
+          "consumeP95Ms": 9,
+          "delivered": 1856,
+          "deliveryBudgetMs": 50,
+          "invalidClocks": 0,
+          "lastSequence": 1888,
+          "overwrites": 32,
+          "pendingWaitMaxMs": 3,
+          "pendingWaitP95Ms": 0,
+          "pixelFormat": "NV12",
+          "read": 1888,
+          "readWaitMaxMs": 30,
+          "readWaitP95Ms": 21,
+          "receiveAgeMs": 14,
+          "receiveIntervalMaxMs": 31,
+          "receiveIntervalP95Ms": 21,
+          "received": 1856,
+          "sent": 1856,
+          "staleDrops": 0,
+          "supplyClock": {
+            "offsetMs": 2,
+            "state": "calibrated",
+            "uncertaintyMs": 4
+          },
+          "transferMaxMs": 2,
+          "transferP95Ms": 0,
+          "unknownClocks": 0,
+          "workerObservationAgeMs": 12
+        },
+        "maxCounters": {
+          "read": 1888,
+          "sent": 1856,
+          "received": 1856,
+          "delivered": 1856,
+          "overwrites": 32,
+          "staleDrops": 0,
+          "invalidClocks": 0,
+          "unknownClocks": 0
+        }
+      }
+    ],
+    "observedOverwrites": 79,
+    "observedStaleDrops": 1,
+    "pauseBucket": {
+      "seq": 993,
+      "window": {
+        "elapsedMs": 986,
+        "endMs": 135153,
+        "firstSampleId": "1:105",
+        "lastSampleId": "1:108",
+        "partial": true,
+        "resetReasons": [
+          "generationReset"
+        ],
+        "sampleCount": 3,
+        "startMs": 134167,
+        "validSampleCount": 3
+      },
+      "delta": {
+        "bytesReceived": 3110114,
+        "callbackGaps": 0,
+        "callbacks": 37,
+        "decoded": 59,
+        "duplicates": 0,
+        "fir": 0,
+        "framesDropped": 0,
+        "freezeCount": 0,
+        "keyframes": 0,
+        "nack": 2,
+        "overwrites": 0,
+        "packetsReceived": 2830,
+        "pli": 0,
+        "presentedJumps": 18,
+        "rateLimitDrops": 0,
+        "received": 59,
+        "rendererSubmit": 16,
+        "submitFailures": 0,
+        "videoPresent": 59
+      },
+      "decodeToSubmitDeficit": 43
+    },
+    "counterAlignment": "异步采样及reader重建，覆盖和暂停窗口与累计差额吻合，严格逐帧归因需各reader终端快照"
+  },
+  "visibility": {
+    "transitions": [
+      {
+        "seq": 247,
+        "atMs": 95069,
+        "visibility": "hidden",
+        "localTime": "2026-11-26T15:39:25.715+08:00"
+      },
+      {
+        "seq": 437,
+        "atMs": 113487,
+        "visibility": "visible",
+        "localTime": "2026-11-26T15:39:44.133+08:00"
+      },
+      {
+        "seq": 973,
+        "atMs": 134416,
+        "visibility": "hidden",
+        "localTime": "2026-11-26T15:40:05.062+08:00"
+      },
+      {
+        "seq": 991,
+        "atMs": 135153,
+        "visibility": "visible",
+        "localTime": "2026-11-26T15:40:05.799+08:00"
+      }
+    ],
+    "visibleSpans": [
+      {
+        "startMs": 113487,
+        "endMs": 134416,
+        "durationMs": 20929,
+        "startLocal": "2026-11-26T15:39:44.133+08:00",
+        "endLocal": "2026-11-26T15:40:05.062+08:00"
+      },
+      {
+        "startMs": 135153,
+        "endMs": 166509,
+        "durationMs": 31356,
+        "startLocal": "2026-11-26T15:40:05.799+08:00",
+        "endLocal": "2026-11-26T15:40:37.155+08:00"
+      }
+    ],
+    "longestContinuousVisibleMs": 31356,
+    "initialHiddenRenderingMs": 14321
+  },
+  "anomalyWindow": {
+    "startMs": 117064,
+    "endMs": 120143,
+    "durationMs": 3079,
+    "startLocal": "2026-11-26T15:39:47.710+08:00",
+    "endLocal": "2026-11-26T15:39:50.789+08:00",
+    "anchors": [
+      560,
+      584,
+      614,
+      644
+    ]
+  },
+  "automatedReports": {
+    "browserBehaviorGate": "PASS",
+    "healthGate": "FAIL",
+    "healthSections": {
+      "networkHealth": {
+        "status": "PASS",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      },
+      "recoveryChainHealth": {
+        "status": "PASS",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      },
+      "mediaSupply": {
+        "status": "INSUFFICIENT_EVIDENCE",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      },
+      "steadySupply": {
+        "status": "FAIL",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      },
+      "submitPresentTail": {
+        "status": "INSUFFICIENT_EVIDENCE",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      },
+      "frameSupplyDelta": {
+        "status": "FAIL",
+        "segments": 6,
+        "samples": 119,
+        "validMs": 71139.0
+      }
+    },
+    "reportedSteadyDurationMs": 105059.0,
+    "devIntervals": 64,
+    "productionHealthRecords": 72,
+    "ownerEpochs": [
+      0,
+      1
+    ],
+    "ending": {
+      "status": "PASS",
+      "partialEnding": false,
+      "sessions": [
+        {
+          "sessionId": "10E6F301-C57D-4AC8-AC3A-CA0A4B19E108",
+          "status": "PASS",
+          "summarySeq": 1798,
+          "cleanupSeq": 1814.0,
+          "cleanupState": "completed",
+          "flushed": true,
+          "reason": "menuActionExit"
+        }
+      ]
+    },
+    "traceLoss": {
+      "status": "PASS",
+      "producerMaxCounters": {
+        "dropped": 0,
+        "droppedEssential": 0,
+        "ipcFailed": 0,
+        "ipcTimedOut": 0,
+        "producerRowOversized": 0,
+        "payloadFailed": 0,
+        "ackMissing": 0,
+        "coalesced": 0,
+        "profileFiltered": 0,
+        "queueFull": 0,
+        "rowOversized": 0,
+        "writerUnavailable": 0
+      },
+      "backendMaxCounters": {
+        "essentialDropped": 0,
+        "keyDropped": 0,
+        "debugDropped": 0,
+        "rawDropped": 0,
+        "ioDropped": 0,
+        "ioFailures": 0,
+        "oversizedDropped": 0
+      },
+      "counterScope": "maxObservedCumulativeWithinRun"
+    },
+    "interpretation": "dev消费行默认epoch=0，与production bucket epoch=1双计；可见性在发布时取样，跨隐藏切换bucket仍显示visible；network门采用连续窗口阈值，单秒尖峰需直接查raw"
+  }
+}

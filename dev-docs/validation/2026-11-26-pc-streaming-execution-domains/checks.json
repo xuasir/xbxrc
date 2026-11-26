@@ -1,0 +1,133 @@
+{
+  "frontendTests": 266,
+  "productionBudgetTests": 2,
+  "rustContractTests": 4,
+  "commands": [
+    {
+      "command": "pnpm lint:fix",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm exec vite build --outDir <task-temp>/vite-dist --emptyOutDir",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test:trace-production",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo fmt --package xbxrc",
+      "exitCode": 0
+    },
+    {
+      "command": "cargo test -p xbxrc --lib mods::runtime_trace::trace_contract::tests --offline",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "workerAssets": [
+    {
+      "name": "decoded-video-frame-worker-ElARvcmR.js",
+      "bytes": 3822
+    },
+    {
+      "name": "input-worker-KlG3ntdt.js",
+      "bytes": 27936
+    },
+    {
+      "name": "render-worker-CIyrn8Nh.js",
+      "bytes": 67334
+    }
+  ],
+  "baseline": "../2026-11-26-pc-latest-log-1795692428673/facts.json",
+  "runtimeValidation": "用户统一实机回归待验",
+  "cleanup": {
+    "temporaryDirectory": "/private/tmp/xbxrc-pc-execution-domains-20261126-qto4kquy",
+    "state": "cleaned",
+    "removedBytes": 8683365,
+    "removedMiB": 8.28,
+    "availableDiskBytesAfter": 83558400000,
+    "availableDiskDeltaBytes": 0,
+    "processVerification": "本轮前台exec会话结束结果；ps受沙箱限制",
+    "completedSessions": [
+      {
+        "sessionId": 32967,
+        "kind": "final Vite build",
+        "exitCode": 0
+      },
+      {
+        "sessionId": 59112,
+        "kind": "Rust contract tests",
+        "exitCode": 0
+      },
+      {
+        "sessionId": 38357,
+        "kind": "final lint",
+        "exitCode": 0
+      },
+      {
+        "sessionId": 43377,
+        "kind": "final typecheck",
+        "exitCode": 0
+      }
+    ],
+    "temporaryTopLevelPaths": [
+      "lifecycle-smoke-final.log",
+      "m4-typecheck.log",
+      "integration-smoke.json",
+      "lifecycle-smoke.log",
+      "lint-fix.log",
+      "m4-worker-smoke.log",
+      "lint-fix-final.log",
+      "lifecycle-smoke-final.json",
+      "typecheck-final.log",
+      "rust-trace-contract.log",
+      "m3-typecheck.log",
+      "lifecycle-smoke.json",
+      "typecheck-verified.log",
+      "integration-smoke.log",
+      "build-verified.log",
+      "vite-dist",
+      "production-budget-verified.log",
+      "baseline",
+      "owned-files.json",
+      "build-final.log",
+      "extract-input-core.py",
+      "lint-verified-final.log",
+      "worker-build-assets.json",
+      "m1-render-smoke.json",
+      "extract-frame-observer.py",
+      "rust-trace-contract-final.log",
+      "production-budget-final.log",
+      "m2-direct-smoke.log",
+      "pre-lint-src.json",
+      "manifest.json",
+      "m3-m4-main-smoke.json",
+      "worker-facade-smoke.log",
+      "extract-render-core.py",
+      "lint-fix-verified.log",
+      "m3-m4-main-smoke.log",
+      "m4-worker-smoke.json",
+      "pre-fmt-rust.json",
+      "worker-facade-smoke.json",
+      "m2-typecheck.log",
+      "integration-typecheck.log",
+      "m1-typecheck.log",
+      "m2-direct-smoke.json",
+      "m1-render-smoke.log"
+    ],
+    "retained": [
+      "dev-docs/validation/2026-11-26-pc-streaming-execution-domains",
+      "dev-docs/validation/2026-11-26-pc-latest-log-1795692428673",
+      "最近应用日志原件",
+      "现有共享构建/依赖缓存"
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "rfcScope": "PASS",
+  "readerConsumptionAndAck": "PASS",
+  "latestAndInflight": "PASS",
+  "mainCanvasAndSelectedUpload": "PASS",
+  "inputQueueAndDrain": "PASS",
+  "diagnosticSnapshotAndConstruction": "PASS",
+  "renderWarningAndSupervisionScope": "PASS",
+  "workerApiDeclarations": "PASS",
+  "localEvidenceLinks": "PASS",
+  "textWhitespace": "PASS",
+  "sourceManifest": [
+    {
+      "file": "docs/rfcs/2026-11-26-ios-streaming-latency-threading.md",
+      "sha256": "84df6538a3bc7a9b2e09ea35b7ef6eaf2a4b7893e1a1305e5e004a29d0069484",
+      "lines": 299
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-reader.ts",
+      "sha256": "b104d905b4fe8bab816a3b1b2da6d00640ac5caaf67a25b6281d4c2313114892",
+      "lines": 408
+    },
+    {
+      "file": "src/player/infra/render/decoded-video-frame-worker-source.ts",
+      "sha256": "d5b7dd1959c8fad34614995f158c25280fb7a0df7f417e62065752fe0634f1b9",
+      "lines": 163
+    },
+    {
+      "file": "src/player/infra/render/video-frame-source.ts",
+      "sha256": "5981091adb7f7e5121d1d2e6be63478abd4a222d111bc60a1ff22dfa2f9fa85f",
+      "lines": 527
+    },
+    {
+      "file": "src/player/infra/render/Renderers.ts",
+      "sha256": "8a041ca6ee146188ce3c5010fe594c987547d87fc722fdad4ad218abf44e186e",
+      "lines": 1162
+    },
+    {
+      "file": "src/player/app/input/InputService.ts",
+      "sha256": "401ccf610936ef092e65517ff61b27cbd98c8d8b13e841bd9a204589de32dbd9",
+      "lines": 537
+    },
+    {
+      "file": "src/player/app/input/input-buffer-budget.ts",
+      "sha256": "7db1aac539fb820ce56615f0fb268cc164caef13b3724a07a69646614fe74daa",
+      "lines": 80
+    },
+    {
+      "file": "src/shared/gamepad/browser-backend.ts",
+      "sha256": "ff33f5313c952f72cc3cb583528d1b303c005b5f170e1e0cbabac3dcf2cae8a7",
+      "lines": 316
+    },
+    {
+      "file": "src/streaming/runtime/browser-render-health.ts",
+      "sha256": "cec8a78fa578e3407ae169bc50f456622b5b5602ba8cb80f5094e94f558809af",
+      "lines": 122
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime-trace.ts",
+      "sha256": "10850e8fd0810f594a27d9b7e90bf7d0e880f9e3dda675321c725b4061a4efaa",
+      "lines": 219
+    },
+    {
+      "file": "src/streaming/runtime/browser-runtime.ts",
+      "sha256": "afc173266dfe65dd38ca04c72ece9928a258cea53a3904004b618ecd8b93bb63",
+      "lines": 2651
+    },
+    {
+      "file": "src/shared/latency-window.ts",
+      "sha256": "cd3b5e6496fc1225685c7abd6fc1de5be93747c1e70b34835b4e3ce81dde4886",
+      "lines": 45
+    },
+    {
+      "file": "src/player/app/stats/StatsService.ts",
+      "sha256": "75f0b32c1f016a9fc71982f74972f4644aa20fc3a0716f20af68849d882d801a",
+      "lines": 758
+    },
+    {
+      "file": "src/player/app/media/PlaybackService.ts",
+      "sha256": "2f108342dd67046cb85db618f1d3928ee8ace9dec9018c2c7b5f62eab9b8a186",
+      "lines": 516
+    },
+    {
+      "file": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "46f1fd5d7f73e728a27d6c7748df02a2646e9be23a993466391aa1d6ec2fee26",
+      "lines": 628
+    }
+  ],
+  "runtimeSourceEditsThisTask": [],
+  "capabilityQualifications": {
+    "workerOffscreenWebgl2VideoFrame": "prototype required on WKWebView/WebView2",
+    "dataChannelTransferAndLifecycle": "prototype required",
+    "workerNavigatorGamepad": "absent from current TypeScript worker declaration",
+    "physicalCanvasScanout": "unavailable in current Browser observation"
+  },
+  "temporaryFilesCreated": 0,
+  "freeDiskBytes": 89702400000,
+  "gitDiffCheck": {
+    "exitCode": 0,
+    "runs": 1,
+    "scope": [
+      "docs/project-task.md",
+      "dev-docs/validation/2026-11-26-pc-ios-threading-assessment"
+    ]
+  }
+}

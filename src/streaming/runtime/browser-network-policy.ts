@@ -6,25 +6,30 @@ import { BROWSER_SOFT_WINDOW_MS, BROWSER_STABLE_WINDOW_MS } from './browser-runt
 
 export type NetworkPressure = 'stable' | 'warning' | 'congested' | 'recovering' | 'unknown'
 type ActionEffect = 'improved' | 'neutral' | 'degraded' | 'unknown'
-export interface BrowserNetworkAction { level: number, reason: 'sustainedCongestion' | 'healthyRestore' | 'ineffectiveRestore', evidence?: BrowserActionEvidence }
+export interface BrowserNetworkAction { level: number, reason: 'sustainedCongestion' | 'delayAccumulation' | 'healthyRestore' | 'ineffectiveRestore', evidence?: BrowserActionEvidence }
 
 /** 网络资格只消费传输事实；固定路径 RTT 与额外压力分别记录。 */
 export function classifyBrowserNetworkPressure(window: BrowserStatsWindowSummary | undefined, rttBaselineMs?: number): NetworkPressure {
-  if (!window || (window.lossCoverageMs ?? 0) < BROWSER_SOFT_WINDOW_MS - 1 || window.lossAvg === undefined)
-    return 'unknown'
-  const loss = window.lossAvg
-  const rttGrowth = rttBaselineMs !== undefined && (window.rttCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1 && window.rttMsAvg !== undefined
-    ? window.rttMsAvg - rttBaselineMs
-    : 0
-  const jitterPressure = (window.jitterCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1 && (window.jitterMsAvg ?? 0) >= 35
-  const bufferGrowth = (window.jitterBufferCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
-    && (window.jitterBufferMsLast ?? 0) - (window.jitterBufferMsFirst ?? 0) >= 100
-    && (window.repairPacketsPerSecondAvg ?? 0) > 0
-  if (loss >= 0.08 || (loss >= 0.03 && (rttGrowth > Math.max(50, (rttBaselineMs ?? 0) * 0.25) || jitterPressure || bufferGrowth)))
-    return 'congested'
-  if (loss >= 0.03)
-    return 'warning'
-  return 'stable'
+  return assessBrowserNetworkPressure(window, rttBaselineMs).pressure
+}
+
+/** 对照 Rust 公共判定的既有回放入口；生产 runtime 消费 Rust 的决定。 */
+function assessBrowserNetworkPressure(window: BrowserStatsWindowSummary | undefined, baseline?: number): { pressure: NetworkPressure, reason: string } {
+  const valid = (value: number | undefined): value is number => value !== undefined && Number.isFinite(value) && value >= 0
+  const covered = (ms: number | undefined) => (ms ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1
+  const loss = covered(window?.lossCoverageMs) && valid(window?.lossAvg) ? window.lossAvg : undefined
+  const delayPressure = valid(baseline) && covered(window?.rttCoverageMs) && valid(window?.rttMsAvg)
+    && window.rttMsAvg - baseline > Math.max(50, baseline * 0.25)
+  const jitterPressure = covered(window?.jitterCoverageMs) && valid(window?.jitterMsAvg) && window.jitterMsAvg >= 35
+  const bufferGrowth = covered(window?.jitterBufferCoverageMs) && valid(window?.jitterBufferMsFirst) && valid(window?.jitterBufferMsLast)
+    && window.jitterBufferMsLast - window.jitterBufferMsFirst >= 100
+  if (loss !== undefined && (loss >= 0.08 || (loss >= 0.03 && (delayPressure || jitterPressure || (bufferGrowth && (window?.repairPacketsPerSecondAvg ?? 0) > 0)))))
+    return { pressure: 'congested', reason: 'transportLoss' }
+  if (delayPressure)
+    return { pressure: bufferGrowth ? 'congested' : 'warning', reason: 'delayAccumulation' }
+  if (loss !== undefined)
+    return { pressure: loss >= 0.03 ? 'warning' : 'stable', reason: loss >= 0.03 ? 'transportLoss' : 'pathStable' }
+  return { pressure: 'unknown', reason: 'networkEvidenceIncomplete' }
 }
 
 export class BrowserNetworkPolicy {
@@ -93,7 +98,7 @@ export class BrowserNetworkPolicy {
     const short = stats.browserStatsWindows?.short
     const pressure = accepted === 'new' && (stats.statsSampledAtMs ?? 0) - BROWSER_SOFT_WINDOW_MS >= this.eligibleSinceMs ? input.sharedPressure ?? classifyBrowserNetworkPressure(short, this.rttBaselineMs) : 'unknown'
     this.state = pressure
-    this.reason = pressure === 'unknown' ? 'networkEvidenceIncomplete' : pressure === 'stable' ? 'pathStable' : 'transportLoss'
+    this.reason = pressure === 'unknown' ? 'networkEvidenceIncomplete' : assessBrowserNetworkPressure(short, this.rttBaselineMs).reason
     const now = input.nowMs
     if (pressure === 'stable') {
       this.healthySinceMs ??= now
@@ -101,8 +106,10 @@ export class BrowserNetworkPolicy {
       if (this.rttBaselineMs === undefined && (short?.rttCoverageMs ?? 0) >= BROWSER_SOFT_WINDOW_MS - 1)
         this.rttBaselineMs = short?.rttMsAvg
       const long = stats.browserStatsWindows?.long
-      if (now - this.healthySinceMs >= BROWSER_STABLE_WINDOW_MS && (long?.rttCoverageMs ?? 0) >= BROWSER_STABLE_WINDOW_MS - 1)
-        this.rttBaselineMs = long?.rttMsAvg
+      if (now - this.healthySinceMs >= BROWSER_STABLE_WINDOW_MS && (long?.rttCoverageMs ?? 0) >= BROWSER_STABLE_WINDOW_MS - 1
+        && long?.rttMsAvg !== undefined && Number.isFinite(long.rttMsAvg) && long.rttMsAvg >= 0) {
+        this.rttBaselineMs = Math.min(this.rttBaselineMs ?? long.rttMsAvg, long.rttMsAvg)
+      }
       if (input.level > 0)
         this.state = 'recovering'
     }
@@ -127,7 +134,7 @@ export class BrowserNetworkPolicy {
       return this.reserve({ level: 0, reason: 'healthyRestore' }, stats, now)
     }
     if (!this.suspended && pressure === 'congested' && input.level < 2 && this.pressureSinceMs !== undefined && now - this.pressureSinceMs >= BROWSER_SOFT_WINDOW_MS)
-      return this.reserve({ level: input.level + 1, reason: 'sustainedCongestion' }, stats, now)
+      return this.reserve({ level: input.level + 1, reason: this.reason === 'delayAccumulation' ? 'delayAccumulation' : 'sustainedCongestion' }, stats, now)
   }
 
   private reserve(action: BrowserNetworkAction, stats: StreamStats, nowMs: number): BrowserNetworkAction {
@@ -193,9 +200,11 @@ export class BrowserNetworkPolicy {
       ? 'unknown'
       : probe.action.reason === 'healthyRestore'
         ? classifyBrowserNetworkPressure(post, this.rttBaselineMs) === 'stable' ? 'improved' : 'degraded'
-        : post.lossAvg < baseline.lossAvg * 0.5
-          ? 'improved'
-          : post.lossAvg > baseline.lossAvg * 1.2 ? 'degraded' : 'neutral'
+        : probe.action.reason === 'delayAccumulation'
+          ? evaluateDelayEffect(baseline, post)
+          : post.lossAvg < baseline.lossAvg * 0.5
+            ? 'improved'
+            : post.lossAvg > baseline.lossAvg * 1.2 ? 'degraded' : 'neutral'
     this.reason = `qualityEffect:${this.effect}`
     if (this.effect !== 'improved') {
       this.suspended = true
@@ -203,4 +212,16 @@ export class BrowserNetworkPolicy {
     }
     this.probe = undefined
   }
+}
+
+function evaluateDelayEffect(before: BrowserStatsWindowSummary, after: BrowserStatsWindowSummary): ActionEffect {
+  const fields = [before.rttMsAvg, after.rttMsAvg, before.jitterBufferMsLast, after.jitterBufferMsLast, before.lossAvg, after.lossAvg]
+  if ([before.rttCoverageMs, after.rttCoverageMs, before.jitterBufferCoverageMs, after.jitterBufferCoverageMs].some(ms => (ms ?? 0) < BROWSER_SOFT_WINDOW_MS - 1)
+    || fields.some(value => value === undefined || !Number.isFinite(value) || value < 0)) {
+    return 'unknown'
+  }
+  const [previousRtt, rtt, previousBuffer, buffer, previousLoss, loss] = fields as number[]
+  if (loss > previousLoss + 0.01 || rtt - previousRtt > Math.max(10, previousRtt * 0.2) || buffer - previousBuffer > Math.max(20, previousBuffer * 0.2))
+    return 'degraded'
+  return previousRtt - rtt >= Math.max(10, previousRtt * 0.2) && previousBuffer - buffer >= Math.max(20, previousBuffer * 0.2) ? 'improved' : 'neutral'
 }

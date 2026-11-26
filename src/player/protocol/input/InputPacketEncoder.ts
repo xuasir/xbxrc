@@ -33,7 +33,7 @@ export class InputPacketEncoder {
   private keyboardFrames: Array<KeyboardFrame> = []
   private maxTouchpoints = 0
 
-  constructor(sequence: number) {
+  constructor(sequence: number, private readonly now: () => number = () => performance.now()) {
     this.sequence = sequence
   }
 
@@ -111,7 +111,7 @@ export class InputPacketEncoder {
     const packet = new DataView(buffer)
     packet.setUint16(0, this.reportType, true)
     packet.setUint32(2, this.sequence, true)
-    packet.setFloat64(6, performance.now(), true)
+    packet.setFloat64(6, this.now(), true)
 
     let offset = 14
 
@@ -152,8 +152,8 @@ export class InputPacketEncoder {
       packet.setUint32(offset + 8, frame.frameSubmittedTimeMs, true)
       packet.setUint32(offset + 12, frame.frameDecodedTimeMs, true)
       packet.setUint32(offset + 16, frame.frameRenderedTimeMs, true)
-      packet.setUint32(offset + 20, performance.now(), true)
-      packet.setUint32(offset + 24, performance.now(), true)
+      packet.setUint32(offset + 20, this.now(), true)
+      packet.setUint32(offset + 24, this.now(), true)
       offset += 28
     }
     return offset

@@ -18,6 +18,7 @@ final class StreamingFeatureStore: ObservableObject {
     @Published private(set) var controlMessage: String?
     @Published private(set) var startupProgress: StreamingStartupProgress?
 
+    let renderResources = StreamingRenderResourceCache()
     let input: StreamInputSession
     let touchLayout = StreamingTouchLayoutController()
     weak var authentication: AuthStore?
@@ -96,9 +97,9 @@ final class StreamingFeatureStore: ObservableObject {
             state = .playing
             streamTarget = target
             diagnostics = StreamingSessionDiagnostics(
-            peerStats: nil, displayHealth: nil, peer: nil, audioLifecycleState: nil,
-            audioRoute: nil, audioTrackReady: true, updatedAtMilliseconds: 0)
-    }
+                peerStats: nil, displayHealth: nil, peer: nil, audioLifecycleState: nil,
+                audioRoute: nil, audioTrackReady: true, updatedAtMilliseconds: 0)
+        }
     #endif
 
     var isPresentingPlayer: Bool { state.presentsPlayer }
@@ -176,13 +177,13 @@ final class StreamingFeatureStore: ObservableObject {
             start(target: .cloud, targetID: rawStreamTitleID) { startup in
                 let access = try await prepareAccess(startup)
                 return PreparedStreamingAccess(
-                handle: access.handle,
-                accountID: access.accountID,
-                regionHost: access.regionHost,
-                ownerGeneration: access.ownerGeneration,
-                expiresAtMs: access.expiresAtMs
-            )
-        }
+                    handle: access.handle,
+                    accountID: access.accountID,
+                    regionHost: access.regionHost,
+                    ownerGeneration: access.ownerGeneration,
+                    expiresAtMs: access.expiresAtMs
+                )
+            }
         }
     #endif
 

@@ -1,0 +1,106 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+      "deviceName": "iPhone 18 Pro",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24B8117",
+      "osVersion": "27.2",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "0.0024s",
+                  "durationInSeconds": 0.0023920536041259766,
+                  "name": "testAudioConfigurationsKeepDefaultPCMAndBufferWithStereoNegotiation()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioConfigurationsKeepDefaultPCMAndBufferWithStereoNegotiation()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioConfigurationsKeepDefaultPCMAndBufferWithStereoNegotiation",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0023s",
+                  "durationInSeconds": 0.002314925193786621,
+                  "name": "testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioNegotiationUsesSenderStereoAndScopesPayloadToAudio",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0022s",
+                  "durationInSeconds": 0.002241969108581543,
+                  "name": "testAudioPreferencesKeepDefaultADMFormatAcrossStereoAndRoutes()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testAudioPreferencesKeepDefaultADMFormatAcrossStereoAndRoutes()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testAudioPreferencesKeepDefaultADMFormatAcrossStereoAndRoutes",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.2s",
+                  "durationInSeconds": 0.19814300537109375,
+                  "name": "testNativeNegotiationAndHealthyRouteOnlyUpdateObservations()",
+                  "nodeIdentifier": "StreamingMediaCalibrationTests/testNativeNegotiationAndHealthyRouteOnlyUpdateObservations()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests/testNativeNegotiationAndHealthyRouteOnlyUpdateObservations",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "StreamingMediaCalibrationTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/StreamingMediaCalibrationTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "0.12s",
+                  "durationInSeconds": 0.12219798564910889,
+                  "name": "testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes()",
+                  "nodeIdentifier": "XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.001s",
+                  "durationInSeconds": 0.0010110139846801758,
+                  "name": "testStreamingAudioConfigurationsAreIndependentAndDirectionComplete()",
+                  "nodeIdentifier": "XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "XBXRCTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/XBXRCTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "XBXRCTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        }
+      ],
+      "name": "XBXRC",
+      "nodeType": "Test Plan",
+      "result": "Passed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

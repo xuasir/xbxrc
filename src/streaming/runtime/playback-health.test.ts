@@ -8,6 +8,18 @@ function payload(window: PlaybackHealthWindow, at = 1000) {
 }
 
 describe('production playback buckets', () => {
+  it('keeps decoded read/drop deltas within one reader generation', () => {
+    const window = new PlaybackHealthWindow()
+    const sample = (at: number, reader: number, read: number) => observation(at, {
+      rendererExecution: { mode: 'worker-direct', state: 'ready', scope: { surfaceGeneration: 1, videoGeneration: 1, readerGeneration: reader, linkEpoch: reader }, link: { frames: read, acknowledgements: read, rejectedFrames: 0, heldFrames: 1, frameQueueLimit: 1, applicationFrameLimit: 3, messagesReceived: read, messagesSent: read, bytesReceived: 0, bytesSent: 0, readFrames: read, deliveredFrames: read - 1, overwrittenFrames: 1, staleDrops: 0 } },
+    })
+    window.observe(sample(0, 1, 10))
+    window.observe(sample(250, 1, 25))
+    window.observe(sample(500, 2, 1))
+    window.observe(sample(750, 2, 16))
+    window.observe(sample(1000, 2, 31))
+    expect(payload(window).frameSupply.delta).toMatchObject({ read: 45, delivered: 45, readerOverwrites: 0, staleDrops: 0 })
+  })
   it('covers every 250ms interval, including a short deficit and a callback spike', () => {
     const window = new PlaybackHealthWindow()
     window.observe(observation(0))

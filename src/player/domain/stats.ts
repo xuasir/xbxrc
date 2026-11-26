@@ -11,6 +11,9 @@ export interface InputPacketStats {
   pointerFrames: number
   mouseFrames: number
   keyboardFrames: number
+  /** Worker 合并快照携带实际发送包计数，沿既有 FPS 语义消费。 */
+  inputPackets?: number
+  metadataPackets?: number
 }
 
 export interface NetworkStats {
@@ -32,6 +35,7 @@ export interface BrowserWebRtcCodecSample {
   payloadType?: number | string
   mimeType?: string
   clockRate?: number
+  channels?: number
   sdpFmtpLine?: string
 }
 
@@ -85,6 +89,67 @@ export interface BrowserWebRtcInboundVideoSample {
   frameWidth?: number
   frameHeight?: number
   codecId?: string
+}
+
+export interface BrowserWebRtcInboundAudioSample {
+  id: string
+  mid?: string
+  ssrc?: number
+  trackIdentifier?: string
+  codecId?: string
+  packetsReceived?: number
+  packetsLost?: number
+  bytesReceived?: number
+  jitter?: number
+  jitterBufferDelay?: number
+  jitterBufferTargetDelay?: number
+  jitterBufferMinimumDelay?: number
+  jitterBufferEmittedCount?: number
+  totalSamplesReceived?: number
+  concealedSamples?: number
+  silentConcealedSamples?: number
+  concealmentEvents?: number
+  insertedSamplesForDeceleration?: number
+  removedSamplesForAcceleration?: number
+  audioLevel?: number
+  totalAudioEnergy?: number
+  estimatedPlayoutTimestamp?: number
+}
+
+export interface BrowserAudioStatsDelta {
+  elapsedMs: number
+  packetsReceivedDelta?: number
+  packetsLostDelta?: number
+  bytesReceivedDelta?: number
+  jitterBufferDelayDelta?: number
+  jitterBufferEmittedCountDelta?: number
+  totalSamplesReceivedDelta?: number
+  concealedSamplesDelta?: number
+  concealmentEventsDelta?: number
+  insertedSamplesForDecelerationDelta?: number
+  removedSamplesForAccelerationDelta?: number
+}
+
+export interface BrowserAudioStatsSummary {
+  supported: boolean
+  sampledAtMs: number
+  coverageMs: number
+  progressObserved?: boolean
+  bitrateKbps?: number
+  samplesPerSecond?: number
+  jitterBufferMs?: number
+  concealedRatio?: number
+  concealmentEventsDelta?: number
+  packetsReceivedTotal?: number
+  samplesReceivedTotal?: number
+  concealedSamplesTotal?: number
+  insertedSamplesTotal?: number
+  removedSamplesTotal?: number
+  insertedSamplesDelta?: number
+  removedSamplesDelta?: number
+  playoutDeltaMs?: number
+  playoutEstimateState: 'available' | 'unavailable'
+  resetReason?: string
 }
 
 export interface BrowserWebRtcCandidatePairSample {
@@ -184,6 +249,10 @@ export interface BrowserWebRtcStatsSample {
   connectionState: RTCPeerConnectionState
   selectedCodec?: BrowserWebRtcCodecSample
   inboundVideo?: BrowserWebRtcInboundVideoSample
+  inboundAudio?: BrowserWebRtcInboundAudioSample
+  selectedAudioCodec?: BrowserWebRtcCodecSample
+  audioDelta?: BrowserAudioStatsDelta
+  audioDeltaResetReason?: string
   selectedCandidatePair?: BrowserWebRtcCandidatePairSample
   transport?: BrowserWebRtcTransportSample
   delta?: BrowserWebRtcStatsDelta

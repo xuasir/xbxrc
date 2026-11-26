@@ -13,17 +13,23 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
     private var activationLeaseCount = 0
     private var observing = false
     private var activeAudioDirection: StreamingMediaDirection = .receiveOnly
+    private var stereoAudio = true
+    private var negotiatedOutputChannels: Int?
+    private var requestedAudioConfiguration: RTCAudioSessionConfiguration?
 
     init(eventSink: @escaping EventSink) {
         self.eventSink = eventSink
         super.init()
     }
 
-    func start(audioDirection: StreamingMediaDirection) throws {
+    func start(audioDirection: StreamingMediaDirection, stereoAudio: Bool = true) throws {
         try queue.sync {
             nextGeneration &+= 1
             let generation = nextGeneration
             activeAudioDirection = audioDirection
+            self.stereoAudio = stereoAudio
+            negotiatedOutputChannels = nil
+            requestedAudioConfiguration = nil
             if !observing {
                 session.add(self)
                 observing = true
@@ -60,13 +66,23 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         }
     }
 
+    func updateNegotiatedOutputChannels(_ channels: Int?) {
+        queue.sync {
+            guard machine.generation != nil else { return }
+            negotiatedOutputChannels = channels
+            observeOutput(reason: "remoteDescription")
+        }
+    }
+
     private func enqueue(
         _ makeEvent: @escaping @Sendable (UInt64) -> StreamingAudioLifecycleEvent,
         payload: [String: IOSRuntimeTraceValue] = [:]
     ) {
         queue.async { [weak self] in
             guard let self, let generation = self.machine.generation else { return }
-            try? self.process(makeEvent(generation), eventPayload: payload)
+            let event = makeEvent(generation)
+            try? self.process(event, eventPayload: payload)
+            if case .routeChanged = event { self.observeOutput(reason: "routeChanged") }
         }
     }
 
@@ -155,7 +171,9 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         reason: StreamingAudioActivationReason,
         audioDirection: StreamingMediaDirection
     ) throws {
-        let configuration = Self.makeConfiguration(for: audioDirection)
+        let configuration = Self.makeConfiguration(
+            for: audioDirection, stereoAudio: stereoAudio,
+            negotiatedOutputChannels: negotiatedOutputChannels)
         RTCAudioSessionConfiguration.setWebRTC(configuration)
         // 让生命周期的 isAudioEnabled 开关实际控制 WebRTC 音频设备启停。
         session.useManualAudio = true
@@ -164,6 +182,7 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         defer { session.unlockForConfiguration() }
         var acquiredActivationLease = false
         do {
+            // 路由可限制首选声道/采样率；关键 category 与激活错误继续进入生命周期失败路径。
             session.ignoresPreferredAttributeConfigurationErrors = audioDirection == .receiveOnly
             try session.setConfiguration(configuration)
             if !session.isActive {
@@ -173,6 +192,7 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
             }
             // WebRTC 仅在 active + voiceChat 下应用首选输入/输出通道。
             try session.setConfiguration(configuration)
+            requestedAudioConfiguration = configuration
             session.isAudioEnabled = true
         } catch {
             if acquiredActivationLease {
@@ -189,7 +209,9 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
     }
 
     static func makeConfiguration(
-        for _: StreamingMediaDirection
+        for _: StreamingMediaDirection, stereoAudio _: Bool = true,
+        negotiatedOutputChannels _: Int? = nil, maximumOutputChannels _: Int? = nil,
+        outputPortTypes _: [String] = []
     ) -> RTCAudioSessionConfiguration {
         let configuration = RTCAudioSessionConfiguration()
         // M137 默认 VoiceProcessingIO 在 recvonly 播放初始化时也要求有效输入通道。
@@ -202,7 +224,15 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
             .allowBluetoothA2DP,
             .allowAirPlay,
         ]
+        // 本地 PCM 与 I/O 周期消费默认 ADM 合同；远端声道和路由用于观测。
         return configuration
+    }
+
+    private func observeOutput(reason: String) {
+        guard machine.generation != nil else { return }
+        var payload = sessionPayload()
+        payload["observationReason"] = .string(reason)
+        eventSink("audioOutputObserved", payload)
     }
 
     private func deactivate() -> Error? {
@@ -255,6 +285,13 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
 
     private func sessionPayload() -> [String: IOSRuntimeTraceValue] {
         let route = session.currentRoute
+        let observation = StreamingAudioOutputPreferences(
+            stereoAudio: stereoAudio, negotiatedChannels: negotiatedOutputChannels,
+            maximumChannels: max(1, session.maximumOutputNumberOfChannels),
+            outputPortTypes: route.outputs.map { $0.portType.rawValue }
+        )
+        let requested =
+            requestedAudioConfiguration ?? Self.makeConfiguration(for: activeAudioDirection)
         return [
             "isActive": .bool(session.isActive),
             "useManualAudio": .bool(session.useManualAudio),
@@ -262,6 +299,22 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
             "activationLeaseCount": .integer(Int64(activationLeaseCount)),
             "category": .string(session.category),
             "mode": .string(session.mode),
+            "audioDirection": .string(activeAudioDirection.rawValue),
+            "stereoAudioRequested": .bool(stereoAudio),
+            "audioConfigurationOwner": .string("libwebrtcDefaultADM"),
+            "nativePlayoutChannels": .integer(Int64(requested.outputNumberOfChannels)),
+            "negotiatedOutputChannels": .integer(
+                Int64(observation.negotiatedChannels)),
+            "preferredOutputChannels": .integer(
+                Int64(requested.outputNumberOfChannels)),
+            "maximumOutputChannels": .integer(Int64(session.maximumOutputNumberOfChannels)),
+            "outputChannelPreferenceSatisfied": .bool(
+                session.outputNumberOfChannels
+                    >= requested.outputNumberOfChannels),
+            "negotiatedOutputChannelMatch": .bool(
+                session.outputNumberOfChannels
+                    >= observation.negotiatedChannels),
+            "outputRoute": .string(observation.route),
             "outputPortTypes": .array(route.outputs.map { .string($0.portType.rawValue) }),
             "inputPortTypes": .array(route.inputs.map { .string($0.portType.rawValue) }),
             "inputAvailable": .bool(session.inputAvailable),
@@ -269,6 +322,11 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
             "outputNumberOfChannels": .integer(Int64(session.outputNumberOfChannels)),
             "outputVolume": .double(Double(session.outputVolume)),
             "sampleRate": .double(session.sampleRate),
+            "preferredSampleRate": .double(session.preferredSampleRate),
+            "requestedSampleRate": .double(requested.sampleRate),
+            "requestedIOBufferDurationMs": .double(
+                requested.ioBufferDuration * 1_000),
+            "preferredIOBufferDurationMs": .double(session.preferredIOBufferDuration * 1_000),
             "ioBufferDurationMs": .double(session.ioBufferDuration * 1_000),
             "outputLatencyMs": .double(session.outputLatency * 1_000),
             "secondaryAudioShouldBeSilenced": .bool(session.secondaryAudioShouldBeSilencedHint),

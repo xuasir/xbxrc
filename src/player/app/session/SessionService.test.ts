@@ -96,7 +96,7 @@ function fixture(options: PlayerClientOptions = DEFAULT_PLAYER_OPTIONS()) {
   }
   const input = new InputService(driver, emitter)
   const rumble = vi.spyOn(input, 'handleRumble')
-  const media = { destroy: vi.fn(), attachVideoStream: vi.fn(), attachAudioStream: vi.fn() }
+  const media = { destroy: vi.fn(), attachVideoStream: vi.fn(), attachAudioStream: vi.fn(), updateAudioPlaybackFormat: vi.fn() }
   const session = new SessionService(options, input, media as unknown as MediaService, emitter)
   sessions.add(session)
   const timeline = vi.fn()
@@ -126,6 +126,43 @@ function dispatchLateEvents(peer: FakePeer): void {
 }
 
 describe('browser session replacement', () => {
+  it('consumes audio channel policy with track-before-answer and answer-before-track ordering', async () => {
+    const options = DEFAULT_PLAYER_OPTIONS()
+    options.transport.forceMonoAudio = true
+    const f = fixture(options)
+    f.session.bind()
+    expect((await f.session.createOffer()).sdp).toContain('useinbandfec=1;stereo=0')
+    const stream = {} as MediaStream
+    const track = { kind: 'audio', getSettings: () => ({ channelCount: 2 }) } as unknown as MediaStreamTrack
+    FakePeer.instances[0].ontrack?.({ streams: [stream], track, transceiver: { mid: 'game' } } as unknown as RTCTrackEvent)
+    expect(f.media.attachAudioStream).toHaveBeenLastCalledWith(stream, expect.objectContaining({ requestedChannelCount: 1, effectiveChannelCount: 1, sourceChannelCount: 2 }), track)
+    await f.session.setRemoteAnswer('v=0\nm=audio 9 RTP/SAVPF 111\na=mid:game\na=sendonly\na=rtpmap:111 opus/48000/2\n')
+    expect(f.media.updateAudioPlaybackFormat).toHaveBeenLastCalledWith(expect.objectContaining({ codecChannelCount: 2, effectiveChannelCount: 1 }))
+    const next = fixture()
+    next.session.bind()
+    await next.session.createOffer()
+    await next.session.setRemoteAnswer('v=0\nm=audio 9 RTP/SAVPF 111\na=mid:game\na=sendonly\na=rtpmap:111 opus/48000/2\na=fmtp:111 sprop-stereo=0\n')
+    expect(next.media.updateAudioPlaybackFormat).toHaveBeenLastCalledWith(expect.objectContaining({ effectiveChannelCount: 1, source: 'senderHint' }))
+    FakePeer.instances[1].ontrack?.({ streams: [stream], track, transceiver: { mid: 'game' } } as unknown as RTCTrackEvent)
+    expect(next.media.attachAudioStream).toHaveBeenLastCalledWith(stream, expect.objectContaining({ effectiveChannelCount: 2, source: 'trackSettings' }), track)
+  })
+
+  it('discards audio format completion from an answer on a replaced peer', async () => {
+    const f = fixture()
+    f.session.bind()
+    await f.session.createOffer()
+    let finish!: () => void
+    FakePeer.instances[0].setRemoteDescription.mockImplementation(() => new Promise<void>((resolve) => {
+      finish = resolve
+    }))
+    const pending = f.session.setRemoteAnswer('v=0\nm=audio 9 RTP/SAVPF 111\na=rtpmap:111 opus/48000/2\n')
+    f.session.close()
+    f.session.bind()
+    finish()
+    await pending
+    expect(f.media.updateAudioPlaybackFormat).not.toHaveBeenCalled()
+  })
+
   it.each([[1280, 720, 3600], [1920, 1080, 8160], [2560, 1440, 14400]])('applies %i×%i receive constraints to the actual offer and ICE restart', async (width, height, maxFrameSize) => {
     const options = DEFAULT_PLAYER_OPTIONS()
     Object.assign(options.transport, { targetVideoWidth: width, targetVideoHeight: height })

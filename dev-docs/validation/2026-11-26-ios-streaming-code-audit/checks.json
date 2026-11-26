@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-26",
+  "timezone": "Asia/Shanghai",
+  "analysisScope": "current source and current test assertions",
+  "head": "37e4fb434039d38062d08e0cf2c9a8030d33b8f8",
+  "boundarySmoke": {
+    "command": "sh iosapp/scripts/check-streaming-session-boundary.sh",
+    "runs": 1,
+    "exitCode": 0,
+    "stdout": "streaming session boundary check passed",
+    "stderr": ""
+  },
+  "sourceFactChecks": {
+    "short_tap_test_asserts_press_release_and_final_neutral": true,
+    "touch_accumulator_publishes_transitions": true,
+    "session_binding_consumes_final_snapshot_only": true,
+    "input_poll_wait_is_8ms": true,
+    "input_loop_uses_mainactor": true,
+    "ingress_drain_uses_mainactor": true,
+    "both_latency_windows_sorted_per_completion": true,
+    "device_profile_buttons_and_axes_sorted_per_read": true,
+    "touch_render_allocates_accessibility_elements": true,
+    "decoded_progress_refreshes_video_activity": true,
+    "local_recovery_requires_inactivity_threshold": true,
+    "supervision_present_counter_uses_gpu_completion_count": true,
+    "actual_drawable_presentation_is_already_observed": true,
+    "stats_projection_has_buffer_and_decode_time_extension_space": true,
+    "supervision_captures_now_before_async_debug": true,
+    "yuv_coefficients_use_bt601": true,
+    "audio_configuration_uses_shared_voicechat_mode": true,
+    "superresolution_resources_already_reused": true,
+    "all_report_source_links_resolve": true
+  },
+  "sourceLinkIssues": [],
+  "sourceFiles": [
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingMetalRenderer.swift",
+      "sha256": "db9451d564f8e606fafb2c25cb59a5c5dc14dfbc01dc4e355f5a4c056e07fbdb"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+      "sha256": "349de9965bd272698d1f8a7247c85c5418e754a7b821a16fd719f7df7a0af2dc"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "sha256": "be102bbdd69c562cbf6e1428557fe73ad21e30af4fde5883374de8f77f5d0d2f"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+      "sha256": "a8de194a3e4c74f17e8c5ad033d505a2b701ff8b3bf8ec721b1e274e07f4013a"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+      "sha256": "4ecbc5cb642a30a89207c4d25cd2b2e99598c4cd34e6f08faa2a652a5c4ae4c6"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "sha256": "aa9822eb843d6163c82fb96a06073e1f037afae17f2b54ea3f8cf80829458546"
+    },
+    {
+      "path": "iosapp/XBXRCTests/TouchLayoutTests.swift",
+      "sha256": "091d40ac53a7ecc3e106517066b7f67dc4350374d7d9a36231f57c4fb91a9363"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift",
+      "sha256": "5b7ff17cbeff66dbde5ce21e06b2392b0b2b323982492ca80e45c3a0dfaeff96"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/LibWebRtcRuntime.swift",
+      "sha256": "63cc7e43453048aba9219f06e23fdd836bcc4b4c5ba36f033caa02877ace161b"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+      "sha256": "a752b1660ded244328a66941ecb2bca2172eb9d0f56b8af1385c41e9c4c8144c"
+    },
+    {
+      "path": "iosapp/XBXRC/Shared/Diagnostics/IOSRuntimeTraceWriter.swift",
+      "sha256": "d419a8ec41ec1ede21f5fcf6d63abc4196476c8c27e02ce244b55815c01aba18"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/observation.rs",
+      "sha256": "28bbf0f9e57d6473e235e152d9a6f8c2ce399deab7176b075165a9e2fba8efb7"
+    },
+    {
+      "path": "crates/xbox-streaming/src/session/recovery/supervision.rs",
+      "sha256": "4557d41ff24d0893a88d14c010fb6b8c560a8821457917c41f736d69823c41bd"
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsModel.swift",
+      "sha256": "690a7e1e2ee0bf661c0575ee411709c78ecd02d693bb45b79c00aa722259ad64"
+    }
+  ],
+  "behavioralTestsExecuted": [],
+  "runtimePerformanceMeasurements": [],
+  "temporaryArtifactsCreated": [],
+  "temporaryArtifactsRemaining": [],
+  "finalArtifacts": [
+    "README.md",
+    "checks.json"
+  ],
+  "availableDiskBytesAfter": 92160000000
+}

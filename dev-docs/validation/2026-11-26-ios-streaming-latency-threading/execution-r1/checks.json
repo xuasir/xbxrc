@@ -1,0 +1,15 @@
+{
+  "rustSupervision": {
+    "passed": 27,
+    "failed": 0
+  },
+  "deviceCompile": "passed",
+  "simulatorTestBuild": "passed",
+  "swiftRuntimeTests": "awaiting_simulator_authorization",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-threading-20261126-ra23942o",
+  "metalToolchain": {
+    "version": "27B47",
+    "downloadBytes": 838900000,
+    "retainedAs": "Xcode official build dependency"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "m4-worker-smoke": [
+    {
+      "test": "Worker input send ownership and deadlines keeps metadata on the original clock and includes handoff age in the feedback budget",
+      "status": "failed"
+    }
+  ],
+  "lifecycle-smoke": [
+    {
+      "test": "Render execution lifecycle and batched readback settles old-scope capture requests and retires the old port when rebind wins",
+      "status": "failed"
+    }
+  ],
+  "rust-trace-contract": "既有Rust静态描述表缺localStallObserved及audioPlaybackStateObserved；改为从共享JSON装配，4项合同复验通过。",
+  "production-budget": "新增读帧delta与重复累计字段使模拟常态输出达到334391.93 B/min；健康桶累计投影精简，完整同窗delta和会话summary/decodedSupply累计事实保留，原327680 B/min门通过。",
+  "lint": "处理新增适配器与夹具中的语句布局、函数声明和this别名；全仓src lint最终通过，任务外文件变化0。",
+  "repairs": {
+    "m4-worker-smoke": "测试消费者补上单在途快照ACK，再读取1Hz反馈汇总。",
+    "lifecycle-smoke": "旧scope取消结果按缺失RGBA字段验收；捕获请求/作用域与零转移断言保持。"
+  }
+}
