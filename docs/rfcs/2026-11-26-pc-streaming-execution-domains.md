@@ -201,7 +201,7 @@ M0在相同设备、实际2560×1440/60fps、USM3及SR同档输入下比较当�
 - [x] M2 Reader→Render直接MessagePort、暂停/重绑/截图/有界关闭及Main回退。
 - [x] M3 100ms数字事实、1Hz聚合、同窗read/drop delta、执行域与时钟观察、现有renderer局部恢复。
 - [x] M4同一个InputCore、真实channel发送、4ms deadline、owner barrier及neutral接受确认。
-- [ ] 用户一次实机回归：实际宿主的成本门、Home/Cloud画面、输入、截图和前后台。
+- [ ] 实机验收收口：首轮Home/Worker/输入/退出日志已验证；完整成本门、Render停机回执与SR/截图/前后台资格待验。
 
 ## Execution Notes
 
@@ -216,4 +216,5 @@ M0在相同设备、实际2560×1440/60fps、USM3及SR同档输入下比较当�
 - 观察决策：新鲜Worker提交年龄按生产者采样点计算，快照交付年龄与skew独立记录；250ms以后按陈旧事实老化进入现有局部恢复窗口。GPU fence维持完成代理语义。
 - 资源边界：单link应用帧峰值3；现行current/pending renderer交接分别持有自己的scope，短暂交接总上界6。截图单批一次同步读回、一次ImageBitmap/RGBA转移，至多4项等待。
 - 日志合同：Rust准入表直接从共享JSON装配，执行域事件、既有local-stall与音频事件的描述和投影保持同源。消息字节是应用元数据JSON UTF-16估算，原生图像句柄与驱动成本分别由交接/导入计时观察。
+- 2026-11-26 | 首轮实机日志：worker-direct与input-worker启用；同档前台64.044秒提交59.881FPS、上传/绘制P95/P99 1ms，端口交接P951.5ms、输入交接max2ms、neutral接受确认通过。两次供给停顿形成submit/present尾部FAIL，采样竞态及Render停机回执缺证已定位；受控繁忙收益与其他实机功能继续待验。[日志证据](../../dev-docs/validation/2026-11-26-pc-latest-log-1795701183517/README.md)。
 - 本轮保持同一个Rust局部恢复所有者与现行网络/音频/输入wire；诊断聚合在已有Render/Input Worker内完成。
