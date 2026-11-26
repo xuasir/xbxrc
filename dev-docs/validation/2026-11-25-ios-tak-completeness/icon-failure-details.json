@@ -1,0 +1,31 @@
+{
+  "missingSymbols": [
+    "hand.fist",
+    "pickaxe",
+    "sword"
+  ],
+  "assertions": [
+    "XCTAssertNotNil failed - lightSword: sword",
+    "XCTAssertNotNil failed - mediumPunch2: hand.fist",
+    "XCTAssertNotNil failed - mediumSword2: sword",
+    "XCTAssertNotNil failed - heavySword: sword",
+    "XCTAssertNotNil failed - pickAxe: pickaxe",
+    "XCTAssertNotNil failed - heavyPunch2: hand.fist",
+    "XCTAssertNotNil failed - mediumSword: sword",
+    "XCTAssertNotNil failed - heavyPunch3: hand.fist",
+    "XCTAssertNotNil failed - lightPunch3: hand.fist",
+    "XCTAssertNotNil failed - sword: sword",
+    "XCTAssertNotNil failed - punch: hand.fist",
+    "XCTAssertNotNil failed - lightSword2: sword",
+    "XCTAssertNotNil failed - heavySword2: sword",
+    "XCTAssertNotNil failed - lightPunch: hand.fist",
+    "XCTAssertNotNil failed - mediumPunch: hand.fist",
+    "XCTAssertNotNil failed - mediumPunch3: hand.fist",
+    "XCTAssertNotNil failed - firePunch: hand.fist",
+    "XCTAssertNotNil failed - punch2: hand.fist",
+    "XCTAssertNotNil failed - heavyPunch: hand.fist",
+    "XCTAssertNotNil failed - lightPunch2: hand.fist",
+    "XCTAssertNotNil failed - abilityPowerPunch: hand.fist",
+    "XCTAssertNotNil failed - sword2: sword"
+  ]
+}

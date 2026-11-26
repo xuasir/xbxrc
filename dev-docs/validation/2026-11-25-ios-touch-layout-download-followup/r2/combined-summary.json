@@ -1,0 +1,40 @@
+{
+  "r1ResultsReused": {
+    "rustLayoutsPassed": 23,
+    "rustBridgePassed": 15,
+    "swiftPassed": 9,
+    "uiPassed": 1
+  },
+  "r2FinalDistinctTests": {
+    "unitPassed": 7,
+    "uiPassed": 3,
+    "passed": 10,
+    "failed": 0
+  },
+  "r2InitialRun": {
+    "passed": 9,
+    "failed": 1,
+    "summary": "r2/xctest-summary.json"
+  },
+  "r2HomeScrollAttempt": {
+    "passed": 0,
+    "failed": 1,
+    "summary": "r2/home-attempt-summary.json",
+    "diagnosis": "横屏半屏浮层压缩列表空间"
+  },
+  "r2FinalAffectedSwitches": {
+    "passed": 2,
+    "failed": 0,
+    "summary": "r2/final-switches-summary.json"
+  },
+  "requestCoverage": "入口与串流UI使用可控请求客户端；完整微软原件用于资源解析与保存回归",
+  "manualValidationPending": [
+    "正常账号游戏布局服务返回",
+    "Cloud/Home实机串流与手感"
+  ],
+  "screenshotsReviewed": [
+    "两个详情入口四张成功来源图",
+    "Cloud查询后零下载、官方/社区应用和横屏包内切换",
+    "Home增高后横屏选择及最近模板"
+  ]
+}

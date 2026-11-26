@@ -1,0 +1,39 @@
+{
+  "round": "r1",
+  "sourceBase": "a98e5457c8f9d67b099033710aa34d08d2fcd3cb",
+  "branch": "release/test",
+  "xcodeExitCode": 0,
+  "testRuns": 1,
+  "testCases": [
+    {
+      "name": "-[XBXRCTests.SavedOfficialTouchLayoutTests testCommunityRequestsSurviveCloudAccessFailureAndCancellation]",
+      "seconds": 0.026,
+      "result": "passed"
+    },
+    {
+      "name": "-[XBXRCTests.SavedOfficialTouchLayoutTests testResolvedTitleReusesPreparedAccessForOfficialCatalog]",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testInstalledGameDetailsOpenCommunityLayoutsWithSourceFailure]",
+      "seconds": 32.116,
+      "result": "passed"
+    }
+  ],
+  "testCount": 3,
+  "passed": 3,
+  "failed": 0,
+  "screenshots": 4,
+  "liveOfficialService": "pending fresh trace and device verification",
+  "communityProbeScope": "public revision endpoint through current Mac configured network",
+  "format": "passed",
+  "diffCheck": "passed",
+  "finalSyntax": "passed",
+  "finalStyleAdjustment": {
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "change": "operation closure uses explicit argument label",
+    "runtimeBehaviorChange": false,
+    "testRepetition": false
+  }
+}

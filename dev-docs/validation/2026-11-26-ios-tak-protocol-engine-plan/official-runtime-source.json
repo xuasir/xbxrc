@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-26",
+  "sourceManifest": "dev-docs/validation/2026-11-12-tak-layout-and-engine/sources.json",
+  "archive": "official-runtime-source.zip",
+  "files": [
+    {
+      "file": "2871.36f50502.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/2871.36f50502.chunk.js",
+      "bytes": 498778,
+      "sha256": "c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0",
+      "matchesFrozenSource": true
+    },
+    {
+      "file": "2879.4921609f.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/2879.4921609f.chunk.js",
+      "bytes": 363813,
+      "sha256": "6a89b3639e8d1bb639e7dc489bf32b056d6ee9e496a611b789cdeb357be11d52",
+      "matchesFrozenSource": true
+    }
+  ]
+}

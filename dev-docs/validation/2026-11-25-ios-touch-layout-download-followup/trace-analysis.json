@@ -1,0 +1,275 @@
+{
+  "budget": {
+    "aggregateExports": [
+      "/Users/guo.xu/Downloads/XBXRC-Diagnostic-F17231B7-8D9A-4F0A-9C0B-CE227A4A6013.jsonl"
+    ],
+    "pressureNotices": 0,
+    "rawFiles": [],
+    "retention": [],
+    "violations": []
+  },
+  "coverage": {
+    "flows": {
+      "library": {
+        "checks": [
+          {
+            "alternatives": [
+              "libraryPageAppeared"
+            ],
+            "label": "library page",
+            "observed": [
+              "libraryPageAppeared"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreStarted"
+            ],
+            "label": "cache restore start",
+            "observed": [
+              "cacheRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "cacheRestoreFailed",
+              "cacheRestoreHit",
+              "cacheRestoreMiss",
+              "cacheRestoreRejected",
+              "cacheRestoreSkipped"
+            ],
+            "label": "cache restore outcome",
+            "observed": [
+              "cacheRestoreHit",
+              "cacheRestoreSkipped"
+            ]
+          },
+          {
+            "alternatives": [
+              "catalogActivationSkipped",
+              "catalogRefreshStarted"
+            ],
+            "label": "catalog activation decision",
+            "observed": [
+              "catalogRefreshStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "contentPresented",
+              "skeletonPresented"
+            ],
+            "label": "library presentation",
+            "observed": [
+              "contentPresented"
+            ]
+          }
+        ],
+        "required": true
+      },
+      "startup": {
+        "checks": [
+          {
+            "alternatives": [
+              "appLaunchStarted"
+            ],
+            "label": "app launch",
+            "observed": [
+              "appLaunchStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreStarted"
+            ],
+            "label": "auth restore start",
+            "observed": [
+              "authRestoreStarted"
+            ]
+          },
+          {
+            "alternatives": [
+              "authRestoreFailed",
+              "authRestoreSucceeded"
+            ],
+            "label": "auth restore outcome",
+            "observed": [
+              "authRestoreSucceeded"
+            ]
+          }
+        ],
+        "required": true
+      }
+    },
+    "missingRequiredAnchors": []
+  },
+  "failures": {
+    "budgetViolations": 0,
+    "coverageViolations": 0,
+    "invalidRows": 0,
+    "noRows": 0,
+    "pairingViolations": 2,
+    "privacyViolations": 0,
+    "schemaViolations": 0,
+    "sequenceViolations": 0
+  },
+  "gate": "FAIL",
+  "pairing": {
+    "evaluatedStarts": 19,
+    "violations": [
+      {
+        "expectedOutcomes": [
+          "imageCandidateFailed",
+          "imageCandidateSucceeded"
+        ],
+        "operationId": "46B24A87-F212-4CD6-83C6-46814ED9F34F",
+        "seq": 42,
+        "sessionId": "E5076E4F-2BCF-445F-BC14-E092DE3CB898",
+        "startEvent": "imageCandidateStarted"
+      },
+      {
+        "expectedOutcomes": [
+          "imageCandidateFailed",
+          "imageCandidateSucceeded"
+        ],
+        "operationId": "F3272614-5F87-4884-B961-21527070C0E9",
+        "seq": 185,
+        "sessionId": "E5076E4F-2BCF-445F-BC14-E092DE3CB898",
+        "startEvent": "imageCandidateStarted"
+      }
+    ]
+  },
+  "privacy": {
+    "violations": []
+  },
+  "schema": {
+    "invalidRows": [],
+    "truncatedTails": [],
+    "violations": []
+  },
+  "scope": {
+    "categories": {
+      "decision": 13,
+      "event": 180,
+      "snapshot": 9,
+      "state": 16
+    },
+    "dimensions": {
+      "core": 40,
+      "frontend": 3,
+      "lifecycle": 13,
+      "network": 88,
+      "presentation": 74
+    },
+    "domains": {
+      "auth": 21,
+      "cloud-library": 48,
+      "image": 99,
+      "ios-app": 1,
+      "library-ui": 3,
+      "touch-layouts": 16,
+      "trace": 1,
+      "xbox-data": 29
+    },
+    "events": {
+      "activityOverlayCommitted": 1,
+      "activityOverlayStarted": 1,
+      "appLaunchStarted": 1,
+      "authRestoreSessionFound": 1,
+      "authRestoreStarted": 1,
+      "authRestoreSucceeded": 1,
+      "authSessionRenewStarted": 1,
+      "authSessionRenewSucceeded": 1,
+      "cacheDiskLoadStarted": 1,
+      "cacheDiskLoadSucceeded": 1,
+      "cacheDiskSaveStarted": 5,
+      "cacheDiskSaveSucceeded": 5,
+      "cacheRestoreHit": 1,
+      "cacheRestoreScopeChanged": 1,
+      "cacheRestoreSkipped": 1,
+      "cacheRestoreStarted": 2,
+      "catalogActivationRefreshRequired": 1,
+      "catalogActivationStarted": 1,
+      "catalogRefreshCommitted": 1,
+      "catalogRefreshStarted": 1,
+      "catalogRemoteSnapshotReceived": 1,
+      "catalogRequestBoundaryStarted": 1,
+      "catalogRequestBoundarySucceeded": 1,
+      "cloudAccessBoundaryStarted": 1,
+      "cloudAccessBoundarySucceeded": 1,
+      "cloudAccessUniFFIBoundaryStarted": 1,
+      "cloudAccessUniFFIBoundarySucceeded": 1,
+      "contentPresented": 1,
+      "credentialCheckpointCommitted": 1,
+      "credentialFlowStage": 9,
+      "dataSessionBound": 3,
+      "dataStoreCleared": 1,
+      "dataSyncSkipped": 1,
+      "fileOpened": 1,
+      "hostsRefreshStarted": 1,
+      "hostsRefreshSucceeded": 1,
+      "imageCacheHit": 4,
+      "imageCandidateStarted": 15,
+      "imageCandidateSucceeded": 13,
+      "imageCandidatesExhausted": 8,
+      "imageNetworkCoalesced": 1,
+      "imageNetworkCompleted": 10,
+      "imageNetworkStarted": 10,
+      "imageViewPhase": 36,
+      "libraryActivationRequested": 1,
+      "libraryClearStarted": 1,
+      "libraryContentCommitted": 1,
+      "libraryPageAppeared": 1,
+      "libraryRefreshStarted": 1,
+      "libraryStateChanged": 1,
+      "metadataHydrationStarted": 1,
+      "metadataPageBoundaryFailed": 1,
+      "metadataPageBoundaryStarted": 5,
+      "metadataPageBoundarySucceeded": 4,
+      "metadataPageCommitted": 4,
+      "metadataPageStarted": 5,
+      "officialTouchCatalogStarted": 2,
+      "officialTouchCatalogSucceeded": 2,
+      "preferredImageUpdated": 2,
+      "sectionQueryFailed": 2,
+      "sectionQueryStarted": 10,
+      "sectionQuerySucceeded": 8,
+      "touchBundleDownloadFailed": 2,
+      "touchBundleDownloadStarted": 2,
+      "touchCatalogSourceFailed": 2,
+      "touchCatalogSourceStarted": 4,
+      "touchCatalogSourceSucceeded": 2,
+      "uniffiBoundaryStarted": 1,
+      "uniffiBoundarySucceeded": 1
+    },
+    "files": [
+      "/Users/guo.xu/Downloads/XBXRC-Diagnostic-F17231B7-8D9A-4F0A-9C0B-CE227A4A6013.jsonl"
+    ],
+    "firstTsMs": 1795570819258,
+    "importance": {
+      "debug": 139,
+      "essential": 2,
+      "key": 77
+    },
+    "lastTsMs": 1795570871848,
+    "profiles": {
+      "dev": 218
+    },
+    "rows": 218,
+    "sessions": [
+      "E5076E4F-2BCF-445F-BC14-E092DE3CB898"
+    ]
+  },
+  "sequence": {
+    "sessions": {
+      "E5076E4F-2BCF-445F-BC14-E092DE3CB898": {
+        "duplicates": 0,
+        "firstSeq": 1,
+        "lastSeq": 218,
+        "regressions": 0,
+        "rows": 218
+      }
+    },
+    "violations": []
+  }
+}

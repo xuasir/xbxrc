@@ -5388,6 +5388,9 @@
         }
       }
     },
+    "已加载可用操作" : {
+
+    },
     "已加载游戏" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6329,6 +6332,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前游戏列表"
+          }
+        }
+      }
+    },
+    "当前游戏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current game layouts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前游戏布局"
           }
         }
       }
@@ -7968,6 +7988,7 @@
       }
     },
     "新会话使用触屏设置中的默认布局" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9905,6 +9926,23 @@
         }
       }
     },
+    "正在查询当前游戏布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking up layouts for the current game"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查询当前游戏布局"
+          }
+        }
+      }
+    },
     "正在查询游戏布局" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11610,6 +11648,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "点按菜单目标即可录入；组合全部松开后自动保存。手柄方向键选择，按 A 确定。"
+          }
+        }
+      }
+    },
+    "点选后下载并切换当前游戏的布局" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a layout to download and apply it to the current game"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点选后下载并切换当前游戏的布局"
           }
         }
       }

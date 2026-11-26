@@ -1,0 +1,162 @@
+[
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/README.md",
+    "sha256": "bf613aea20c09b7e770f365930c48fcdefc5c97684605dd3e895d3feca71a2c9",
+    "bytes": 4429
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/bindings.log",
+    "sha256": "5307f7655836a142118b8a4ce4973b218df32e019890f094ecfae0749651b1ed",
+    "bytes": 1588
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/cleanup-preflight.json",
+    "sha256": "c8879d2a78760b7597e56bc0c85454625eaec48aaede1a0d338ede5ee5d79e38",
+    "bytes": 402
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/cleanup.json",
+    "sha256": "ab1d81a40c6e123a5e208a55a181bd2ad87401ce448d379ed08b61989972a81c",
+    "bytes": 678
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/execution-manifest.json",
+    "sha256": "36b06e41a1673a35643dfe75cf9aa09e5190ae95ca1e132f0a0a9d0c8bcbad2a",
+    "bytes": 26884
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/failure-diagnostics.md",
+    "sha256": "b4690e136252473bb58aa9e4a86c1eeb397c4e8de81efc4344be7fb3437afc7f",
+    "bytes": 1865
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/failure-preview-return.png",
+    "sha256": "e102b8775be7288e4d3bba87a3149cbc5bf1063ea6b224b8e587f4f9e9509927",
+    "bytes": 200422
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/frontend-lint.log",
+    "sha256": "af96fb4719e5f2363e9cfe2217ae9b8742a397194be30b372eeca0bcd2f8d237",
+    "bytes": 19
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/implementation.diff",
+    "sha256": "923e6b0ac0708cc988890ad61b61dd9adc9238f90cf3c277f6f09d882bc6fd91",
+    "bytes": 735391
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-diagnostics.log",
+    "sha256": "9da5a50c76346bee447ea96aa4bd915b204c5b5fa2531cca5ad7485b6d504747",
+    "bytes": 1421
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-final-summary.json",
+    "sha256": "ed292881c79fa69d1b7cd231b459cc2e585cccc51bef186906feaf198e645a19",
+    "bytes": 994
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-final.log",
+    "sha256": "7eec5a090d9a5b79645c4e8ff025525913c2b78246885a4e5ef2d15e59e2152b",
+    "bytes": 23273
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-initial-summary.json",
+    "sha256": "9ab14c2b70feb169fe53181db2addca4b1234899f681432a517f8662abc39940",
+    "bytes": 2267
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-retry-summary.json",
+    "sha256": "a343414160ace4ffced068e169a480aaf0a4f35de5b62273bf3ca603ae4601d8",
+    "bytes": 1449
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-retry.log",
+    "sha256": "5b3b804b99f2e1c2976ec987a51887b22ce75886338bd65c924a4aad5eacc046",
+    "bytes": 19103
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-smoke.log",
+    "sha256": "c4d11e36eff9fdd53f4a2d86fc564e251aa9cdf51ea537a6edd5270afed9a501",
+    "bytes": 27622
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-test-matrix.json",
+    "sha256": "25ba52fe1006eaad703711f7aa18463126d35cdae08ad1f2db94da269d1493b8",
+    "bytes": 4818
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/ios-ui.log",
+    "sha256": "c397fcf776682cde85f9843524aafabb6929f37718014f1abbf2b9d3da7bf0b8",
+    "bytes": 20313
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/numeric-reference-replay.json",
+    "sha256": "4857683cd337e0677ef0852cfc347015adcc5d948afafaab651c3cd9d7303241",
+    "bytes": 2141
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/protocol-community-landscape.png",
+    "sha256": "6b283d6d62222ebb9fa3948fdc188a699002ad9c3fe8571fd253c90eee651bf6",
+    "bytes": 249679
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/protocol-community-portrait.png",
+    "sha256": "a4e5437c072837465371dbc9a6e27d63656eedf54ba61e1e2f27b991c8a8aca0",
+    "bytes": 183852
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/protocol-community-saved.png",
+    "sha256": "02737f2cb6ff80736e1c1e2c409ee0626285c3736153947dbbd19aea4bdef531",
+    "bytes": 2944372
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/protocol-corpus.json",
+    "sha256": "ca7b6a76e9fada89802d37b71122785adddccb5b3fe51850db9a10c3664e0c6f",
+    "bytes": 63871
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/rust-bridge-final.log",
+    "sha256": "6a468acf5a5382147d0f4b1c888fcf86a08fc2c1977ab86681cd4d942a459fbb",
+    "bytes": 3192
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/rust-bridge-retry.log",
+    "sha256": "8beb0465dde70e1a248c5509d12acbe0e34a7950ec1ee542fd0e2fdbcfcb6efc",
+    "bytes": 592
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/rust-cache-final.log",
+    "sha256": "3ec2d54a9c940b1c18469a622f8a6e537f1b250b4242203fd98ea0d25398d4ee",
+    "bytes": 597
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/rust-format.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/rust-protocol-release.log",
+    "sha256": "2bfaeaed05cf178063e33c1f8dd5a49e60358e74d71000b42bfa5fe847f36cf1",
+    "bytes": 3361
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/screenshots.json",
+    "sha256": "172cc5911b601a4713a52630de38f9abb01f1a4b3b8ec11d9efc721dfa837d44",
+    "bytes": 1589
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/streaming-boundary.log",
+    "sha256": "b01cc4d83d354e9f1a622e1e35537e8edadd48b69c1a2f73e6dca49f82a4a571",
+    "bytes": 40
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/swift-format.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  {
+    "path": "dev-docs/validation/2026-11-26-ios-tak-protocol-engine/validation-summary.json",
+    "sha256": "2389a040bc4389478e99d77b91b51cde0e4ed439c37e440d336bec0918aadf56",
+    "bytes": 831
+  }
+]

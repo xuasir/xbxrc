@@ -1,0 +1,4090 @@
+{
+  "date": "2026-11-26",
+  "kind": "protocol-extraction-and-implementation-plan",
+  "schemas": [
+    {
+      "path": "dev-docs/validation/2026-11-25-ios-tak-completeness/fixtures/layout-schema.json",
+      "sha256": "db3bdab7b166015fc4a8bfdd1b75a5e236d2c06b26b60af9c9e115c27917b7d1",
+      "id": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v4.1/layout.json",
+      "schemaDialect": "https://json-schema.org/draft/2019-09/schema",
+      "definitionCount": 183,
+      "contract": {
+        "$id": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/layout/v4.1/layout.json",
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "additionalProperties": false,
+        "$defs": {
+          "LayoutDefinableType": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ActionThreshold"
+              },
+              {
+                "$ref": "#/$defs/ActionType"
+              },
+              {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              {
+                "$ref": "#/$defs/ArcadeButtonStyleBase"
+              },
+              {
+                "$ref": "#/$defs/ArcadeButtonStyles"
+              },
+              {
+                "$ref": "#/$defs/AssetReference"
+              },
+              {
+                "$ref": "#/$defs/AxisCap"
+              },
+              {
+                "$ref": "#/$defs/AxisCapColor"
+              },
+              {
+                "$ref": "#/$defs/AxisMapping2D"
+              },
+              {
+                "$ref": "#/$defs/AxisMapping3D"
+              },
+              {
+                "$ref": "#/$defs/Background"
+              },
+              {
+                "$ref": "#/$defs/BackgroundAssetValue"
+              },
+              {
+                "$ref": "#/$defs/ButtonStyles"
+              },
+              {
+                "$ref": "#/$defs/ButtonActivatedStyle"
+              },
+              {
+                "$ref": "#/$defs/ButtonDefaultStyle"
+              },
+              {
+                "$ref": "#/$defs/ButtonDisabledStyle"
+              },
+              {
+                "$ref": "#/$defs/ButtonIdleStyle"
+              },
+              {
+                "$ref": "#/$defs/ButtonToggledStyle"
+              },
+              {
+                "$ref": "#/$defs/ButtonPulledStyle"
+              },
+              {
+                "$ref": "#/$defs/Color"
+              },
+              {
+                "$ref": "#/$defs/ColorPaletteDefaultVariant"
+              },
+              {
+                "$ref": "#/$defs/ColorPaletteHighContrastVariant"
+              },
+              {
+                "$ref": "#/$defs/Control"
+              },
+              {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              {
+                "$ref": "#/$defs/ControlGroup"
+              },
+              {
+                "$ref": "#/$defs/ControlGroupItem"
+              },
+              {
+                "$ref": "#/$defs/ControllerOnlyActionType"
+              },
+              {
+                "$ref": "#/$defs/ControlVisibility"
+              },
+              {
+                "$ref": "#/$defs/Deadzone1D"
+              },
+              {
+                "$ref": "#/$defs/Deadzone2D"
+              },
+              {
+                "$ref": "#/$defs/DeadzoneDirectionalPad"
+              },
+              {
+                "$ref": "#/$defs/DeadzoneRadial"
+              },
+              {
+                "$ref": "#/$defs/DeadzoneThreshold"
+              },
+              {
+                "$ref": "#/$defs/DirectionalPadDefaultStyle"
+              },
+              {
+                "$ref": "#/$defs/DirectionalPadIdleStyle"
+              },
+              {
+                "$ref": "#/$defs/DirectionalPadInteraction"
+              },
+              {
+                "$ref": "#/$defs/DirectionalPadInteractionActivationType"
+              },
+              {
+                "$ref": "#/$defs/DirectionalPadStyles"
+              },
+              {
+                "$ref": "#/$defs/ExpandInteraction"
+              },
+              {
+                "$ref": "#/$defs/FaceImage"
+              },
+              {
+                "$ref": "#/$defs/FaceImageAssetValue"
+              },
+              {
+                "$ref": "#/$defs/FaceImageIconLabel"
+              },
+              {
+                "$ref": "#/$defs/FaceImageIconValue"
+              },
+              {
+                "$ref": "#/$defs/FillColor"
+              },
+              {
+                "$ref": "#/$defs/Gradient"
+              },
+              {
+                "$ref": "#/$defs/Indicator"
+              },
+              {
+                "$ref": "#/$defs/InnerLayoutControlWheel"
+              },
+              {
+                "$ref": "#/$defs/InnerLayerControlWheel"
+              },
+              {
+                "$ref": "#/$defs/InputCurveRange"
+              },
+              {
+                "$ref": "#/$defs/InputCurve"
+              },
+              {
+                "$ref": "#/$defs/InputCurveType"
+              },
+              {
+                "$ref": "#/$defs/JoystickActivatedStyle"
+              },
+              {
+                "$ref": "#/$defs/JoystickDefaultStyle"
+              },
+              {
+                "$ref": "#/$defs/JoystickDirectionIndicator"
+              },
+              {
+                "$ref": "#/$defs/JoystickDisabledStyle"
+              },
+              {
+                "$ref": "#/$defs/JoystickIdleStyle"
+              },
+              {
+                "$ref": "#/$defs/JoystickMovingStyle"
+              },
+              {
+                "$ref": "#/$defs/JoystickOutlineWithIndicator"
+              },
+              {
+                "$ref": "#/$defs/JoystickOutlineWithoutIndicator"
+              },
+              {
+                "$ref": "#/$defs/JoystickStyles"
+              },
+              {
+                "$ref": "#/$defs/Knob"
+              },
+              {
+                "$ref": "#/$defs/Layer"
+              },
+              {
+                "$ref": "#/$defs/Layers"
+              },
+              {
+                "$ref": "#/$defs/LayerControl"
+              },
+              {
+                "$ref": "#/$defs/LayerControlGroup"
+              },
+              {
+                "$ref": "#/$defs/LayerControlGroupItem"
+              },
+              {
+                "$ref": "#/$defs/LayerControlWheel"
+              },
+              {
+                "$ref": "#/$defs/LayerLowerArrayContent"
+              },
+              {
+                "$ref": "#/$defs/LayerLowerContent"
+              },
+              {
+                "$ref": "#/$defs/LayerSensorContent"
+              },
+              {
+                "$ref": "#/$defs/LayerUpperContent"
+              },
+              {
+                "$ref": "#/$defs/LayerUpperRightContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutControlWheel"
+              },
+              {
+                "$ref": "#/$defs/LayoutColors"
+              },
+              {
+                "$ref": "#/$defs/LayoutOrientation"
+              },
+              {
+                "$ref": "#/$defs/LayoutLowerArrayContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutLowerContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutSensorContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutUpperContent"
+              },
+              {
+                "$ref": "#/$defs/LayoutUpperRightContent"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              },
+              {
+                "$ref": "#/$defs/Opacity"
+              },
+              {
+                "$ref": "#/$defs/OuterLayoutControlWheel"
+              },
+              {
+                "$ref": "#/$defs/OuterWheelControlGroup"
+              },
+              {
+                "$ref": "#/$defs/OuterLayerControlWheel"
+              },
+              {
+                "$ref": "#/$defs/OuterWheelLayerControlGroup"
+              },
+              {
+                "$ref": "#/$defs/PullActionType"
+              },
+              {
+                "$ref": "#/$defs/PullIndicator"
+              },
+              {
+                "$ref": "#/$defs/PullIndicatorSegment"
+              },
+              {
+                "$ref": "#/$defs/RelativeInteraction"
+              },
+              {
+                "$ref": "#/$defs/RenderAsButton"
+              },
+              {
+                "$ref": "#/$defs/Scale"
+              },
+              {
+                "$ref": "#/$defs/Sensitivity"
+              },
+              {
+                "$ref": "#/$defs/SensorControl"
+              },
+              {
+                "$ref": "#/$defs/Sticky"
+              },
+              {
+                "$ref": "#/$defs/Stroke"
+              },
+              {
+                "$ref": "#/$defs/LayoutStyles"
+              },
+              {
+                "$ref": "#/$defs/ThrottleAxisOutput"
+              },
+              {
+                "$ref": "#/$defs/ThrottleAxisStyle"
+              },
+              {
+                "$ref": "#/$defs/ThrottleStyleBase"
+              },
+              {
+                "$ref": "#/$defs/ThrottleStyles"
+              },
+              {
+                "$ref": "#/$defs/Toggle"
+              },
+              {
+                "$ref": "#/$defs/TouchpadStyleBase"
+              },
+              {
+                "$ref": "#/$defs/TouchpadStyles"
+              }
+            ]
+          },
+          "Definitions": {
+            "additionalProperties": false,
+            "patternProperties": {
+              "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$": {
+                "$ref": "#/$defs/LayoutDefinableType"
+              }
+            },
+            "type": "object"
+          },
+          "Reference": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "$ref"
+            ],
+            "properties": {
+              "$ref": {
+                "type": "string",
+                "format": "uri-reference"
+              }
+            }
+          },
+          "_Null": {
+            "type": "null"
+          },
+          "_Accelerometer": {
+            "additionalProperties": false,
+            "properties": {
+              "axis": {
+                "$ref": "#/$defs/AxisMapping3D"
+              },
+              "type": {
+                "const": "accelerometer",
+                "type": "string"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              }
+            },
+            "required": [
+              "type",
+              "axis"
+            ],
+            "type": "object"
+          },
+          "_ActionTypeBase": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_SingleControlActionAssignableTypes"
+              },
+              {
+                "items": {
+                  "$ref": "#/$defs/_SingleControlActionAssignableTypes"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "_ArcadeButtons": {
+            "additionalProperties": false,
+            "properties": {
+              "heavyKick": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "heavyPunch": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "lightKick": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "lightPunch": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "mediumKick": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "mediumPunch": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "specialKick": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "specialPunch": {
+                "$ref": "#/$defs/ArcadeButton"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeArcadeButtons"
+              }
+            },
+            "required": [
+              "type",
+              "lightKick",
+              "mediumKick",
+              "heavyKick",
+              "lightPunch",
+              "mediumPunch",
+              "heavyPunch"
+            ],
+            "type": "object"
+          },
+          "_AxisMapping2DItem": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMapping2D"
+              },
+              {
+                "$ref": "#/$defs/_InputMapping1D"
+              },
+              {
+                "$ref": "#/$defs/_InputMappingMagnitudinal"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_AxisMapping3DItem": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMapping3DTo2DOutput"
+              },
+              {
+                "$ref": "#/$defs/_AxisMapping2DItem"
+              }
+            ]
+          },
+          "_BackgroundAsset": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "asset",
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/BackgroundAssetValue"
+              },
+              "opacity": {
+                "$ref": "#/$defs/Opacity"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ],
+            "type": "object"
+          },
+          "_BackgroundColor": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "color",
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/Color"
+              },
+              "opacity": {
+                "$ref": "#/$defs/Opacity"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ],
+            "type": "object"
+          },
+          "_Blank": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "blank",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          "_Button": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ActionType"
+              },
+              "pullAction": {
+                "$ref": "#/$defs/PullActionType"
+              },
+              "toggle": {
+                "$ref": "#/$defs/Toggle"
+              },
+              "styles": {
+                "$ref": "#/$defs/ButtonStyles"
+              },
+              "visible": {
+                "$ref": "#/$defs/ControlVisibility"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeButton"
+              }
+            },
+            "required": [
+              "type",
+              "action"
+            ],
+            "type": "object"
+          },
+          "_Color": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_HexColor"
+              },
+              {
+                "$ref": "#/$defs/_ColorReference"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_ColorReference": {
+            "type": "string",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^colors/(?!system_)[a-zA-Z0-9\\.\\-_]+$"
+              },
+              {
+                "enum": [
+                  "colors/system_contentPrimary",
+                  "colors/system_contentSecondary",
+                  "colors/system_contrastPrimary",
+                  "colors/system_contrastSecondary",
+                  "colors/system_actionColorDefault",
+                  "colors/system_actionColorA",
+                  "colors/system_actionColorB",
+                  "colors/system_actionColorX",
+                  "colors/system_actionColorY",
+                  "colors/system_accentPrimary",
+                  "colors/system_accentSecondary"
+                ],
+                "type": "string"
+              }
+            ]
+          },
+          "_ColorPaletteBase": {
+            "additionalProperties": false,
+            "properties": {
+              "system_contentPrimary": {
+                "$ref": "#/$defs/_SystemColorContentPrimary"
+              },
+              "system_contentSecondary": {
+                "$ref": "#/$defs/_SystemColorContentSecondary"
+              },
+              "system_contrastPrimary": {
+                "$ref": "#/$defs/_SystemColorContrastPrimary"
+              },
+              "system_contrastSecondary": {
+                "$ref": "#/$defs/_SystemColorContrastSecondary"
+              },
+              "system_actionColorDefault": {
+                "$ref": "#/$defs/_SystemColorActionColor"
+              },
+              "system_actionColorA": {
+                "$ref": "#/$defs/_SystemColorGamepadActionColor"
+              },
+              "system_actionColorB": {
+                "$ref": "#/$defs/_SystemColorGamepadActionColor"
+              },
+              "system_actionColorX": {
+                "$ref": "#/$defs/_SystemColorGamepadActionColor"
+              },
+              "system_actionColorY": {
+                "$ref": "#/$defs/_SystemColorGamepadActionColor"
+              },
+              "system_accentPrimary": {
+                "$ref": "#/$defs/_SystemColorAccentPrimary"
+              },
+              "system_accentSecondary": {
+                "$ref": "#/$defs/_SystemColorAccentSecondary"
+              }
+            },
+            "patternProperties": {
+              "^(?!system_)[a-zA-Z0-9\\.\\-_]+$": {
+                "$ref": "#/$defs/_CustomColorPaletteColor"
+              }
+            },
+            "type": "object"
+          },
+          "_ColorPaletteColor": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_HexColor"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_ControlBase": {
+            "properties": {
+              "type": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/_ControlTypeArcadeButtons"
+                  },
+                  {
+                    "$ref": "#/$defs/_ControlTypeButton"
+                  },
+                  {
+                    "$ref": "#/$defs/_ControlTypeDirectionalPad"
+                  },
+                  {
+                    "$ref": "#/$defs/_ControlTypeJoystick"
+                  },
+                  {
+                    "$ref": "#/$defs/_ControlTypeThrottle"
+                  },
+                  {
+                    "$ref": "#/$defs/_ControlTypeTouchpad"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_Button"
+              },
+              {
+                "$ref": "#/$defs/_Joystick"
+              },
+              {
+                "$ref": "#/$defs/_DirectionalPad"
+              },
+              {
+                "$ref": "#/$defs/_Touchpad"
+              },
+              {
+                "$ref": "#/$defs/_Throttle"
+              },
+              {
+                "$ref": "#/$defs/_ArcadeButtons"
+              }
+            ]
+          },
+          "_ControllerAction": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControllerButtonOutputType"
+              },
+              {
+                "$ref": "#/$defs/_ControllerAnalogMagnitudinalOutputType"
+              }
+            ]
+          },
+          "_ControllerAnalogMagnitudinalJoystickOutputType": {
+            "enum": [
+              "leftJoystickRight",
+              "leftJoystickLeft",
+              "leftJoystickUp",
+              "leftJoystickDown",
+              "rightJoystickRight",
+              "rightJoystickLeft",
+              "rightJoystickUp",
+              "rightJoystickDown"
+            ],
+            "type": "string"
+          },
+          "_ControllerAnalogMagnitudinalOutputType": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControllerTriggerOutputType"
+              },
+              {
+                "$ref": "#/$defs/_ControllerAnalogMagnitudinalJoystickOutputType"
+              }
+            ]
+          },
+          "_ControllerAnalog1DOutputType": {
+            "enum": [
+              "leftJoystickX",
+              "leftJoystickY",
+              "rightJoystickX",
+              "rightJoystickY"
+            ],
+            "type": "string"
+          },
+          "_ControllerAnalog2DOutputType": {
+            "enum": [
+              "rightJoystick",
+              "leftJoystick"
+            ],
+            "type": "string"
+          },
+          "_ControllerButtonOutputType": {
+            "enum": [
+              "guide",
+              "gamepadA",
+              "gamepadB",
+              "gamepadX",
+              "gamepadY",
+              "view",
+              "menu",
+              "leftBumper",
+              "rightBumper",
+              "dPadLeft",
+              "dPadRight",
+              "dPadUp",
+              "dPadDown",
+              "leftThumb",
+              "rightThumb"
+            ],
+            "type": "string"
+          },
+          "_ControllerTriggerOutputType": {
+            "enum": [
+              "leftTrigger",
+              "rightTrigger"
+            ],
+            "type": "string"
+          },
+          "_ControlTypeArcadeButtons": {
+            "const": "arcadeButtons",
+            "type": "string"
+          },
+          "_ControlTypeButton": {
+            "const": "button",
+            "type": "string"
+          },
+          "_ControlTypeDirectionalPad": {
+            "const": "directionalPad",
+            "type": "string"
+          },
+          "_ControlTypeJoystick": {
+            "const": "joystick",
+            "type": "string"
+          },
+          "_ControlTypeThrottle": {
+            "const": "throttle",
+            "type": "string"
+          },
+          "_ControlTypeTouchpad": {
+            "const": "touchpad",
+            "type": "string"
+          },
+          "_CustomColorPaletteColor": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_DirectionalPad": {
+            "additionalProperties": false,
+            "properties": {
+              "deadzone": {
+                "$ref": "#/$defs/DeadzoneDirectionalPad"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              "interaction": {
+                "$ref": "#/$defs/DirectionalPadInteraction"
+              },
+              "scale": {
+                "$ref": "#/$defs/Scale"
+              },
+              "styles": {
+                "$ref": "#/$defs/DirectionalPadStyles"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeDirectionalPad"
+              },
+              "visible": {
+                "$ref": "#/$defs/ControlVisibility"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          "_FaceImageAsset": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "asset",
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/FaceImageAssetValue"
+              },
+              "opacity": {
+                "$ref": "#/$defs/Opacity"
+              }
+            },
+            "type": "object",
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          "_FaceImageIcon": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "icon",
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/FaceImageIconValue"
+              },
+              "opacity": {
+                "$ref": "#/$defs/Opacity"
+              },
+              "label": {
+                "$ref": "#/$defs/FaceImageIconLabel"
+              }
+            },
+            "type": "object",
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          "_Gyroscope": {
+            "additionalProperties": false,
+            "properties": {
+              "axis": {
+                "$ref": "#/$defs/AxisMapping3D"
+              },
+              "type": {
+                "const": "gyroscope",
+                "type": "string"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              }
+            },
+            "required": [
+              "type",
+              "axis"
+            ],
+            "type": "object"
+          },
+          "_HexColor": {
+            "pattern": "^#([a-fA-F0-9]{6}|[a-fA-F0-9]{8}|[a-fA-F0-9]{4}|[a-fA-F0-9]{3})$",
+            "type": "string"
+          },
+          "_InputAxisMagnitudinal": {
+            "enum": [
+              "axisRight",
+              "axisLeft",
+              "axisUp",
+              "axisDown"
+            ],
+            "type": "string"
+          },
+          "_InputAxis1D": {
+            "anyOf": [
+              {
+                "const": "axisX",
+                "type": "string"
+              },
+              {
+                "const": "axisY",
+                "type": "string"
+              }
+            ]
+          },
+          "_InputAxisXY": {
+            "const": "axisXY",
+            "type": "string"
+          },
+          "_InputAxisZY": {
+            "const": "axisZY",
+            "type": "string"
+          },
+          "_InputMapping1D": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMapping1DToGamepad1DOutput"
+              },
+              {
+                "$ref": "#/$defs/_InputMapping1DToRelativeMouse1DOutput"
+              }
+            ]
+          },
+          "_InputMapping1DToGamepad1DOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "deadzone": {
+                "$ref": "#/$defs/Deadzone1D"
+              },
+              "input": {
+                "$ref": "#/$defs/_InputAxis1D"
+              },
+              "output": {
+                "$ref": "#/$defs/_ControllerAnalog1DOutputType"
+              },
+              "responseCurve": {
+                "$ref": "#/$defs/InputCurve"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_InputMapping1DToRelativeMouse1DOutput": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "input": {
+                    "$ref": "#/$defs/_InputAxis1D"
+                  },
+                  "output": {
+                    "$ref": "#/$defs/_RelativeMouse1DOutputType"
+                  },
+                  "sensitivity": {
+                    "$ref": "#/$defs/Sensitivity"
+                  }
+                },
+                "required": [
+                  "input",
+                  "output"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_InputMapping2D": {
+            "$ref": "#/$defs/_InputMappingXY"
+          },
+          "_InputMappingMagnitudinal": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMappingMagnitudinalToGamepadMagnitudinalOutput"
+              }
+            ]
+          },
+          "_InputMappingMagnitudinalToRelativeMouseMagnitudinalOutput": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "input": {
+                    "$ref": "#/$defs/_InputAxisMagnitudinal"
+                  },
+                  "output": {
+                    "$ref": "#/$defs/_RelativeMouseMagnitudinalOutputType"
+                  },
+                  "sensitivity": {
+                    "$ref": "#/$defs/Sensitivity"
+                  }
+                },
+                "required": [
+                  "input",
+                  "output"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_InputMappingXY": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMappingXYToGamepad2DOutput"
+              },
+              {
+                "$ref": "#/$defs/_InputMappingXYToMouse2DOutput"
+              }
+            ]
+          },
+          "_InputMappingXYToGamepad2DOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "deadzone": {
+                "$ref": "#/$defs/Deadzone2D"
+              },
+              "input": {
+                "$ref": "#/$defs/_InputAxisXY"
+              },
+              "output": {
+                "$ref": "#/$defs/_ControllerAnalog2DOutputType"
+              },
+              "responseCurve": {
+                "$ref": "#/$defs/InputCurve"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_InputMappingXYToMouse2DOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "input": {
+                "$ref": "#/$defs/_InputAxisXY"
+              },
+              "output": {
+                "$ref": "#/$defs/_RelativeMouse2DOutputType"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_InputMappingZY": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMappingZYToGamepad2DOutput"
+              },
+              {
+                "$ref": "#/$defs/_InputMappingZYToMouse2DOutput"
+              }
+            ]
+          },
+          "_InputMappingZYToMouse2DOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "input": {
+                "$ref": "#/$defs/_InputAxisZY"
+              },
+              "output": {
+                "$ref": "#/$defs/_RelativeMouse2DOutputType"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_InputMappingZYToGamepad2DOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "deadzone": {
+                "$ref": "#/$defs/Deadzone2D"
+              },
+              "input": {
+                "$ref": "#/$defs/_InputAxisZY"
+              },
+              "output": {
+                "$ref": "#/$defs/_ControllerAnalog2DOutputType"
+              },
+              "responseCurve": {
+                "$ref": "#/$defs/InputCurve"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_InputMapping3DTo2DOutput": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMappingXY"
+              },
+              {
+                "$ref": "#/$defs/_InputMappingZY"
+              }
+            ]
+          },
+          "_InputMappingMagnitudinalToGamepadMagnitudinalOutput": {
+            "additionalProperties": false,
+            "properties": {
+              "deadzone": {
+                "$ref": "#/$defs/Deadzone1D"
+              },
+              "input": {
+                "$ref": "#/$defs/_InputAxisMagnitudinal"
+              },
+              "output": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/_ControllerAnalogMagnitudinalOutputType"
+                  },
+                  {
+                    "$ref": "#/$defs/Reference"
+                  }
+                ]
+              },
+              "responseCurve": {
+                "$ref": "#/$defs/InputCurve"
+              },
+              "sensitivity": {
+                "$ref": "#/$defs/Sensitivity"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "type": "object"
+          },
+          "_Joystick": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ActionType"
+              },
+              "actionThreshold": {
+                "$ref": "#/$defs/ActionThreshold"
+              },
+              "axis": {
+                "$ref": "#/$defs/AxisMapping2D"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              "expand": {
+                "$ref": "#/$defs/ExpandInteraction"
+              },
+              "relative": {
+                "$ref": "#/$defs/RelativeInteraction"
+              },
+              "styles": {
+                "$ref": "#/$defs/JoystickStyles"
+              },
+              "visible": {
+                "$ref": "#/$defs/ControlVisibility"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeJoystick"
+              }
+            },
+            "required": [
+              "type",
+              "axis"
+            ],
+            "type": "object"
+          },
+          "_LayerControlBase": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControlBase"
+              },
+              {
+                "$ref": "#/$defs/_Blank"
+              }
+            ]
+          },
+          "_LayoutAction": {
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/LayoutActionTarget"
+              },
+              "type": {
+                "const": "layer",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "target"
+            ],
+            "type": "object"
+          },
+          "_LayoutStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "colors": {
+                    "$ref": "#/$defs/LayoutColors"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_RelativeMouse1DOutputType": {
+            "enum": [
+              "relativeMouseX",
+              "relativeMouseY"
+            ],
+            "type": "string"
+          },
+          "_RelativeMouse2DOutputType": {
+            "const": "relativeMouse",
+            "type": "string"
+          },
+          "_RelativeMouseMagnitudinalOutputType": {
+            "enum": [
+              "relativeMouseUp",
+              "relativeMouseDown",
+              "relativeMouseLeft",
+              "relativeMouseRight"
+            ],
+            "type": "string"
+          },
+          "_SingleControlActionAssignableTypes": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControllerAction"
+              },
+              {
+                "$ref": "#/$defs/_LayoutAction"
+              },
+              {
+                "$ref": "#/$defs/_TurboAction"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_StrokeBase": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "const": "solid",
+                    "type": "string"
+                  },
+                  "color": {
+                    "$ref": "#/$defs/Color"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "_SystemColorContentPrimary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorContentSecondary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorContrastPrimary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorContrastSecondary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorActionColor": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorGamepadActionColor": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorAccentPrimary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_SystemColorAccentSecondary": {
+            "$ref": "#/$defs/_ColorPaletteColor"
+          },
+          "_Throttle": {
+            "additionalProperties": false,
+            "properties": {
+              "axisDown": {
+                "$ref": "#/$defs/ThrottleAxisOutput"
+              },
+              "axisUp": {
+                "$ref": "#/$defs/ThrottleAxisOutput"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              "relative": {
+                "$ref": "#/$defs/RelativeInteraction"
+              },
+              "sticky": {
+                "$ref": "#/$defs/Sticky"
+              },
+              "styles": {
+                "$ref": "#/$defs/ThrottleStyles"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeThrottle"
+              },
+              "visible": {
+                "$ref": "#/$defs/ControlVisibility"
+              }
+            },
+            "required": [
+              "type",
+              "axisDown",
+              "axisUp"
+            ],
+            "type": "object"
+          },
+          "_Touchpad": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ActionType"
+              },
+              "axis": {
+                "$ref": "#/$defs/AxisMapping2D"
+              },
+              "enabled": {
+                "$ref": "#/$defs/ControlEnabled"
+              },
+              "renderAsButton": {
+                "$ref": "#/$defs/RenderAsButton"
+              },
+              "styles": {
+                "$ref": "#/$defs/TouchpadStyles"
+              },
+              "type": {
+                "$ref": "#/$defs/_ControlTypeTouchpad"
+              },
+              "visible": {
+                "$ref": "#/$defs/ControlVisibility"
+              }
+            },
+            "required": [
+              "type",
+              "axis"
+            ],
+            "type": "object"
+          },
+          "_TurboAction": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ControllerOnlyActionType"
+              },
+              "interval": {
+                "$ref": "#/$defs/TurboActionInterval"
+              },
+              "type": {
+                "const": "turbo",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "action",
+              "interval"
+            ],
+            "type": "object"
+          },
+          "ActionThreshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ActionType": {
+            "$ref": "#/$defs/_ActionTypeBase"
+          },
+          "ArcadeButton": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "$ref": "#/$defs/ActionType"
+                  },
+                  "enabled": {
+                    "$ref": "#/$defs/ControlEnabled"
+                  },
+                  "styles": {
+                    "$ref": "#/$defs/ArcadeButtonStyles"
+                  },
+                  "visible": {
+                    "$ref": "#/$defs/ControlVisibility"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ArcadeButtonStyleBase": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ArcadeButtonStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activated": {
+                    "$ref": "#/$defs/ArcadeButtonStyleBase"
+                  },
+                  "default": {
+                    "$ref": "#/$defs/ArcadeButtonStyleBase"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/ArcadeButtonStyleBase"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/ArcadeButtonStyleBase"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "AssetReference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[^/\\.]+$"
+              },
+              {
+                "type": "string",
+                "pattern": "^[^/\\.]+/[A-Za-z0-9_]+$"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "AxisCap": {
+            "$ref": "#/$defs/AxisCapColor"
+          },
+          "AxisCapColor": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "const": "color",
+                    "type": "string"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/Color"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "AxisMapping2D": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_AxisMapping2DItem"
+              },
+              {
+                "items": {
+                  "$ref": "#/$defs/_AxisMapping2DItem"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "AxisMapping3D": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_InputMapping3DTo2DOutput"
+              },
+              {
+                "items": {
+                  "$ref": "#/$defs/_InputMapping2D"
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Background": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_BackgroundColor"
+              },
+              {
+                "$ref": "#/$defs/_BackgroundAsset"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "BackgroundAssetValue": {
+            "$ref": "#/$defs/AssetReference"
+          },
+          "ButtonStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "default": {
+                    "$ref": "#/$defs/ButtonDefaultStyle"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/ButtonIdleStyle"
+                  },
+                  "activated": {
+                    "$ref": "#/$defs/ButtonActivatedStyle"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/ButtonDisabledStyle"
+                  },
+                  "toggled": {
+                    "$ref": "#/$defs/ButtonToggledStyle"
+                  },
+                  "pulled": {
+                    "$ref": "#/$defs/ButtonPulledStyle"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonActivatedStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "pullIndicator": {
+                    "$ref": "#/$defs/PullIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonDefaultStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "pullIndicator": {
+                    "$ref": "#/$defs/PullIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonDisabledStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonIdleStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "pullIndicator": {
+                    "$ref": "#/$defs/PullIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonToggledStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ButtonPulledStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "pullIndicator": {
+                    "$ref": "#/$defs/PullIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Color": {
+            "$ref": "#/$defs/_Color"
+          },
+          "ColorPaletteDefaultVariant": {
+            "$ref": "#/$defs/_ColorPaletteBase"
+          },
+          "ColorPaletteHighContrastVariant": {
+            "$ref": "#/$defs/_ColorPaletteBase"
+          },
+          "Control": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControlBase"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ControlEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ControlGroup": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/ControlGroupItem"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ControlGroupItem": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControlBase"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ControllerOnlyActionType": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControllerAction"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ControlVisibility": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Deadzone1D": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "threshold": {
+                    "$ref": "#/$defs/DeadzoneThreshold"
+                  }
+                },
+                "required": [
+                  "threshold"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Deadzone2D": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "radial": {
+                    "$ref": "#/$defs/DeadzoneRadial"
+                  },
+                  "threshold": {
+                    "$ref": "#/$defs/DeadzoneThreshold"
+                  }
+                },
+                "required": [
+                  "threshold",
+                  "radial"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DeadzoneDirectionalPad": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DeadzoneThreshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DeadzoneRadial": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "DirectionalPadDefaultStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/FillColor"
+                  },
+                  "gradient": {
+                    "$ref": "#/$defs/Gradient"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DirectionalPadIdleStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "fill": {
+                    "$ref": "#/$defs/FillColor"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DirectionalPadInteraction": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activationType": {
+                    "$ref": "#/$defs/DirectionalPadInteractionActivationType"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DirectionalPadInteractionActivationType": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "exclusive",
+                  "allowNeighboring"
+                ]
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "DirectionalPadStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activated": {
+                    "$ref": "#/$defs/DirectionalPadDefaultStyle"
+                  },
+                  "default": {
+                    "$ref": "#/$defs/DirectionalPadDefaultStyle"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/DirectionalPadIdleStyle"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/DirectionalPadIdleStyle"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ExpandInteraction": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "FaceImage": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_FaceImageIcon"
+              },
+              {
+                "$ref": "#/$defs/_FaceImageAsset"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "FaceImageAssetValue": {
+            "$ref": "#/$defs/AssetReference"
+          },
+          "FaceImageIconLabel": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "action",
+                      "none"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "FaceImageIconValue": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ability",
+                  "ability2",
+                  "ability3",
+                  "abilityPowerPunch",
+                  "abilityPowerUp",
+                  "accept",
+                  "add",
+                  "aim",
+                  "armor",
+                  "arrow",
+                  "arrowReload",
+                  "attackBehind",
+                  "barrel",
+                  "block",
+                  "bomb",
+                  "book",
+                  "bow",
+                  "brakePedal",
+                  "brightness",
+                  "capture",
+                  "character",
+                  "characterSelect",
+                  "characterSelect2",
+                  "chat",
+                  "climbStairs",
+                  "close",
+                  "compass",
+                  "cover",
+                  "crouch",
+                  "cursor",
+                  "dPad",
+                  "dash",
+                  "defendByShield",
+                  "dodge",
+                  "downArrow",
+                  "downArrow2",
+                  "downChevron",
+                  "emotes",
+                  "enterCar",
+                  "enterDoor",
+                  "exit",
+                  "exitCar",
+                  "exitDoor",
+                  "fastForward",
+                  "fire",
+                  "firePunch",
+                  "flag",
+                  "gasPedal",
+                  "glide",
+                  "golf",
+                  "grab",
+                  "grenade",
+                  "gyroscope",
+                  "handbrake",
+                  "handbrake2",
+                  "health",
+                  "heavyKick",
+                  "heavyKick2",
+                  "heavyKick3",
+                  "heavyKick4",
+                  "heavyPunch",
+                  "heavyPunch2",
+                  "heavyPunch3",
+                  "heavySword",
+                  "heavySword2",
+                  "help",
+                  "horn",
+                  "hourglass",
+                  "interact",
+                  "internet",
+                  "inventory",
+                  "jump",
+                  "kick",
+                  "largeGridView",
+                  "leftArrow",
+                  "leftArrow2",
+                  "leftChevron",
+                  "leftRightArrows",
+                  "lightKick",
+                  "lightKick2",
+                  "lightKick3",
+                  "lightKick4",
+                  "lightPunch",
+                  "lightPunch2",
+                  "lightPunch3",
+                  "lightSword",
+                  "lightSword2",
+                  "look",
+                  "lookBehind",
+                  "lookBehind2",
+                  "lookByHand",
+                  "map",
+                  "map2",
+                  "medical",
+                  "meditate",
+                  "mediumKick",
+                  "mediumKick2",
+                  "mediumKick3",
+                  "mediumKick4",
+                  "mediumPunch",
+                  "mediumPunch2",
+                  "mediumPunch3",
+                  "mediumSword",
+                  "mediumSword2",
+                  "microphone",
+                  "mirror",
+                  "moreActions",
+                  "move",
+                  "move2",
+                  "notebook",
+                  "parameters",
+                  "pause",
+                  "phone",
+                  "pickAxe",
+                  "placeholder",
+                  "plane",
+                  "planeFast",
+                  "planeSlow",
+                  "punch",
+                  "punch2",
+                  "radialMenu",
+                  "radialMenu2",
+                  "radio",
+                  "ram",
+                  "redo",
+                  "reload",
+                  "repeatRefresh",
+                  "reset",
+                  "rewind",
+                  "rightArrow",
+                  "rightArrow2",
+                  "rightChevron",
+                  "roll",
+                  "run",
+                  "select",
+                  "selectAll",
+                  "selectionWheel",
+                  "sit",
+                  "skateboard",
+                  "skateboardGrab",
+                  "skateboardGrind",
+                  "skateboardJump",
+                  "skateboardOllie",
+                  "skateboardRampOver",
+                  "slide",
+                  "smallGridView",
+                  "speaker",
+                  "specialAbility",
+                  "sprint",
+                  "stealth",
+                  "steering",
+                  "stopwatch",
+                  "subtract",
+                  "surf",
+                  "switchCamera",
+                  "sword",
+                  "sword2",
+                  "sync",
+                  "targetLock",
+                  "team",
+                  "teamAttack",
+                  "throw",
+                  "titleMenu",
+                  "touch",
+                  "undo",
+                  "upArrow",
+                  "upArrow2",
+                  "upChevron",
+                  "walk",
+                  "waypoint",
+                  "weaponSelect",
+                  "zoomIn",
+                  "zoomOut"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "FillColor": {
+            "$ref": "#/$defs/_Color"
+          },
+          "Gradient": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "$ref": "#/$defs/Color"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Indicator": {
+            "$ref": "#/$defs/_StrokeBase"
+          },
+          "InnerLayoutControlWheel": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Control"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "InnerLayerControlWheel": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/LayerControl"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "InputCurveRange": {
+            "deprecated": true,
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    {
+                      "$ref": "#/$defs/Reference"
+                    }
+                  ]
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "InputCurve": {
+            "deprecated": true,
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "range": {
+                    "$ref": "#/$defs/InputCurveRange"
+                  },
+                  "type": {
+                    "$ref": "#/$defs/InputCurveType"
+                  }
+                },
+                "required": [
+                  "range",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "InputCurveType": {
+            "deprecated": true,
+            "anyOf": [
+              {
+                "enum": [
+                  "circular",
+                  "circular-inverse"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickActivatedStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "outline": {
+                    "$ref": "#/$defs/JoystickOutlineWithIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickDefaultStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "outline": {
+                    "$ref": "#/$defs/JoystickOutlineWithIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickDirectionIndicator": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "const": "color",
+                    "type": "string"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/Color"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickDisabledStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "outline": {
+                    "$ref": "#/$defs/JoystickOutlineWithoutIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickIdleStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "outline": {
+                    "$ref": "#/$defs/JoystickOutlineWithoutIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickMovingStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "outline": {
+                    "$ref": "#/$defs/JoystickOutlineWithIndicator"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickOutlineWithIndicator": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  },
+                  "indicator": {
+                    "$ref": "#/$defs/JoystickDirectionIndicator"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickOutlineWithoutIndicator": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "JoystickStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activated": {
+                    "$ref": "#/$defs/JoystickActivatedStyle"
+                  },
+                  "default": {
+                    "$ref": "#/$defs/JoystickDefaultStyle"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/JoystickDisabledStyle"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/JoystickIdleStyle"
+                  },
+                  "moving": {
+                    "$ref": "#/$defs/JoystickMovingStyle"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Knob": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Layer": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "center": {
+                    "deprecated": true,
+                    "$ref": "#/$defs/LayerControlWheel"
+                  },
+                  "left": {
+                    "$ref": "#/$defs/LayerControlWheel"
+                  },
+                  "lower": {
+                    "$ref": "#/$defs/LayerLowerContent"
+                  },
+                  "right": {
+                    "$ref": "#/$defs/LayerControlWheel"
+                  },
+                  "sensors": {
+                    "$ref": "#/$defs/LayerSensorContent"
+                  },
+                  "upper": {
+                    "$ref": "#/$defs/LayerUpperContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Layers": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$": {
+                    "$ref": "#/$defs/Layer"
+                  }
+                }
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerControl": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_LayerControlBase"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerControlGroup": {
+            "items": {
+              "$ref": "#/$defs/LayerControlGroupItem"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array"
+          },
+          "LayerControlGroupItem": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_LayerControlBase"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerControlWheel": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "inner": {
+                    "$ref": "#/$defs/InnerLayerControlWheel"
+                  },
+                  "outer": {
+                    "$ref": "#/$defs/OuterLayerControlWheel"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerLowerArrayContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/LayerControl"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerLowerContent": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "center": {
+                    "$ref": "#/$defs/LayerControl"
+                  },
+                  "leftCenter": {
+                    "$ref": "#/$defs/LayerLowerArrayContent"
+                  },
+                  "rightCenter": {
+                    "$ref": "#/$defs/LayerLowerArrayContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerSensorContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SensorLayerControl"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerUpperContent": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "right": {
+                    "$ref": "#/$defs/LayerUpperRightContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayerUpperRightContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/LayerControl"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 5,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutActionTarget": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutColors": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "default": {
+                    "$ref": "#/$defs/ColorPaletteDefaultVariant"
+                  },
+                  "highContrast": {
+                    "$ref": "#/$defs/ColorPaletteHighContrastVariant"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutContent": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "center": {
+                    "deprecated": true,
+                    "$ref": "#/$defs/LayoutControlWheel"
+                  },
+                  "layers": {
+                    "$ref": "#/$defs/Layers"
+                  },
+                  "left": {
+                    "$ref": "#/$defs/LayoutControlWheel"
+                  },
+                  "lower": {
+                    "$ref": "#/$defs/LayoutLowerContent"
+                  },
+                  "right": {
+                    "$ref": "#/$defs/LayoutControlWheel"
+                  },
+                  "sensors": {
+                    "$ref": "#/$defs/LayerSensorContent"
+                  },
+                  "upper": {
+                    "$ref": "#/$defs/LayoutUpperContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutControlWheel": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "inner": {
+                    "$ref": "#/$defs/InnerLayoutControlWheel"
+                  },
+                  "outer": {
+                    "$ref": "#/$defs/OuterLayoutControlWheel"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutOrientation": {
+            "deprecated": true,
+            "enum": [
+              "landscape-left",
+              "landscape-right",
+              "landscape",
+              "portrait-up",
+              "portrait"
+            ],
+            "type": "string"
+          },
+          "LayoutLowerArrayContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Control"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutLowerContent": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "center": {
+                    "$ref": "#/$defs/Control"
+                  },
+                  "leftCenter": {
+                    "$ref": "#/$defs/LayoutLowerArrayContent"
+                  },
+                  "rightCenter": {
+                    "$ref": "#/$defs/LayoutLowerArrayContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutSensorContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SensorControl"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutStyles": {
+            "$ref": "#/$defs/_LayoutStyles"
+          },
+          "LayoutUpperContent": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "right": {
+                    "$ref": "#/$defs/LayoutUpperRightContent"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "LayoutUpperRightContent": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Control"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "type": "array",
+                "maxItems": 5,
+                "minItems": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Opacity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "OuterLayoutControlWheel": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/OuterWheelControlGroup"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "OuterLayerControlWheel": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/OuterWheelLayerControlGroup"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "OuterWheelControlGroup": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Control"
+              },
+              {
+                "$ref": "#/$defs/ControlGroup"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              }
+            ]
+          },
+          "OuterWheelLayerControlGroup": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LayerControl"
+              },
+              {
+                "$ref": "#/$defs/LayerControlGroup"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              }
+            ]
+          },
+          "PullActionType": {
+            "anyOf": [
+              {
+                "properties": {
+                  "type": {
+                    "const": "segmented",
+                    "type": "string"
+                  },
+                  "items": {
+                    "items": {
+                      "$ref": "#/$defs/_ActionTypeBase"
+                    },
+                    "maxItems": 4,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/_ActionTypeBase"
+              }
+            ]
+          },
+          "PullIndicator": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/PullIndicatorSegment"
+                    },
+                    {
+                      "$ref": "#/$defs/_Null"
+                    }
+                  ]
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "$ref": "#/$defs/PullIndicatorSegment"
+              }
+            ]
+          },
+          "PullIndicatorSegment": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/PullIndicatorBackground"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "PullIndicatorBackground": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_BackgroundColor"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "RelativeInteraction": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "RenderAsButton": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Scale": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 2
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Sensitivity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "SensorControl": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "accelerometer",
+                  "gyroscope"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_Accelerometer"
+              },
+              {
+                "$ref": "#/$defs/_Gyroscope"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "SensorLayerControl": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "accelerometer",
+                  "gyroscope",
+                  "blank"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_Accelerometer"
+              },
+              {
+                "$ref": "#/$defs/_Gyroscope"
+              },
+              {
+                "$ref": "#/$defs/_Blank"
+              },
+              {
+                "$ref": "#/$defs/_Null"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Sticky": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Stroke": {
+            "$ref": "#/$defs/_StrokeBase"
+          },
+          "ThrottleAxisOutput": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/_ControllerAnalogMagnitudinalOutputType"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ThrottleAxisStyle": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "cap": {
+                    "$ref": "#/$defs/AxisCap"
+                  },
+                  "stroke": {
+                    "$ref": "#/$defs/Stroke"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ThrottleStyleBase": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "axisUp": {
+                    "$ref": "#/$defs/ThrottleAxisStyle"
+                  },
+                  "axisDown": {
+                    "$ref": "#/$defs/ThrottleAxisStyle"
+                  },
+                  "indicator": {
+                    "$ref": "#/$defs/Indicator"
+                  },
+                  "knob": {
+                    "$ref": "#/$defs/Knob"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "ThrottleStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activated": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "activatedUp": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "activatedDown": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "default": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  },
+                  "idleUp": {
+                    "$ref": "#/$defs/ThrottleStyleBase"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "Toggle": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "TouchpadStyleBase": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "background": {
+                    "$ref": "#/$defs/Background"
+                  },
+                  "faceImage": {
+                    "$ref": "#/$defs/FaceImage"
+                  },
+                  "opacity": {
+                    "$ref": "#/$defs/Opacity"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "TouchpadStyles": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "activated": {
+                    "$ref": "#/$defs/TouchpadStyleBase"
+                  },
+                  "default": {
+                    "$ref": "#/$defs/TouchpadStyleBase"
+                  },
+                  "disabled": {
+                    "$ref": "#/$defs/TouchpadStyleBase"
+                  },
+                  "idle": {
+                    "$ref": "#/$defs/TouchpadStyleBase"
+                  },
+                  "moving": {
+                    "$ref": "#/$defs/TouchpadStyleBase"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Reference"
+              }
+            ]
+          },
+          "TurboActionInterval": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/$defs/LayoutContent"
+          },
+          "styles": {
+            "$ref": "#/$defs/LayoutStyles"
+          },
+          "orientation": {
+            "$ref": "#/$defs/LayoutOrientation"
+          },
+          "definitions": {
+            "$ref": "#/$defs/Definitions"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "path": "dev-docs/validation/2026-11-25-ios-tak-completeness/fixtures/context-schema.json",
+      "sha256": "cbf3e049627d160930562671173e898c17829c1f4afdadda8db785e51850d725",
+      "id": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v4.1/context.json",
+      "schemaDialect": "https://json-schema.org/draft/2019-09/schema",
+      "definitionCount": 6,
+      "contract": {
+        "$id": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/main/touch-adaptation-kit/schemas/context/v4.1/context.json",
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$defs": {
+          "AllowedStateValues": {
+            "additionalProperties": false,
+            "patternProperties": {
+              "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/StateType"
+                    }
+                  },
+                  {
+                    "$ref": "../../layout/v4.1/layout.json#/$defs/Reference"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "ContextDefinableType": {
+            "anyOf": [
+              {
+                "$ref": "../../layout/v4.1/layout.json#/$defs/LayoutDefinableType"
+              },
+              {
+                "$ref": "#/$defs/StateType"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/StateType"
+                }
+              }
+            ]
+          },
+          "Definitions": {
+            "additionalProperties": false,
+            "patternProperties": {
+              "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$": {
+                "$ref": "#/$defs/ContextDefinableType"
+              }
+            },
+            "type": "object"
+          },
+          "State": {
+            "additionalProperties": false,
+            "patternProperties": {
+              "^(?!__proto__)[a-zA-Z0-9\\.\\-_]+$": {
+                "$ref": "#/$defs/StateType"
+              }
+            },
+            "type": "object"
+          },
+          "StateType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "ContextStyles": {
+            "$ref": "../../layout/v4.1/layout.json#/$defs/_LayoutStyles"
+          }
+        },
+        "type": "object",
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "definitions": {
+            "$ref": "#/$defs/Definitions"
+          },
+          "state": {
+            "$ref": "#/$defs/State"
+          },
+          "styles": {
+            "$ref": "#/$defs/ContextStyles"
+          },
+          "allowedStateValues": {
+            "$ref": "#/$defs/AllowedStateValues"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "schemaSemanticIcons": [
+    "ability",
+    "ability2",
+    "ability3",
+    "abilityPowerPunch",
+    "abilityPowerUp",
+    "accept",
+    "add",
+    "aim",
+    "armor",
+    "arrow",
+    "arrowReload",
+    "attackBehind",
+    "barrel",
+    "block",
+    "bomb",
+    "book",
+    "bow",
+    "brakePedal",
+    "brightness",
+    "capture",
+    "character",
+    "characterSelect",
+    "characterSelect2",
+    "chat",
+    "climbStairs",
+    "close",
+    "compass",
+    "cover",
+    "crouch",
+    "cursor",
+    "dPad",
+    "dash",
+    "defendByShield",
+    "dodge",
+    "downArrow",
+    "downArrow2",
+    "downChevron",
+    "emotes",
+    "enterCar",
+    "enterDoor",
+    "exit",
+    "exitCar",
+    "exitDoor",
+    "fastForward",
+    "fire",
+    "firePunch",
+    "flag",
+    "gasPedal",
+    "glide",
+    "golf",
+    "grab",
+    "grenade",
+    "gyroscope",
+    "handbrake",
+    "handbrake2",
+    "health",
+    "heavyKick",
+    "heavyKick2",
+    "heavyKick3",
+    "heavyKick4",
+    "heavyPunch",
+    "heavyPunch2",
+    "heavyPunch3",
+    "heavySword",
+    "heavySword2",
+    "help",
+    "horn",
+    "hourglass",
+    "interact",
+    "internet",
+    "inventory",
+    "jump",
+    "kick",
+    "largeGridView",
+    "leftArrow",
+    "leftArrow2",
+    "leftChevron",
+    "leftRightArrows",
+    "lightKick",
+    "lightKick2",
+    "lightKick3",
+    "lightKick4",
+    "lightPunch",
+    "lightPunch2",
+    "lightPunch3",
+    "lightSword",
+    "lightSword2",
+    "look",
+    "lookBehind",
+    "lookBehind2",
+    "lookByHand",
+    "map",
+    "map2",
+    "medical",
+    "meditate",
+    "mediumKick",
+    "mediumKick2",
+    "mediumKick3",
+    "mediumKick4",
+    "mediumPunch",
+    "mediumPunch2",
+    "mediumPunch3",
+    "mediumSword",
+    "mediumSword2",
+    "microphone",
+    "mirror",
+    "moreActions",
+    "move",
+    "move2",
+    "notebook",
+    "parameters",
+    "pause",
+    "phone",
+    "pickAxe",
+    "placeholder",
+    "plane",
+    "planeFast",
+    "planeSlow",
+    "punch",
+    "punch2",
+    "radialMenu",
+    "radialMenu2",
+    "radio",
+    "ram",
+    "redo",
+    "reload",
+    "repeatRefresh",
+    "reset",
+    "rewind",
+    "rightArrow",
+    "rightArrow2",
+    "rightChevron",
+    "roll",
+    "run",
+    "select",
+    "selectAll",
+    "selectionWheel",
+    "sit",
+    "skateboard",
+    "skateboardGrab",
+    "skateboardGrind",
+    "skateboardJump",
+    "skateboardOllie",
+    "skateboardRampOver",
+    "slide",
+    "smallGridView",
+    "speaker",
+    "specialAbility",
+    "sprint",
+    "stealth",
+    "steering",
+    "stopwatch",
+    "subtract",
+    "surf",
+    "switchCamera",
+    "sword",
+    "sword2",
+    "sync",
+    "targetLock",
+    "team",
+    "teamAttack",
+    "throw",
+    "titleMenu",
+    "touch",
+    "undo",
+    "upArrow",
+    "upArrow2",
+    "upChevron",
+    "walk",
+    "waypoint",
+    "weaponSelect",
+    "zoomIn",
+    "zoomOut"
+  ],
+  "schemaSemanticIconCount": 173,
+  "runtimeRules": [
+    {
+      "id": "community.runtime-entry",
+      "rule": "社区包装提取为直接运行时布局，名称和作者属于来源元数据",
+      "source": "docs/references/better-xcloud-touch-layout-protocol.md",
+      "anchor": "3. 社区布局怎样进入官方引擎"
+    },
+    {
+      "id": "versions.converter",
+      "rule": "按历史版本路由转换 icon、threshold、upper 槽位和方向动作",
+      "source": "dev-docs/validation/2026-11-12-tak-layout-and-engine/source-excerpts/tak-core-protocol.txt",
+      "anchor": "or / ar / cr / lr / ur"
+    },
+    {
+      "id": "layout.layer-merge",
+      "rule": "省略与 null 继承基础槽位，blank 显式占用空槽，cluster 保留两物理槽位",
+      "source": "docs/references/better-xcloud-touch-layout-protocol.md",
+      "anchor": "5. 位置协议 / 7. layer"
+    },
+    {
+      "id": "runtime.defaults",
+      "rule": "省略属性和样式由系统默认与状态继承规则解释",
+      "source": "docs/references/tak-babylon-touch-engine.md",
+      "anchor": "5. 控件状态与输入模型"
+    },
+    {
+      "id": "runtime.pointer",
+      "rule": "Start/Move/End、attach/detach/swap 在输入批次内统一通知与释放",
+      "source": "docs/references/tak-babylon-touch-engine.md",
+      "anchor": "3. 指针池、附着与释放"
+    },
+    {
+      "id": "input.contribution",
+      "rule": "每控件贡献保留独立释放；轴保留限幅前总和，输出时 clamp",
+      "source": "docs/references/tak-babylon-touch-engine.md",
+      "anchor": "9. InputProvider"
+    },
+    {
+      "id": "context.state",
+      "rule": "引用与 JSON Patch 逐项应用，布局更新受 revision 和 scope 约束",
+      "source": "docs/references/better-xcloud-touch-layout-protocol.md",
+      "anchor": "9. Context / 10. 串流消息"
+    },
+    {
+      "id": "render.properties",
+      "rule": "控件类型和 renderStream 提供形状、样式、透明度、变换、图标和标签",
+      "source": "docs/references/tak-babylon-touch-engine.md",
+      "anchor": "10. Babylon 怎样绘制控件"
+    },
+    {
+      "id": "render.icon-catalog",
+      "rule": "Babylon 从宿主 atlas.frames 建立图标 Map，以 getIcon(value) 查找",
+      "source": "official-runtime-source.zip:2879.4921609f.chunk.js",
+      "anchor": "V.loadIcons / V._parseSpriteSheet / V.getIcon",
+      "evidence": "official-icon-atlas-inventory.json",
+      "runtimeIconNames": [
+        "ability",
+        "ability2",
+        "ability3",
+        "abilityPowerPunch",
+        "abilityPowerUp",
+        "accept",
+        "add",
+        "aim",
+        "armor",
+        "arrow",
+        "arrowReload",
+        "attackBehind",
+        "barrel",
+        "block",
+        "bluetooth",
+        "bomb",
+        "book",
+        "bow",
+        "brakePedal",
+        "brightness",
+        "capture",
+        "captureShare",
+        "character",
+        "characterSelect",
+        "characterSelect2",
+        "chat",
+        "checkbox",
+        "checkboxChecked",
+        "climbStairs",
+        "close",
+        "compass",
+        "controller",
+        "cover",
+        "crouch",
+        "cursor",
+        "dPad",
+        "dPadDown",
+        "dPadDownLabel",
+        "dPadLeft",
+        "dPadLeftLabel",
+        "dPadRight",
+        "dPadRightLabel",
+        "dPadUp",
+        "dPadUpLabel",
+        "dash",
+        "defendByShield",
+        "dodge",
+        "downArrow",
+        "downArrow2",
+        "downChevron",
+        "elipsis",
+        "emotes",
+        "enterCar",
+        "enterDoor",
+        "exit",
+        "exitCar",
+        "exitDoor",
+        "fastForward",
+        "fire",
+        "firePunch",
+        "flag",
+        "gamepadA",
+        "gamepadALabel",
+        "gamepadALetter",
+        "gamepadB",
+        "gamepadBLabel",
+        "gamepadBLetter",
+        "gamepadX",
+        "gamepadXLabel",
+        "gamepadXLetter",
+        "gamepadY",
+        "gamepadYLabel",
+        "gamepadYLetter",
+        "gasPedal",
+        "glide",
+        "golf",
+        "grab",
+        "grenade",
+        "guide",
+        "gyroscope",
+        "handbrake",
+        "handbrake2",
+        "health",
+        "heavyKick",
+        "heavyKick2",
+        "heavyKick3",
+        "heavyKick4",
+        "heavyPunch",
+        "heavyPunch2",
+        "heavyPunch3",
+        "heavySword",
+        "heavySword2",
+        "help",
+        "horn",
+        "hourglass",
+        "interact",
+        "internet",
+        "inventory",
+        "jump",
+        "kick",
+        "largeGridView",
+        "leftArrow",
+        "leftArrow2",
+        "leftBumper",
+        "leftBumperLabel",
+        "leftBumperLetter",
+        "leftChevron",
+        "leftHorizontal",
+        "leftLetter",
+        "leftRightArrows",
+        "leftThumb",
+        "leftThumbLabel",
+        "leftTrigger",
+        "leftTriggerLabel",
+        "leftTriggerLetter",
+        "leftVertical",
+        "library",
+        "library2",
+        "lightKick",
+        "lightKick2",
+        "lightKick3",
+        "lightKick4",
+        "lightPunch",
+        "lightPunch2",
+        "lightPunch3",
+        "lightSword",
+        "lightSword2",
+        "look",
+        "lookBehind",
+        "lookBehind2",
+        "lookByHand",
+        "map",
+        "map2",
+        "medical",
+        "meditate",
+        "mediumKick",
+        "mediumKick2",
+        "mediumKick3",
+        "mediumKick4",
+        "mediumPunch",
+        "mediumPunch2",
+        "mediumPunch3",
+        "mediumSword",
+        "mediumSword2",
+        "menu",
+        "menuLabel",
+        "microphone",
+        "mirror",
+        "moreActions",
+        "move",
+        "move2",
+        "notebook",
+        "parameters",
+        "pause",
+        "phone",
+        "pickAxe",
+        "placeholder",
+        "plane",
+        "planeFast",
+        "planeSlow",
+        "punch",
+        "punch2",
+        "radialMenu",
+        "radialMenu2",
+        "radio",
+        "ram",
+        "redo",
+        "reload",
+        "repeatRefresh",
+        "reset",
+        "rewind",
+        "rightArrow",
+        "rightArrow2",
+        "rightBumper",
+        "rightBumperLabel",
+        "rightBumperLetter",
+        "rightChevron",
+        "rightHorizontal",
+        "rightLetter",
+        "rightThumb",
+        "rightThumbLabel",
+        "rightTrigger",
+        "rightTriggerLabel",
+        "rightTriggerLetter",
+        "rightVertical",
+        "roll",
+        "run",
+        "select",
+        "selectAll",
+        "selectionWheel",
+        "settings",
+        "sit",
+        "skateboard",
+        "skateboardGrab",
+        "skateboardGrind",
+        "skateboardJump",
+        "skateboardOllie",
+        "skateboardRampOver",
+        "slide",
+        "smallGridView",
+        "speaker",
+        "specialAbility",
+        "sprint",
+        "stealth",
+        "steering",
+        "stopwatch",
+        "subtract",
+        "surf",
+        "switchCamera",
+        "sword",
+        "sword2",
+        "sync",
+        "targetLock",
+        "team",
+        "teamAttack",
+        "throw",
+        "titleMenu",
+        "touch",
+        "touchControls",
+        "touchControlsError",
+        "touchControlsOk",
+        "undo",
+        "upArrow",
+        "upArrow2",
+        "upChevron",
+        "view",
+        "viewLabel",
+        "walk",
+        "waypoint",
+        "weaponSelect",
+        "xboxLogo",
+        "xboxLogoOutline",
+        "zoomIn",
+        "zoomOut"
+      ],
+      "runtimeIconNameCount": 234
+    },
+    {
+      "id": "render.lifecycle",
+      "rule": "稳定控件身份复用绘制对象，属性变化驱动脏更新，移除清理对象和订阅",
+      "source": "docs/references/tak-babylon-touch-engine.md",
+      "anchor": "10. 对象复用 / 11. 生命周期"
+    }
+  ],
+  "sourceHashes": [
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchIconCatalog.swift",
+      "sha256": "0c5c1fdbede6267d4f5c765bf9945dffce71ee25f567238f8d66023ee2449e79"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift",
+      "sha256": "cabda43714ce27391320ce6d8d11b925d48352d7660131f4210d754d8cae024d"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutStyle.swift",
+      "sha256": "57540652b429539f9a4680bca57f9a721dff7dbc8e9bf2cd76d4d5a4f7962d1e"
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "sha256": "94c4b7cb1f231b6374ffe6338362effb948cfdf205b4ccb6b081ca4389528a29"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/community.rs",
+      "sha256": "fa8eaf6bcaa515bd3ef5a03ba6ce0ed14473dc08c63e9aef3a61d2fe550e9c76"
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/runtime.rs",
+      "sha256": "1d468d8be205c475a35da38ffb14202b3db036e5d960e5aaba5288f75b65ebdf"
+    }
+  ],
+  "plannedCanonicalContract": [
+    "versionRegistry",
+    "sourceProfiles",
+    "typedLayoutIR",
+    "requiredCapabilities",
+    "renderDescription",
+    "diagnostics",
+    "cacheRevision"
+  ],
+  "authority": "schema 结构 + 冻结 TAK/Babylon 行为 + 宿主图集",
+  "implementationStatus": "planned",
+  "tolerantExecutionPolicy": {
+    "status": "planned-user-directed",
+    "principle": "可执行语义优先，协议框架约束",
+    "knownInputs": "已解析且已实现的 action/axis 正常执行",
+    "optionalVisuals": "未知图标、缺失装饰图片、可选样式采用官方默认或动作标签回退，并生成 warning",
+    "unknownOptionalFields": "保留原文，记录诊断，当前执行使用已知字段",
+    "unsupportedInputs": "按控件或具体输出隔离，保留可用控件；整体失去有效输入时使用通用布局",
+    "hardBoundaries": [
+      "文档可解析",
+      "资源和嵌套预算",
+      "会话及版本归属",
+      "可确定的输入输出语义"
+    ],
+    "saveAndPreview": "可运行布局允许预览、保存和切换，完整性与视觉差异独立报告"
+  }
+}

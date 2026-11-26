@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-26",
+  "completedAtUTC": "2026-11-26T04:02:46.821473+00:00",
+  "deletedPaths": [
+    "/private/tmp/xbxrc-ios-tak-protocol-20261126-wy_61dyd"
+  ],
+  "temporaryAllocatedBytes": 846966784,
+  "freeDiskBytesBefore": 89702400000,
+  "freeDiskBytesAfter": 90521600000,
+  "measuredFreeDiskDeltaBytes": 819200000,
+  "temporaryRootExists": false,
+  "processPreflight": "completed",
+  "simulatorFinalState": "Shutdown",
+  "simulatorDataRetained": true,
+  "retained": [
+    "dev-docs/validation/2026-11-26-ios-tak-protocol-engine",
+    "dev-docs/validation/2026-11-26-ios-tak-protocol-engine-plan",
+    "target/ios",
+    "target/ios-bindgen",
+    "target/browser"
+  ]
+}

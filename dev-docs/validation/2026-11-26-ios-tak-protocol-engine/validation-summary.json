@@ -1,0 +1,45 @@
+{
+  "rustCore": 34,
+  "rustBridgeUnique": 16,
+  "officialNumericReferenceReplay": 7,
+  "iosUnitUnique": 19,
+  "iosUIUnique": 1,
+  "frozenTemplates": 75,
+  "frozenLayouts": 85,
+  "fullyCompatible": 70,
+  "gamepadInputGaps": 0,
+  "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+  "irVersion": 1,
+  "simulatorOnly": true,
+  "isRunnable": 85,
+  "formatAndBoundaryChecks": "passed",
+  "rounds": [
+    {
+      "round": "initial",
+      "passed": 15,
+      "failed": 2
+    },
+    {
+      "round": "retry",
+      "passed": 3,
+      "failed": 1
+    },
+    {
+      "round": "ui",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "round": "diagnostics",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "round": "final",
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "cleanup": "complete",
+  "temporaryRootExists": false
+}

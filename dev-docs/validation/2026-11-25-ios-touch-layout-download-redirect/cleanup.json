@@ -1,0 +1,27 @@
+{
+  "completedAtUTC": "2026-11-25T01:30:57.593987+00:00",
+  "removedRoot": "/private/tmp/xbxrc-touch-layout-redirect-r2.LTsG03",
+  "processCheck": "xcodebuild, lint and both xcresult exports returned completion with exit code 0 before cleanup",
+  "processInventory": "ps unavailable in filesystem sandbox; command-session completions used",
+  "completedCommands": {
+    "xcodebuildSession86557": 0,
+    "frontendLintSession25061": 0,
+    "xcresultTestExport": 0,
+    "xcresultBuildExport": 0
+  },
+  "removedFiles": 4545,
+  "allocatedBytesBeforeCleanup": 661131264,
+  "allocatedMiBBeforeCleanup": 630.5,
+  "logicalBytesBeforeCleanup": 640184073,
+  "freeBytesBeforeCleanup": 29163520000,
+  "freeBytesAfterCleanup": 29777920000,
+  "observedFreeBytesDelta": 614400000,
+  "rootExistsAfterCleanup": false,
+  "retained": [
+    "user original diagnostic files",
+    "previous evidence",
+    "shared Rust and SDK caches",
+    "simulator app data",
+    "other task temporary roots"
+  ]
+}

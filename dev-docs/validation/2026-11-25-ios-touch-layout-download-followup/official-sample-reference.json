@@ -1,0 +1,50 @@
+{
+  "references": [
+    {
+      "sourceURL": "https://github.com/microsoft/xbox-game-streaming-tools/blob/99d5449bb054908876ceb867f948652f3b9cb41b/touch-adaptation-kit/samples/sample-layouts/sample-layouts.takx",
+      "commit": "99d5449bb054908876ceb867f948652f3b9cb41b",
+      "path": "touch-adaptation-kit/samples/sample-layouts/sample-layouts.takx",
+      "retainedFixture": "fixtures/official-sample-layouts.takx",
+      "sha256": "6e99958b74ae82c8f8682ab50a2da96256422bf390308880aa9f90049527c36c",
+      "bytes": 4293,
+      "manifest": {
+        "$schema": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/v2.0/manifest.json",
+        "defaultLayout": "standard-controller",
+        "layouts": "layouts",
+        "version": "1.1.0.0"
+      },
+      "layoutCount": 6,
+      "utf8BOMLayoutCount": 6,
+      "assetNames": []
+    },
+    {
+      "sourceURL": "https://github.com/microsoft/xbox-game-streaming-tools/blob/99d5449bb054908876ceb867f948652f3b9cb41b/touch-adaptation-kit/samples/custom-assets/custom-assets.takx",
+      "commit": "99d5449bb054908876ceb867f948652f3b9cb41b",
+      "path": "touch-adaptation-kit/samples/custom-assets/custom-assets.takx",
+      "retainedFixture": "fixtures/official-custom-assets.takx",
+      "sha256": "8b05f11ef7a7f4279d7471c5427366ef811732dcc64cbb300ae74b41fa2e0424",
+      "bytes": 207542,
+      "manifest": {
+        "$schema": "https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/manifest/v2.0/manifest.json",
+        "assets": "assets",
+        "defaultLayout": "custom-assets",
+        "layouts": "layouts",
+        "version": "1.0.0.0"
+      },
+      "layoutCount": 1,
+      "utf8BOMLayoutCount": 1,
+      "assetNames": [
+        "Bow",
+        "Button",
+        "ButtonGlow",
+        "Dash",
+        "Health",
+        "JoystickBackground",
+        "Return",
+        "Spellbook",
+        "Sword"
+      ]
+    }
+  ],
+  "licenseFile": "fixtures/official-LICENSE.txt"
+}

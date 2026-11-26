@@ -1,0 +1,134 @@
+[
+  {
+    "file": "screenshots/community-touch-saved-library.png",
+    "sha256": "9c3af1013882f5703d3a905d2ba33dae5fda85e7d899d9a8e173b3d8982fa806",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "timestamp": 1795573204.25
+  },
+  {
+    "file": "screenshots/community-touch-preview-landscape.png",
+    "sha256": "de8154821adfbdb3aa0443cce708f00cd3817a0afadf8b295bca4ddf4812e3f4",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "timestamp": 1795573191.544
+  },
+  {
+    "file": "screenshots/community-touch-preview-portrait.png",
+    "sha256": "8ac8be559c62bec703fa6bbd648a01e455f7c407330228b3cd140f9fa447cf33",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "timestamp": 1795573187.769
+  },
+  {
+    "file": "screenshots/community-touch-layout-cards.png",
+    "sha256": "3c84cca55285af48096f5a94903975dd68248c72e456a3aa8da879677012df24",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+    "timestamp": 1795573183.799
+  },
+  {
+    "file": "screenshots/healthy-installed-community-download.png",
+    "sha256": "6a73907f6d3f1e9632d1a8f66323d7a6059815a21a6182fcdff6657db5f3d0eb",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+    "timestamp": 1795575480.196,
+    "round": "r2",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/healthy-installed-official-download.png",
+    "sha256": "6a73907f6d3f1e9632d1a8f66323d7a6059815a21a6182fcdff6657db5f3d0eb",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+    "timestamp": 1795575473.967,
+    "round": "r2",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/healthy-cloud-community-download.png",
+    "sha256": "dc9cfb6fa5699d772d6d85fb16c459101dab4fc8f2864355893722e4a151e068",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+    "timestamp": 1795575453.511,
+    "round": "r2",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/healthy-cloud-official-download.png",
+    "sha256": "3178d00a6b23fa6931b8f64ee9823faea5dd615d99c5adae59a17ba27b0d8cf9",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+    "timestamp": 1795575446.101,
+    "round": "r2",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/cloud-current-game-picker-landscape.png",
+    "sha256": "04dab7b1320f6c4fbee8e59e82bfdbcf544650744ca0ccefc1cda5e8a8c7ea71",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection()",
+    "timestamp": 1795576655.602,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/cloud-community-layout-applied.png",
+    "sha256": "e3a2aefa77f8b5e8f120a703dcd40b67fa1d3641549e9446c3fdcd665ceeda33",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection()",
+    "timestamp": 1795576643.356,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/cloud-official-layout-applied.png",
+    "sha256": "38a1fbe7e43c73b6fae7deb48dd22cd75659111cdd0005afc8407e8e5cfa90ec",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection()",
+    "timestamp": 1795576622.757,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/cloud-current-game-query-only.png",
+    "sha256": "0dfad2c09761060cfeb952c62d0e82acd3260b32a9ca8c7fcdee20fa90c73881",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection()",
+    "timestamp": 1795576617.947,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/home-touch-standard-landscape-right.png",
+    "sha256": "dbca5fc208d2c26d02aca611d1e7fe07ef7224aa4a8371b14c04f26ebd6781ad",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795576716.857,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/home-touch-quick-custom-landscape.png",
+    "sha256": "b166a54ebbad8cdf4f425acd94a9ff78c5b734ddba125a7af64974c2c18add93",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795576708.303,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/home-touch-picker-landscape.png",
+    "sha256": "f788c55eefa88b82c16bf60a01839d68e0c8d1d2f33df11e91f26ca21bbac7a3",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795576701.082,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  },
+  {
+    "file": "screenshots/home-touch-quick-saved-portrait.png",
+    "sha256": "e170011614ce454393e4b24704975e0dae05e9aa8db6994be412931298ed7a8b",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+    "timestamp": 1795576683.578,
+    "round": "r2-height-fix",
+    "requestSource": "controlled-test-client",
+    "productionServiceRequest": false
+  }
+]

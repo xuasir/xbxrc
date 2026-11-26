@@ -1,0 +1,11 @@
+{
+  "snapshotFiles": [
+    "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+    "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift"
+  ],
+  "taskChangeRanges": "final-format-validation.json",
+  "baselineRecovery": "execution-manifest.json#baselineRecovery",
+  "note": "任务开始时已有修改的共享文件保留最终快照和本轮修改范围；可恢复任务前基线的文件提供任务差异。"
+}

@@ -1,0 +1,202 @@
+[
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "cloud-library",
+    "event": "catalogRefreshStarted",
+    "importance": "key",
+    "payload": {
+      "cachedGames": 2867,
+      "generation": 2,
+      "language": "zh-CN",
+      "market": "US",
+      "operationId": "E5F8649F-A745-4E95-A2AB-9BDCB6D1E0DC",
+      "platform": "ios",
+      "reason": "initialActivation",
+      "reuseAccess": false,
+      "sourceMonotonicMs": 463718174.32491666,
+      "writerQueueDelayMs": 0.1441250443458557
+    },
+    "schemaVersion": 3,
+    "seq": 111,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513860719
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "importance": "key",
+    "payload": {
+      "operationId": "E0003176-0D70-4788-A7EE-26C57B2900DD",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 463718256.1519167,
+      "writerQueueDelayMs": 0.11487501859664917
+    },
+    "schemaVersion": 3,
+    "seq": 118,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513860801
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "importance": "key",
+    "payload": {
+      "operationId": "E54F4A01-AB2A-425F-BED2-71A8B9BEA6BF",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 463719672.7279584,
+      "writerQueueDelayMs": 0.04362499713897705
+    },
+    "schemaVersion": 3,
+    "seq": 136,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513862218
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "importance": "key",
+    "payload": {
+      "operationId": "1FEA8031-B477-4F31-9CD1-535F6CA1AAE8",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 463720850.3995417,
+      "writerQueueDelayMs": 0.044291675090789795
+    },
+    "schemaVersion": 3,
+    "seq": 171,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513863395
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundarySucceeded",
+    "importance": "key",
+    "payload": {
+      "appLevel": 2,
+      "elapsedMs": 4108,
+      "leaseExpiresAtMs": 1795514764922,
+      "leaseGeneration": 1,
+      "operationId": "A05FBBE8-1075-414D-819B-FFF9E5C27613",
+      "platform": "ios",
+      "sourceMonotonicMs": 463722377.49575,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.07570832967758179
+    },
+    "schemaVersion": 3,
+    "seq": 174,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513864923
+  },
+  {
+    "category": "event",
+    "dimension": "lifecycle",
+    "domain": "xbox-data",
+    "event": "dataSessionBound",
+    "importance": "key",
+    "payload": {
+      "ownerChanged": false,
+      "platform": "ios",
+      "previousGames": 189,
+      "sourceMonotonicMs": 463722517.2466667,
+      "writerQueueDelayMs": 0.06024998426437378
+    },
+    "schemaVersion": 3,
+    "seq": 175,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513865062
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessBoundarySucceeded",
+    "importance": "key",
+    "payload": {
+      "appLevel": 2,
+      "elapsedMs": 4316,
+      "operationId": "E0003176-0D70-4788-A7EE-26C57B2900DD",
+      "platform": "ios",
+      "sessionPersisted": true,
+      "sourceMonotonicMs": 463722573.0876667,
+      "writerQueueDelayMs": 0.06429165601730347
+    },
+    "schemaVersion": 3,
+    "seq": 176,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513865118
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "cloud-library",
+    "event": "catalogRequestBoundaryStarted",
+    "importance": "key",
+    "payload": {
+      "language": "zh-CN",
+      "market": "US",
+      "operationId": "495E4A8D-23E7-4E4F-9897-F12611674127",
+      "platform": "ios",
+      "sourceMonotonicMs": 463722573.11220837,
+      "writerQueueDelayMs": 0.2162083387374878
+    },
+    "schemaVersion": 3,
+    "seq": 177,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513865118
+  },
+  {
+    "category": "event",
+    "dimension": "network",
+    "domain": "auth",
+    "event": "cloudAccessBoundaryFailed",
+    "importance": "essential",
+    "payload": {
+      "elapsedMs": 2904,
+      "error": "Swift.CancellationError#1: 未能完成操作。（Swift.CancellationError错误1。）",
+      "errorCode": 1,
+      "errorDomain": "Swift.CancellationError",
+      "errorKind": "cancelled",
+      "errorType": "CancellationError",
+      "operationId": "E54F4A01-AB2A-425F-BED2-71A8B9BEA6BF",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "retriable": false,
+      "sourceMonotonicMs": 463722577.5506667,
+      "timeout": false,
+      "writerQueueDelayMs": 0.14254164695739746
+    },
+    "schemaVersion": 3,
+    "seq": 178,
+    "sessionId": "52F2B531-AFE6-432D-AD05-AED671198F5C",
+    "traceMode": "dev",
+    "traceProfile": "dev",
+    "tsMs": 1795513865123
+  }
+]

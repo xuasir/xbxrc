@@ -1,0 +1,189 @@
+{
+  "date": "2026-11-26",
+  "status": "passed",
+  "kind": "source-extraction-and-rfc-smoke",
+  "checks": [
+    {
+      "check": "evidence-json",
+      "passed": true,
+      "detail": {
+        "files": 5
+      }
+    },
+    {
+      "check": "community-source.json-file-list",
+      "passed": true,
+      "detail": 168
+    },
+    {
+      "check": "official-runtime-source.json-file-list",
+      "passed": true,
+      "detail": 2
+    },
+    {
+      "check": "archived-source-hashes",
+      "passed": true,
+      "detail": {
+        "files": 170
+      }
+    },
+    {
+      "check": "source-hash:dev-docs/validation/2026-11-25-ios-tak-completeness/fixtures/layout-schema.json",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:dev-docs/validation/2026-11-25-ios-tak-completeness/fixtures/context-schema.json",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:iosapp/XBXRC/Features/TouchControls/TouchIconCatalog.swift",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:iosapp/XBXRC/Features/TouchControls/TouchLayoutStyle.swift",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:crates/xbox-touch-layouts/src/community.rs",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "source-hash:crates/xbox-touch-layouts/src/runtime.rs",
+      "passed": true,
+      "detail": "matches extracted snapshot"
+    },
+    {
+      "check": "whole-community-reference-graph",
+      "passed": true,
+      "detail": {
+        "files": 168,
+        "validJSONFiles": 167,
+        "titleDefinitions": 92,
+        "templateFiles": 75,
+        "layouts": 85,
+        "referencedTemplates": 75,
+        "missingTemplateReferences": [],
+        "unreferencedTemplates": [],
+        "controlTypes": {
+          "blank": 17,
+          "button": 704,
+          "directionalPad": 56,
+          "gyroscope": 14,
+          "joystick": 208,
+          "throttle": 1,
+          "touchpad": 94
+        },
+        "semanticIconNamesUsed": 68,
+        "iconNamesMissingFromCurrentCatalog": 4,
+        "missingIconOccurrences": 74
+      }
+    },
+    {
+      "check": "gta6-shared-icon-gap",
+      "passed": true,
+      "detail": {
+        "gta6": 3,
+        "sharedOccurrences": 74,
+        "iconKinds": 4
+      }
+    },
+    {
+      "check": "document-whitespace:2026-11-26-ios-tak-protocol-engine.md",
+      "passed": true,
+      "detail": "no trailing whitespace"
+    },
+    {
+      "check": "document-link",
+      "passed": true,
+      "detail": "../../dev-docs/validation/2026-11-26-ios-tak-protocol-engine-plan/README.md"
+    },
+    {
+      "check": "document-whitespace:README.md",
+      "passed": true,
+      "detail": "no trailing whitespace"
+    },
+    {
+      "check": "document-link",
+      "passed": true,
+      "detail": "../../../docs/rfcs/2026-11-26-ios-tak-protocol-engine.md"
+    },
+    {
+      "check": "task-registration",
+      "passed": true,
+      "detail": "planned task registered; concurrent background task retained"
+    },
+    {
+      "check": "targeted-diff-check",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "sourceArchiveFiles": 170,
+  "schemaDefinitions": 189,
+  "communityTemplates": 75,
+  "communityLayouts": 85,
+  "localDocumentLinks": 2,
+  "productImplementation": "planned; execution confirmation pending",
+  "runtimeBehaviorValidation": "implementation stage",
+  "sourceDiagnostics": [
+    {
+      "kind": "sandbox-network-restriction",
+      "resolution": "public read approved through sandbox escalation"
+    },
+    {
+      "kind": "python-local-ca-chain",
+      "resolution": "system curl verified HTTPS successfully"
+    },
+    {
+      "kind": "upstream-ids-json-syntax",
+      "resolution": "raw source and exact diagnostic retained; referenced title definitions/templates parsed successfully"
+    }
+  ],
+  "atlasFollowup": {
+    "status": "passed",
+    "checks": [
+      {
+        "check": "atlas-host-source.json",
+        "passed": true,
+        "sourceFiles": 2
+      },
+      {
+        "check": "official-icon-atlas-source.json",
+        "passed": true,
+        "sourceFiles": 5
+      },
+      {
+        "check": "official-runtime-icon-frames",
+        "passed": true,
+        "profiles": 5,
+        "names": 234,
+        "communityGamepadNames": 4
+      },
+      {
+        "check": "updated-protocol-documents",
+        "passed": true,
+        "policy": "tolerant execution within protocol contracts"
+      }
+    ],
+    "sourceFiles": 7,
+    "dpiProfiles": 5,
+    "runtimeIconNames": 234,
+    "confirmedGTA6FalseRejections": 3,
+    "productImplementation": "planned"
+  }
+}

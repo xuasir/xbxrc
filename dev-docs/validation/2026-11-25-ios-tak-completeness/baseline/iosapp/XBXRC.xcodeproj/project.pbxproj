@@ -1,0 +1,1269 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */; };
+		5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */; };
+		4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */; };
+		3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */; };
+		C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */; };
+		17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */; };
+		495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */; };
+		E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */; };
+		7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */; };
+		907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */; };
+		DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */; };
+		09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */; };
+		C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */; };
+		5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */; };
+		A10000000000000000000001 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* WebRTC */; };
+		A00000000000000000000001 /* XBXRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* XBXRCApp.swift */; };
+		A00000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppRootView.swift */; };
+		A00000000000000000000035 /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* AppOrientation.swift */; };
+		A00000000000000000000036 /* StreamingMetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000036 /* StreamingMetalRenderer.swift */; };
+		A0000000000000000000002D /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* LaunchExperienceView.swift */; };
+		A00000000000000000000003 /* GameLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* GameLibraryView.swift */; };
+		A00000000000000000000004 /* AchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* AchievementsView.swift */; };
+		A00000000000000000000005 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ProfileView.swift */; };
+		A00000000000000000000006 /* StreamingRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* StreamingRuntime.swift */; };
+		A00000000000000000000026 /* StreamingContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002D /* StreamingContracts.swift */; };
+		A00000000000000000000027 /* StreamSessionActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002E /* StreamSessionActor.swift */; };
+		A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002F /* LibWebRtcRuntime.swift */; };
+		A00000000000000000000029 /* StreamingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000030 /* StreamingPlayerView.swift */; };
+		A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000031 /* XboxStreamDataChannels.swift */; };
+		A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* IOSStreamInputProtocol.swift */; };
+		A00000000000000000000037 /* AuthCredentialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000037 /* AuthCredentialCoordinator.swift */; };
+		A00000000000000000000038 /* SettingsPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000038 /* SettingsPersistence.swift */; };
+		A00000000000000000000039 /* StreamingSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000039 /* StreamingSessionState.swift */; };
+		A0000000000000000000003A /* AuthCredentialCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */; };
+		A0000000000000000000003B /* SettingsAndPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003B /* SettingsAndPersistenceTests.swift */; };
+		A0000000000000000000003C /* CloudLibraryDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003C /* CloudLibraryDiagnostics.swift */; };
+		A0000000000000000000003D /* CloudLibraryScopeLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */; };
+		A0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */; };
+		A0000000000000000000003F /* XboxDataStoreLocaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */; };
+		A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */; };
+		A00000000000000000000041 /* StreamingAudioLifecycleState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000041 /* StreamingAudioLifecycleState.swift */; };
+		A00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */; };
+		A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */; };
+		A00000000000000000000044 /* StreamingControlsState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000044 /* StreamingControlsState.swift */; };
+		A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */; };
+		A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000046 /* StreamingControlsOverlay.swift */; };
+		A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000047 /* StreamingControlsStateTests.swift */; };
+		A00000000000000000000007 /* GameSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* GameSummary.swift */; };
+		A00000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Assets.xcassets */; };
+		A00000000000000000000009 /* XBXRCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000A /* XBXRCTests.swift */; };
+		A0000000000000000000000A /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000D /* XCTest.framework */; };
+		A0000000000000000000000B /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000E /* AuthStore.swift */; };
+		A0000000000000000000000C /* WebAuthenticationPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000000F /* WebAuthenticationPresenter.swift */; };
+		A0000000000000000000000D /* XboxLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* XboxLoginView.swift */; };
+		A0000000000000000000000E /* XboxAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* XboxAuthClient.swift */; };
+		A0000000000000000000000F /* xbox_ios_bridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* xbox_ios_bridge.swift */; };
+		A00000000000000000000010 /* KeychainSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* KeychainSessionStore.swift */; };
+		A00000000000000000000011 /* XboxDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* XboxDataClient.swift */; };
+		A00000000000000000000012 /* XboxDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* XboxDataStore.swift */; };
+		A00000000000000000000013 /* LibraryPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001A /* LibraryPresentation.swift */; };
+		A00000000000000000000014 /* LibraryComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001B /* LibraryComponents.swift */; };
+		A00000000000000000000015 /* SkeletonPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001C /* SkeletonPulse.swift */; };
+		A00000000000000000000016 /* GamerscoreCoinIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001D /* GamerscoreCoinIcon.swift */; };
+		A00000000000000000000017 /* GameDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001E /* GameDetailView.swift */; };
+		A00000000000000000000018 /* CircularCardCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000001F /* CircularCardCarousel.swift */; };
+		A00000000000000000000019 /* CloudLibraryGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* CloudLibraryGame.swift */; };
+		A0000000000000000000001A /* XboxCloudDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* XboxCloudDataClient.swift */; };
+		A0000000000000000000001B /* CloudCatalogSnapshotRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000022 /* CloudCatalogSnapshotRepository.swift */; };
+		A0000000000000000000001C /* CloudLibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* CloudLibraryStore.swift */; };
+		A0000000000000000000001D /* IOSRuntimeTraceEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000024 /* IOSRuntimeTraceEnvelope.swift */; };
+		A0000000000000000000001E /* IOSRuntimeTracePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000025 /* IOSRuntimeTracePolicy.swift */; };
+		A0000000000000000000001F /* IOSRuntimeTraceWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000026 /* IOSRuntimeTraceWriter.swift */; };
+		A00000000000000000000020 /* IOSRuntimeTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000027 /* IOSRuntimeTrace.swift */; };
+		A00000000000000000000021 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000028 /* AppSettingsStore.swift */; };
+		A00000000000000000000022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000029 /* SettingsView.swift */; };
+		A00000000000000000000023 /* XboxHostSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002A /* XboxHostSummary.swift */; };
+		A00000000000000000000024 /* HostListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0000000000000000000002B /* HostListView.swift */; };
+		A0000000000000000000002B /* OrbitCardCarousel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000032 /* OrbitCardCarousel.swift */; };
+		A960814176DD25A8CECF942D /* AdaptiveSectionNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B960814176DD25A8CECF942D /* AdaptiveSectionNavigation.swift */; };
+		AE602F3CC34084E8BAA6B72A /* AppInformationPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE602F3CC34084E8BAA6B72A /* AppInformationPage.swift */; };
+		A9B70ADF05C9FF4427D8FF9C /* MobilePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B70ADF05C9FF4427D8FF9C /* MobilePreferences.swift */; };
+		A9BC22024D4D1ABF8943070D /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BC22024D4D1ABF8943070D /* SettingsRootView.swift */; };
+		A99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift */; };
+		A9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift */; };
+		A90CCE6592550CB1E2C6D5CE /* ControllerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90CCE6592550CB1E2C6D5CE /* ControllerView.swift */; };
+		A944F8EB7990E2910D626954 /* PersonalDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B944F8EB7990E2910D626954 /* PersonalDataModels.swift */; };
+		A9BC5E82238132BB99913E9D /* XboxPersonalData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BC5E82238132BB99913E9D /* XboxPersonalData.swift */; };
+		A9235FFFFA1375C8BD4E415D /* PersonalPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9235FFFFA1375C8BD4E415D /* PersonalPages.swift */; };
+		A988C84F0EFC587C094CAF97 /* HostInstalledGamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B988C84F0EFC587C094CAF97 /* HostInstalledGamesView.swift */; };
+		A94F03234E1E29E2F89558F1 /* CloudLibraryBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94F03234E1E29E2F89558F1 /* CloudLibraryBrowserView.swift */; };
+		A90000000000000000000F01 /* CapabilityMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90000000000000000000F01 /* CapabilityMigrationTests.swift */; };
+		A20000000000000000000001 /* MobileSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* MobileSettingsModels.swift */; };
+		A20000000000000000000005 /* MobileControllerTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* MobileControllerTools.swift */; };
+		A20000000000000000000002 /* MobileSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* MobileSettingsControls.swift */; };
+		A20000000000000000000003 /* MobileTurnSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* MobileTurnSettingsView.swift */; };
+		A20000000000000000000004 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* Localizable.xcstrings */; };
+		A30000000000000000000001 = {isa = PBXBuildFile; fileRef = B30000000000000000000001; };
+		A40000000000000000000001 /* PCPageUITestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000001 /* PCPageUITestFixtures.swift */; };
+		A40000000000000000000002 /* AchievementComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000002 /* AchievementComparisonView.swift */; };
+		A40000000000000000000003 /* PersonalGameViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000003 /* PersonalGameViews.swift */; };
+		A40000000000000000000004 /* XboxAlbumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000004 /* XboxAlbumView.swift */; };
+		A40000000000000000000005 /* CloudProductDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000005 /* CloudProductDataClient.swift */; };
+		A40000000000000000000006 /* XboxPersonalDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000006 /* XboxPersonalDataClient.swift */; };
+		A40000000000000000000007 /* CloudFavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000007 /* CloudFavoritesStore.swift */; };
+		A40000000000000000000008 /* XboxPlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000008 /* XboxPlayerData.swift */; };
+		A40000000000000000000009 /* PCDataParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000009 /* PCDataParityTests.swift */; };
+		A4000000000000000000000A /* PCPageInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4000000000000000000000A /* PCPageInteractionTests.swift */; };
+		A508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = B508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift */; };
+		AF59239E3D11055F769008F4 /* StreamingFrameFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF59239E3D11055F769008F4 /* StreamingFrameFeedbackTests.swift */; };
+		A60000000000000000000600 /* TouchControlRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000600 /* TouchControlRuntime.swift */; };
+		A60000000000000000000601 /* TouchInputAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000601 /* TouchInputAccumulator.swift */; };
+		A60000000000000000000602 /* TouchLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000602 /* TouchLayout.swift */; };
+		A60000000000000000000603 /* TouchLayoutCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000603 /* TouchLayoutCatalog.swift */; };
+		A60000000000000000000604 /* TouchLayoutGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000604 /* TouchLayoutGeometry.swift */; };
+		A60000000000000000000605 /* TouchLayoutNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000605 /* TouchLayoutNormalizer.swift */; };
+		A60000000000000000000606 /* TouchLayoutPlaygroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000606 /* TouchLayoutPlaygroundView.swift */; };
+		A60000000000000000000607 /* TouchLayoutResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000607 /* TouchLayoutResolver.swift */; };
+		A60000000000000000000608 /* TouchLayoutSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000608 /* TouchLayoutSurface.swift */; };
+		A6000000000000000000060A /* TouchLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060A /* TouchLayoutTests.swift */; };
+		A6000000000000000000060B /* TouchLayoutInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060B /* TouchLayoutInteractionTests.swift */; };
+		A6000000000000000000060C /* TouchLayouts in Resources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060C /* TouchLayouts */; };
+		A6000000000000000000060D /* TouchInputDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060D /* TouchInputDiagnostics.swift */; };
+		A6000000000000000000060E /* TouchSampleBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060E /* TouchSampleBatch.swift */; };
+		A6000000000000000000060F /* TouchLayoutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6000000000000000000060F /* TouchLayoutRecorder.swift */; };
+		A544DD12D0B6A0F9C7BBFADE /* AppSectionRequestState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B544DD12D0B6A0F9C7BBFADE /* AppSectionRequestState.swift */; };
+		A523A9F9259A20E7CED54B5C /* SectionRequestFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = B523A9F9259A20E7CED54B5C /* SectionRequestFailure.swift */; };
+		F70000000000000000000001 /* StreamingDiagnosticsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71000000000000000000001 /* StreamingDiagnosticsModel.swift */; };
+		F70000000000000000000002 /* StreamingDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71000000000000000000002 /* StreamingDiagnosticsView.swift */; };
+		A60000000000000000000620 /* TouchLayoutTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000620 /* TouchLayoutTemplate.swift */; };
+		A60000000000000000000621 /* TouchLayoutSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000621 /* TouchLayoutSettingsViews.swift */; };
+		A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */; };
+		182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */; };
+		956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */; };
+		B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E00000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F00000000000000000000001;
+			remoteInfo = XBXRC;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchQuickSwitch.swift; sourceTree = "<group>"; };
+		B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutInteractionTests.swift; sourceTree = "<group>"; };
+		74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutTests.swift; sourceTree = "<group>"; };
+		6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsUITestFixtures.swift; sourceTree = "<group>"; };
+		414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutPickerPanel.swift; sourceTree = "<group>"; };
+		4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsView.swift; sourceTree = "<group>"; };
+		A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutPreviewView.swift; sourceTree = "<group>"; };
+		2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutsView.swift; sourceTree = "<group>"; };
+		1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchLayoutController.swift; sourceTree = "<group>"; };
+		0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTouchLayoutsStore.swift; sourceTree = "<group>"; };
+		6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxTouchLayoutClient.swift; sourceTree = "<group>"; };
+		78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialTouchLayoutModels.swift; sourceTree = "<group>"; };
+		384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnostics.swift; sourceTree = "<group>"; };
+		2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingStartupDiagnosticsTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000001 /* XBXRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000035 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
+		B00000000000000000000036 /* StreamingMetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMetalRenderer.swift; sourceTree = "<group>"; };
+		B00000000000000000000034 /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 /* GameLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLibraryView.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 /* AchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsView.swift; sourceTree = "<group>"; };
+		B00000000000000000000005 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 /* StreamingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingRuntime.swift; sourceTree = "<group>"; };
+		B00000000000000000000007 /* GameSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSummary.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B00000000000000000000009 /* XBXRC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XBXRC.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0000000000000000000000A /* XBXRCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XBXRCTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000000B /* XBXRCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = XBXRCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0000000000000000000000D /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		B0000000000000000000000E /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		B0000000000000000000000F /* WebAuthenticationPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAuthenticationPresenter.swift; sourceTree = "<group>"; };
+		B00000000000000000000010 /* XboxLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxLoginView.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 /* XboxAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxAuthClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* xbox_ios_bridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = xbox_ios_bridge.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* XBXRC-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "XBXRC-Bridging-Header.h"; sourceTree = "<group>"; };
+		B00000000000000000000014 /* xbox_ios_bridge.modulemap */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.module-map; path = xbox_ios_bridge.modulemap; sourceTree = "<group>"; };
+		B00000000000000000000015 /* xbox_ios_bridgeFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = xbox_ios_bridgeFFI.h; sourceTree = "<group>"; };
+		B00000000000000000000016 /* KeychainSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSessionStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000018 /* XboxDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxDataClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000019 /* XboxDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxDataStore.swift; sourceTree = "<group>"; };
+		B0000000000000000000001A /* LibraryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPresentation.swift; sourceTree = "<group>"; };
+		B0000000000000000000001B /* LibraryComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryComponents.swift; sourceTree = "<group>"; };
+		B0000000000000000000001C /* SkeletonPulse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonPulse.swift; sourceTree = "<group>"; };
+		B0000000000000000000001D /* GamerscoreCoinIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamerscoreCoinIcon.swift; sourceTree = "<group>"; };
+		B0000000000000000000001E /* GameDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDetailView.swift; sourceTree = "<group>"; };
+		B0000000000000000000001F /* CircularCardCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularCardCarousel.swift; sourceTree = "<group>"; };
+		B00000000000000000000020 /* CloudLibraryGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryGame.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* XboxCloudDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxCloudDataClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* CloudCatalogSnapshotRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCatalogSnapshotRepository.swift; sourceTree = "<group>"; };
+		B00000000000000000000023 /* CloudLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* IOSRuntimeTraceEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRuntimeTraceEnvelope.swift; sourceTree = "<group>"; };
+		B00000000000000000000025 /* IOSRuntimeTracePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRuntimeTracePolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000026 /* IOSRuntimeTraceWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRuntimeTraceWriter.swift; sourceTree = "<group>"; };
+		B00000000000000000000027 /* IOSRuntimeTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRuntimeTrace.swift; sourceTree = "<group>"; };
+		B00000000000000000000028 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000029 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B0000000000000000000002A /* XboxHostSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxHostSummary.swift; sourceTree = "<group>"; };
+		B0000000000000000000002B /* HostListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostListView.swift; sourceTree = "<group>"; };
+		B0000000000000000000002D /* StreamingContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingContracts.swift; sourceTree = "<group>"; };
+		B0000000000000000000002E /* StreamSessionActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionActor.swift; sourceTree = "<group>"; };
+		B0000000000000000000002F /* LibWebRtcRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibWebRtcRuntime.swift; sourceTree = "<group>"; };
+		B00000000000000000000030 /* StreamingPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingPlayerView.swift; sourceTree = "<group>"; };
+		B00000000000000000000031 /* XboxStreamDataChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxStreamDataChannels.swift; sourceTree = "<group>"; };
+		B00000000000000000000032 /* OrbitCardCarousel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitCardCarousel.swift; sourceTree = "<group>"; };
+		B00000000000000000000033 /* IOSStreamInputProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSStreamInputProtocol.swift; sourceTree = "<group>"; };
+		B00000000000000000000037 /* AuthCredentialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCredentialCoordinator.swift; sourceTree = "<group>"; };
+		B00000000000000000000038 /* SettingsPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPersistence.swift; sourceTree = "<group>"; };
+		B00000000000000000000039 /* StreamingSessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingSessionState.swift; sourceTree = "<group>"; };
+		B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCredentialCoordinatorTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000003B /* SettingsAndPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndPersistenceTests.swift; sourceTree = "<group>"; };
+		B0000000000000000000003C /* CloudLibraryDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryDiagnostics.swift; sourceTree = "<group>"; };
+		B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryScopeLifecycle.swift; sourceTree = "<group>"; };
+		B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCatalogPersistenceCoordinator.swift; sourceTree = "<group>"; };
+		B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxDataStoreLocaleTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryStoreConcurrencyTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000041 /* StreamingAudioLifecycleState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleState.swift; sourceTree = "<group>"; };
+		B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleCoordinator.swift; sourceTree = "<group>"; };
+		B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingAudioLifecycleStateTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000044 /* StreamingControlsState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsState.swift; sourceTree = "<group>"; };
+		B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsGestureRecognizer.swift; sourceTree = "<group>"; };
+		B00000000000000000000046 /* StreamingControlsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsOverlay.swift; sourceTree = "<group>"; };
+		B00000000000000000000047 /* StreamingControlsStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingControlsStateTests.swift; sourceTree = "<group>"; };
+		B960814176DD25A8CECF942D /* AdaptiveSectionNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveSectionNavigation.swift; sourceTree = "<group>"; };
+		BE602F3CC34084E8BAA6B72A /* AppInformationPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInformationPage.swift; sourceTree = "<group>"; };
+		B9B70ADF05C9FF4427D8FF9C /* MobilePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePreferences.swift; sourceTree = "<group>"; };
+		B9BC22024D4D1ABF8943070D /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		B99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamInputSession.swift; sourceTree = "<group>"; };
+		B9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchGamepadOverlay.swift; sourceTree = "<group>"; };
+		B90CCE6592550CB1E2C6D5CE /* ControllerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerView.swift; sourceTree = "<group>"; };
+		B944F8EB7990E2910D626954 /* PersonalDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalDataModels.swift; sourceTree = "<group>"; };
+		B9BC5E82238132BB99913E9D /* XboxPersonalData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxPersonalData.swift; sourceTree = "<group>"; };
+		B9235FFFFA1375C8BD4E415D /* PersonalPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalPages.swift; sourceTree = "<group>"; };
+		B988C84F0EFC587C094CAF97 /* HostInstalledGamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostInstalledGamesView.swift; sourceTree = "<group>"; };
+		B94F03234E1E29E2F89558F1 /* CloudLibraryBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryBrowserView.swift; sourceTree = "<group>"; };
+		B90000000000000000000F01 /* CapabilityMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilityMigrationTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000001 /* MobileSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileSettingsModels.swift; sourceTree = "<group>"; };
+		B20000000000000000000005 /* MobileControllerTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControllerTools.swift; sourceTree = "<group>"; };
+		B20000000000000000000002 /* MobileSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileSettingsControls.swift; sourceTree = "<group>"; };
+		B20000000000000000000003 /* MobileTurnSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTurnSettingsView.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+        B30000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInteractionTests.swift; sourceTree = "<group>"; };
+        B30000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = XBXRCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B40000000000000000000001 /* PCPageUITestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCPageUITestFixtures.swift; sourceTree = "<group>"; };
+		B40000000000000000000002 /* AchievementComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementComparisonView.swift; sourceTree = "<group>"; };
+		B40000000000000000000003 /* PersonalGameViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalGameViews.swift; sourceTree = "<group>"; };
+		B40000000000000000000004 /* XboxAlbumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxAlbumView.swift; sourceTree = "<group>"; };
+		B40000000000000000000005 /* CloudProductDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProductDataClient.swift; sourceTree = "<group>"; };
+		B40000000000000000000006 /* XboxPersonalDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxPersonalDataClient.swift; sourceTree = "<group>"; };
+		B40000000000000000000007 /* CloudFavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFavoritesStore.swift; sourceTree = "<group>"; };
+		B40000000000000000000008 /* XboxPlayerData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XboxPlayerData.swift; sourceTree = "<group>"; };
+		B40000000000000000000009 /* PCDataParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCDataParityTests.swift; sourceTree = "<group>"; };
+		B4000000000000000000000A /* PCPageInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCPageInteractionTests.swift; sourceTree = "<group>"; };
+		B508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingFrameFeedback.swift; sourceTree = "<group>"; };
+		BF59239E3D11055F769008F4 /* StreamingFrameFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingFrameFeedbackTests.swift; sourceTree = "<group>"; };
+		B60000000000000000000600 /* TouchControlRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchControlRuntime.swift; sourceTree = "<group>"; };
+		B60000000000000000000601 /* TouchInputAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInputAccumulator.swift; sourceTree = "<group>"; };
+		B60000000000000000000602 /* TouchLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayout.swift; sourceTree = "<group>"; };
+		B60000000000000000000603 /* TouchLayoutCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutCatalog.swift; sourceTree = "<group>"; };
+		B60000000000000000000604 /* TouchLayoutGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutGeometry.swift; sourceTree = "<group>"; };
+		B60000000000000000000605 /* TouchLayoutNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutNormalizer.swift; sourceTree = "<group>"; };
+		B60000000000000000000606 /* TouchLayoutPlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutPlaygroundView.swift; sourceTree = "<group>"; };
+		B60000000000000000000607 /* TouchLayoutResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutResolver.swift; sourceTree = "<group>"; };
+		B60000000000000000000608 /* TouchLayoutSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutSurface.swift; sourceTree = "<group>"; };
+		B6000000000000000000060A /* TouchLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutTests.swift; sourceTree = "<group>"; };
+		B6000000000000000000060B /* TouchLayoutInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutInteractionTests.swift; sourceTree = "<group>"; };
+		B6000000000000000000060C /* TouchLayouts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TouchLayouts; sourceTree = "<group>"; };
+		B6000000000000000000060D /* TouchInputDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInputDiagnostics.swift; sourceTree = "<group>"; };
+		B6000000000000000000060E /* TouchSampleBatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchSampleBatch.swift; sourceTree = "<group>"; };
+		B6000000000000000000060F /* TouchLayoutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutRecorder.swift; sourceTree = "<group>"; };
+		B544DD12D0B6A0F9C7BBFADE /* AppSectionRequestState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSectionRequestState.swift; sourceTree = "<group>"; };
+		B523A9F9259A20E7CED54B5C /* SectionRequestFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionRequestFailure.swift; sourceTree = "<group>"; };
+		F71000000000000000000001 /* StreamingDiagnosticsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingDiagnosticsModel.swift; sourceTree = "<group>"; };
+		F71000000000000000000002 /* StreamingDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingDiagnosticsView.swift; sourceTree = "<group>"; };
+		B60000000000000000000620 /* TouchLayoutTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutTemplate.swift; sourceTree = "<group>"; };
+		B60000000000000000000621 /* TouchLayoutSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutSettingsViews.swift; sourceTree = "<group>"; };
+		B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutCustomizationTests.swift; sourceTree = "<group>"; };
+		5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProductDetailRepository.swift; sourceTree = "<group>"; };
+		1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumFileDownload.swift; sourceTree = "<group>"; };
+		DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPBehaviorParityTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D00000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D00000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0000000000000000000000A /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+        D30000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000002 /* XBXRC */,
+				C0000000000000000000000D /* XBXRCTests */,
+                C30000000000000000000001 /* XBXRCUITests */,
+				C0000000000000000000000F /* Frameworks */,
+				C0000000000000000000000E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C00000000000000000000002 /* XBXRC */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000003 /* App */,
+				C00000000000000000000004 /* Features */,
+				C00000000000000000000008 /* Platform */,
+				C0000000000000000000000A /* Shared */,
+				C0000000000000000000000C /* Resources */,
+			);
+			path = XBXRC;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000003 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				6177AFFD365AB4F4AD4A2F52 /* OfficialTouchLayoutsUITestFixtures.swift */,
+				B40000000000000000000001 /* PCPageUITestFixtures.swift */,
+				B00000000000000000000001 /* XBXRCApp.swift */,
+				B00000000000000000000002 /* AppRootView.swift */,
+				B00000000000000000000035 /* AppOrientation.swift */,
+				B00000000000000000000034 /* LaunchExperienceView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000004 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				C60000000000000000000001 /* TouchControls */,
+				C9C166FF29164BBCD8904079 /* Controllers */,
+				C00000000000000000000010 /* Authentication */,
+				C00000000000000000000005 /* Library */,
+				C00000000000000000000019 /* Hosts */,
+				C00000000000000000000006 /* Achievements */,
+				C00000000000000000000007 /* Profile */,
+				C00000000000000000000018 /* Settings */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000019 /* Hosts */ = {
+			isa = PBXGroup;
+			children = (
+				B988C84F0EFC587C094CAF97 /* HostInstalledGamesView.swift */,
+				B0000000000000000000002B /* HostListView.swift */,
+			);
+			path = Hosts;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000010 /* Authentication */ = {
+			isa = PBXGroup;
+			children = (
+				B0000000000000000000000E /* AuthStore.swift */,
+				B00000000000000000000037 /* AuthCredentialCoordinator.swift */,
+				B0000000000000000000000F /* WebAuthenticationPresenter.swift */,
+				B00000000000000000000010 /* XboxLoginView.swift */,
+			);
+			path = Authentication;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000005 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				B94F03234E1E29E2F89558F1 /* CloudLibraryBrowserView.swift */,
+				B00000000000000000000003 /* GameLibraryView.swift */,
+				B0000000000000000000001A /* LibraryPresentation.swift */,
+				B0000000000000000000001B /* LibraryComponents.swift */,
+				B0000000000000000000001E /* GameDetailView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000006 /* Achievements */ = {
+			isa = PBXGroup;
+			children = (
+				B40000000000000000000002 /* AchievementComparisonView.swift */,
+				B00000000000000000000004 /* AchievementsView.swift */,
+			);
+			path = Achievements;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000007 /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				1C9804D329156E2C4D7B763C /* AlbumFileDownload.swift */,
+				B40000000000000000000004 /* XboxAlbumView.swift */,
+				B40000000000000000000003 /* PersonalGameViews.swift */,
+				B9235FFFFA1375C8BD4E415D /* PersonalPages.swift */,
+				B00000000000000000000005 /* ProfileView.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000018 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B9BC22024D4D1ABF8943070D /* SettingsRootView.swift */,
+				B9B70ADF05C9FF4427D8FF9C /* MobilePreferences.swift */,
+				B00000000000000000000028 /* AppSettingsStore.swift */,
+				B00000000000000000000038 /* SettingsPersistence.swift */,
+				B00000000000000000000029 /* SettingsView.swift */,
+				B20000000000000000000003 /* MobileTurnSettingsView.swift */,
+				B20000000000000000000005 /* MobileControllerTools.swift */,
+				B20000000000000000000002 /* MobileSettingsControls.swift */,
+				B20000000000000000000001 /* MobileSettingsModels.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000008 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000011 /* RustBridge */,
+				C00000000000000000000009 /* Streaming */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000011 /* RustBridge */ = {
+			isa = PBXGroup;
+			children = (
+				6D8110B7AB276F8B318A7189 /* XboxTouchLayoutClient.swift */,
+				B40000000000000000000006 /* XboxPersonalDataClient.swift */,
+				B40000000000000000000005 /* CloudProductDataClient.swift */,
+				B00000000000000000000011 /* XboxAuthClient.swift */,
+				B00000000000000000000018 /* XboxDataClient.swift */,
+				B00000000000000000000021 /* XboxCloudDataClient.swift */,
+				C00000000000000000000012 /* Generated */,
+				C00000000000000000000013 /* Support */,
+			);
+			path = RustBridge;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000012 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000012 /* xbox_ios_bridge.swift */,
+				B00000000000000000000015 /* xbox_ios_bridgeFFI.h */,
+				B00000000000000000000014 /* xbox_ios_bridge.modulemap */,
+			);
+			path = Generated;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000013 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000013 /* XBXRC-Bridging-Header.h */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000009 /* Streaming */ = {
+			isa = PBXGroup;
+			children = (
+				744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */,
+				414B4F3CD504FB53621426AC /* StreamingTouchLayoutPickerPanel.swift */,
+				1CB99BB8014E9CAAE078C209 /* StreamingTouchLayoutController.swift */,
+				B9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift */,
+				B99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift */,
+				B00000000000000000000006 /* StreamingRuntime.swift */,
+				B0000000000000000000002D /* StreamingContracts.swift */,
+				B00000000000000000000039 /* StreamingSessionState.swift */,
+				B00000000000000000000041 /* StreamingAudioLifecycleState.swift */,
+				B00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift */,
+				B00000000000000000000044 /* StreamingControlsState.swift */,
+				F71000000000000000000002 /* StreamingDiagnosticsView.swift */,
+				F71000000000000000000001 /* StreamingDiagnosticsModel.swift */,
+				B00000000000000000000045 /* StreamingControlsGestureRecognizer.swift */,
+				B00000000000000000000046 /* StreamingControlsOverlay.swift */,
+				B0000000000000000000002E /* StreamSessionActor.swift */,
+				384FD9083CB51D185D4C2016 /* StreamingStartupDiagnostics.swift */,
+				B0000000000000000000002F /* LibWebRtcRuntime.swift */,
+				B508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift */,
+				B00000000000000000000030 /* StreamingPlayerView.swift */,
+				B00000000000000000000036 /* StreamingMetalRenderer.swift */,
+				B00000000000000000000031 /* XboxStreamDataChannels.swift */,
+				B00000000000000000000033 /* IOSStreamInputProtocol.swift */,
+			);
+			path = Streaming;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000017 /* Diagnostics */,
+				C00000000000000000000016 /* Components */,
+				C0000000000000000000000B /* Models */,
+				C00000000000000000000014 /* Security */,
+				C00000000000000000000015 /* State */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000017 /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000024 /* IOSRuntimeTraceEnvelope.swift */,
+				B00000000000000000000025 /* IOSRuntimeTracePolicy.swift */,
+				B00000000000000000000026 /* IOSRuntimeTraceWriter.swift */,
+				B00000000000000000000027 /* IOSRuntimeTrace.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000016 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				B960814176DD25A8CECF942D /* AdaptiveSectionNavigation.swift */,
+				BE602F3CC34084E8BAA6B72A /* AppInformationPage.swift */,
+				B544DD12D0B6A0F9C7BBFADE /* AppSectionRequestState.swift */,
+				B0000000000000000000001D /* GamerscoreCoinIcon.swift */,
+				B0000000000000000000001F /* CircularCardCarousel.swift */,
+				B00000000000000000000032 /* OrbitCardCarousel.swift */,
+				B0000000000000000000001C /* SkeletonPulse.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000014 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000016 /* KeychainSessionStore.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000015 /* State */ = {
+			isa = PBXGroup;
+			children = (
+				5F2723338FE5EB14A5432DA1 /* CloudProductDetailRepository.swift */,
+				0B31B4A15A07D7C2649B3D78 /* SavedTouchLayoutsStore.swift */,
+				B40000000000000000000008 /* XboxPlayerData.swift */,
+				B40000000000000000000007 /* CloudFavoritesStore.swift */,
+				B9BC5E82238132BB99913E9D /* XboxPersonalData.swift */,
+				B00000000000000000000019 /* XboxDataStore.swift */,
+				B00000000000000000000022 /* CloudCatalogSnapshotRepository.swift */,
+				B0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift */,
+				B0000000000000000000003C /* CloudLibraryDiagnostics.swift */,
+				B0000000000000000000003D /* CloudLibraryScopeLifecycle.swift */,
+				B00000000000000000000023 /* CloudLibraryStore.swift */,
+			);
+			path = State;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000B /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B944F8EB7990E2910D626954 /* PersonalDataModels.swift */,
+				B523A9F9259A20E7CED54B5C /* SectionRequestFailure.swift */,
+				B00000000000000000000007 /* GameSummary.swift */,
+				B00000000000000000000020 /* CloudLibraryGame.swift */,
+				B0000000000000000000002A /* XboxHostSummary.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000C /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B6000000000000000000060C /* TouchLayouts */,
+				B00000000000000000000008 /* Assets.xcassets */,
+				B20000000000000000000004 /* Localizable.xcstrings */,
+				B00000000000000000000017 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000D /* XBXRCTests */ = {
+			isa = PBXGroup;
+			children = (
+				DE5280609A6A0DA562E13653 /* HTTPBehaviorParityTests.swift */,
+				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
+				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
+				B6000000000000000000060A /* TouchLayoutTests.swift */,
+				B40000000000000000000009 /* PCDataParityTests.swift */,
+				B0000000000000000000000A /* XBXRCTests.swift */,
+				B90000000000000000000F01 /* CapabilityMigrationTests.swift */,
+				B0000000000000000000003A /* AuthCredentialCoordinatorTests.swift */,
+				B0000000000000000000003B /* SettingsAndPersistenceTests.swift */,
+				BF59239E3D11055F769008F4 /* StreamingFrameFeedbackTests.swift */,
+				B0000000000000000000003F /* XboxDataStoreLocaleTests.swift */,
+				B00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift */,
+				B00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift */,
+				B00000000000000000000047 /* StreamingControlsStateTests.swift */,
+				2A08116442E67A7B6294ABA1 /* StreamingStartupDiagnosticsTests.swift */,
+			);
+			path = XBXRCTests;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000009 /* XBXRC.app */,
+				B0000000000000000000000B /* XBXRCTests.xctest */,
+                B30000000000000000000002 /* XBXRCUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C0000000000000000000000F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B0000000000000000000000D /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		C9C166FF29164BBCD8904079 /* Controllers */ = {
+			isa = PBXGroup;
+			children = (
+				B90CCE6592550CB1E2C6D5CE /* ControllerView.swift */,
+			);
+			path = Controllers;
+			sourceTree = "<group>";
+		};
+        C30000000000000000000001 = {isa = PBXGroup; children = (
+				B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */,B6000000000000000000060B, B4000000000000000000000A, B30000000000000000000001,); path = XBXRCUITests; sourceTree = "<group>"; };
+		C60000000000000000000001 /* TouchControls */ = {
+			isa = PBXGroup;
+			children = (
+				4A288ED1EF7528774AAAD653 /* SavedTouchLayoutsView.swift */,
+				A7BEC9E0B6C7CBA99FAABE61 /* OfficialTouchLayoutPreviewView.swift */,
+				2F72F2894405E47DD0A20224 /* OfficialTouchLayoutsView.swift */,
+				78455ADE4B460029DEFF4C19 /* OfficialTouchLayoutModels.swift */,
+				B60000000000000000000600 /* TouchControlRuntime.swift */,
+				B60000000000000000000601 /* TouchInputAccumulator.swift */,
+				B60000000000000000000620 /* TouchLayoutTemplate.swift */,
+				B60000000000000000000621 /* TouchLayoutSettingsViews.swift */,
+				B60000000000000000000602 /* TouchLayout.swift */,
+				B60000000000000000000603 /* TouchLayoutCatalog.swift */,
+				B60000000000000000000604 /* TouchLayoutGeometry.swift */,
+				B60000000000000000000605 /* TouchLayoutNormalizer.swift */,
+				B60000000000000000000606 /* TouchLayoutPlaygroundView.swift */,
+				B60000000000000000000607 /* TouchLayoutResolver.swift */,
+				B60000000000000000000608 /* TouchLayoutSurface.swift */,
+				B6000000000000000000060F /* TouchLayoutRecorder.swift */,
+				B6000000000000000000060E /* TouchSampleBatch.swift */,
+				B6000000000000000000060D /* TouchInputDiagnostics.swift */,
+			);
+			path = TouchControls;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F00000000000000000000001 /* XBXRC */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H00000000000000000000002 /* Build configuration list for PBXNativeTarget "XBXRC" */;
+			buildPhases = (
+				D00000000000000000000006 /* Build Rust bridge */,
+				D00000000000000000000001 /* Sources */,
+				D00000000000000000000003 /* Frameworks */,
+				D00000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = XBXRC;
+			packageProductDependencies = (
+				C10000000000000000000001 /* WebRTC */,
+			);
+			productName = XBXRC;
+			productReference = B00000000000000000000009 /* XBXRC.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F00000000000000000000002 /* XBXRCTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H00000000000000000000003 /* Build configuration list for PBXNativeTarget "XBXRCTests" */;
+			buildPhases = (
+				D00000000000000000000005 /* Sources */,
+				D00000000000000000000004 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E00000000000000000000003 /* PBXTargetDependency */,
+			);
+			name = XBXRCTests;
+			productName = XBXRCTests;
+			productReference = B0000000000000000000000B /* XBXRCTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+        F30000000000000000000001 = {
+            isa = PBXNativeTarget; buildConfigurationList = H30000000000000000000001;
+            buildPhases = (D30000000000000000000001, D30000000000000000000002,);
+            buildRules = (); dependencies = (E30000000000000000000001,);
+            name = XBXRCUITests; productName = XBXRCUITests;
+            productReference = B30000000000000000000002; productType = "com.apple.product-type.bundle.ui-testing";
+        };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2610;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					F00000000000000000000001 = {
+						CreatedOnToolsVersion = 26.1;
+					};
+					F00000000000000000000002 = {
+						CreatedOnToolsVersion = 26.1;
+						TestTargetID = F00000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = H00000000000000000000001 /* Build configuration list for PBXProject "XBXRC" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+                "zh-Hans",
+				Base,
+			);
+			mainGroup = C00000000000000000000001;
+			packageReferences = (
+				B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */,
+			);
+			productRefGroup = C0000000000000000000000E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F00000000000000000000001 /* XBXRC */,
+				F00000000000000000000002 /* XBXRCTests */,
+                F30000000000000000000001 /* XBXRCUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D00000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6000000000000000000060C /* TouchLayouts in Resources */,
+				A00000000000000000000008 /* Assets.xcassets in Resources */,
+				A20000000000000000000004 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D00000000000000000000006 /* Build Rust bridge */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust bridge";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/rust/libxbox_ios_bridge.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/scripts/build-rust-bridge.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WebRTC;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C10000000000000000000001 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference \"WebRTC\" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D00000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				956C5DC3924439A88324303C /* AlbumFileDownload.swift in Sources */,
+				182D847B1016D5AC842B150C /* CloudProductDetailRepository.swift in Sources */,
+				BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */,
+				3C6A3527ED0374F0E67DD7A8 /* OfficialTouchLayoutsUITestFixtures.swift in Sources */,
+				C742B02950CB40990368FA43 /* StreamingTouchLayoutPickerPanel.swift in Sources */,
+				17E91614265C7C3171BBA273 /* SavedTouchLayoutsView.swift in Sources */,
+				495D75A0F2CEBB985FFEB317 /* OfficialTouchLayoutPreviewView.swift in Sources */,
+				E64234A57CE9E3090ECA85C0 /* OfficialTouchLayoutsView.swift in Sources */,
+				7B53D8F9EF8513E8D6C96F0E /* StreamingTouchLayoutController.swift in Sources */,
+				907E66D9E412A77948FA6F74 /* SavedTouchLayoutsStore.swift in Sources */,
+				DFBFB673BAFC5F3B745DC09A /* XboxTouchLayoutClient.swift in Sources */,
+				09ED27373282777A6D445986 /* OfficialTouchLayoutModels.swift in Sources */,
+				A60000000000000000000608 /* TouchLayoutSurface.swift in Sources */,
+				A6000000000000000000060F /* TouchLayoutRecorder.swift in Sources */,
+				A6000000000000000000060E /* TouchSampleBatch.swift in Sources */,
+				A6000000000000000000060D /* TouchInputDiagnostics.swift in Sources */,
+				A60000000000000000000607 /* TouchLayoutResolver.swift in Sources */,
+				A60000000000000000000606 /* TouchLayoutPlaygroundView.swift in Sources */,
+				A60000000000000000000605 /* TouchLayoutNormalizer.swift in Sources */,
+				A60000000000000000000604 /* TouchLayoutGeometry.swift in Sources */,
+				A60000000000000000000603 /* TouchLayoutCatalog.swift in Sources */,
+				A60000000000000000000620 /* TouchLayoutTemplate.swift in Sources */,
+				A60000000000000000000621 /* TouchLayoutSettingsViews.swift in Sources */,
+				A60000000000000000000602 /* TouchLayout.swift in Sources */,
+				A60000000000000000000601 /* TouchInputAccumulator.swift in Sources */,
+				A60000000000000000000600 /* TouchControlRuntime.swift in Sources */,
+				A40000000000000000000008 /* XboxPlayerData.swift in Sources */,
+				A40000000000000000000007 /* CloudFavoritesStore.swift in Sources */,
+				A40000000000000000000006 /* XboxPersonalDataClient.swift in Sources */,
+				A40000000000000000000005 /* CloudProductDataClient.swift in Sources */,
+				A40000000000000000000004 /* XboxAlbumView.swift in Sources */,
+				A40000000000000000000003 /* PersonalGameViews.swift in Sources */,
+				A40000000000000000000002 /* AchievementComparisonView.swift in Sources */,
+				A40000000000000000000001 /* PCPageUITestFixtures.swift in Sources */,
+				A00000000000000000000001 /* XBXRCApp.swift in Sources */,
+				A94F03234E1E29E2F89558F1 /* CloudLibraryBrowserView.swift in Sources */,
+				A988C84F0EFC587C094CAF97 /* HostInstalledGamesView.swift in Sources */,
+				A9235FFFFA1375C8BD4E415D /* PersonalPages.swift in Sources */,
+				A9BC5E82238132BB99913E9D /* XboxPersonalData.swift in Sources */,
+				A944F8EB7990E2910D626954 /* PersonalDataModels.swift in Sources */,
+				A523A9F9259A20E7CED54B5C /* SectionRequestFailure.swift in Sources */,
+				A90CCE6592550CB1E2C6D5CE /* ControllerView.swift in Sources */,
+				A9F250D4D3ECECEB1186FFB7 /* TouchGamepadOverlay.swift in Sources */,
+				A99D7AE3D6162D2E8CEB7A5C /* StreamInputSession.swift in Sources */,
+				A9BC22024D4D1ABF8943070D /* SettingsRootView.swift in Sources */,
+				A9B70ADF05C9FF4427D8FF9C /* MobilePreferences.swift in Sources */,
+				A960814176DD25A8CECF942D /* AdaptiveSectionNavigation.swift in Sources */,
+				AE602F3CC34084E8BAA6B72A /* AppInformationPage.swift in Sources */,
+				A544DD12D0B6A0F9C7BBFADE /* AppSectionRequestState.swift in Sources */,
+				A00000000000000000000002 /* AppRootView.swift in Sources */,
+				A00000000000000000000035 /* AppOrientation.swift in Sources */,
+				A0000000000000000000002D /* LaunchExperienceView.swift in Sources */,
+				A0000000000000000000000B /* AuthStore.swift in Sources */,
+				A00000000000000000000037 /* AuthCredentialCoordinator.swift in Sources */,
+				A0000000000000000000000C /* WebAuthenticationPresenter.swift in Sources */,
+				A0000000000000000000000D /* XboxLoginView.swift in Sources */,
+				A00000000000000000000003 /* GameLibraryView.swift in Sources */,
+				A00000000000000000000013 /* LibraryPresentation.swift in Sources */,
+				A00000000000000000000014 /* LibraryComponents.swift in Sources */,
+				A00000000000000000000017 /* GameDetailView.swift in Sources */,
+				A00000000000000000000004 /* AchievementsView.swift in Sources */,
+				A00000000000000000000005 /* ProfileView.swift in Sources */,
+				A0000000000000000000000E /* XboxAuthClient.swift in Sources */,
+				A00000000000000000000011 /* XboxDataClient.swift in Sources */,
+				A0000000000000000000001A /* XboxCloudDataClient.swift in Sources */,
+				A0000000000000000000000F /* xbox_ios_bridge.swift in Sources */,
+				A00000000000000000000006 /* StreamingRuntime.swift in Sources */,
+				A00000000000000000000026 /* StreamingContracts.swift in Sources */,
+				A00000000000000000000039 /* StreamingSessionState.swift in Sources */,
+				A00000000000000000000041 /* StreamingAudioLifecycleState.swift in Sources */,
+				A00000000000000000000042 /* StreamingAudioLifecycleCoordinator.swift in Sources */,
+				A00000000000000000000044 /* StreamingControlsState.swift in Sources */,
+				F70000000000000000000002 /* StreamingDiagnosticsView.swift in Sources */,
+				F70000000000000000000001 /* StreamingDiagnosticsModel.swift in Sources */,
+				A00000000000000000000045 /* StreamingControlsGestureRecognizer.swift in Sources */,
+				A00000000000000000000046 /* StreamingControlsOverlay.swift in Sources */,
+				A00000000000000000000027 /* StreamSessionActor.swift in Sources */,
+				C5DAD6886F11B8D41EA420B1 /* StreamingStartupDiagnostics.swift in Sources */,
+				A00000000000000000000028 /* LibWebRtcRuntime.swift in Sources */,
+				A508D60EF512529EE78ED8B2 /* StreamingFrameFeedback.swift in Sources */,
+				A00000000000000000000029 /* StreamingPlayerView.swift in Sources */,
+				A00000000000000000000036 /* StreamingMetalRenderer.swift in Sources */,
+				A0000000000000000000002A /* XboxStreamDataChannels.swift in Sources */,
+				A0000000000000000000002C /* IOSStreamInputProtocol.swift in Sources */,
+				A00000000000000000000007 /* GameSummary.swift in Sources */,
+				A00000000000000000000019 /* CloudLibraryGame.swift in Sources */,
+				A00000000000000000000010 /* KeychainSessionStore.swift in Sources */,
+				A00000000000000000000012 /* XboxDataStore.swift in Sources */,
+				A0000000000000000000001B /* CloudCatalogSnapshotRepository.swift in Sources */,
+				A0000000000000000000003E /* CloudCatalogPersistenceCoordinator.swift in Sources */,
+				A0000000000000000000003C /* CloudLibraryDiagnostics.swift in Sources */,
+				A0000000000000000000003D /* CloudLibraryScopeLifecycle.swift in Sources */,
+				A0000000000000000000001C /* CloudLibraryStore.swift in Sources */,
+				A00000000000000000000016 /* GamerscoreCoinIcon.swift in Sources */,
+				A00000000000000000000015 /* SkeletonPulse.swift in Sources */,
+				A00000000000000000000018 /* CircularCardCarousel.swift in Sources */,
+				A0000000000000000000001D /* IOSRuntimeTraceEnvelope.swift in Sources */,
+				A0000000000000000000001E /* IOSRuntimeTracePolicy.swift in Sources */,
+				A0000000000000000000001F /* IOSRuntimeTraceWriter.swift in Sources */,
+				A00000000000000000000020 /* IOSRuntimeTrace.swift in Sources */,
+				A00000000000000000000021 /* AppSettingsStore.swift in Sources */,
+				A00000000000000000000038 /* SettingsPersistence.swift in Sources */,
+				A00000000000000000000022 /* SettingsView.swift in Sources */,
+				A20000000000000000000003 /* MobileTurnSettingsView.swift in Sources */,
+				A20000000000000000000005 /* MobileControllerTools.swift in Sources */,
+				A20000000000000000000002 /* MobileSettingsControls.swift in Sources */,
+				A20000000000000000000001 /* MobileSettingsModels.swift in Sources */,
+				A00000000000000000000023 /* XboxHostSummary.swift in Sources */,
+				A00000000000000000000024 /* HostListView.swift in Sources */,
+				A0000000000000000000002B /* OrbitCardCarousel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D00000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8B9EADDFA7FA352DDD32E7B /* HTTPBehaviorParityTests.swift in Sources */,
+				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
+				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,
+				A6000000000000000000060A /* TouchLayoutTests.swift in Sources */,
+				A40000000000000000000009 /* PCDataParityTests.swift in Sources */,
+				A00000000000000000000009 /* XBXRCTests.swift in Sources */,
+				A90000000000000000000F01 /* CapabilityMigrationTests.swift in Sources */,
+				A0000000000000000000003A /* AuthCredentialCoordinatorTests.swift in Sources */,
+				A0000000000000000000003B /* SettingsAndPersistenceTests.swift in Sources */,
+				AF59239E3D11055F769008F4 /* StreamingFrameFeedbackTests.swift in Sources */,
+				A0000000000000000000003F /* XboxDataStoreLocaleTests.swift in Sources */,
+				A00000000000000000000040 /* CloudLibraryStoreConcurrencyTests.swift in Sources */,
+				A00000000000000000000043 /* StreamingAudioLifecycleStateTests.swift in Sources */,
+				A00000000000000000000047 /* StreamingControlsStateTests.swift in Sources */,
+				5CF3B5786EEAA3DF425A05D5 /* StreamingStartupDiagnosticsTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+        D30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */,
+				A6000000000000000000060B /* TouchLayoutInteractionTests.swift in Sources */,A4000000000000000000000A, A30000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E00000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F00000000000000000000001 /* XBXRC */;
+			targetProxy = E00000000000000000000002 /* PBXContainerItemProxy */;
+		};
+        E30000000000000000000001 = {isa = PBXTargetDependency; target = F00000000000000000000001; targetProxy = E00000000000000000000002; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		G00000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		G00000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		G00000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconMidnight";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 9P8MT5G4P8;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = XBXRC/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = xbxrc;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1.0;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)/rust",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lxbox_ios_bridge",
+					"-ObjC",
+					"-framework",
+					Security,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreFoundation,
+					"-liconv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_OBJC_BRIDGING_HEADER = "XBXRC/Platform/RustBridge/Support/XBXRC-Bridging-Header.h";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		G00000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconMidnight";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 9P8MT5G4P8;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = XBXRC/Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = xbxrc;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 0.1.0;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)/rust",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lxbox_ios_bridge",
+					"-ObjC",
+					"-framework",
+					Security,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreFoundation,
+					"-liconv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_OBJC_BRIDGING_HEADER = "XBXRC/Platform/RustBridge/Support/XBXRC-Bridging-Header.h";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		G00000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/XBXRC.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/XBXRC";
+			};
+			name = Debug;
+		};
+		G00000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/XBXRC.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/XBXRC";
+			};
+			name = Release;
+		};
+        G30000000000000000000001 = {
+            isa = XCBuildConfiguration; name = Debug; buildSettings = {
+                CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios.uitests; PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; TARGETED_DEVICE_FAMILY = "1,2";
+                TEST_TARGET_NAME = XBXRC; SWIFT_EMIT_LOC_STRINGS = NO;
+            };
+        };
+        G30000000000000000000002 = {
+            isa = XCBuildConfiguration; name = Release; buildSettings = {
+                CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.xuasir.xbxrc.ios.uitests; PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; TARGETED_DEVICE_FAMILY = "1,2";
+                TEST_TARGET_NAME = XBXRC; SWIFT_EMIT_LOC_STRINGS = NO;
+            };
+        };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		H00000000000000000000001 /* Build configuration list for PBXProject "XBXRC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G00000000000000000000001 /* Debug */,
+				G00000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H00000000000000000000002 /* Build configuration list for PBXNativeTarget "XBXRC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G00000000000000000000003 /* Debug */,
+				G00000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H00000000000000000000003 /* Build configuration list for PBXNativeTarget "XBXRCTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G00000000000000000000005 /* Debug */,
+				G00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+        H30000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (G30000000000000000000001,G30000000000000000000002,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = E00000000000000000000001 /* Project object */;
+}

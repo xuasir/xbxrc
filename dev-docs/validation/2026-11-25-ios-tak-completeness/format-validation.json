@@ -1,0 +1,37 @@
+{
+  "fourSpaces": {
+    "files": [
+      "iosapp/XBXRC/Features/TouchControls/TouchLayout.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "iosapp/XBXRC/Platform/Streaming/TouchGamepadOverlay.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamInputSession.swift",
+      "iosapp/XBXRC/Platform/Streaming/XboxStreamDataChannels.swift",
+      "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift"
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  "twoSpaces": {
+    "files": [
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutStyle.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchIconCatalog.swift",
+      "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+      "iosapp/XBXRCTests/TouchLayoutCompletenessTests.swift",
+      "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+      "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift"
+    ],
+    "exitCode": 0,
+    "output": ""
+  },
+  "iconFollowup": {
+    "files": [
+      "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+      "iosapp/XBXRC/Features/TouchControls/TouchIconCatalog.swift",
+      "iosapp/XBXRCTests/TouchLayoutCompletenessTests.swift"
+    ],
+    "formatAndStrictLintExitCode": 0
+  }
+}

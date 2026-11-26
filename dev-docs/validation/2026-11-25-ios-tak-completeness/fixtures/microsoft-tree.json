@@ -1,0 +1,1714 @@
+{
+  "sha": "99d5449bb054908876ceb867f948652f3b9cb41b",
+  "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/99d5449bb054908876ceb867f948652f3b9cb41b",
+  "tree": [
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "02bfaf634238d304059e3da95ad9a429fbba79ae",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/02bfaf634238d304059e3da95ad9a429fbba79ae"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "27cec764de95229081c4d52491b87dfb83ddf268",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/27cec764de95229081c4d52491b87dfb83ddf268"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/01-bug-report.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ba22ef682d83b61f82abd65aa21022f56b4413dd",
+      "size": 3012,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ba22ef682d83b61f82abd65aa21022f56b4413dd"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/02-feature-request.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3e543eeeba111107aa12932325385e5aa1807647",
+      "size": 2050,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3e543eeeba111107aa12932325385e5aa1807647"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4becd04680329a38224ab88b65dd6ab1d540c866",
+      "size": 279,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/4becd04680329a38224ab88b65dd6ab1d540c866"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dfcfd56f444f9ae40e1082c07fe254cc547136cf",
+      "size": 6002,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/dfcfd56f444f9ae40e1082c07fe254cc547136cf"
+    },
+    {
+      "path": "CODE_OF_CONDUCT.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f9ba8cf65f3e3104dd061c178066ec8247811f33",
+      "size": 444,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f9ba8cf65f3e3104dd061c178066ec8247811f33"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c0fe950bfb8f209748605ccf3ae3586cd159e8ca",
+      "size": 601,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c0fe950bfb8f209748605ccf3ae3586cd159e8ca"
+    },
+    {
+      "path": "LICENSE.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "24931e9a6d09904e5a1f4d1db62ea4f015792b9c",
+      "size": 1171,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/24931e9a6d09904e5a1f4d1db62ea4f015792b9c"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3ee42c53c7d3379eaaada14006e2b353cc35ced2",
+      "size": 6190,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3ee42c53c7d3379eaaada14006e2b353cc35ced2"
+    },
+    {
+      "path": "SECURITY.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f7b89984f0fb5dd204028bc525e19eefc0859f4f",
+      "size": 2780,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f7b89984f0fb5dd204028bc525e19eefc0859f4f"
+    },
+    {
+      "path": "touch-adaptation-kit",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "093af61d02329025382fbd4e66c99f4d359dfa44",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/093af61d02329025382fbd4e66c99f4d359dfa44"
+    },
+    {
+      "path": "touch-adaptation-kit/copilot-instructions",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "150c70b01a26a27686b251a8de5a35ff25425ac3",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/150c70b01a26a27686b251a8de5a35ff25425ac3"
+    },
+    {
+      "path": "touch-adaptation-kit/copilot-instructions/copilot-instructions.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "01029c17ab64d05a76f17a60f8ad0ed4c9d0946e",
+      "size": 13648,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/01029c17ab64d05a76f17a60f8ad0ed4c9d0946e"
+    },
+    {
+      "path": "touch-adaptation-kit/samples",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4a15b2615c80b3d34103b6c8ee5a9a5807694b37",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/4a15b2615c80b3d34103b6c8ee5a9a5807694b37"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4709d7ff51a780646fb2cf1c3ca004422edc7002",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/4709d7ff51a780646fb2cf1c3ca004422edc7002"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3cfdef6aea434396fc5c50c2124e5a1c8cf4dd5e",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/3cfdef6aea434396fc5c50c2124e5a1c8cf4dd5e"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6a8f749de27807c8bde840d9edeff0a37e2b4e71",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/6a8f749de27807c8bde840d9edeff0a37e2b4e71"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "cab81ca6fd03f5d4b7a79f7cd6062b65823d44c8",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/cab81ca6fd03f5d4b7a79f7cd6062b65823d44c8"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Bow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d2f1f7955008e8161179f64d5b9f393312c56dfa",
+      "size": 998,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/d2f1f7955008e8161179f64d5b9f393312c56dfa"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Button.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "21dc64041cdefa29f045f9c1d3f9566fe1b9aae9",
+      "size": 3024,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/21dc64041cdefa29f045f9c1d3f9566fe1b9aae9"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/ButtonGlow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d49a6ffd101e2808d5d291d907ca89d0d4a8d5ce",
+      "size": 7961,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/d49a6ffd101e2808d5d291d907ca89d0d4a8d5ce"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Dash.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4864dcaffd7a071ef1e17ac1601ebc70a7d13494",
+      "size": 915,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/4864dcaffd7a071ef1e17ac1601ebc70a7d13494"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Health.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0ae3c3a28674e9b0af86c4573fd65d86175d7c34",
+      "size": 1039,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/0ae3c3a28674e9b0af86c4573fd65d86175d7c34"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/JoystickBackground.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "523c35a6f138c8c4a14ac492bd01576e5933eb3b",
+      "size": 15544,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/523c35a6f138c8c4a14ac492bd01576e5933eb3b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Return.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e6ff2039563e67dc1eae10f612ece07265b05e62",
+      "size": 855,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/e6ff2039563e67dc1eae10f612ece07265b05e62"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Spellbook.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cdb6c8e7e3f282f8d74d2eec5260531ca319bab1",
+      "size": 760,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/cdb6c8e7e3f282f8d74d2eec5260531ca319bab1"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.0x/Sword.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "195fb2db74a0d2d35d22fe548145175458382eff",
+      "size": 961,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/195fb2db74a0d2d35d22fe548145175458382eff"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "572e38f8c37fd0a93728e90265e3335daacdf7d9",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/572e38f8c37fd0a93728e90265e3335daacdf7d9"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Bow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c94b8a6d8ed52acb49d2d3bcd85a2ed7d304bab6",
+      "size": 1391,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c94b8a6d8ed52acb49d2d3bcd85a2ed7d304bab6"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Button.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f8a2584c4824f2ebeebeffeff1dcc22940e41457",
+      "size": 5141,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f8a2584c4824f2ebeebeffeff1dcc22940e41457"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/ButtonGlow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1317efecc729dab6c9d3e3d8af5f1801c63f11b0",
+      "size": 15247,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/1317efecc729dab6c9d3e3d8af5f1801c63f11b0"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Dash.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cb3185a44d652b5ee092305c2e9d3ea3d5b86a09",
+      "size": 1276,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/cb3185a44d652b5ee092305c2e9d3ea3d5b86a09"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Health.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "92181c78fcb3fc87f2a9c15f66b6303c498af5c6",
+      "size": 1482,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/92181c78fcb3fc87f2a9c15f66b6303c498af5c6"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/JoystickBackground.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "08bd942369013b942180e9d3e0e863290ae60a64",
+      "size": 28612,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/08bd942369013b942180e9d3e0e863290ae60a64"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Return.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "84b03a5ff4f3948c7c1211a4ff37c822943402fa",
+      "size": 1157,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/84b03a5ff4f3948c7c1211a4ff37c822943402fa"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Spellbook.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b2017f6dd2f130360ab807fa5b5ff845917e4e3d",
+      "size": 1025,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/b2017f6dd2f130360ab807fa5b5ff845917e4e3d"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@1.5x/Sword.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "46ad41f873f95d5e6eaced7cded19b6264261fad",
+      "size": 1347,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/46ad41f873f95d5e6eaced7cded19b6264261fad"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d0d7549353c1fb827fbd28066218070860fd10cf",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d0d7549353c1fb827fbd28066218070860fd10cf"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Bow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cfcc28b84f4f9383392bd8e8e6d5193752d3632",
+      "size": 1894,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/5cfcc28b84f4f9383392bd8e8e6d5193752d3632"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Button.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "13d637f160c35b2b7ceae86b8e5e8fcc9d23437a",
+      "size": 7534,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/13d637f160c35b2b7ceae86b8e5e8fcc9d23437a"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/ButtonGlow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cefa42b589c069bb9a2d3341d0828b7560b584a5",
+      "size": 24640,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/cefa42b589c069bb9a2d3341d0828b7560b584a5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Dash.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ef3bee3bf8006e483f24c083bacfb3e8ab62fa79",
+      "size": 1634,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ef3bee3bf8006e483f24c083bacfb3e8ab62fa79"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Health.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6ba12f335820ee9616760e04412d7f5855b3efe7",
+      "size": 2039,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/6ba12f335820ee9616760e04412d7f5855b3efe7"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/JoystickBackground.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f6260818b9a63bcf978dce9aab41456a6a8d07d6",
+      "size": 43989,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f6260818b9a63bcf978dce9aab41456a6a8d07d6"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Return.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4e97c85503955a4894799cd8f7bb9dac4ebc3d47",
+      "size": 1497,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/4e97c85503955a4894799cd8f7bb9dac4ebc3d47"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Spellbook.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "526555c1a680811c8b4be55bc4de44e42b8c68d8",
+      "size": 1300,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/526555c1a680811c8b4be55bc4de44e42b8c68d8"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@2.0x/Sword.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5a83ac9cce401ce142bd37c3fb9e2b57d30187bc",
+      "size": 1746,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/5a83ac9cce401ce142bd37c3fb9e2b57d30187bc"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "27fb378ef17b7a034caaf31349486e7bb57e9dbc",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/27fb378ef17b7a034caaf31349486e7bb57e9dbc"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Bow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "20db4d3fed86344c6aa5323bce3e753029d7fda3",
+      "size": 3085,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/20db4d3fed86344c6aa5323bce3e753029d7fda3"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Button.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "735a6485240839252df0a572e93fbd1e5fb3f3b5",
+      "size": 12547,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/735a6485240839252df0a572e93fbd1e5fb3f3b5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/ButtonGlow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6bdee8f3b6212ccf949957881120f52e45404d7c",
+      "size": 48624,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/6bdee8f3b6212ccf949957881120f52e45404d7c"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Dash.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "569dce02d2cc1e56da5387041eaccbc1cd9361ff",
+      "size": 2395,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/569dce02d2cc1e56da5387041eaccbc1cd9361ff"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Health.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f8ad8e4e56a16e07b27202d7e7724cc753e5863",
+      "size": 3180,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3f8ad8e4e56a16e07b27202d7e7724cc753e5863"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/JoystickBackground.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ab609325a4026ace28152ef6f3fcca349682c45b",
+      "size": 81948,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ab609325a4026ace28152ef6f3fcca349682c45b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Return.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a2674215e080cb5772d9ba172eb08dce306f11a7",
+      "size": 2313,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/a2674215e080cb5772d9ba172eb08dce306f11a7"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Spellbook.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "14df7a05f7f0922d5af819ac6463c922b2160bc2",
+      "size": 1767,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/14df7a05f7f0922d5af819ac6463c922b2160bc2"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@3.0x/Sword.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "68f7ec8faa70cbe56a64782f943450b54e1211ce",
+      "size": 2887,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/68f7ec8faa70cbe56a64782f943450b54e1211ce"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "55ef68c4c0a5aadcc2664b93e6e0f259483214c3",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/55ef68c4c0a5aadcc2664b93e6e0f259483214c3"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Bow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bea3cae130b2317082705cf9f4ce9f18e17e9e0d",
+      "size": 2277,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bea3cae130b2317082705cf9f4ce9f18e17e9e0d"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Button.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70ac548d020fa6bf160237a7de0a998ceba62c0b",
+      "size": 9892,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/70ac548d020fa6bf160237a7de0a998ceba62c0b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/ButtonGlow.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd57f059c4d81fdfc81c7daa66100dc25e499c1a",
+      "size": 70135,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/dd57f059c4d81fdfc81c7daa66100dc25e499c1a"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Dash.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ffcb72ad99073ad5cdd65804849de614f75d2e13",
+      "size": 1913,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ffcb72ad99073ad5cdd65804849de614f75d2e13"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Health.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fca282684b74e502c75259e76534467db35d36b3",
+      "size": 2359,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/fca282684b74e502c75259e76534467db35d36b3"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/JoystickBackground.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ecda908165c69d97449ee0c30ecd42d513352288",
+      "size": 108854,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ecda908165c69d97449ee0c30ecd42d513352288"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Return.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0604717878f4adde6ac8f0a915c6c737e1065201",
+      "size": 1761,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/0604717878f4adde6ac8f0a915c6c737e1065201"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Spellbook.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c9d55e9f205106714e2432521654faf366abcf7a",
+      "size": 1514,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c9d55e9f205106714e2432521654faf366abcf7a"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/assets/neutral/@4.0x/Sword.png",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c7c2b33a1ad0e3ea1bf095abf5ae66d4f8ba24b5",
+      "size": 2056,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c7c2b33a1ad0e3ea1bf095abf5ae66d4f8ba24b5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/custom-assets.takx",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0b531568837e3547175014443bcb55ea8c1469b5",
+      "size": 207542,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/0b531568837e3547175014443bcb55ea8c1469b5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/layouts",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7442c255812b7f6d8f166a9b74d4095491c9eae4",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/7442c255812b7f6d8f166a9b74d4095491c9eae4"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/layouts/neutral",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "70eb202a2f5f93030feb4d0d29c7bd4d53304f2f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/70eb202a2f5f93030feb4d0d29c7bd4d53304f2f"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/layouts/neutral/custom-assets.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "65fdd14ce4ea2d68afd08992f0ecbb41b105b849",
+      "size": 6293,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/65fdd14ce4ea2d68afd08992f0ecbb41b105b849"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/media",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a6e3bc76a6c7e8158561f52efb1de5fe91d3bc5b",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a6e3bc76a6c7e8158561f52efb1de5fe91d3bc5b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/media/custom-assets.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3da54b37749f114286e822d55eb80fc2554c0b61",
+      "size": 134750,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3da54b37749f114286e822d55eb80fc2554c0b61"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/pack.ps1",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f93302920c017fcfec1f578397a501b52fb8bcb0",
+      "size": 166,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f93302920c017fcfec1f578397a501b52fb8bcb0"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/custom-assets/readme.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fc932e6fe5a9bfd847ecfbd52027dc289efae2f8",
+      "size": 392,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/fc932e6fe5a9bfd847ecfbd52027dc289efae2f8"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/readme.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1bbc79d84ec59a8fc4df0ccf879470d433415a6b",
+      "size": 323,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/1bbc79d84ec59a8fc4df0ccf879470d433415a6b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0c16beab1339183e0dc4e5778f5e997c4c16e827",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0c16beab1339183e0dc4e5778f5e997c4c16e827"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a0e9ae5741b256b476a9d2f139e336dd0341aabf",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a0e9ae5741b256b476a9d2f139e336dd0341aabf"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0891ee955402cbecb1e3a8b407a86290eff3e3a0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0891ee955402cbecb1e3a8b407a86290eff3e3a0"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/driving.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c9dbd271a1402cb01ac8dfc943346ffbf0f0247a",
+      "size": 2837,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c9dbd271a1402cb01ac8dfc943346ffbf0f0247a"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/fighting.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bbbd26f0ed82fa20bb089688d95c4d2b3794bebc",
+      "size": 2181,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bbbd26f0ed82fa20bb089688d95c4d2b3794bebc"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/first-person-shooter.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c607611ca69b20636bb2fdd0ceed8b43529c8743",
+      "size": 4220,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c607611ca69b20636bb2fdd0ceed8b43529c8743"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/platformer-simple.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5607d03dbc3bf077991f070b47385a38ee4032f4",
+      "size": 1821,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/5607d03dbc3bf077991f070b47385a38ee4032f4"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/platformer.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "81f88297fd5d43b0d621c132607bde063ec53f3b",
+      "size": 3089,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/81f88297fd5d43b0d621c132607bde063ec53f3b"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/layouts/neutral/standard-controller.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e7d96e869e0eb7c352a6dd1c2b2906d266a841d5",
+      "size": 2040,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/e7d96e869e0eb7c352a6dd1c2b2906d266a841d5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f2cefbb62ee8163a95bc902b05c72bdf7cdc3a19",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/f2cefbb62ee8163a95bc902b05c72bdf7cdc3a19"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/driving.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7e8a64df484580b86637e1a6bc435c509b94b5f2",
+      "size": 78588,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/7e8a64df484580b86637e1a6bc435c509b94b5f2"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/fighting.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b630d26d9a5600ea0660c7eeced4ad25ea076a44",
+      "size": 80576,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/b630d26d9a5600ea0660c7eeced4ad25ea076a44"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/first-person-shooter.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3c26637ff56c99dfd015ce7edd76221cd6183c0f",
+      "size": 89192,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3c26637ff56c99dfd015ce7edd76221cd6183c0f"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/platformer-simple.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "173991c8e8373cbc094bb2033fd80b710ab535a5",
+      "size": 73756,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/173991c8e8373cbc094bb2033fd80b710ab535a5"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/platformer.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "657ab7a598f820202f03e51be495a5f85298ddd2",
+      "size": 85130,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/657ab7a598f820202f03e51be495a5f85298ddd2"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/media/standard-controller.jpg",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9046579dda942723ad6816fd296557afabe4dfbc",
+      "size": 93855,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/9046579dda942723ad6816fd296557afabe4dfbc"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/pack.ps1",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ebc025c498a30625dc9b4b9c65e0aabfae7d5f1f",
+      "size": 139,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/ebc025c498a30625dc9b4b9c65e0aabfae7d5f1f"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/readme.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d9c3a4ee3caccabfe9631700bd61df7d4f9e4eaa",
+      "size": 1821,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/d9c3a4ee3caccabfe9631700bd61df7d4f9e4eaa"
+    },
+    {
+      "path": "touch-adaptation-kit/samples/sample-layouts/sample-layouts.takx",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c0a5a3753a727e6e37ad609f463aac1cc115f967",
+      "size": 4293,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c0a5a3753a727e6e37ad609f463aac1cc115f967"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ea9dff5d066ca8bb352db39b7a9f5d4b1accf4df",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/ea9dff5d066ca8bb352db39b7a9f5d4b1accf4df"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a4cb0cba83d241c7d91aa4028fc6c55287cd3d6c",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a4cb0cba83d241c7d91aa4028fc6c55287cd3d6c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "83912b76369f5f2fdc482fcb8cc813683f54e61f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/83912b76369f5f2fdc482fcb8cc813683f54e61f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.0/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "29ffc89580fb957e2ba9b391491ee9b46d2934cf",
+      "size": 2496,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/29ffc89580fb957e2ba9b391491ee9b46d2934cf"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a947c364d4e8c4cd961836080f6a16d5ff2483f0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a947c364d4e8c4cd961836080f6a16d5ff2483f0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b1ea8625800bca5978ce39d4b4a4a96255029f2",
+      "size": 2496,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3b1ea8625800bca5978ce39d4b4a4a96255029f2"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "559090989faf4fae5cd71237bc9c2858512d7425",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/559090989faf4fae5cd71237bc9c2858512d7425"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.2/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f47bf80234b734b43d1b7bb97a232d688785737",
+      "size": 2496,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3f47bf80234b734b43d1b7bb97a232d688785737"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.3",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "bd0c9be072c66418d5d179ec2af696ff491ca1fe",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/bd0c9be072c66418d5d179ec2af696ff491ca1fe"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.3/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0bf2be8e668fc345c03f4382ec939857239a9cc9",
+      "size": 2672,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/0bf2be8e668fc345c03f4382ec939857239a9cc9"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "fe203fd74b352aa1a414e34817e2b5311e9e00d2",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/fe203fd74b352aa1a414e34817e2b5311e9e00d2"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.4.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c904ed4d77c7c15ed65cef173940be2de92bbfb8",
+      "size": 2678,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c904ed4d77c7c15ed65cef173940be2de92bbfb8"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.4",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7689c4cee1558a9e7a071c6a2308644bb47c5532",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/7689c4cee1558a9e7a071c6a2308644bb47c5532"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.4/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "82ef65b01f463fa0b14270e49aab6ec1f0b0d65d",
+      "size": 2672,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/82ef65b01f463fa0b14270e49aab6ec1f0b0d65d"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.5",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "de705c50fe7254ccf0caf4ec5276cc9ed41b8eb7",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/de705c50fe7254ccf0caf4ec5276cc9ed41b8eb7"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v3.5/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "76f4ee8b35d333417a2a832eb14138efbfe29a02",
+      "size": 2672,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/76f4ee8b35d333417a2a832eb14138efbfe29a02"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "5d4dc0972cc5860c4f623336b48106192c53ea77",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/5d4dc0972cc5860c4f623336b48106192c53ea77"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.0/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b8f514443b779da3ecfba2b6c110f50c09ddba3f",
+      "size": 10902,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/b8f514443b779da3ecfba2b6c110f50c09ddba3f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c8dda3bc5e7d184962f0911f49d50b24641c699d",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/c8dda3bc5e7d184962f0911f49d50b24641c699d"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.1.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "aa0a14ef9fba9ac2c9b90b2c386e6a4687492cae",
+      "size": 10910,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/aa0a14ef9fba9ac2c9b90b2c386e6a4687492cae"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a9fddcb5d1c0dc70a5a494a8c3e03a5c2c106846",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a9fddcb5d1c0dc70a5a494a8c3e03a5c2c106846"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4518ae95cdfe9a7c4b650cc0b1f239809b5c86fd",
+      "size": 10902,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/4518ae95cdfe9a7c4b650cc0b1f239809b5c86fd"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d187a7b8d0ad43a9653d76fd24e5c682e66b952c",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d187a7b8d0ad43a9653d76fd24e5c682e66b952c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/context/v4.2/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1b72e49656d9889b68dd31c2146682f49190840f",
+      "size": 10902,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/1b72e49656d9889b68dd31c2146682f49190840f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "12717fef6c03154ba2f664742e101a8c5cf44b9c",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/12717fef6c03154ba2f664742e101a8c5cf44b9c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0f26562b68645a184da423811477a38cb4c1a93f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0f26562b68645a184da423811477a38cb4c1a93f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d0b49761024902021a6075b1e44f26e01503b84f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d0b49761024902021a6075b1e44f26e01503b84f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.0/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c22258c617fbf786a307e72396da265786641dc3",
+      "size": 13079,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c22258c617fbf786a307e72396da265786641dc3"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "22e2d17fda77f73d157733f8edddd7b110f28d36",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/22e2d17fda77f73d157733f8edddd7b110f28d36"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.1.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9eec2348bab8bb51255cd1ab523230307c3e7cbd",
+      "size": 13231,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/9eec2348bab8bb51255cd1ab523230307c3e7cbd"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ee5e6c4f6cd2c6eaf7e0859b5a31b485e23046d2",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/ee5e6c4f6cd2c6eaf7e0859b5a31b485e23046d2"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5bdd4bc86a049758a1e1fc4bb66cd3e8ce54e9cf",
+      "size": 13223,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/5bdd4bc86a049758a1e1fc4bb66cd3e8ce54e9cf"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "77eb001de6950843bad43e7b0943840fc85fe90d",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/77eb001de6950843bad43e7b0943840fc85fe90d"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/context/v4.2/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7ad317fa8d76a3beab9546e265db1e95db722045",
+      "size": 13223,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/7ad317fa8d76a3beab9546e265db1e95db722045"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "bd4510611e120376382ad1dc74ee41866965f92c",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/bd4510611e120376382ad1dc74ee41866965f92c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a2e4d0465d22f1e16f70027999c671a35e64419d",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a2e4d0465d22f1e16f70027999c671a35e64419d"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a9870b6bb266ec45d1c1e1ef84b714a7023b3e85",
+      "size": 254279,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/a9870b6bb266ec45d1c1e1ef84b714a7023b3e85"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "028d9bc949edc6fe926920ee2368df18a5b98c8f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/028d9bc949edc6fe926920ee2368df18a5b98c8f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.1.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7b794e43119f33e9edd998cf2f364cfb08187fc6",
+      "size": 265097,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/7b794e43119f33e9edd998cf2f364cfb08187fc6"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "daef4aada52a61332cdc21d3a9c6c05ad4bb78c4",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/daef4aada52a61332cdc21d3a9c6c05ad4bb78c4"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8e201608148645ce291304cc654314e117d415bc",
+      "size": 259117,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/8e201608148645ce291304cc654314e117d415bc"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "812fabb3d55637afdb4dd9a32cc29cf6ab91191b",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/812fabb3d55637afdb4dd9a32cc29cf6ab91191b"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/layout/v4.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "510d20bd3e63ec744c42e43fb5690a298d028343",
+      "size": 265095,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/510d20bd3e63ec744c42e43fb5690a298d028343"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/takxconfig",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d415636a88488961bf72775972271845e64e5088",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d415636a88488961bf72775972271845e64e5088"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/takxconfig/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "529b91246205008ff205581ef35d1239edd891ff",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/529b91246205008ff205581ef35d1239edd891ff"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ja-JP/takxconfig/v1/takxconfig.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "53bcba703264e53865b5930810b95dc81e8aef41",
+      "size": 14474,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/53bcba703264e53865b5930810b95dc81e8aef41"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "78b4f05f8e1e1b0f2528ed29f93c604640bd5eb9",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/78b4f05f8e1e1b0f2528ed29f93c604640bd5eb9"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "14c66d6afdb022bee5f56750d06d1ff8a860a487",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/14c66d6afdb022bee5f56750d06d1ff8a860a487"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "bb07ab7d4fd34f6cacf55f44174b6d6477db70c0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/bb07ab7d4fd34f6cacf55f44174b6d6477db70c0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.0/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "91c8fe21cae6c7a6f09c61607b615e7fdcedbff7",
+      "size": 11863,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/91c8fe21cae6c7a6f09c61607b615e7fdcedbff7"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f332f597925eff78c1a9bf831be782810bfca766",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/f332f597925eff78c1a9bf831be782810bfca766"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.1.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7ae21700c19b4a2a824d5adb72d7d51176eb37c9",
+      "size": 11871,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/7ae21700c19b4a2a824d5adb72d7d51176eb37c9"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "790e75fc33e058b0340180b08a4869105854b8ce",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/790e75fc33e058b0340180b08a4869105854b8ce"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "753f35da7d3e8bd4333f8320a41e5d134fa7f063",
+      "size": 11863,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/753f35da7d3e8bd4333f8320a41e5d134fa7f063"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "be1fbca5de5769365092ae1f372969422e5f3ebd",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/be1fbca5de5769365092ae1f372969422e5f3ebd"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/context/v4.2/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fbaa50fcef33fba958c551fcafcecb35cb0df9c3",
+      "size": 11863,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/fbaa50fcef33fba958c551fcafcecb35cb0df9c3"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a92d6f9fbfaa905c62380c2466e70f52d14a6871",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a92d6f9fbfaa905c62380c2466e70f52d14a6871"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ab2b6f2c7eac094da0c3e42c4e4bbbcce6c2e3ee",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/ab2b6f2c7eac094da0c3e42c4e4bbbcce6c2e3ee"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "80cd7abcbdf62bf5c7a73384ec99cb3f029fd531",
+      "size": 230261,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/80cd7abcbdf62bf5c7a73384ec99cb3f029fd531"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "aef1212709a64e7aa899122909877fa5de80187c",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/aef1212709a64e7aa899122909877fa5de80187c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.1.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "34b8c9ed0be789cbe9e894e95ff404d245f8d14a",
+      "size": 239776,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/34b8c9ed0be789cbe9e894e95ff404d245f8d14a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0481f10de92e9c584387134ab0c3d3e73c239b39",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0481f10de92e9c584387134ab0c3d3e73c239b39"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "85744d59d467d1fc4b132caa46acfc0b92a2c19f",
+      "size": 234505,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/85744d59d467d1fc4b132caa46acfc0b92a2c19f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "84e3126c5d11a8b65e5446b467f44ffa6bda7b15",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/84e3126c5d11a8b65e5446b467f44ffa6bda7b15"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/layout/v4.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "86c01f20b0339c5e590fbd792d45cf5db38779dc",
+      "size": 239774,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/86c01f20b0339c5e590fbd792d45cf5db38779dc"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/takxconfig",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "594f74e562f9d88fd3f7125f19973e90a9fc3bde",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/594f74e562f9d88fd3f7125f19973e90a9fc3bde"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/takxconfig/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3379229c92625517a953f66b56f4d55a8a225505",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/3379229c92625517a953f66b56f4d55a8a225505"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/ko-KR/takxconfig/v1/takxconfig.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bf0b8644a07320bef4a6943449e2e16008bb9629",
+      "size": 12479,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bf0b8644a07320bef4a6943449e2e16008bb9629"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d7509e0a12f51794363358e9dd9c5c9641cf2aa5",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d7509e0a12f51794363358e9dd9c5c9641cf2aa5"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6d82de9339cb34a50e4d50a5dabca6ca5d6d480a",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/6d82de9339cb34a50e4d50a5dabca6ca5d6d480a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "029292acef5490e97d764191f00d17c7b4814497",
+      "size": 35418,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/029292acef5490e97d764191f00d17c7b4814497"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0a62ec043d82f4274a2f6eca5135f1f9836de63a",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0a62ec043d82f4274a2f6eca5135f1f9836de63a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "098f0bb0854f51111e4063f117d8cb286b69c8f4",
+      "size": 35473,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/098f0bb0854f51111e4063f117d8cb286b69c8f4"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0b05f07e9643f4644140438a67672a87809c31dc",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0b05f07e9643f4644140438a67672a87809c31dc"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1d035668d46976b8be41a7781e4e80d328337403",
+      "size": 35950,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/1d035668d46976b8be41a7781e4e80d328337403"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v2.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1a2fde677b18c21b0f150dc12e62ad9a1a3e47ff",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/1a2fde677b18c21b0f150dc12e62ad9a1a3e47ff"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v2.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "55afb2f2c0c77eceb319ac4e21a9e53dd93917fe",
+      "size": 45766,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/55afb2f2c0c77eceb319ac4e21a9e53dd93917fe"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4467e2cfafb315c802fa884e57dd4cc45379e8ab",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/4467e2cfafb315c802fa884e57dd4cc45379e8ab"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "39642a1815aab8fd42f263d3113831bf65a81e31",
+      "size": 66647,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/39642a1815aab8fd42f263d3113831bf65a81e31"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "4e41ca086dea57a53ad05ffd0657bca922797e9d",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/4e41ca086dea57a53ad05ffd0657bca922797e9d"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3ff689dbf4bdbc9ba7942ca42185fa63fbf0aa13",
+      "size": 74755,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/3ff689dbf4bdbc9ba7942ca42185fa63fbf0aa13"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "42c660227459f8751f4cee41720d131943d1da31",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/42c660227459f8751f4cee41720d131943d1da31"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d6e44f1526172dd8f6610d98d39052d426d62677",
+      "size": 93087,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/d6e44f1526172dd8f6610d98d39052d426d62677"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.3",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "b675c145169ce8be03a7f874573322ab8a285f74",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/b675c145169ce8be03a7f874573322ab8a285f74"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.3/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bb3efd25feee7d5613ccc2d663897927645e7bc3",
+      "size": 94163,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bb3efd25feee7d5613ccc2d663897927645e7bc3"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1ca78a28a1069472f87fed9f744708f5999cb0aa",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/1ca78a28a1069472f87fed9f744708f5999cb0aa"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.4.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bed6726726c4d5be9c189819b76ee5c060edcb6f",
+      "size": 103092,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bed6726726c4d5be9c189819b76ee5c060edcb6f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.4",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7f4ca232c4269c1c78ad8c02abec0e7d6aaa7571",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/7f4ca232c4269c1c78ad8c02abec0e7d6aaa7571"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.4/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "254cdd182597a3bf67b1ff39b221ef6333a9bad3",
+      "size": 96706,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/254cdd182597a3bf67b1ff39b221ef6333a9bad3"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.5",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "8a17ac7df3bc377918eee693082c3129537f0334",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/8a17ac7df3bc377918eee693082c3129537f0334"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v3.5/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6f9dd56ac2f8fdb15ebc8ee91bcaf1e28626eaa6",
+      "size": 104835,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/6f9dd56ac2f8fdb15ebc8ee91bcaf1e28626eaa6"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9a62e72b412957ee3b419e98732df7548fb48e6a",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/9a62e72b412957ee3b419e98732df7548fb48e6a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f92bda028e708f9f17324b15ba1573e623c737ec",
+      "size": 213753,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f92bda028e708f9f17324b15ba1573e623c737ec"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a1f3b7d19ab4fdb56df5ecfe611e9e965d571f97",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a1f3b7d19ab4fdb56df5ecfe611e9e965d571f97"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.1.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2657b1fe3e817c6727e1b3031a73e7fa1c1ca52c",
+      "size": 222747,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/2657b1fe3e817c6727e1b3031a73e7fa1c1ca52c"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "9a39e53dae8cb62f00721342bcbb9250a9be93ed",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/9a39e53dae8cb62f00721342bcbb9250a9be93ed"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bfd036c15fd423f185b1f06fa31c0e8443c23413",
+      "size": 217781,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/bfd036c15fd423f185b1f06fa31c0e8443c23413"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "49506c36dc93b1bf3d1e9cf72fb73c47bfd0d4a0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/49506c36dc93b1bf3d1e9cf72fb73c47bfd0d4a0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/layout/v4.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f1f2dd87cf2e6d2c113b49171704e0dda57a60ac",
+      "size": 222745,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f1f2dd87cf2e6d2c113b49171704e0dda57a60ac"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/spritesheet",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a5b3ddb233ecf994f5129f1b8242e5283bcf2c57",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/a5b3ddb233ecf994f5129f1b8242e5283bcf2c57"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/spritesheet/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "164a502c8d6d7c9e1124be6474f5404ddfdf81a1",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/164a502c8d6d7c9e1124be6474f5404ddfdf81a1"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/spritesheet/v1/spritesheet.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8778765b1161ed0520c1e8996eb8d2944128d3b8",
+      "size": 5112,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/8778765b1161ed0520c1e8996eb8d2944128d3b8"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/takxconfig",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e04a25d8a279d60d4a15ba045fe4a69194790ee0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/e04a25d8a279d60d4a15ba045fe4a69194790ee0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/takxconfig/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "bdba11a929865d262ac7814f91ed5eb462ccff08",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/bdba11a929865d262ac7814f91ed5eb462ccff08"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/takxconfig/v1/takxconfig.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1f398f67a03b0b75c0e316dd2e52220af723cba9",
+      "size": 11907,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/1f398f67a03b0b75c0e316dd2e52220af723cba9"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "232dbe6aabbcdb7e25a3db07b6bd1e865ae3dbb8",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/232dbe6aabbcdb7e25a3db07b6bd1e865ae3dbb8"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "06210529f0ef22f6a911ffa54fab476e891cdc0a",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/06210529f0ef22f6a911ffa54fab476e891cdc0a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "d9a75c1d4a541fc5509e3cc20871dce7cc65307e",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/d9a75c1d4a541fc5509e3cc20871dce7cc65307e"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.0/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "67487d29487a7485e7077785b5f1bc2b4c058f9a",
+      "size": 9895,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/67487d29487a7485e7077785b5f1bc2b4c058f9a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "ccd42c5ee0a004f047de75f9e3a24db7d701b7d0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/ccd42c5ee0a004f047de75f9e3a24db7d701b7d0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.1.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fb5ebd224856ec34a22b53c273c91947149c4f94",
+      "size": 9903,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/fb5ebd224856ec34a22b53c273c91947149c4f94"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "e50b4fafc36a9f4d80fb834929ccefa526763347",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/e50b4fafc36a9f4d80fb834929ccefa526763347"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.1/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f5b9f92bc290108870296cab0ee89ed9fbbc16a6",
+      "size": 9895,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f5b9f92bc290108870296cab0ee89ed9fbbc16a6"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7ca1eb7c80b0d7234cca1b2d62f87b1206e222b8",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/7ca1eb7c80b0d7234cca1b2d62f87b1206e222b8"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/context/v4.2/context.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "910d8359e0670877b06d4a81e53a8ce4eef1c790",
+      "size": 9895,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/910d8359e0670877b06d4a81e53a8ce4eef1c790"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "15b8d46de9e12683843cf777f175ea2bafd95bd7",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/15b8d46de9e12683843cf777f175ea2bafd95bd7"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.0",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0eaf4c691e8b6dac378c1b62eaf8ffa2996a8e0f",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0eaf4c691e8b6dac378c1b62eaf8ffa2996a8e0f"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.0/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "095a445b4f240271a21d53edc36714d9af1139fe",
+      "size": 193766,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/095a445b4f240271a21d53edc36714d9af1139fe"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.1.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "3531269c852f9c345e69f917c5c9206422c3bfb0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/3531269c852f9c345e69f917c5c9206422c3bfb0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.1.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "88be2e008454932e4a03c5c02a1ea232cf10693a",
+      "size": 201920,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/88be2e008454932e4a03c5c02a1ea232cf10693a"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0b7664c96bd2a94402e416e4704a4c97af241f72",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/0b7664c96bd2a94402e416e4704a4c97af241f72"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.1/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "19f9af7c36cf4d22b078ca50dd57a6fab471e0bb",
+      "size": 197519,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/19f9af7c36cf4d22b078ca50dd57a6fab471e0bb"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.2",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6d9cc61bb0e07f21922703cd13b4348ff8da8112",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/6d9cc61bb0e07f21922703cd13b4348ff8da8112"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/layout/v4.2/layout.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c130d784075849ee5965e3cc441eb027e0e02f50",
+      "size": 201918,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/c130d784075849ee5965e3cc441eb027e0e02f50"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/takxconfig",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f2bc2381b66eeed2cbe181292f3dfffc0282e4b0",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/f2bc2381b66eeed2cbe181292f3dfffc0282e4b0"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/takxconfig/v1",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "05b6d7e4f0e240b7e6e81ee9869eca7e3923810e",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/05b6d7e4f0e240b7e6e81ee9869eca7e3923810e"
+    },
+    {
+      "path": "touch-adaptation-kit/schemas/zh-CN/takxconfig/v1/takxconfig.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f9e7ce4501d7253b98eb4410c6922f0b4499d56c",
+      "size": 11066,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/f9e7ce4501d7253b98eb4410c6922f0b4499d56c"
+    },
+    {
+      "path": "touch-adaptation-kit/scripts",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "494711d032e3df5fbf7eb50fb9735f9b533aae88",
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/trees/494711d032e3df5fbf7eb50fb9735f9b533aae88"
+    },
+    {
+      "path": "touch-adaptation-kit/scripts/Create-SelfSignedCertificate.ps1",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d921d69275bd230965a463c6ffedabff6f9eed33",
+      "size": 4643,
+      "url": "https://api.github.com/repos/microsoft/xbox-game-streaming-tools/git/blobs/d921d69275bd230965a463c6ffedabff6f9eed33"
+    }
+  ],
+  "truncated": false
+}

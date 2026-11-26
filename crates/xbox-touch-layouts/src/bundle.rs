@@ -1,8 +1,8 @@
 use crate::{
     archive::{archive_path, read_archive},
     invalid,
-    references::{read_json, resolve},
-    TouchBundleError, MAX_LAYOUTS,
+    references::{read_json, resolve, resolve_dynamic, resolve_partial},
+    TouchBundleError, MAX_JSON_BYTES, MAX_LAYOUTS,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,6 +39,13 @@ pub fn decode_bundle(
     scale: f64,
 ) -> Result<TouchBundle, TouchBundleError> {
     let files = read_archive(data)?;
+    // 文档预算先于兼容性降级判断，超限资源保持整个包拒绝。
+    if files
+        .iter()
+        .any(|(path, data)| path.ends_with(".json") && data.len() > MAX_JSON_BYTES)
+    {
+        return Err(invalid("布局 JSON 超过 2 MB"));
+    }
     let manifest = read_json(&files, "takxmanifest.json")?;
     let version = manifest["version"]
         .as_str()
@@ -54,7 +61,7 @@ pub fn decode_bundle(
         .as_str()
         .map(archive_path)
         .transpose()?;
-    if let Some(path) = &context {
+    if let Some(path) = context.as_ref().filter(|path| files.contains_key(*path)) {
         read_json(&files, path)?;
     }
     let directories = locale_directories(&root, locale)?;
@@ -68,7 +75,10 @@ pub fn decode_bundle(
             else {
                 continue;
             };
-            selected.insert(name.trim_end_matches(".json").to_string(), path.clone());
+            selected.insert(
+                name.strip_suffix(".json").unwrap().to_lowercase(),
+                path.clone(),
+            );
         }
     }
     if selected.is_empty() || selected.len() > MAX_LAYOUTS {
@@ -78,13 +88,25 @@ pub fn decode_bundle(
     let default = manifest["defaultLayout"]
         .as_str()
         .unwrap_or_default()
-        .to_ascii_lowercase();
+        .to_lowercase();
     let mut layouts = Vec::new();
     for (id, path) in selected {
         // 单份布局的引用失败保留为诊断项，其他有效布局继续可选择。
         let (mut document, mut issues) = match resolve(&files, &path) {
             Ok(value) => (value, Vec::new()),
-            Err(error) => (read_json(&files, &path)?, vec![error.to_string()]),
+            Err(error) => match resolve_partial(&files, &path, None) {
+                Ok((value, warnings)) => (
+                    value,
+                    warnings
+                        .into_iter()
+                        .map(|(path, message)| format!("{path}：{message}"))
+                        .collect(),
+                ),
+                Err(_) => (
+                    read_json(&files, &path).unwrap_or(Value::Null),
+                    vec![error.to_string()],
+                ),
+            },
         };
         if !document["content"].is_object() {
             issues.push("布局缺少有效控件内容".into());
@@ -98,6 +120,32 @@ pub fn decode_bundle(
             .collect();
         let mut used = BTreeSet::new();
         bind_assets(&mut document, &assets, &mut used, &mut issues);
+        if let Some(context_path) = context.as_ref().filter(|path| files.contains_key(*path)) {
+            match resolve_dynamic(&files, &path, context_path).or_else(|_| {
+                resolve_partial(&files, &path, Some(context_path)).map(|(value, warnings)| {
+                    issues.extend(
+                        warnings
+                            .into_iter()
+                            .map(|(path, message)| format!("{path}：{message}")),
+                    );
+                    value
+                })
+            }) {
+                Ok(recipe) => {
+                    let runtime = serde_json::json!({
+                        "layout": recipe,
+                        "context": read_json(&files, context_path)?,
+                        "assets": assets,
+                    });
+                    if let Some(object) = document.as_object_mut() {
+                        object.insert("_xbxrcRuntime".into(), runtime);
+                        // 动态素材变化复用包内资源，继续受宿主图片数量/解码预算限制。
+                        used.extend(assets.values().cloned());
+                    }
+                }
+                Err(error) => issues.push(error.to_string()),
+            }
+        }
         layouts.push(ResolvedTouchLayout {
             id: id.clone(),
             name,
@@ -222,7 +270,7 @@ fn asset_catalog(
     Ok(aliases)
 }
 
-fn bind_assets(
+pub(crate) fn bind_assets(
     value: &mut Value,
     assets: &BTreeMap<String, String>,
     used: &mut BTreeSet<String>,

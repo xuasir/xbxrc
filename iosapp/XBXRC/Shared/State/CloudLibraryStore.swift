@@ -366,6 +366,14 @@ final class CloudLibraryStore: ObservableObject {
             } else {
                 access = try await prepareAccess()
             }
+            guard self.isCurrent(requestRevision), !Task.isCancelled else {
+                if self.activeAccess?.handle != access.handle {
+                    await client.releaseAccess(handle: access.handle)
+                }
+                throw CancellationError()
+            }
+            // 授权准备完成即交给同范围查询复用，目录回包期间也共用该租约。
+            self.activeAccess = access
             let snapshot = try await client.loadCatalog(
                 accessHandle: access.handle, market: market, language: language)
             return RemoteLoadResult(access: access, snapshot: snapshot)
@@ -403,7 +411,7 @@ final class CloudLibraryStore: ObservableObject {
                     importance: .key,
                     operationID: operationID
                 )
-                if existingAccess?.handle != result.access.handle {
+                if activeAccess?.handle != result.access.handle {
                     await client.releaseAccess(handle: result.access.handle)
                 }
                 clearRefreshOwnership(operationID: operationID)
@@ -447,7 +455,7 @@ final class CloudLibraryStore: ObservableObject {
             try await repository.save(snapshot)
             guard isCurrent(requestRevision), !Task.isCancelled else {
                 await discardPersistedOverlayIfOwnerChanged(scope: snapshot.scope)
-                if existingAccess?.handle != result.access.handle {
+                if activeAccess?.handle != result.access.handle {
                     await client.releaseAccess(handle: result.access.handle)
                 }
                 clearRefreshOwnership(operationID: operationID)

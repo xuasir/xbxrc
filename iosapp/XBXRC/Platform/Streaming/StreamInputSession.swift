@@ -50,6 +50,7 @@ enum IOSStreamStickTransform {
 /// 触屏、实体手柄与菜单共用既有 DataChannel 输出，热路径在 MainActor 上采样。
 @MainActor
 final class StreamInputSession: ObservableObject {
+    var onTouchLayoutCommand: ((XboxStreamTouchLayoutCommand) -> Void)?
     @Published private(set) var source: StreamInputSource = .idle
     @Published private(set) var menuRevealToken = 0
     @Published private(set) var diagnosticsRevealToken = 0

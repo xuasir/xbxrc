@@ -70,7 +70,7 @@ pub(super) fn snapshot(
     bundle: &TouchBundle,
     layout: &ResolvedTouchLayout,
 ) -> Result<XboxTouchLayoutSnapshot, crate::XboxBridgeError> {
-    let assets = layout
+    let assets: Vec<XboxTouchLayoutAsset> = layout
         .assets
         .iter()
         .map(|asset| {
@@ -87,8 +87,28 @@ pub(super) fn snapshot(
     Ok(XboxTouchLayoutSnapshot {
         id: layout.id.clone(),
         name: layout.name.clone(),
-        document_json: serde_json::to_string(&layout.document)
-            .map_err(|_| crate::XboxBridgeError::InvalidData("布局序列化失败".into()))?,
+        document_json: xbox_touch_layouts::compile_layout_json(
+            &serde_json::to_string(&layout.document)
+                .map_err(|_| crate::XboxBridgeError::InvalidData("布局序列化失败".into()))?,
+            &layout.id,
+            if bundle
+                .files
+                .get("takxmanifest.json")
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).ok())
+                .is_some_and(|manifest| manifest["source"]["provider"] == "better-xcloud")
+            {
+                "community"
+            } else {
+                "official"
+            },
+            &assets
+                .iter()
+                .map(|asset| asset.id.clone())
+                .collect::<Vec<_>>(),
+            None,
+            None,
+        )
+        .map_err(|error| crate::XboxBridgeError::InvalidData(error.to_string()))?,
         assets,
         issues: layout.issues.clone(),
     })

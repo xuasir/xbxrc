@@ -134,7 +134,6 @@ actor StreamSessionActor {
     private var microphoneTask: Task<Void, Error>?
     private var microphoneRequested = false
     private var resumedAtMilliseconds: Double?
-    private var pendingResumeValidation: (revision: UInt64, peerEpoch: UInt64)?
     private var supervisionTask: Task<Void, Never>?
     private var firstFrameGuardTask: Task<Void, Never>?
     private var supervisionConnectedAtMs: UInt64 = 0
@@ -489,65 +488,47 @@ actor StreamSessionActor {
         firstFrameGuardTask?.cancel()
         firstFrameGuardTask = nil
         recoveryProbe = nil
-        pendingResumeValidation = nil
         if !value {
             resumedAtMilliseconds = nil
-            playbackReadiness.remove(.framePresented)
+            // 前后台只切换呈现与输入；当前 peer、接收音频和播放就绪事实持续保留。
+            trace(
+                "presentationPaused", payload: ["logicalSessionRetained": .bool(true)],
+                dimension: .lifecycle)
+            guard microphoneRequested || microphonePeerEpoch != 0 || microphoneTask != nil else {
+                return
+            }
             microphoneRevision &+= 1
             microphoneTask?.cancel()
+            microphoneTask = nil
             microphonePeerEpoch = 0
             await peerRuntime?.stopMicrophoneCapture()
             guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
             await microphoneSink?(generation, false, microphoneRequested)
-            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
-            trace(
-                "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
-                dimension: .lifecycle)
-            await publish(.suspending, generation: generation)
             return
         }
-        guard let control = controlSession, let peer = peerRuntime else { return }
+        guard peerRuntime != nil else { return }
         let peerEpoch = activePeerEpoch
         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
-        pendingResumeValidation = (revision, peerEpoch)
-        await publish(.waitingForFirstFrame, generation: generation)
+        lastVideoActivityAtMs = Self.nowMs
+        trace(
+            "presentationResumed", payload: ["logicalSessionRetained": .bool(true)],
+            dimension: .lifecycle)
+        switch peerConnectionState {
+        case .connected:
+            armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
+        case .failed, .closed:
+            // 后台期间记录的真实连接故障沿公共恢复合同处理。
+            await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
+        case .new, .checking, .disconnected:
+            break
+        }
         guard isCurrent(generation), visible, revision == visibilityRevision,
-            peerEpoch == activePeerEpoch
+            peerEpoch == activePeerEpoch, microphoneRequested
         else { return }
         do {
-            try await control.validateResume()
-            try ensureCurrent(generation)
-            guard visible, revision == visibilityRevision, peerEpoch == activePeerEpoch else {
-                return
-            }
-            let snapshot = await peer.debugSnapshot()
-            guard isCurrent(generation), visible, revision == visibilityRevision,
-                peerEpoch == activePeerEpoch
-            else { return }
-            pendingResumeValidation = nil
-            trace("sessionResumeValidated", dimension: .lifecycle)
-            lastVideoActivityAtMs = Self.nowMs
-            if snapshot.iceConnectionState == "connected"
-                || snapshot.iceConnectionState == "completed"
-            {
-                if resumedAtMilliseconds != nil {
-                    armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
-                }
-                // 验证期间已保存的新上屏事实，直接决定恢复后的可见状态。
-                await publish(
-                    playbackReady ? .playing : .waitingForFirstFrame, generation: generation)
-            } else {
-                await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
-            }
-            guard isCurrent(generation), visible, revision == visibilityRevision,
-                peerEpoch == activePeerEpoch
-            else { return }
-            if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
+            try await setMicrophoneEnabled(true, generation: generation)
         } catch {
-            guard isCurrent(generation), visible, revision == visibilityRevision,
-                peerEpoch == activePeerEpoch
-            else { return }
-            await fail(reason: .sessionFailed, generation: generation, error: error)
+            trace("microphoneRestoreFailed", dimension: .mediaSupply)
         }
     }
 
@@ -2057,7 +2038,6 @@ actor StreamSessionActor {
         visible = true
         visibilityRevision &+= 1
         resumedAtMilliseconds = nil
-        pendingResumeValidation = nil
         let localIceTask = localIceFlushTask
         let peer = peerRuntime
         let retiringPeer = retiringPeerRuntime
@@ -2409,11 +2389,10 @@ actor StreamSessionActor {
 
     private func publish(_ state: StreamingFeatureState, generation: UInt64) async {
         guard isCurrent(generation) else { return }
-        let visibleState = visible ? state : .suspending
-        guard let stateSink, lastPublishedState != visibleState else { return }
+        guard let stateSink, lastPublishedState != state else { return }
         // 在跨 MainActor 等待前记住状态，合并重入的健康回报。
-        lastPublishedState = visibleState
-        await stateSink(generation, visibleState)
+        lastPublishedState = state
+        await stateSink(generation, state)
     }
 
     private func ensureCurrent(_ generation: UInt64) throws {
@@ -2423,10 +2402,7 @@ actor StreamSessionActor {
     }
 
     private var playbackReady: Bool {
-        guard playbackReadiness.isPlaybackReady else { return false }
-        guard let pendingResumeValidation else { return true }
-        return pendingResumeValidation.revision != visibilityRevision
-            || pendingResumeValidation.peerEpoch != activePeerEpoch
+        playbackReadiness.isPlaybackReady
     }
 
     private var connectionStateAfterNegotiation: StreamingFeatureState {

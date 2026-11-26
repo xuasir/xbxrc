@@ -31,6 +31,7 @@ use xbox_webapi::{ConsoleApi, SmartglassApi};
 mod credentials;
 mod frame_feedback;
 mod home_context;
+mod touch_controls;
 use credentials::SessionCredentials;
 pub use credentials::XboxStreamingAuthUpdate;
 mod startup;

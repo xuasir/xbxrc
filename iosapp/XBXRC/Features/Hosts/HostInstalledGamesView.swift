@@ -157,6 +157,18 @@ struct HostInstalledGamesView: View {
                     } footer: {
                         Text("连接后进入主机界面，选择此游戏开始游玩。")
                     }
+                    if let productID = game.productID {
+                        Section {
+                            GameTouchLayoutsLink(
+                                game: CloudLibraryGame(
+                                    gameSummary: GameSummary(
+                                        id: game.id, titleID: "", name: detail?.name ?? game.name,
+                                        artworkURL: artwork(for: game),
+                                        lastPlayedAt: game.lastPlayedAt, playtimeMinutes: nil,
+                                        achievementProgress: nil, productID: productID)),
+                                identifier: "installed-official-touch-layouts")
+                        }
+                    }
                     if let description = detail?.description, !description.isEmpty {
                         Section("游戏简介") {
                             Text(description).appFont(.body)
@@ -249,7 +261,7 @@ struct HostInstalledGamesView: View {
 
     private var startButton: some View {
         HostStreamButton(host: host, action: startHost)
-        .accessibilityIdentifier("installed-start-stream")
+            .accessibilityIdentifier("installed-start-stream")
     }
 
     private var storageOverview: some View {

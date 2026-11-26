@@ -75,6 +75,88 @@ fn decodes_manifest_with_short_service_version() {
 }
 
 #[test]
+fn decodes_microsoft_sample_packages_with_bom_layouts_and_original_assets() {
+    let samples: [(&[u8], usize, &str, usize); 2] = [
+        (
+            include_bytes!("../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/official-sample-layouts.takx"),
+            6,
+            "standard-controller",
+            0,
+        ),
+        (
+            include_bytes!("../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/official-custom-assets.takx"),
+            1,
+            "custom-assets",
+            9,
+        ),
+    ];
+    for (bytes, layout_count, default_id, asset_count) in samples {
+        let bundle = decode_bundle(bytes, "zh-CN", 2.0).unwrap();
+        assert_eq!(bundle.layouts.len(), layout_count);
+        assert!(bundle.layouts.iter().all(|layout| layout.issues.is_empty()));
+        let default = bundle
+            .layouts
+            .iter()
+            .find(|layout| layout.is_default)
+            .unwrap();
+        assert_eq!(default.id, default_id);
+        assert_eq!(default.assets.len(), asset_count);
+        for asset in &default.assets {
+            assert!(asset.path.starts_with("assets/neutral/@2.0x/"));
+            let original = &bundle.files[&asset.path];
+            assert!(original.starts_with(b"\x89PNG\r\n\x1a\n"));
+            assert_eq!(asset.content_hash, crate::content_hash(original));
+        }
+    }
+}
+
+#[test]
+fn decodes_utf8_bom_and_unicode_edges_in_manifest_context_and_layout() {
+    let mut files = base_files();
+    files[2].1 = serde_json::to_vec(&json!({
+        "displayName":"游戏布局",
+        "content":{"right":{"inner":[{"type":"button","action":{
+            "$ref":"../../context.json#/definitions/action"
+        }}]}}
+    }))
+    .unwrap();
+    for (_, bytes) in &mut files {
+        let mut decorated = "\u{FEFF}\u{00A0}\r\n".as_bytes().to_vec();
+        decorated.extend_from_slice(bytes);
+        decorated.extend_from_slice("\n\u{3000}\u{FEFF}".as_bytes());
+        *bytes = decorated;
+    }
+    let bundle = decode_bundle(&archive(files), "zh-CN", 2.0).unwrap();
+    assert_eq!(bundle.layouts[0].name, "游戏布局");
+    assert_eq!(
+        bundle.layouts[0].document["content"]["right"]["inner"][0]["action"],
+        "gamepadA"
+    );
+    assert!(bundle.layouts[0].issues.is_empty());
+}
+
+#[test]
+fn malformed_layout_keeps_valid_layouts_available_with_a_local_diagnostic() {
+    let mut files = base_files();
+    files.push(("layouts/neutral/broken.json", b"{broken".to_vec()));
+    let bundle = decode_bundle(&archive(files), "en-US", 2.0).unwrap();
+    let broken = bundle
+        .layouts
+        .iter()
+        .find(|layout| layout.id == "broken")
+        .unwrap();
+    assert!(broken.document.is_null());
+    assert!(broken.issues[0].contains("行 1"));
+    assert!(bundle
+        .layouts
+        .iter()
+        .find(|layout| layout.id == "gameplay")
+        .unwrap()
+        .issues
+        .is_empty());
+}
+
+#[test]
 fn locale_overrides_neutral_and_falls_back_between_regions() {
     let mut files = base_files();
     files.push(("layouts/en/gameplay.json", layout("gamepadB")));
@@ -193,13 +275,23 @@ fn archive_rejects_traversal_absolute_and_conflicting_paths() {
 }
 
 #[test]
-fn rejects_invalid_manifest_and_missing_context() {
+fn rejects_invalid_manifest_and_accepts_a_missing_optional_context() {
     let mut files = base_files();
     files[0].1 = br#"{"layouts":"layouts","version":"invalid"}"#.to_vec();
     assert!(decode_bundle(&archive(files), "en", 1.0).is_err());
     let mut files = base_files();
     files.remove(1);
-    assert!(decode_bundle(&archive(files), "en", 1.0).is_err());
+    assert!(decode_bundle(&archive(files.clone()), "en", 1.0)
+        .unwrap()
+        .layouts[0]
+        .issues
+        .is_empty());
+    files[1].1 = br##"{"content":{"value":{"$ref":"../../context.json#/state"}}}"##.to_vec();
+    assert!(
+        !decode_bundle(&archive(files), "en", 1.0).unwrap().layouts[0]
+            .issues
+            .is_empty()
+    );
 }
 
 #[test]

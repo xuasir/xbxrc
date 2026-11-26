@@ -7325,6 +7325,7 @@ name = "xbox-touch-layouts"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "json-patch",
  "serde",
  "serde_json",
  "sha2",

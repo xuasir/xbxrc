@@ -4,6 +4,38 @@ import XCTest
 
 final class CloudLibraryStoreConcurrencyTests: XCTestCase {
     @MainActor
+    func testLayoutQueryReusesAccessBeforeCatalogCommit() async {
+        let scope = CloudCatalogScope(
+            accountID: "account-a", regionHost: "region.example.com", language: "en-US",
+            market: "US")
+        let repository = DelayedSnapshotRepository()
+        let store = CloudLibraryStore(
+            client: DelayedSaveCloudClient(scope: scope), repository: repository)
+        let refresh = Task { @MainActor in
+            await store.refresh(reason: .manualRetry) {
+                PreparedCloudAccess(
+                    authSession: AuthSession(
+                        refreshToken: "refresh", seedJson: "seed", webTokenJson: "web", appLevel: 1),
+                    handle: "catalog-access", accountID: scope.accountID,
+                    regionHost: scope.regionHost,
+                    ownerGeneration: 1,
+                    expiresAtMs: UInt64(Date().timeIntervalSince1970 * 1000) + 600_000)
+            }
+        }
+        await repository.waitUntilSaveEntered()
+        do {
+            let handle = try await store.withCloudAccess(
+                prepareAccess: {
+                    XCTFail("Layout query should reuse the pending catalog lease")
+                    throw CancellationError()
+                }, operation: { $0.handle })
+            XCTAssertEqual(handle, "catalog-access")
+        } catch { XCTFail("Layout query failed before catalog commit: \(error)") }
+        await repository.completeSave()
+        await refresh.value
+    }
+
+    @MainActor
     func testClearWaitsForDelayedSaveAndRemovesStaleOverlay() async {
         let scope = CloudCatalogScope(
             accountID: "account-a",

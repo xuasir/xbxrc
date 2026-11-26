@@ -43,6 +43,15 @@ final class AuthStore: ObservableObject {
     private var profileInitialRefreshGeneration: UInt64?
     private var profileRefreshTask: Task<Void, Never>?
     private var profileRefreshTaskID: UUID?
+    private var cloudAccessPreparation: CloudAccessPreparation?
+
+    private struct CloudAccessPreparation {
+        let id: UUID
+        let ownerGeneration: UInt64
+        let forceRegionIP: String
+        let task: Task<Void, Never>
+        var waiters: [UUID: CheckedContinuation<PreparedCloudAccess, any Error>]
+    }
 
     init(
         client: any XboxAuthClient = RustXboxAuthClient(),
@@ -463,7 +472,7 @@ final class AuthStore: ObservableObject {
             throw AuthStoreError.signedOut
         }
         let requestOwnerGeneration = ownerGeneration
-        let authProvider = makeStreamingAuthProvider(ownerGeneration: requestOwnerGeneration)
+        let forceRegionIP = settings.cloudRegionPreset.forceRegionIP
         let operationID = UUID().uuidString
         let startedAt = Date()
         IOSRuntimeTrace.event(
@@ -475,26 +484,16 @@ final class AuthStore: ObservableObject {
             operationID: operationID
         )
         do {
-            let result = try await performAccessPreparation(
-                ownerGeneration: requestOwnerGeneration,
-                prepare: { [cloudClient, settings] currentSession, checkpoint in
-                    try await cloudClient.prepareAccess(
-                        session: currentSession,
-                        forceRegionIP: settings.cloudRegionPreset.forceRegionIP,
-                        checkpoint: checkpoint,
-                        authProvider: authProvider,
-                        startup: startup
-                    )
-                },
-                refreshedSession: { result, _ in
-                    StoredAuthSession(
-                        bridgeSession: result.authSession,
-                        cloudAccountID: result.accountID,
-                        cloudRegionHost: result.regionHost
-                    )
-                },
-                accessHandle: { $0.handle }
-            )
+            let result: PreparedCloudAccess
+            if let startup {
+                result = try await performCloudAccessPreparation(
+                    ownerGeneration: requestOwnerGeneration, forceRegionIP: forceRegionIP,
+                    startup: startup)
+            } else {
+                result = try await coalescedCloudAccess(
+                    ownerGeneration: requestOwnerGeneration, forceRegionIP: forceRegionIP)
+            }
+            try Task.checkCancellation()
             IOSRuntimeTrace.event(
                 domain: "auth",
                 event: "cloudAccessBoundarySucceeded",
@@ -524,6 +523,92 @@ final class AuthStore: ObservableObject {
                 operationID: operationID
             )
             throw error
+        }
+    }
+
+    private func performCloudAccessPreparation(
+        ownerGeneration: UInt64, forceRegionIP: String, startup: XboxStreamStartup?
+    ) async throws -> PreparedCloudAccess {
+        let authProvider = makeStreamingAuthProvider(ownerGeneration: ownerGeneration)
+        return try await performAccessPreparation(
+            ownerGeneration: ownerGeneration,
+            prepare: { [cloudClient] currentSession, checkpoint in
+                try await cloudClient.prepareAccess(
+                    session: currentSession, forceRegionIP: forceRegionIP, checkpoint: checkpoint,
+                    authProvider: authProvider, startup: startup)
+            },
+            refreshedSession: { result, _ in
+                StoredAuthSession(
+                    bridgeSession: result.authSession, cloudAccountID: result.accountID,
+                    cloudRegionHost: result.regionHost)
+            },
+            accessHandle: { $0.handle })
+    }
+
+    /// 同账户的目录、等待时间和布局请求共用在途租约，避免互相撤销授权。
+    private func coalescedCloudAccess(
+        ownerGeneration: UInt64, forceRegionIP: String
+    ) async throws -> PreparedCloudAccess {
+        let waiter = UUID()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                if var request = cloudAccessPreparation,
+                    request.ownerGeneration == ownerGeneration,
+                    request.forceRegionIP == forceRegionIP
+                {
+                    request.waiters[waiter] = continuation
+                    cloudAccessPreparation = request
+                    IOSRuntimeTrace.decision(
+                        domain: "auth", event: "cloudAccessBoundaryCoalesced",
+                        payload: ["waiterCount": .integer(Int64(request.waiters.count))],
+                        dimension: .network, importance: .key)
+                    return
+                }
+                if let previous = cloudAccessPreparation {
+                    cloudAccessPreparation = nil
+                    previous.task.cancel()
+                    for continuation in previous.waiters.values {
+                        continuation.resume(throwing: AuthStoreError.staleOperation)
+                    }
+                }
+                let id = UUID()
+                let task = Task { @MainActor in
+                    let result: Result<PreparedCloudAccess, any Error>
+                    do {
+                        result = .success(
+                            try await self.performCloudAccessPreparation(
+                                ownerGeneration: ownerGeneration, forceRegionIP: forceRegionIP,
+                                startup: nil))
+                    } catch { result = .failure(error) }
+                    guard let request = self.cloudAccessPreparation, request.id == id else {
+                        return
+                    }
+                    self.cloudAccessPreparation = nil
+                    for continuation in request.waiters.values { continuation.resume(with: result) }
+                }
+                cloudAccessPreparation = CloudAccessPreparation(
+                    id: id, ownerGeneration: ownerGeneration, forceRegionIP: forceRegionIP,
+                    task: task, waiters: [waiter: continuation])
+            }
+        } onCancel: {
+            Task { @MainActor in self.cancelCloudAccessWaiter(waiter) }
+        }
+    }
+
+    private func cancelCloudAccessWaiter(_ waiter: UUID) {
+        guard var request = cloudAccessPreparation,
+            let continuation = request.waiters.removeValue(forKey: waiter)
+        else { return }
+        continuation.resume(throwing: CancellationError())
+        if request.waiters.isEmpty {
+            cloudAccessPreparation = nil
+            request.task.cancel()
+        } else {
+            cloudAccessPreparation = request
         }
     }
 

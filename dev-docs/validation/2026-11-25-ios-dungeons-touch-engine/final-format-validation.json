@@ -1,0 +1,446 @@
+[
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayout.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        64,
+        66
+      ],
+      [
+        92,
+        92
+      ],
+      [
+        124,
+        150
+      ],
+      [
+        157,
+        157
+      ],
+      [
+        170,
+        171
+      ],
+      [
+        194,
+        201
+      ],
+      [
+        215,
+        215
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        80,
+        81
+      ],
+      [
+        225,
+        242
+      ],
+      [
+        255,
+        257
+      ],
+      [
+        277,
+        279
+      ],
+      [
+        284,
+        285
+      ],
+      [
+        288,
+        324
+      ],
+      [
+        372,
+        372
+      ],
+      [
+        392,
+        405
+      ],
+      [
+        410,
+        411
+      ],
+      [
+        416,
+        416
+      ],
+      [
+        429,
+        429
+      ],
+      [
+        432,
+        432
+      ],
+      [
+        435,
+        462
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        76,
+        82
+      ],
+      [
+        88,
+        88
+      ],
+      [
+        93,
+        117
+      ],
+      [
+        121,
+        124
+      ],
+      [
+        129,
+        132
+      ],
+      [
+        141,
+        144
+      ],
+      [
+        148,
+        156
+      ],
+      [
+        168,
+        168
+      ],
+      [
+        182,
+        182
+      ],
+      [
+        185,
+        193
+      ],
+      [
+        202,
+        203
+      ],
+      [
+        214,
+        214
+      ],
+      [
+        249,
+        259
+      ],
+      [
+        279,
+        283
+      ],
+      [
+        292,
+        292
+      ],
+      [
+        299,
+        299
+      ],
+      [
+        302,
+        302
+      ],
+      [
+        304,
+        308
+      ],
+      [
+        323,
+        333
+      ],
+      [
+        335,
+        335
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        26,
+        84
+      ],
+      [
+        255,
+        255
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        122,
+        143
+      ],
+      [
+        244,
+        244
+      ],
+      [
+        252,
+        252
+      ],
+      [
+        316,
+        316
+      ],
+      [
+        322,
+        322
+      ],
+      [
+        332,
+        332
+      ],
+      [
+        339,
+        339
+      ],
+      [
+        344,
+        344
+      ],
+      [
+        346,
+        346
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        92,
+        92
+      ],
+      [
+        170,
+        174
+      ],
+      [
+        186,
+        188
+      ],
+      [
+        190,
+        190
+      ],
+      [
+        210,
+        231
+      ],
+      [
+        236,
+        236
+      ],
+      [
+        345,
+        349
+      ],
+      [
+        352,
+        354
+      ],
+      [
+        358,
+        373
+      ],
+      [
+        387,
+        396
+      ],
+      [
+        407,
+        410
+      ],
+      [
+        415,
+        428
+      ],
+      [
+        435,
+        438
+      ],
+      [
+        449,
+        452
+      ],
+      [
+        457,
+        462
+      ],
+      [
+        473,
+        480
+      ],
+      [
+        483,
+        495
+      ],
+      [
+        504,
+        505
+      ],
+      [
+        550,
+        679
+      ],
+      [
+        713,
+        719
+      ],
+      [
+        721,
+        729
+      ],
+      [
+        737,
+        739
+      ],
+      [
+        744,
+        752
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        245,
+        245
+      ],
+      [
+        311,
+        312
+      ],
+      [
+        316,
+        316
+      ],
+      [
+        318,
+        322
+      ],
+      [
+        353,
+        353
+      ],
+      [
+        361,
+        361
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        22,
+        23
+      ],
+      [
+        25,
+        26
+      ],
+      [
+        56,
+        56
+      ],
+      [
+        66,
+        68
+      ],
+      [
+        79,
+        79
+      ],
+      [
+        81,
+        106
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/TouchLayoutTests.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        635,
+        944
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        485,
+        672
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        6,
+        57
+      ]
+    ],
+    "diagnostics": ""
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift",
+    "exitCode": 0,
+    "ranges": [
+      [
+        47,
+        48
+      ]
+    ],
+    "diagnostics": ""
+  }
+]

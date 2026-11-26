@@ -1,0 +1,36 @@
+{
+  "finalXCTest": {
+    "passed": 9,
+    "failed": 0,
+    "unit": 8,
+    "ui": 1,
+    "summary": "images-test-summary.json"
+  },
+  "swiftFormatting": {
+    "files": 12,
+    "result": "passed",
+    "evidence": "final-format-validation.json"
+  },
+  "diffCheck": {
+    "result": "passed",
+    "scope": "本轮修改的Swift文件"
+  },
+  "inheritedChecks": {
+    "firstRoundTests": {
+      "passed": 17,
+      "failed": 0,
+      "source": "前轮已完成验收记录；中断后临时bundle不可用"
+    },
+    "frontendLint": {
+      "command": "pnpm lint:fix",
+      "result": "passed",
+      "source": "前轮执行记录，之后仅修改Swift与文档"
+    },
+    "streamingBoundary": {
+      "command": "./iosapp/scripts/check-streaming-session-boundary.sh",
+      "result": "passed",
+      "source": "前轮执行记录，之后沿既有手柄合同扩展控件绘制"
+    }
+  },
+  "buildSourceMatchesCurrent": true
+}

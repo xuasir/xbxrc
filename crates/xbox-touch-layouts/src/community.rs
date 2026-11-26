@@ -9,16 +9,22 @@ use std::{
 };
 use zip::write::SimpleFileOptions;
 
-pub fn validate_community_game(
-    definition: &Value,
-    product_id: &str,
-) -> Result<(), TouchBundleError> {
-    // 旧社区定义按已校验的 Xbox 文件身份关联；附带商品身份时继续核验。
-    if definition.get("product_id").is_some_and(|id| {
-        !id.as_str()
-            .is_some_and(|id| id.eq_ignore_ascii_case(product_id))
-    }) {
-        return Err(invalid("社区布局与当前游戏商品身份不匹配"));
+pub fn validate_community_definition(definition: &Value) -> Result<(), TouchBundleError> {
+    // better-xcloud 以 Xbox TitleId 文件选源；product_id 记录来源商品元数据。
+    let names = definition["layouts"]
+        .as_array()
+        .filter(|names| !names.is_empty() && names.len() <= 16)
+        .ok_or_else(|| invalid("社区布局引用数量无效"))?;
+    for name in names {
+        if !name.as_str().is_some_and(|name| {
+            !name.is_empty()
+                && name.len() <= 80
+                && name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        }) {
+            return Err(invalid("社区布局引用名称无效"));
+        }
     }
     Ok(())
 }
@@ -32,7 +38,7 @@ pub fn community_bundle(
     locale: &str,
     scale: f64,
 ) -> Result<(Vec<u8>, TouchBundle), TouchBundleError> {
-    validate_community_game(definition, product_id)?;
+    validate_community_definition(definition)?;
     if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(invalid("社区布局来源版本无效"));
     }
@@ -47,9 +53,6 @@ pub fn community_bundle(
     let mut files = BTreeMap::new();
     files.insert("sources/game.json".to_owned(), json_bytes(definition)?);
     for (index, source) in sources.iter().enumerate() {
-        if source["schema_version"] != 1 {
-            return Err(invalid("社区布局包装版本需要为 1"));
-        }
         let layouts = source["layouts"]
             .as_object()
             .ok_or_else(|| invalid("社区布局内容无效"))?;
@@ -57,14 +60,19 @@ pub fn community_bundle(
         for (id, document) in layouts {
             if id.is_empty()
                 || id.len() > 128
-                || !id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                || id.contains(['/', '\\'])
+                || id.chars().any(char::is_control)
+                || [".", ".."].contains(&id.as_str())
             {
                 return Err(invalid("社区布局身份无效"));
             }
             // 按游戏索引顺序合并，后续共用布局覆盖同身份条目。
-            documents.insert(id.to_ascii_lowercase(), document.clone());
+            let mut document = document.clone();
+            if source["schema_version"] != 1 {
+                document["_xbxrcProtocolWarnings"] =
+                    serde_json::json!(["社区包装版本按已知布局字段运行"]);
+            }
+            documents.insert(id.to_lowercase(), document);
         }
     }
     if documents.is_empty() || documents.len() > MAX_LAYOUTS {
@@ -73,7 +81,7 @@ pub fn community_bundle(
     let default = definition["default_layout"]
         .as_str()
         .unwrap_or_default()
-        .to_ascii_lowercase();
+        .to_lowercase();
     let default = if default.is_empty() {
         documents.keys().next().unwrap().clone()
     } else {
@@ -154,16 +162,7 @@ mod tests {
             .iter()
             .any(|layout| layout.is_default && layout.document["author"] == "redphx"));
         assert!(!crate::content_hash(&bytes).is_empty());
-        assert!(validate_community_game(&json!({"layouts":["forza"]}), "GAME").is_ok());
-        assert!(community_bundle(
-            &definition,
-            &[source],
-            "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
-            "OTHER",
-            "zh-Hans",
-            2.0
-        )
-        .is_err());
+        assert!(validate_community_definition(&json!({"layouts":["forza"]})).is_ok());
         assert!(community_bundle(
             &definition,
             &[],
@@ -173,5 +172,43 @@ mod tests {
             2.0
         )
         .is_err());
+    }
+
+    #[test]
+    fn real_horizon_6_definition_accepts_another_product_of_the_verified_title() {
+        let definition: Value = serde_json::from_slice(include_bytes!(
+            "../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/forza-horizon-6.json"
+        ))
+        .unwrap();
+        let source: Value = serde_json::from_slice(include_bytes!(
+            "../../../iosapp/XBXRC/Resources/TouchLayouts/forza-layouts.json"
+        ))
+        .unwrap();
+        let (_, bundle) = community_bundle(
+            &definition,
+            &[source],
+            "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+            "HORIZON6EDITION",
+            "zh-Hans",
+            2.0,
+        )
+        .unwrap();
+        assert_eq!(definition["name"], "Forza Horizon 6");
+        assert_eq!(bundle.layouts.len(), 2);
+        assert!(bundle.layouts.iter().any(|layout| {
+            layout.id == "layout-1" && layout.is_default && layout.document["author"] == "redphx"
+        }));
+    }
+
+    #[test]
+    fn community_definition_limits_source_file_references() {
+        for layouts in [
+            json!([]),
+            json!(["../forza"]),
+            json!([null]),
+            json!("forza"),
+        ] {
+            assert!(validate_community_definition(&json!({"layouts":layouts})).is_err());
+        }
     }
 }

@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A76100000000000000000002 /* TouchIconAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76100000000000000000002 /* TouchIconAtlas.swift */; };
+		A76100000000000000000001 /* TouchLayoutIR.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76100000000000000000001 /* TouchLayoutIR.swift */; };
+		7BCB61DD3957851D0AA92F2E /* TouchLayoutCompletenessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA69661C973A601BB6AFF548 /* TouchLayoutCompletenessTests.swift */; };
+		777B2DEA33245FE1928EEBC9 /* TouchIconCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70D927A3667B153862FEEBD /* TouchIconCatalog.swift */; };
+		9A9995BFBA8353ED91CA824E /* TouchLayoutStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BA972FF6B3206F870608D6 /* TouchLayoutStyle.swift */; };
 		BD22CB3F27179469657B7389 /* StreamingTouchQuickSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */; };
 		5A5C6E0C8476873C1321E2AD /* SavedOfficialTouchLayoutInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */; };
 		4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */; };
@@ -154,6 +159,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B76100000000000000000002 /* TouchIconAtlas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchIconAtlas.swift; sourceTree = "<group>"; };
+		B76100000000000000000001 /* TouchLayoutIR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutIR.swift; sourceTree = "<group>"; };
+		BA69661C973A601BB6AFF548 /* TouchLayoutCompletenessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutCompletenessTests.swift; sourceTree = "<group>"; };
+		C70D927A3667B153862FEEBD /* TouchIconCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchIconCatalog.swift; sourceTree = "<group>"; };
+		B7BA972FF6B3206F870608D6 /* TouchLayoutStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchLayoutStyle.swift; sourceTree = "<group>"; };
 		744C4C46055797FCDB4141F9 /* StreamingTouchQuickSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingTouchQuickSwitch.swift; sourceTree = "<group>"; };
 		B06453188B83D2EA61C297C5 /* SavedOfficialTouchLayoutInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutInteractionTests.swift; sourceTree = "<group>"; };
 		74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedOfficialTouchLayoutTests.swift; sourceTree = "<group>"; };
@@ -602,6 +612,7 @@
 				74FEA147655012329203D7B1 /* SavedOfficialTouchLayoutTests.swift */,
 				B60000000000000000000622 /* TouchLayoutCustomizationTests.swift */,
 				B6000000000000000000060A /* TouchLayoutTests.swift */,
+				BA69661C973A601BB6AFF548 /* TouchLayoutCompletenessTests.swift */,
 				B40000000000000000000009 /* PCDataParityTests.swift */,
 				B0000000000000000000000A /* XBXRCTests.swift */,
 				B90000000000000000000F01 /* CapabilityMigrationTests.swift */,
@@ -660,6 +671,10 @@
 				B60000000000000000000603 /* TouchLayoutCatalog.swift */,
 				B60000000000000000000604 /* TouchLayoutGeometry.swift */,
 				B60000000000000000000605 /* TouchLayoutNormalizer.swift */,
+				C70D927A3667B153862FEEBD /* TouchIconCatalog.swift */,
+				B76100000000000000000002 /* TouchIconAtlas.swift */,
+				B76100000000000000000001 /* TouchLayoutIR.swift */,
+				B7BA972FF6B3206F870608D6 /* TouchLayoutStyle.swift */,
 				B60000000000000000000606 /* TouchLayoutPlaygroundView.swift */,
 				B60000000000000000000607 /* TouchLayoutResolver.swift */,
 				B60000000000000000000608 /* TouchLayoutSurface.swift */,
@@ -832,6 +847,10 @@
 				A60000000000000000000607 /* TouchLayoutResolver.swift in Sources */,
 				A60000000000000000000606 /* TouchLayoutPlaygroundView.swift in Sources */,
 				A60000000000000000000605 /* TouchLayoutNormalizer.swift in Sources */,
+				777B2DEA33245FE1928EEBC9 /* TouchIconCatalog.swift in Sources */,
+				A76100000000000000000002 /* TouchIconAtlas.swift in Sources */,
+				A76100000000000000000001 /* TouchLayoutIR.swift in Sources */,
+				9A9995BFBA8353ED91CA824E /* TouchLayoutStyle.swift in Sources */,
 				A60000000000000000000604 /* TouchLayoutGeometry.swift in Sources */,
 				A60000000000000000000603 /* TouchLayoutCatalog.swift in Sources */,
 				A60000000000000000000620 /* TouchLayoutTemplate.swift in Sources */,
@@ -934,6 +953,7 @@
 				4F72AEAFFB3F6C9C6E1C2AB3 /* SavedOfficialTouchLayoutTests.swift in Sources */,
 				A60000000000000000000622 /* TouchLayoutCustomizationTests.swift in Sources */,
 				A6000000000000000000060A /* TouchLayoutTests.swift in Sources */,
+				7BCB61DD3957851D0AA92F2E /* TouchLayoutCompletenessTests.swift in Sources */,
 				A40000000000000000000009 /* PCDataParityTests.swift in Sources */,
 				A00000000000000000000009 /* XBXRCTests.swift in Sources */,
 				A90000000000000000000F01 /* CapabilityMigrationTests.swift in Sources */,

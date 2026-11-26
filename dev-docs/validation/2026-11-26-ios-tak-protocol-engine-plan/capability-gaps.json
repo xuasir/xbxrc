@@ -1,0 +1,546 @@
+{
+  "date": "2026-11-26",
+  "method": "冻结社区原件与当前 Swift 图标目录的静态合同对照",
+  "scope": "图标校验与运行时协议来源；完整行为覆盖进入实施验收",
+  "currentCatalogCount": 177,
+  "schemaSemanticIconCount": 173,
+  "catalogMatchesSchemaSemanticNames": false,
+  "gta6": {
+    "definition": {
+      "file": "touch-layouts/2035456122.json",
+      "titleID": "2035456122",
+      "name": "Grand Theft Auto VI",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-vi"
+      ]
+    },
+    "missingIconUses": [
+      {
+        "icon": "leftBumper",
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value",
+        "verifiedOfficialFrameAcrossDPI": true
+      },
+      {
+        "icon": "leftTrigger",
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value",
+        "verifiedOfficialFrameAcrossDPI": true
+      },
+      {
+        "icon": "rightTrigger",
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value",
+        "verifiedOfficialFrameAcrossDPI": true
+      }
+    ]
+  },
+  "sharedIconGaps": {
+    "leftBumper": {
+      "occurrences": 23,
+      "templates": [
+        "touch-layouts/layouts/fifa.json",
+        "touch-layouts/layouts/gta-4.json",
+        "touch-layouts/layouts/gta-de.json",
+        "touch-layouts/layouts/gta-v.json",
+        "touch-layouts/layouts/gta-vi.json",
+        "touch-layouts/layouts/hogwarts-legacy.json",
+        "touch-layouts/layouts/little-kitty-big-city.json",
+        "touch-layouts/layouts/metal-gear-solid-2.json",
+        "touch-layouts/layouts/metal-gear-solid-3.json",
+        "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "touch-layouts/layouts/palworld.json",
+        "touch-layouts/layouts/perfect-dark.json",
+        "touch-layouts/layouts/resident-evil-2.json",
+        "touch-layouts/layouts/resident-evil-4-remake.json",
+        "touch-layouts/layouts/resident-evil-7.json",
+        "touch-layouts/layouts/resident-evil-requiem.json",
+        "touch-layouts/layouts/resident-evil-village.json",
+        "touch-layouts/layouts/resident-evil.json",
+        "touch-layouts/layouts/shredders.json"
+      ],
+      "uses": [
+        {
+          "file": "touch-layouts/layouts/fifa.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-4.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-de.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-v.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-vi.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/hogwarts-legacy.json",
+          "layout": "custom",
+          "path": "/content/left/outer/0/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/little-kitty-big-city.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+          "layout": "custom",
+          "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+          "layout": "mgs2",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+          "layout": "mgs3",
+          "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/palworld.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/perfect-dark.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-2.json",
+          "layout": "type-a",
+          "path": "/content/left/outer/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+          "layout": "type-a-1",
+          "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-7.json",
+          "layout": "default",
+          "path": "/content/right/outer/4/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-7.json",
+          "layout": "alternative",
+          "path": "/content/right/outer/4/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-requiem.json",
+          "layout": "default",
+          "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-village.json",
+          "layout": "default",
+          "path": "/content/right/outer/4/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-village.json",
+          "layout": "alternative",
+          "path": "/content/right/outer/4/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil.json",
+          "layout": "custom",
+          "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil.json",
+          "layout": "custom",
+          "path": "/content/layers/selectAbility/right/outer/2/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/shredders.json",
+          "layout": "custom",
+          "path": "/content/right/outer/6/styles/default/knob/faceImage/value"
+        }
+      ],
+      "verifiedOfficialFrameAcrossDPI": true
+    },
+    "leftTrigger": {
+      "occurrences": 30,
+      "templates": [
+        "touch-layouts/layouts/conker-live-and-reloaded.json",
+        "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "touch-layouts/layouts/go-mecha-ball.json",
+        "touch-layouts/layouts/gta-4.json",
+        "touch-layouts/layouts/gta-de.json",
+        "touch-layouts/layouts/gta-v.json",
+        "touch-layouts/layouts/gta-vi.json",
+        "touch-layouts/layouts/halo-campaign-evolved.json",
+        "touch-layouts/layouts/halo-infinite.json",
+        "touch-layouts/layouts/hogwarts-legacy.json",
+        "touch-layouts/layouts/la-noire.json",
+        "touch-layouts/layouts/metal-gear-solid-1.json",
+        "touch-layouts/layouts/metal-gear-solid-2.json",
+        "touch-layouts/layouts/metal-gear-solid-3.json",
+        "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "touch-layouts/layouts/palworld.json",
+        "touch-layouts/layouts/poppy-playtime.json",
+        "touch-layouts/layouts/red-dead-redemption-2.json",
+        "touch-layouts/layouts/red-dead-redemption.json",
+        "touch-layouts/layouts/resident-evil-2.json",
+        "touch-layouts/layouts/resident-evil-3.json",
+        "touch-layouts/layouts/resident-evil-4-remake.json",
+        "touch-layouts/layouts/resident-evil-requiem.json",
+        "touch-layouts/layouts/roboquest.json",
+        "touch-layouts/layouts/silent-hill-2.json",
+        "touch-layouts/layouts/tomb-raider-rise.json",
+        "touch-layouts/layouts/tomb-raider-shadow.json"
+      ],
+      "uses": [
+        {
+          "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+          "layout": "custom",
+          "path": "/content/right/outer/2/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+          "layout": "custom",
+          "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/go-mecha-ball.json",
+          "layout": "custom",
+          "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-4.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-de.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-v.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-vi.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+          "layout": "default",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/halo-infinite.json",
+          "layout": "rightstick",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/halo-infinite.json",
+          "layout": "relativemouse",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/hogwarts-legacy.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/la-noire.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+          "layout": "mgs2",
+          "path": "/content/left/outer/5/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+          "layout": "mgs3",
+          "path": "/content/left/outer/4/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/palworld.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/poppy-playtime.json",
+          "layout": "custom",
+          "path": "/content/right/outer/6/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/red-dead-redemption.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-2.json",
+          "layout": "type-a",
+          "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-3.json",
+          "layout": "type-a",
+          "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+          "layout": "type-a-1",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/resident-evil-requiem.json",
+          "layout": "default",
+          "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/roboquest.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/roboquest.json",
+          "layout": "custom",
+          "path": "/content/right/outer/1/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/silent-hill-2.json",
+          "layout": "custom",
+          "path": "/content/left/outer/4/1/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-rise.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+          "layout": "custom",
+          "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+        }
+      ],
+      "verifiedOfficialFrameAcrossDPI": true
+    },
+    "rightBumper": {
+      "occurrences": 8,
+      "templates": [
+        "touch-layouts/layouts/007-first-light.json",
+        "touch-layouts/layouts/alan-wake-2.json",
+        "touch-layouts/layouts/fifa.json",
+        "touch-layouts/layouts/palworld.json",
+        "touch-layouts/layouts/red-dead-redemption-2.json",
+        "touch-layouts/layouts/shredders.json",
+        "touch-layouts/layouts/tomb-raider-rise.json",
+        "touch-layouts/layouts/tomb-raider-shadow.json"
+      ],
+      "uses": [
+        {
+          "file": "touch-layouts/layouts/007-first-light.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/alan-wake-2.json",
+          "layout": "custom",
+          "path": "/content/right/outer/1/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/fifa.json",
+          "layout": "custom",
+          "path": "/content/left/outer/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/palworld.json",
+          "layout": "custom",
+          "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+          "layout": "custom",
+          "path": "/content/right/outer/6/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/shredders.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-rise.json",
+          "layout": "custom",
+          "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+          "layout": "custom",
+          "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+        }
+      ],
+      "verifiedOfficialFrameAcrossDPI": true
+    },
+    "rightTrigger": {
+      "occurrences": 13,
+      "templates": [
+        "touch-layouts/layouts/fifa.json",
+        "touch-layouts/layouts/go-mecha-ball.json",
+        "touch-layouts/layouts/gta-4.json",
+        "touch-layouts/layouts/gta-de.json",
+        "touch-layouts/layouts/gta-v.json",
+        "touch-layouts/layouts/gta-vi.json",
+        "touch-layouts/layouts/hogwarts-legacy.json",
+        "touch-layouts/layouts/palworld.json",
+        "touch-layouts/layouts/poppy-playtime.json",
+        "touch-layouts/layouts/red-dead-redemption-2.json",
+        "touch-layouts/layouts/south-of-midnight.json",
+        "touch-layouts/layouts/tomb-raider-rise.json",
+        "touch-layouts/layouts/tomb-raider-shadow.json"
+      ],
+      "uses": [
+        {
+          "file": "touch-layouts/layouts/fifa.json",
+          "layout": "custom",
+          "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/go-mecha-ball.json",
+          "layout": "custom",
+          "path": "/content/right/inner/0/styles/activated/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-4.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-de.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-v.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/gta-vi.json",
+          "layout": "custom",
+          "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/hogwarts-legacy.json",
+          "layout": "custom",
+          "path": "/content/right/outer/2/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/palworld.json",
+          "layout": "custom",
+          "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/poppy-playtime.json",
+          "layout": "custom",
+          "path": "/content/right/outer/1/styles/default/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+          "layout": "custom",
+          "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/south-of-midnight.json",
+          "layout": "custom",
+          "path": "/content/right/outer/5/styles/default/pullIndicator/3/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-rise.json",
+          "layout": "custom",
+          "path": "/content/right/outer/4/styles/default/knob/faceImage/value"
+        },
+        {
+          "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+          "layout": "custom",
+          "path": "/content/right/outer/4/styles/default/knob/faceImage/value"
+        }
+      ],
+      "verifiedOfficialFrameAcrossDPI": true
+    }
+  },
+  "totalMissingIconOccurrences": 74,
+  "classification": "confirmed-ios-false-rejection-of-official-runtime-icons",
+  "gate": "TouchLayoutNormalizer.scanImageTree → supportedIcons = TouchIconCatalog.symbols.keys",
+  "runtimeAuthority": "Babylon V.loadIcons / V._parseSpriteSheet 从 atlas.frames 建表；getIcon(value) 查询",
+  "runtimeAtlasFrameListStatus": "verified: five DPI atlases, same 234 names",
+  "communityRuntimeBehaviorCandidates": [
+    {
+      "file": "touch-layouts/layouts/wolfenstein-3d.json",
+      "layout": "custom",
+      "path": "/content/right/outer/2/1/toggle",
+      "value": "true"
+    }
+  ],
+  "sourceSyntaxDiagnostics": [
+    {
+      "file": "touch-layouts/ids.json",
+      "kind": "invalid-json-source",
+      "error": "Expecting ',' delimiter: line 4 column 3 (char 39)"
+    }
+  ],
+  "officialRuntimeCatalog": {
+    "inventory": "official-icon-atlas-inventory.json",
+    "frameCount": 234,
+    "dpiProfiles": [
+      1,
+      1.5,
+      2,
+      3,
+      4
+    ],
+    "currentIOSCatalogCount": 177,
+    "missingIOSFrameNameCount": 57
+  }
+}

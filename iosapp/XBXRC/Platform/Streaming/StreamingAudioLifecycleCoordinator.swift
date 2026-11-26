@@ -157,6 +157,8 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
     ) throws {
         let configuration = Self.makeConfiguration(for: audioDirection)
         RTCAudioSessionConfiguration.setWebRTC(configuration)
+        // 让生命周期的 isAudioEnabled 开关实际控制 WebRTC 音频设备启停。
+        session.useManualAudio = true
 
         session.lockForConfiguration()
         defer { session.unlockForConfiguration() }
@@ -169,10 +171,8 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
                 activationLeaseCount += 1
                 acquiredActivationLease = true
             }
-            if audioDirection == .sendReceive {
-                // WebRTC 仅在 active + voiceChat 下应用首选输入/输出通道。
-                try session.setConfiguration(configuration)
-            }
+            // WebRTC 仅在 active + voiceChat 下应用首选输入/输出通道。
+            try session.setConfiguration(configuration)
             session.isAudioEnabled = true
         } catch {
             if acquiredActivationLease {
@@ -189,24 +189,19 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
     }
 
     static func makeConfiguration(
-        for audioDirection: StreamingMediaDirection
+        for _: StreamingMediaDirection
     ) -> RTCAudioSessionConfiguration {
         let configuration = RTCAudioSessionConfiguration()
-        switch audioDirection {
-        case .receiveOnly:
-            configuration.category = AVAudioSession.Category.playback.rawValue
-            configuration.mode = AVAudioSession.Mode.default.rawValue
-            // playback 原生支持 A2DP/AirPlay；显式 allowAirPlay 仅适用于 playAndRecord。
-            configuration.categoryOptions = []
-        case .sendReceive:
-            configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-            configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
-            configuration.categoryOptions = [
-                .allowBluetoothHFP,
-                .allowBluetoothA2DP,
-                .allowAirPlay,
-            ]
-        }
+        // M137 默认 VoiceProcessingIO 在 recvonly 播放初始化时也要求有效输入通道。
+        // 上行音轨和麦克风权限继续由 PeerConnection 的方向与显式开关控制。
+        configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+        configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
+        configuration.categoryOptions = [
+            .defaultToSpeaker,
+            .allowBluetoothHFP,
+            .allowBluetoothA2DP,
+            .allowAirPlay,
+        ]
         return configuration
     }
 
@@ -262,12 +257,17 @@ final class StreamingAudioLifecycleCoordinator: NSObject, @unchecked Sendable {
         let route = session.currentRoute
         return [
             "isActive": .bool(session.isActive),
+            "useManualAudio": .bool(session.useManualAudio),
             "isAudioEnabled": .bool(session.isAudioEnabled),
             "activationLeaseCount": .integer(Int64(activationLeaseCount)),
             "category": .string(session.category),
             "mode": .string(session.mode),
             "outputPortTypes": .array(route.outputs.map { .string($0.portType.rawValue) }),
             "inputPortTypes": .array(route.inputs.map { .string($0.portType.rawValue) }),
+            "inputAvailable": .bool(session.inputAvailable),
+            "inputNumberOfChannels": .integer(Int64(session.inputNumberOfChannels)),
+            "outputNumberOfChannels": .integer(Int64(session.outputNumberOfChannels)),
+            "outputVolume": .double(Double(session.outputVolume)),
             "sampleRate": .double(session.sampleRate),
             "ioBufferDurationMs": .double(session.ioBufferDuration * 1_000),
             "outputLatencyMs": .double(session.outputLatency * 1_000),
@@ -389,11 +389,12 @@ extension StreamingAudioLifecycleCoordinator: RTCAudioSessionDelegate {
     }
 
     func audioSessionDidStartPlayOrRecord(_: RTCAudioSession) {
-        enqueueDiagnostic("audioUnitStarted")
+        // M137 在配置与 AudioUnit 初始化之前发出此回调，表示播放请求已到达。
+        enqueueDiagnostic("audioPlayoutRequested")
     }
 
     func audioSessionDidStopPlayOrRecord(_: RTCAudioSession) {
-        enqueueDiagnostic("audioUnitStopped")
+        enqueueDiagnostic("audioPlayoutStopped")
     }
 
     func audioSession(

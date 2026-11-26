@@ -260,7 +260,12 @@ enum StreamingDiagnosticsPlacement {
             }
             .background { StreamingSafeAreaUITestMarker().allowsHitTesting(false) }
             .statusBarHidden(true)
-            .onAppear { store.prepareControlsUITestPreview() }
+            .onAppear {
+                let cloudGame =
+                    ProcessInfo.processInfo.arguments.contains("--cloud-touch-layouts-ui-test")
+                    ? PCPageFixtures.cloudGames().first : nil
+                store.prepareControlsUITestPreview(cloudGame: cloudGame)
+            }
             .background {
                 StreamingControlsGestureLayer(onBlankTap: {
                     revealSource = .blankTap

@@ -1,0 +1,160 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24A434",
+      "osVersion": "27.0",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "0.041s",
+                  "durationInSeconds": 0.040930986404418945,
+                  "name": "testCloudDownloadFailureKeepsCurrentLayoutAndRetrySwitchesSource()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCloudDownloadFailureKeepsCurrentLayoutAndRetrySwitchesSource()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCloudDownloadFailureKeepsCurrentLayoutAndRetrySwitchesSource",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.005s",
+                  "durationInSeconds": 0.004983067512512207,
+                  "name": "testCloudQueriesOnlyAndReusesSelectedPackageWithoutChangingHomeRecent()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCloudQueriesOnlyAndReusesSelectedPackageWithoutChangingHomeRecent()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCloudQueriesOnlyAndReusesSelectedPackageWithoutChangingHomeRecent",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.003s",
+                  "durationInSeconds": 0.003042936325073242,
+                  "name": "testCloudUsesSupportedAlternativeWhenDefaultNeedsAdaptation()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCloudUsesSupportedAlternativeWhenDefaultNeedsAdaptation()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCloudUsesSupportedAlternativeWhenDefaultNeedsAdaptation",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0047s",
+                  "durationInSeconds": 0.004659056663513184,
+                  "name": "testLateCloudDownloadCannotOverwriteHomeSession()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testLateCloudDownloadCannotOverwriteHomeSession()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testLateCloudDownloadCannotOverwriteHomeSession",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0039s",
+                  "durationInSeconds": 0.003906965255737305,
+                  "name": "testNewPointerImmediatelyAfterLayoutChangeFollowsOneNeutralFrame()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testNewPointerImmediatelyAfterLayoutChangeFollowsOneNeutralFrame()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testNewPointerImmediatelyAfterLayoutChangeFollowsOneNeutralFrame",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0053s",
+                  "durationInSeconds": 0.005285024642944336,
+                  "name": "testSingleQuickSwitchCyclesRecentAndStandardAndCancelsPendingLoad()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testSingleQuickSwitchCyclesRecentAndStandardAndCancelsPendingLoad()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testSingleQuickSwitchCyclesRecentAndStandardAndCancelsPendingLoad",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0049s",
+                  "durationInSeconds": 0.0048770904541015625,
+                  "name": "testToggleStickyAxesAndLayerContributionsReleaseOnReplacement()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testToggleStickyAxesAndLayerContributionsReleaseOnReplacement()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testToggleStickyAxesAndLayerContributionsReleaseOnReplacement",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "SavedOfficialTouchLayoutTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "XBXRCTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "55秒",
+                  "durationInSeconds": 55.94294810295105,
+                  "name": "testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCloudAndInstalledLayoutEntriesDownloadBothHealthySources",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "42秒",
+                  "durationInSeconds": 42.931671023368835,
+                  "name": "testCloudListsCurrentGameAndDownloadsOnSelection()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCloudListsCurrentGameAndDownloadsOnSelection",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "children": [
+                    {
+                      "name": "XCTAssertTrue failed",
+                      "nodeType": "Failure Message",
+                      "sourceLocation": {
+                        "filePath": "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+                        "lineNumber": 433
+                      }
+                    }
+                  ],
+                  "duration": "39秒",
+                  "durationInSeconds": 39.85188889503479,
+                  "name": "testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput",
+                  "nodeType": "Test Case",
+                  "result": "Failed"
+                }
+              ],
+              "name": "SavedOfficialTouchLayoutInteractionTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests",
+              "nodeType": "Test Suite",
+              "result": "Failed"
+            }
+          ],
+          "name": "XBXRCUITests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests",
+          "nodeType": "UI test bundle",
+          "result": "Failed"
+        }
+      ],
+      "name": "XBXRC",
+      "nodeType": "Test Plan",
+      "result": "Failed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

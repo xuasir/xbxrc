@@ -3,6 +3,7 @@ use super::{
     XboxTouchLayoutSnapshot,
 };
 use crate::XboxBridgeError;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::BTreeSet,
@@ -12,12 +13,41 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use xbox_touch_layouts::{
-    content_hash, ResolvedTouchLayout, TouchBundle, MAX_BUNDLE_BYTES, MAX_EXPANDED_BYTES,
-    MAX_JSON_BYTES,
+    compile_layout, content_hash, protocol_revision, CompiledTouchLayout, ResolvedTouchLayout,
+    TouchBundle, MAX_BUNDLE_BYTES, MAX_COMPILED_BYTES, MAX_EXPANDED_BYTES, MAX_JSON_BYTES,
 };
 
 const MAX_SAVED_LAYOUTS: usize = 100;
 const MAX_LIBRARY_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProtocolCache {
+    source_revision: String,
+    protocol_revision: String,
+    checksum: String,
+    layout: CompiledTouchLayout,
+}
+
+fn cache_filename(revision: &str) -> String {
+    format!("{revision}.{}.ir.json", protocol_revision())
+}
+
+fn cache_bytes(layout: CompiledTouchLayout, revision: &str) -> Result<Vec<u8>, XboxBridgeError> {
+    let checksum =
+        content_hash(&serde_json::to_vec(&layout).map_err(|_| invalid("协议快照编码失败"))?);
+    let bytes = serde_json::to_vec(&ProtocolCache {
+        source_revision: revision.into(),
+        protocol_revision: protocol_revision().into(),
+        checksum,
+        layout,
+    })
+    .map_err(|_| invalid("协议缓存编码失败"))?;
+    if bytes.len() > MAX_COMPILED_BYTES + 64 * 1024 {
+        return Err(invalid("协议缓存超过8MB预算"));
+    }
+    Ok(bytes)
+}
 
 pub(super) fn read_index(root: &Path) -> Result<Vec<XboxSavedTouchLayout>, XboxBridgeError> {
     let path = root.join("index.json");
@@ -62,9 +92,6 @@ pub(super) fn save(
         .iter()
         .find(|layout| layout.id == layout_id)
         .ok_or_else(|| invalid("布局身份无效"))?;
-    if !layout.issues.is_empty() {
-        return Err(invalid("此布局需要完成资源适配后保存"));
-    }
     let mut entries = read_index(root)?;
     let previous_entries = entries.clone();
     let hash = content_hash(original);
@@ -73,6 +100,27 @@ pub(super) fn save(
         return Err(invalid("布局快照超过保存大小限制"));
     }
     let revision = content_hash(&compiled);
+    let ir = compile_layout(
+        &serde_json::to_string(&layout.document).map_err(|_| invalid("布局来源编码失败"))?,
+        &layout.id,
+        if bundle_id.starts_with("community:") {
+            "community"
+        } else {
+            "official"
+        },
+        &layout
+            .assets
+            .iter()
+            .map(|asset| asset.id.clone())
+            .collect::<Vec<_>>(),
+        None,
+        None,
+    )
+    .map_err(|error| invalid(&error.to_string()))?;
+    if !ir.is_runnable {
+        return Err(invalid("此布局需要有效的输入状态后保存"));
+    }
+    let protocol_cache = cache_bytes(ir, &revision)?;
     // 社区 commit 用于内容版本；同来源的更新沿原保存身份替换。
     let community = bundle_id.starts_with("community:better-xcloud:");
     let bundle_id = if community {
@@ -117,7 +165,7 @@ pub(super) fn save(
         .filter(|entry| revisions.insert((entry.content_hash.clone(), entry.revision.clone())))
         .map(|entry| {
             if entry.content_hash == hash && entry.revision == revision {
-                compiled.len() as u64
+                (compiled.len() + protocol_cache.len()) as u64
             } else {
                 fs::metadata(
                     root.join("packages")
@@ -127,6 +175,14 @@ pub(super) fn save(
                 )
                 .map(|metadata| metadata.len())
                 .unwrap_or(0)
+                    + fs::metadata(
+                        root.join("packages")
+                            .join(&entry.content_hash)
+                            .join("compiled")
+                            .join(cache_filename(&entry.revision)),
+                    )
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0)
             }
         })
         .sum();
@@ -165,14 +221,21 @@ pub(super) fn save(
         let _ = collect_unused(root, &previous_entries);
         return Err(error);
     }
+    // 来源修订继续用于本机身份；协议缓存独立换代，保持已选布局稳定。
+    let _ = write_atomic(
+        &package.join("compiled").join(cache_filename(&revision)),
+        &protocol_cache,
+    );
     collect_unused(root, &entries)?;
     read_index(root)
 }
 
 pub(super) fn load(root: &Path, id: &str) -> Result<XboxTouchLayoutSnapshot, XboxBridgeError> {
-    let entry = read_index(root)?
-        .into_iter()
+    let entries = read_index(root)?;
+    let entry = entries
+        .iter()
         .find(|entry| entry.id == id)
+        .cloned()
         .ok_or_else(|| invalid("本机布局已移除"))?;
     let package = root.join("packages").join(&entry.content_hash);
     let bytes = read(
@@ -190,29 +253,76 @@ pub(super) fn load(root: &Path, id: &str) -> Result<XboxTouchLayoutSnapshot, Xbo
         return Err(invalid("本机布局身份校验失败"));
     }
     let mut total = 0usize;
-    let assets = layout
-        .assets
-        .into_iter()
-        .map(|asset| {
-            let path = resource_path(&asset.path)?;
-            let data = read(&package.join("expanded").join(path), MAX_EXPANDED_BYTES)?;
-            if content_hash(&data) != asset.content_hash {
-                return Err(invalid("本机布局图片完整性校验失败"));
+    let mut issues = layout.issues.clone();
+    let mut assets = Vec::new();
+    for asset in &layout.assets {
+        let path = resource_path(&asset.path)?;
+        let Ok(data) = read(&package.join("expanded").join(path), MAX_EXPANDED_BYTES) else {
+            issues.push("此本机图片缺失，使用默认图形".into());
+            continue;
+        };
+        if content_hash(&data) != asset.content_hash {
+            issues.push("此本机图片校验失败，使用默认图形".into());
+            continue;
+        }
+        total = total
+            .checked_add(data.len())
+            .filter(|size| *size <= MAX_EXPANDED_BYTES)
+            .ok_or_else(|| invalid("布局图片总量超出限制"))?;
+        assets.push(XboxTouchLayoutAsset {
+            id: asset.id.clone(),
+            data,
+        });
+    }
+    let mut asset_ids: Vec<_> = assets.iter().map(|asset| asset.id.clone()).collect();
+    asset_ids.sort();
+    let cache_path = package
+        .join("compiled")
+        .join(cache_filename(&entry.revision));
+    let cached = read(&cache_path, MAX_COMPILED_BYTES + 64 * 1024)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<ProtocolCache>(&bytes).ok())
+        .filter(|cache| {
+            cache.source_revision == entry.revision
+                && cache.protocol_revision == protocol_revision()
+                && cache.layout.protocol_revision == protocol_revision()
+                && cache.layout.id == layout.id
+                && cache.layout.available_assets == asset_ids
+                && serde_json::to_vec(&cache.layout)
+                    .is_ok_and(|bytes| content_hash(&bytes) == cache.checksum)
+        });
+    let ir = if let Some(cache) = cached {
+        cache.layout
+    } else {
+        let ir = compile_layout(
+            &serde_json::to_string(&layout.document).map_err(|_| invalid("布局来源编码失败"))?,
+            &layout.id,
+            if entry.bundle_id.starts_with("community:") {
+                "community"
+            } else {
+                "official"
+            },
+            &asset_ids,
+            None,
+            None,
+        )
+        .map_err(|error| invalid(&error.to_string()))?;
+        let bytes = cache_bytes(ir.clone(), &entry.revision)?;
+        if cache_fits(root, &entries, &entry, bytes.len()) {
+            if let Err(error) = write_atomic(&cache_path, &bytes) {
+                issues.push(format!("协议缓存使用本次编译结果：{error}"));
             }
-            total = total
-                .checked_add(data.len())
-                .filter(|size| *size <= MAX_EXPANDED_BYTES)
-                .ok_or_else(|| invalid("布局图片总量超出限制"))?;
-            Ok(XboxTouchLayoutAsset { id: asset.id, data })
-        })
-        .collect::<Result<Vec<_>, XboxBridgeError>>()?;
+        } else {
+            issues.push("本机缓存达到预算，使用本次编译结果".into());
+        }
+        ir
+    };
     Ok(XboxTouchLayoutSnapshot {
         id: entry.id,
         name: entry.layout_name,
-        document_json: serde_json::to_string(&layout.document)
-            .map_err(|_| invalid("布局快照序列化失败"))?,
+        document_json: serde_json::to_string(&ir).map_err(|_| invalid("布局快照序列化失败"))?,
         assets,
-        issues: layout.issues,
+        issues,
     })
 }
 
@@ -222,6 +332,44 @@ pub(super) fn delete(root: &Path, id: &str) -> Result<Vec<XboxSavedTouchLayout>,
     write_index(root, &entries)?;
     collect_unused(root, &entries)?;
     Ok(entries)
+}
+
+fn cache_fits(
+    root: &Path,
+    entries: &[XboxSavedTouchLayout],
+    current: &XboxSavedTouchLayout,
+    new_bytes: usize,
+) -> bool {
+    let mut packages = BTreeSet::new();
+    let mut revisions = BTreeSet::new();
+    let mut total = 0u64;
+    for entry in entries {
+        if packages.insert(&entry.content_hash) {
+            total = total.saturating_add(entry.byte_count);
+        }
+        if revisions.insert((&entry.content_hash, &entry.revision)) {
+            let folder = root
+                .join("packages")
+                .join(&entry.content_hash)
+                .join("compiled");
+            total = total.saturating_add(
+                fs::metadata(folder.join(format!("{}.json", entry.revision)))
+                    .map(|m| m.len())
+                    .unwrap_or(0),
+            );
+            total = total.saturating_add(
+                if entry.content_hash == current.content_hash && entry.revision == current.revision
+                {
+                    new_bytes as u64
+                } else {
+                    fs::metadata(folder.join(cache_filename(&entry.revision)))
+                        .map(|m| m.len())
+                        .unwrap_or(0)
+                },
+            );
+        }
+    }
+    total <= MAX_LIBRARY_BYTES
 }
 
 pub(super) fn mark_used(root: &Path, id: &str) -> Result<(), XboxBridgeError> {
@@ -357,7 +505,12 @@ pub(super) fn collect_unused(
         let revisions: BTreeSet<_> = entries
             .iter()
             .filter(|entry| entry.content_hash == hash)
-            .map(|entry| format!("{}.json", entry.revision))
+            .flat_map(|entry| {
+                [
+                    format!("{}.json", entry.revision),
+                    cache_filename(&entry.revision),
+                ]
+            })
             .collect();
         if revisions.is_empty() {
             remove_resource(&package.path())?;

@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-26",
+  "archive": "official-icon-atlas-source.zip",
+  "provider": "2879.4921609f.chunk.js module 932383",
+  "runtime": "client.909e27db.js",
+  "files": [
+    {
+      "file": "6099.74d66ebe.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/6099.74d66ebe.chunk.js",
+      "sha256": "714ab3a1ec6e077892b5fbd2d5dcd09b33025e0ad78121aa92193e0de35f2c9e",
+      "bytes": 333591,
+      "dpi": 1
+    },
+    {
+      "file": "4978.fbca282a.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/4978.fbca282a.chunk.js",
+      "sha256": "802f05928d546e886b6593ad6cf29c3a092a97d58dc5e803245cd05590bff0c6",
+      "bytes": 560393,
+      "dpi": 1.5
+    },
+    {
+      "file": "6596.906861bc.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/6596.906861bc.chunk.js",
+      "sha256": "28d0153e17c4272a7f2d74bcd02b5c99296fe9e46d11ac3d5ba20e0cf72bce3a",
+      "bytes": 761568,
+      "dpi": 2
+    },
+    {
+      "file": "8117.3d919111.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/8117.3d919111.chunk.js",
+      "sha256": "61214116e48d9fb5d3692808eebaa88a1e0479b88710b200c4934a81cd215120",
+      "bytes": 1188860,
+      "dpi": 3
+    },
+    {
+      "file": "1694.8e1aa91d.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/1694.8e1aa91d.chunk.js",
+      "sha256": "5ee826b37f729f57287c5a9bd781e63315838dd14b97ceb8052cafc8e74a52e8",
+      "bytes": 1605957,
+      "dpi": 4
+    }
+  ]
+}

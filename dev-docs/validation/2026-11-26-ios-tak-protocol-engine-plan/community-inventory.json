@@ -1,0 +1,5850 @@
+{
+  "date": "2026-11-26",
+  "revision": "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+  "summary": {
+    "files": 168,
+    "validJSONFiles": 167,
+    "titleDefinitions": 92,
+    "templateFiles": 75,
+    "layouts": 85,
+    "referencedTemplates": 75,
+    "missingTemplateReferences": [],
+    "unreferencedTemplates": [],
+    "controlTypes": {
+      "blank": 17,
+      "button": 704,
+      "directionalPad": 56,
+      "gyroscope": 14,
+      "joystick": 208,
+      "throttle": 1,
+      "touchpad": 94
+    },
+    "semanticIconNamesUsed": 68,
+    "iconNamesMissingFromCurrentCatalog": 4,
+    "missingIconOccurrences": 74
+  },
+  "titleDefinitions": [
+    {
+      "file": "touch-layouts/1022228933.json",
+      "titleID": "1022228933",
+      "name": "Shenmue II",
+      "defaultLayout": "custom",
+      "templates": [
+        "shenmue-1-and-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/1046363979.json",
+      "titleID": "1046363979",
+      "name": "Rise of the Tomb Raider",
+      "defaultLayout": "custom",
+      "templates": [
+        "tomb-raider-rise"
+      ]
+    },
+    {
+      "file": "touch-layouts/114172147.json",
+      "titleID": "114172147",
+      "name": "Shenmue",
+      "defaultLayout": "custom",
+      "templates": [
+        "shenmue-1-and-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/1145753246.json",
+      "titleID": "1145753246",
+      "name": "Red Dead Redemption (Xbox 360)",
+      "defaultLayout": "custom",
+      "templates": [
+        "red-dead-redemption"
+      ]
+    },
+    {
+      "file": "touch-layouts/1278031123.json",
+      "titleID": "1278031123",
+      "name": "Resident Evil",
+      "defaultLayout": "custom",
+      "templates": [
+        "resident-evil"
+      ]
+    },
+    {
+      "file": "touch-layouts/1610974574.json",
+      "titleID": "1610974574",
+      "name": "Cocoon",
+      "defaultLayout": "custom",
+      "templates": [
+        "cocoon"
+      ]
+    },
+    {
+      "file": "touch-layouts/1611051325.json",
+      "titleID": "1611051325",
+      "name": "Grand Theft Auto: Vice City - The Definitive Edition",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-de"
+      ]
+    },
+    {
+      "file": "touch-layouts/1621285366.json",
+      "titleID": "1621285366",
+      "name": "DOOM (1993)",
+      "defaultLayout": "custom",
+      "templates": [
+        "doom-1993"
+      ]
+    },
+    {
+      "file": "touch-layouts/1625569842.json",
+      "titleID": "1625569842",
+      "name": "Choo Choo Charles",
+      "defaultLayout": "custom",
+      "templates": [
+        "choo-choo-charles"
+      ]
+    },
+    {
+      "file": "touch-layouts/1631654404.json",
+      "titleID": "1631654404",
+      "name": "Chants of Sennaar",
+      "defaultLayout": "custom",
+      "templates": [
+        "chants-of-sennaar"
+      ]
+    },
+    {
+      "file": "touch-layouts/1653663875.json",
+      "titleID": "1653663875",
+      "name": "EA SPORTS FC 25",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/1658810016.json",
+      "titleID": "1658810016",
+      "name": "Resident Evil Requiem",
+      "defaultLayout": "default",
+      "templates": [
+        "resident-evil-requiem"
+      ]
+    },
+    {
+      "file": "touch-layouts/1668285033.json",
+      "titleID": "1668285033",
+      "name": "The Exit 8",
+      "defaultLayout": "custom",
+      "templates": [
+        "the-exit-8"
+      ]
+    },
+    {
+      "file": "touch-layouts/1669177732.json",
+      "titleID": "1669177732",
+      "name": "Harold Halibut",
+      "defaultLayout": "custom",
+      "templates": [
+        "harold-halibut"
+      ]
+    },
+    {
+      "file": "touch-layouts/1673618851.json",
+      "titleID": "1673618851",
+      "name": "Egging On",
+      "defaultLayout": "custom",
+      "templates": [
+        "egging-on"
+      ]
+    },
+    {
+      "file": "touch-layouts/1693340366.json",
+      "titleID": "1693340366",
+      "name": "Hogwarts Legacy",
+      "defaultLayout": "custom",
+      "templates": [
+        "hogwarts-legacy"
+      ]
+    },
+    {
+      "file": "touch-layouts/1693830737.json",
+      "titleID": "1693830737",
+      "name": "Alan Wake 2",
+      "defaultLayout": "custom",
+      "templates": [
+        "alan-wake-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/1704490079.json",
+      "titleID": "1704490079",
+      "name": "South of Midnight",
+      "defaultLayout": "custom",
+      "templates": [
+        "south-of-midnight"
+      ]
+    },
+    {
+      "file": "touch-layouts/1709856057.json",
+      "titleID": "1709856057",
+      "name": "RoboCop: Rogue City - Unfinished Business",
+      "defaultLayout": "custom",
+      "templates": [
+        "robocop-rogue-city"
+      ]
+    },
+    {
+      "file": "touch-layouts/1714795112.json",
+      "titleID": "1714795112",
+      "name": "DOOM + DOOM II",
+      "defaultLayout": "touchpad",
+      "templates": [
+        "doom-doom-ii"
+      ]
+    },
+    {
+      "file": "touch-layouts/1719461807.json",
+      "titleID": "1719461807",
+      "name": "Rugrats: Adventures in Gameland",
+      "defaultLayout": "custom",
+      "templates": [
+        "rugrats-adventures-in-gameland"
+      ]
+    },
+    {
+      "file": "touch-layouts/1731121397.json",
+      "titleID": "1731121397",
+      "name": "The Quarry (Xbox One)",
+      "defaultLayout": "custom",
+      "templates": [
+        "the-quarry"
+      ]
+    },
+    {
+      "file": "touch-layouts/1741728886.json",
+      "titleID": "1741728886",
+      "name": "Arcade Paradise",
+      "defaultLayout": "custom",
+      "templates": [
+        "arcade-paradise"
+      ]
+    },
+    {
+      "file": "touch-layouts/1753744295.json",
+      "titleID": "1753744295",
+      "name": "Little Kitty, Big City",
+      "defaultLayout": "custom",
+      "templates": [
+        "little-kitty-big-city"
+      ]
+    },
+    {
+      "file": "touch-layouts/1778348973.json",
+      "titleID": "1778348973",
+      "name": "Grand Theft Auto Online (Xbox Series X/S)",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-v"
+      ]
+    },
+    {
+      "file": "touch-layouts/1792830437.json",
+      "titleID": "1792830437",
+      "name": "Balatro",
+      "defaultLayout": "custom",
+      "templates": [
+        "balatro"
+      ]
+    },
+    {
+      "file": "touch-layouts/1797327516.json",
+      "titleID": "1797327516",
+      "name": "Palworld",
+      "defaultLayout": "custom",
+      "templates": [
+        "palworld"
+      ]
+    },
+    {
+      "file": "touch-layouts/1814675537.json",
+      "titleID": "1814675537",
+      "name": "Grand Theft Auto: San Andreas - The Definitive Edition",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-de"
+      ]
+    },
+    {
+      "file": "touch-layouts/1829869520.json",
+      "titleID": "1829869520",
+      "name": "Gears of War: Reloaded",
+      "defaultLayout": "custom",
+      "templates": [
+        "gears-of-war-reloaded"
+      ]
+    },
+    {
+      "file": "touch-layouts/1842668909.json",
+      "titleID": "1842668909",
+      "name": "Forza Motorsport",
+      "defaultLayout": "layout-1",
+      "templates": [
+        "forza"
+      ]
+    },
+    {
+      "file": "touch-layouts/1843641391.json",
+      "titleID": "1843641391",
+      "name": "Quake",
+      "defaultLayout": "custom",
+      "templates": [
+        "quake"
+      ]
+    },
+    {
+      "file": "touch-layouts/1843694822.json",
+      "titleID": "1843694822",
+      "name": "The Quarry (Xbox Series)",
+      "defaultLayout": "custom",
+      "templates": [
+        "the-quarry"
+      ]
+    },
+    {
+      "file": "touch-layouts/1844195280.json",
+      "titleID": "1844195280",
+      "name": "Go Mecha Ball",
+      "defaultLayout": "custom",
+      "templates": [
+        "go-mecha-ball"
+      ]
+    },
+    {
+      "file": "touch-layouts/1844418156.json",
+      "titleID": "1844418156",
+      "name": "Botany Manor",
+      "defaultLayout": "custom",
+      "templates": [
+        "botany-manor"
+      ]
+    },
+    {
+      "file": "touch-layouts/1852502655.json",
+      "titleID": "1852502655",
+      "name": "EA SPORTS FC 24 (Xbox Series)",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/1852916479.json",
+      "titleID": "1852916479",
+      "name": "Resident Evil 4 Remake",
+      "defaultLayout": "type-a-1",
+      "templates": [
+        "resident-evil-4-remake"
+      ]
+    },
+    {
+      "file": "touch-layouts/1866559372.json",
+      "titleID": "1866559372",
+      "name": "Turnip Boy Robs a Bank",
+      "defaultLayout": "custom",
+      "templates": [
+        "turnip-boy"
+      ]
+    },
+    {
+      "file": "touch-layouts/1874191487.json",
+      "titleID": "1874191487",
+      "name": "High On Life",
+      "defaultLayout": "custom",
+      "templates": [
+        "high-on-life"
+      ]
+    },
+    {
+      "file": "touch-layouts/1882096658.json",
+      "titleID": "1882096658",
+      "name": "EA SPORTS FC 25 (Xbox One)",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/1884102336.json",
+      "titleID": "1884102336",
+      "name": "Return of the Obra Dinn",
+      "defaultLayout": "custom",
+      "templates": [
+        "obra-dinn"
+      ]
+    },
+    {
+      "file": "touch-layouts/1911508378.json",
+      "titleID": "1911508378",
+      "name": "RoboCop: Rogue City",
+      "defaultLayout": "custom",
+      "templates": [
+        "robocop-rogue-city"
+      ]
+    },
+    {
+      "file": "touch-layouts/1922695178.json",
+      "titleID": "1922695178",
+      "name": "PlateUp!",
+      "defaultLayout": "custom",
+      "templates": [
+        "plateup"
+      ]
+    },
+    {
+      "file": "touch-layouts/1931911684.json",
+      "titleID": "1931911684",
+      "name": "Shredders",
+      "defaultLayout": "custom",
+      "templates": [
+        "shredders"
+      ]
+    },
+    {
+      "file": "touch-layouts/1948986948.json",
+      "titleID": "1948986948",
+      "name": "007 First Light",
+      "defaultLayout": "custom",
+      "templates": [
+        "007-first-light"
+      ]
+    },
+    {
+      "file": "touch-layouts/1949242128.json",
+      "titleID": "1949242128",
+      "name": "Silent Hill 2",
+      "defaultLayout": "custom",
+      "templates": [
+        "silent-hill-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/1953745880.json",
+      "titleID": "1953745880",
+      "name": "Roboquest",
+      "defaultLayout": "custom",
+      "templates": [
+        "roboquest"
+      ]
+    },
+    {
+      "file": "touch-layouts/1955542194.json",
+      "titleID": "1955542194",
+      "name": "Grand Theft Auto 3 - The Definitive Edition",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-de"
+      ]
+    },
+    {
+      "file": "touch-layouts/1985701699.json",
+      "titleID": "1985701699",
+      "name": "Forza Horizon 4",
+      "defaultLayout": "layout-1",
+      "templates": [
+        "forza"
+      ]
+    },
+    {
+      "file": "touch-layouts/1994003829.json",
+      "titleID": "1994003829",
+      "name": "FIFA 23 (Xbox One)",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/2008576749.json",
+      "titleID": "2008576749",
+      "name": "The Rewinder",
+      "defaultLayout": "custom",
+      "templates": [
+        "the-rewinder"
+      ]
+    },
+    {
+      "file": "touch-layouts/2008767227.json",
+      "titleID": "2008767227",
+      "name": "Brotato",
+      "defaultLayout": "one-handed-left",
+      "templates": [
+        "brotato"
+      ]
+    },
+    {
+      "file": "touch-layouts/2017826215.json",
+      "titleID": "2017826215",
+      "name": "Metal Gear Solid 2",
+      "defaultLayout": "custom",
+      "templates": [
+        "metal-gear-solid-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/2025840804.json",
+      "titleID": "2025840804",
+      "name": "Metal Gear Solid 3",
+      "defaultLayout": "custom",
+      "templates": [
+        "metal-gear-solid-3"
+      ]
+    },
+    {
+      "file": "touch-layouts/2030093255.json",
+      "titleID": "2030093255",
+      "name": "Forza Horizon 5",
+      "defaultLayout": "layout-1",
+      "templates": [
+        "forza"
+      ]
+    },
+    {
+      "file": "touch-layouts/2031804130.json",
+      "titleID": "2031804130",
+      "name": "Red Dead Redemption (Xbox Series X/S)",
+      "defaultLayout": "custom",
+      "templates": [
+        "red-dead-redemption"
+      ]
+    },
+    {
+      "file": "touch-layouts/2035456122.json",
+      "titleID": "2035456122",
+      "name": "Grand Theft Auto VI",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-vi"
+      ]
+    },
+    {
+      "file": "touch-layouts/2043073184.json",
+      "titleID": "2043073184",
+      "name": "Halo Infinite",
+      "defaultLayout": "rightstick",
+      "templates": [
+        "halo-infinite"
+      ]
+    },
+    {
+      "file": "touch-layouts/2046367994.json",
+      "titleID": "2046367994",
+      "name": "Those Who Remain",
+      "defaultLayout": "custom",
+      "templates": [
+        "those-who-remain"
+      ]
+    },
+    {
+      "file": "touch-layouts/2049727100.json",
+      "titleID": "2049727100",
+      "name": "Metal Gear Solid 1",
+      "defaultLayout": "custom",
+      "templates": [
+        "metal-gear-solid-1"
+      ]
+    },
+    {
+      "file": "touch-layouts/2071676002.json",
+      "titleID": "2071676002",
+      "name": "FIFA 23 (Xbox Series)",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/2078926688.json",
+      "titleID": "2078926688",
+      "name": "DOOM II (Classic)",
+      "defaultLayout": "custom",
+      "templates": [
+        "doom-ii-classic"
+      ]
+    },
+    {
+      "file": "touch-layouts/2079757188.json",
+      "titleID": "2079757188",
+      "name": "Forza Horizon 6",
+      "defaultLayout": "layout-1",
+      "templates": [
+        "forza"
+      ]
+    },
+    {
+      "file": "touch-layouts/2082978535.json",
+      "titleID": "2082978535",
+      "name": "Halo: Campaign Evolved",
+      "defaultLayout": "default",
+      "templates": [
+        "halo-campaign-evolved"
+      ]
+    },
+    {
+      "file": "touch-layouts/2090474684.json",
+      "titleID": "2090474684",
+      "name": "Poppy Playtime: Chapter 1",
+      "defaultLayout": "custom",
+      "templates": [
+        "poppy-playtime"
+      ]
+    },
+    {
+      "file": "touch-layouts/2096821037.json",
+      "titleID": "2096821037",
+      "name": "DOOM 3",
+      "defaultLayout": "custom",
+      "templates": [
+        "doom-3"
+      ]
+    },
+    {
+      "file": "touch-layouts/2098741842.json",
+      "titleID": "2098741842",
+      "name": "EA SPORTS FC 24 (Xbox One)",
+      "defaultLayout": "custom",
+      "templates": [
+        "fifa"
+      ]
+    },
+    {
+      "file": "touch-layouts/2106826312.json",
+      "titleID": "2106826312",
+      "name": "Close to the Sun",
+      "defaultLayout": "custom",
+      "templates": [
+        "close-to-the-sun"
+      ]
+    },
+    {
+      "file": "touch-layouts/2108722049.json",
+      "titleID": "2108722049",
+      "name": "Resident Evil Village",
+      "defaultLayout": "default",
+      "templates": [
+        "resident-evil-village"
+      ]
+    },
+    {
+      "file": "touch-layouts/2122751230.json",
+      "titleID": "2122751230",
+      "name": "A Short Hike",
+      "defaultLayout": "custom",
+      "templates": [
+        "a-short-hike"
+      ]
+    },
+    {
+      "file": "touch-layouts/2136041956.json",
+      "titleID": "2136041956",
+      "name": "DOOM 64",
+      "defaultLayout": "touchpad",
+      "templates": [
+        "doom-64"
+      ]
+    },
+    {
+      "file": "touch-layouts/2136524032.json",
+      "titleID": "2136524032",
+      "name": "Chicory",
+      "defaultLayout": "custom",
+      "templates": [
+        "chicory"
+      ]
+    },
+    {
+      "file": "touch-layouts/222473492.json",
+      "titleID": "222473492",
+      "name": "Cyberpunk 2077",
+      "defaultLayout": "custom",
+      "templates": [
+        "cyberpunk-2077"
+      ]
+    },
+    {
+      "file": "touch-layouts/342495815.json",
+      "titleID": "342495815",
+      "name": "Perfect Dark",
+      "defaultLayout": "custom",
+      "templates": [
+        "perfect-dark"
+      ]
+    },
+    {
+      "file": "touch-layouts/374621264.json",
+      "titleID": "374621264",
+      "name": "RESIDENT EVIL 2",
+      "defaultLayout": "type-a",
+      "templates": [
+        "resident-evil-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/378390466.json",
+      "titleID": "378390466",
+      "name": "Bejeweled 3",
+      "defaultLayout": "custom",
+      "templates": [
+        "bejeweled-3"
+      ]
+    },
+    {
+      "file": "touch-layouts/379174015.json",
+      "titleID": "379174015",
+      "name": "Grand Theft Auto IV",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-4"
+      ]
+    },
+    {
+      "file": "touch-layouts/398011207.json",
+      "titleID": "398011207",
+      "name": "LIMBO",
+      "defaultLayout": "custom",
+      "templates": [
+        "limbo"
+      ]
+    },
+    {
+      "file": "touch-layouts/442930574.json",
+      "titleID": "442930574",
+      "name": "Perfect Dark Zero",
+      "defaultLayout": "custom",
+      "templates": [
+        "perfect-dark-zero"
+      ]
+    },
+    {
+      "file": "touch-layouts/504518218.json",
+      "titleID": "504518218",
+      "name": "L.A. Noire",
+      "defaultLayout": "custom",
+      "templates": [
+        "la-noire"
+      ]
+    },
+    {
+      "file": "touch-layouts/560570291.json",
+      "titleID": "560570291",
+      "name": "Plants vs. Zombies",
+      "defaultLayout": "custom",
+      "templates": [
+        "plants-vs-zombies"
+      ]
+    },
+    {
+      "file": "touch-layouts/591405932.json",
+      "titleID": "591405932",
+      "name": "Red Dead Redemption 2",
+      "defaultLayout": "custom",
+      "templates": [
+        "red-dead-redemption-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/651668093.json",
+      "titleID": "651668093",
+      "name": "Resident Evil 7",
+      "defaultLayout": "default",
+      "templates": [
+        "resident-evil-7"
+      ]
+    },
+    {
+      "file": "touch-layouts/654479291.json",
+      "titleID": "654479291",
+      "name": "Conker Live and Reloaded",
+      "defaultLayout": "custom",
+      "templates": [
+        "conker-live-and-reloaded"
+      ]
+    },
+    {
+      "file": "touch-layouts/656062883.json",
+      "titleID": "656062883",
+      "name": "Metal Gear Solid: HD Collection",
+      "defaultLayout": "mgs2",
+      "templates": [
+        "metal-gear-solid-hd"
+      ]
+    },
+    {
+      "file": "touch-layouts/770775860.json",
+      "titleID": "770775860",
+      "name": "Resident Evil 3",
+      "defaultLayout": "type-a",
+      "templates": [
+        "resident-evil-3"
+      ]
+    },
+    {
+      "file": "touch-layouts/832645103.json",
+      "titleID": "832645103",
+      "name": "Grand Theft Auto: Episodes from Liberty City",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-4"
+      ]
+    },
+    {
+      "file": "touch-layouts/884612576.json",
+      "titleID": "884612576",
+      "name": "Sonic Mania",
+      "defaultLayout": "custom",
+      "templates": [
+        "sonic-mania"
+      ]
+    },
+    {
+      "file": "touch-layouts/885488152.json",
+      "titleID": "885488152",
+      "name": "INSIDE",
+      "defaultLayout": "custom",
+      "templates": [
+        "inside"
+      ]
+    },
+    {
+      "file": "touch-layouts/913783821.json",
+      "titleID": "913783821",
+      "name": "Shadow of the Tomb Raider",
+      "defaultLayout": "custom",
+      "templates": [
+        "tomb-raider-shadow"
+      ]
+    },
+    {
+      "file": "touch-layouts/918284490.json",
+      "titleID": "918284490",
+      "name": "RESIDENT EVIL 2 (JP Z Version)",
+      "defaultLayout": "type-a",
+      "templates": [
+        "resident-evil-2"
+      ]
+    },
+    {
+      "file": "touch-layouts/947714459.json",
+      "titleID": "947714459",
+      "name": "Wolfenstein 3D",
+      "defaultLayout": "custom",
+      "templates": [
+        "wolfenstein-3d"
+      ]
+    },
+    {
+      "file": "touch-layouts/972249091.json",
+      "titleID": "972249091",
+      "name": "Grand Theft Auto V (Xbox One)",
+      "defaultLayout": "custom",
+      "templates": [
+        "gta-v"
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "file": "touch-layouts/layouts/007-first-light.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/a-short-hike.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/alan-wake-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/arcade-paradise.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/balatro.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/bejeweled-3.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/botany-manor.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/brotato.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "one-handed-left",
+          "name": "One-handed (Left)",
+          "author": "redphx",
+          "schema": null
+        },
+        {
+          "id": "one-handed-right",
+          "name": "One-handed (Right)",
+          "author": "redphx",
+          "schema": null
+        },
+        {
+          "id": "simplified",
+          "name": "Simplified",
+          "author": "redphx",
+          "schema": null
+        },
+        {
+          "id": "simplified-full",
+          "name": "Simplified (2 joysticks)",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/chants-of-sennaar.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/chicory.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/choo-choo-charles.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/close-to-the-sun.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/cocoon.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/cyberpunk-2077.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "evanpaul14",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/doom-1993.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/doom-3.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/doom-64.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "touchpad",
+          "name": "Touchpad",
+          "author": "Kode-Z",
+          "schema": null
+        },
+        {
+          "id": "joystick",
+          "name": "Joystick",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/doom-doom-ii.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "touchpad",
+          "name": "Touchpad",
+          "author": "Kode-Z",
+          "schema": null
+        },
+        {
+          "id": "joystick",
+          "name": "Joystick",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/doom-ii-classic.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/egging-on.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/fifa.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/forza.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "layout-1",
+          "name": "Layout 1",
+          "author": "redphx",
+          "schema": null
+        },
+        {
+          "id": "layout-1-throttle-pedal",
+          "name": "Layout 1 (Throttle Pedal)",
+          "author": "Tak-attack",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/go-mecha-ball.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-4.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-de.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-v.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-vi.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "default",
+          "name": "Default",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/halo-infinite.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "rightstick",
+          "name": "Right Stick Mode (Default)",
+          "author": "Tak-attack",
+          "schema": null
+        },
+        {
+          "id": "relativemouse",
+          "name": "Relative Mouse Mode",
+          "author": "Tak-attack",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/harold-halibut.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/high-on-life.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/hogwarts-legacy.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/inside.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/la-noire.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/limbo.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/little-kitty-big-city.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "mgs2",
+          "name": "MGS 2",
+          "author": "Kode-Z",
+          "schema": null
+        },
+        {
+          "id": "mgs3",
+          "name": "MGS 3",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/obra-dinn.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/palworld.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/perfect-dark-zero.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/perfect-dark.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/plants-vs-zombies.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/plateup.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Tak-attack",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/poppy-playtime.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/quake.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "evanpaul14",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "type-a",
+          "name": "Type A",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-3.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "type-a",
+          "name": "Type A",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "type-a-1",
+          "name": "Type A-1",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-7.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "default",
+          "name": "Default",
+          "author": "Kode-Z",
+          "schema": null
+        },
+        {
+          "id": "alternative",
+          "name": "Alternative",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-requiem.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "default",
+          "name": "Default",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-village.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "default",
+          "name": "Default",
+          "author": "Kode-Z",
+          "schema": null
+        },
+        {
+          "id": "alternative",
+          "name": "Alternative",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Alternate",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/robocop-rogue-city.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/roboquest.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Tak-attack",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/shredders.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom Layout",
+          "author": "Tak-attack",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/silent-hill-2.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/sonic-mania.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/south-of-midnight.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/the-exit-8.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/the-quarry.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/the-rewinder.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/those-who-remain.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-rise.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/turnip-boy.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "redphx",
+          "schema": null
+        }
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/wolfenstein-3d.json",
+      "schemaVersion": 1,
+      "layouts": [
+        {
+          "id": "custom",
+          "name": "Custom",
+          "author": "Kode-Z",
+          "schema": null
+        }
+      ]
+    }
+  ],
+  "discriminatorTypeCounts": {
+    "blank": 17,
+    "button": 704,
+    "color": 81,
+    "directionalPad": 56,
+    "gyroscope": 14,
+    "icon": 546,
+    "joystick": 208,
+    "layer": 34,
+    "segmented": 7,
+    "solid": 31,
+    "throttle": 1,
+    "touchpad": 94
+  },
+  "fieldsByDiscriminator": {
+    "blank": {
+      "type": 17
+    },
+    "button": {
+      "action": 704,
+      "enabled": 5,
+      "pullAction": 10,
+      "styles": 348,
+      "toggle": 29,
+      "type": 704
+    },
+    "color": {
+      "opacity": 37,
+      "type": 81,
+      "value": 81
+    },
+    "directionalPad": {
+      "deadzone": 1,
+      "interaction": 42,
+      "scale": 43,
+      "styles": 4,
+      "type": 56
+    },
+    "gyroscope": {
+      "axis": 14,
+      "type": 14
+    },
+    "icon": {
+      "opacity": 1,
+      "type": 546,
+      "value": 546
+    },
+    "joystick": {
+      "action": 81,
+      "actionThreshold": 23,
+      "axis": 208,
+      "expand": 33,
+      "relative": 14,
+      "styles": 114,
+      "type": 208
+    },
+    "layer": {
+      "target": 34,
+      "type": 34
+    },
+    "segmented": {
+      "items": 7,
+      "type": 7
+    },
+    "solid": {
+      "color": 30,
+      "opacity": 5,
+      "type": 31
+    },
+    "throttle": {
+      "axisDown": 1,
+      "axisUp": 1,
+      "relative": 1,
+      "sticky": 1,
+      "styles": 1,
+      "type": 1
+    },
+    "touchpad": {
+      "action": 80,
+      "axis": 94,
+      "renderAsButton": 80,
+      "styles": 86,
+      "type": 94
+    }
+  },
+  "fieldPaths": {
+    "/author": 85,
+    "/content": 85,
+    "/content/layers": 23,
+    "/content/layers/ADS": 1,
+    "/content/layers/ADS/left": 1,
+    "/content/layers/ADS/left/outer": 1,
+    "/content/layers/ADS/left/outer/*/*/action": 1,
+    "/content/layers/ADS/left/outer/*/*/interaction": 1,
+    "/content/layers/ADS/left/outer/*/*/interaction/activationType": 1,
+    "/content/layers/ADS/left/outer/*/*/scale": 1,
+    "/content/layers/ADS/left/outer/*/*/styles": 1,
+    "/content/layers/ADS/left/outer/*/*/styles/default": 1,
+    "/content/layers/ADS/left/outer/*/*/styles/default/faceImage": 1,
+    "/content/layers/ADS/left/outer/*/*/styles/default/faceImage/type": 1,
+    "/content/layers/ADS/left/outer/*/*/styles/default/faceImage/value": 1,
+    "/content/layers/ADS/left/outer/*/*/type": 2,
+    "/content/layers/ADS/left/outer/*/action": 1,
+    "/content/layers/ADS/left/outer/*/axis": 1,
+    "/content/layers/ADS/left/outer/*/axis/*/input": 2,
+    "/content/layers/ADS/left/outer/*/axis/*/output": 2,
+    "/content/layers/ADS/left/outer/*/axis/*/sensitivity": 2,
+    "/content/layers/ADS/left/outer/*/renderAsButton": 1,
+    "/content/layers/ADS/left/outer/*/styles": 1,
+    "/content/layers/ADS/left/outer/*/styles/default": 1,
+    "/content/layers/ADS/left/outer/*/styles/default/faceImage": 1,
+    "/content/layers/ADS/left/outer/*/styles/default/faceImage/type": 1,
+    "/content/layers/ADS/left/outer/*/styles/default/faceImage/value": 1,
+    "/content/layers/ADS/left/outer/*/type": 1,
+    "/content/layers/AimTouchpad": 10,
+    "/content/layers/AimTouchpad/right": 9,
+    "/content/layers/AimTouchpad/right/inner": 9,
+    "/content/layers/AimTouchpad/right/inner/*/axis": 9,
+    "/content/layers/AimTouchpad/right/inner/*/axis/*/input": 14,
+    "/content/layers/AimTouchpad/right/inner/*/axis/*/output": 14,
+    "/content/layers/AimTouchpad/right/inner/*/axis/*/sensitivity": 12,
+    "/content/layers/AimTouchpad/right/inner/*/axis/input": 2,
+    "/content/layers/AimTouchpad/right/inner/*/axis/output": 2,
+    "/content/layers/AimTouchpad/right/inner/*/axis/sensitivity": 2,
+    "/content/layers/AimTouchpad/right/inner/*/styles": 9,
+    "/content/layers/AimTouchpad/right/inner/*/styles/default": 9,
+    "/content/layers/AimTouchpad/right/inner/*/styles/default/faceImage": 9,
+    "/content/layers/AimTouchpad/right/inner/*/styles/default/faceImage/type": 9,
+    "/content/layers/AimTouchpad/right/inner/*/styles/default/faceImage/value": 9,
+    "/content/layers/AimTouchpad/right/inner/*/type": 9,
+    "/content/layers/AimTouchpad/sensors": 9,
+    "/content/layers/AimTouchpad/sensors/*/axis": 9,
+    "/content/layers/AimTouchpad/sensors/*/axis/*/input": 6,
+    "/content/layers/AimTouchpad/sensors/*/axis/*/output": 6,
+    "/content/layers/AimTouchpad/sensors/*/axis/*/sensitivity": 6,
+    "/content/layers/AimTouchpad/sensors/*/axis/input": 6,
+    "/content/layers/AimTouchpad/sensors/*/axis/output": 6,
+    "/content/layers/AimTouchpad/sensors/*/axis/sensitivity": 6,
+    "/content/layers/AimTouchpad/sensors/*/type": 9,
+    "/content/layers/EnableGyro": 1,
+    "/content/layers/EnableGyro/sensors": 1,
+    "/content/layers/EnableGyro/sensors/*/axis": 1,
+    "/content/layers/EnableGyro/sensors/*/axis/input": 1,
+    "/content/layers/EnableGyro/sensors/*/axis/output": 1,
+    "/content/layers/EnableGyro/sensors/*/axis/sensitivity": 1,
+    "/content/layers/EnableGyro/sensors/*/type": 1,
+    "/content/layers/ToggleDpad": 2,
+    "/content/layers/ToggleDpad/left": 1,
+    "/content/layers/ToggleDpad/left/outer": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/interaction": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/interaction/activationType": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/scale": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles/default": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles/default/gradient": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles/default/gradient/color": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles/idle": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/styles/idle/opacity": 1,
+    "/content/layers/ToggleDpad/left/outer/*/*/type": 1,
+    "/content/layers/ToggleDpad/right": 1,
+    "/content/layers/ToggleDpad/right/outer": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/interaction": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/interaction/activationType": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/scale": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles/default": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles/default/gradient": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles/default/gradient/color": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles/idle": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/styles/idle/opacity": 1,
+    "/content/layers/ToggleDpad/right/outer/*/*/type": 1,
+    "/content/layers/dPad": 1,
+    "/content/layers/dPad/left": 1,
+    "/content/layers/dPad/left/inner": 1,
+    "/content/layers/dPad/left/inner/*/scale": 1,
+    "/content/layers/dPad/left/inner/*/type": 1,
+    "/content/layers/dPad/right": 1,
+    "/content/layers/dPad/right/inner": 1,
+    "/content/layers/dPad/right/inner/*/axis": 1,
+    "/content/layers/dPad/right/inner/*/axis/input": 1,
+    "/content/layers/dPad/right/inner/*/axis/output": 1,
+    "/content/layers/dPad/right/inner/*/type": 1,
+    "/content/layers/dPadDisplay": 2,
+    "/content/layers/dPadDisplay/right": 2,
+    "/content/layers/dPadDisplay/right/inner": 2,
+    "/content/layers/dPadDisplay/right/inner/*/interaction": 2,
+    "/content/layers/dPadDisplay/right/inner/*/interaction/activationType": 2,
+    "/content/layers/dPadDisplay/right/inner/*/scale": 2,
+    "/content/layers/dPadDisplay/right/inner/*/type": 2,
+    "/content/layers/dPadDisplay/right/outer": 2,
+    "/content/layers/dPadDisplay/right/outer/*/type": 14,
+    "/content/layers/qWatch": 1,
+    "/content/layers/qWatch/right": 1,
+    "/content/layers/qWatch/right/outer": 1,
+    "/content/layers/qWatch/right/outer/*/*/action": 5,
+    "/content/layers/qWatch/right/outer/*/*/type": 5,
+    "/content/layers/rJoystick": 5,
+    "/content/layers/rJoystick/right": 5,
+    "/content/layers/rJoystick/right/inner": 5,
+    "/content/layers/rJoystick/right/inner/*/axis": 5,
+    "/content/layers/rJoystick/right/inner/*/axis/input": 5,
+    "/content/layers/rJoystick/right/inner/*/axis/output": 5,
+    "/content/layers/rJoystick/right/inner/*/type": 5,
+    "/content/layers/selectAbility": 1,
+    "/content/layers/selectAbility/left": 1,
+    "/content/layers/selectAbility/left/inner": 1,
+    "/content/layers/selectAbility/left/inner/*/scale": 1,
+    "/content/layers/selectAbility/left/inner/*/type": 1,
+    "/content/layers/selectAbility/right": 1,
+    "/content/layers/selectAbility/right/outer": 1,
+    "/content/layers/selectAbility/right/outer/*/*/action": 1,
+    "/content/layers/selectAbility/right/outer/*/*/styles": 1,
+    "/content/layers/selectAbility/right/outer/*/*/styles/default": 1,
+    "/content/layers/selectAbility/right/outer/*/*/styles/default/faceImage": 1,
+    "/content/layers/selectAbility/right/outer/*/*/styles/default/faceImage/type": 1,
+    "/content/layers/selectAbility/right/outer/*/*/styles/default/faceImage/value": 1,
+    "/content/layers/selectAbility/right/outer/*/*/type": 1,
+    "/content/layers/selectAbility/right/outer/*/action": 1,
+    "/content/layers/selectAbility/right/outer/*/styles": 1,
+    "/content/layers/selectAbility/right/outer/*/styles/default": 1,
+    "/content/layers/selectAbility/right/outer/*/styles/default/faceImage": 1,
+    "/content/layers/selectAbility/right/outer/*/styles/default/faceImage/type": 1,
+    "/content/layers/selectAbility/right/outer/*/styles/default/faceImage/value": 1,
+    "/content/layers/selectAbility/right/outer/*/type": 1,
+    "/content/left": 84,
+    "/content/left/inner": 82,
+    "/content/left/inner/*/action": 21,
+    "/content/left/inner/*/actionThreshold": 20,
+    "/content/left/inner/*/axis": 76,
+    "/content/left/inner/*/axis/deadzone": 32,
+    "/content/left/inner/*/axis/deadzone/radial": 32,
+    "/content/left/inner/*/axis/deadzone/threshold": 32,
+    "/content/left/inner/*/axis/input": 76,
+    "/content/left/inner/*/axis/output": 76,
+    "/content/left/inner/*/deadzone": 1,
+    "/content/left/inner/*/expand": 24,
+    "/content/left/inner/*/interaction": 4,
+    "/content/left/inner/*/interaction/activationType": 4,
+    "/content/left/inner/*/relative": 10,
+    "/content/left/inner/*/scale": 6,
+    "/content/left/inner/*/styles": 35,
+    "/content/left/inner/*/styles/activated": 20,
+    "/content/left/inner/*/styles/activated/knob": 20,
+    "/content/left/inner/*/styles/activated/knob/background": 1,
+    "/content/left/inner/*/styles/activated/knob/background/type": 1,
+    "/content/left/inner/*/styles/activated/knob/background/value": 1,
+    "/content/left/inner/*/styles/activated/knob/faceImage": 20,
+    "/content/left/inner/*/styles/activated/knob/faceImage/type": 20,
+    "/content/left/inner/*/styles/activated/knob/faceImage/value": 20,
+    "/content/left/inner/*/styles/default": 35,
+    "/content/left/inner/*/styles/default/knob": 34,
+    "/content/left/inner/*/styles/default/knob/background": 3,
+    "/content/left/inner/*/styles/default/knob/background/type": 3,
+    "/content/left/inner/*/styles/default/knob/background/value": 3,
+    "/content/left/inner/*/styles/default/knob/faceImage": 32,
+    "/content/left/inner/*/styles/default/knob/faceImage/type": 32,
+    "/content/left/inner/*/styles/default/knob/faceImage/value": 32,
+    "/content/left/inner/*/styles/default/knob/stroke": 3,
+    "/content/left/inner/*/styles/default/knob/stroke/color": 3,
+    "/content/left/inner/*/styles/default/knob/stroke/opacity": 1,
+    "/content/left/inner/*/styles/default/knob/stroke/type": 3,
+    "/content/left/inner/*/styles/default/outline": 4,
+    "/content/left/inner/*/styles/default/outline/indicator": 3,
+    "/content/left/inner/*/styles/default/outline/indicator/type": 3,
+    "/content/left/inner/*/styles/default/outline/indicator/value": 3,
+    "/content/left/inner/*/styles/default/outline/opacity": 2,
+    "/content/left/inner/*/styles/default/outline/stroke": 4,
+    "/content/left/inner/*/styles/default/outline/stroke/color": 4,
+    "/content/left/inner/*/styles/default/outline/stroke/type": 4,
+    "/content/left/inner/*/type": 82,
+    "/content/left/outer": 69,
+    "/content/left/outer/*/*/action": 64,
+    "/content/left/outer/*/*/action/*/target": 10,
+    "/content/left/outer/*/*/action/*/type": 10,
+    "/content/left/outer/*/*/action/target": 2,
+    "/content/left/outer/*/*/action/type": 2,
+    "/content/left/outer/*/*/actionThreshold": 2,
+    "/content/left/outer/*/*/axis": 36,
+    "/content/left/outer/*/*/axis/*/input": 1,
+    "/content/left/outer/*/*/axis/*/output": 1,
+    "/content/left/outer/*/*/axis/deadzone": 30,
+    "/content/left/outer/*/*/axis/deadzone/radial": 30,
+    "/content/left/outer/*/*/axis/deadzone/threshold": 30,
+    "/content/left/outer/*/*/axis/input": 35,
+    "/content/left/outer/*/*/axis/output": 35,
+    "/content/left/outer/*/*/axis/sensitivity": 1,
+    "/content/left/outer/*/*/expand": 5,
+    "/content/left/outer/*/*/interaction": 28,
+    "/content/left/outer/*/*/interaction/activationType": 28,
+    "/content/left/outer/*/*/relative": 4,
+    "/content/left/outer/*/*/renderAsButton": 1,
+    "/content/left/outer/*/*/scale": 25,
+    "/content/left/outer/*/*/styles": 55,
+    "/content/left/outer/*/*/styles/activated": 4,
+    "/content/left/outer/*/*/styles/activated/background": 2,
+    "/content/left/outer/*/*/styles/activated/background/type": 2,
+    "/content/left/outer/*/*/styles/activated/background/value": 2,
+    "/content/left/outer/*/*/styles/activated/knob": 2,
+    "/content/left/outer/*/*/styles/activated/knob/faceImage": 2,
+    "/content/left/outer/*/*/styles/activated/knob/faceImage/type": 2,
+    "/content/left/outer/*/*/styles/activated/knob/faceImage/value": 2,
+    "/content/left/outer/*/*/styles/default": 53,
+    "/content/left/outer/*/*/styles/default/faceImage": 18,
+    "/content/left/outer/*/*/styles/default/faceImage/type": 18,
+    "/content/left/outer/*/*/styles/default/faceImage/value": 18,
+    "/content/left/outer/*/*/styles/default/fill": 2,
+    "/content/left/outer/*/*/styles/default/gradient": 1,
+    "/content/left/outer/*/*/styles/default/gradient/color": 1,
+    "/content/left/outer/*/*/styles/default/knob": 33,
+    "/content/left/outer/*/*/styles/default/knob/background": 23,
+    "/content/left/outer/*/*/styles/default/knob/background/opacity": 23,
+    "/content/left/outer/*/*/styles/default/knob/background/type": 23,
+    "/content/left/outer/*/*/styles/default/knob/background/value": 23,
+    "/content/left/outer/*/*/styles/default/knob/faceImage": 33,
+    "/content/left/outer/*/*/styles/default/knob/faceImage/type": 33,
+    "/content/left/outer/*/*/styles/default/knob/faceImage/value": 33,
+    "/content/left/outer/*/*/styles/default/knob/stroke": 30,
+    "/content/left/outer/*/*/styles/default/knob/stroke/opacity": 30,
+    "/content/left/outer/*/*/styles/default/knob/stroke/type": 1,
+    "/content/left/outer/*/*/styles/default/outline": 3,
+    "/content/left/outer/*/*/styles/default/outline/indicator": 1,
+    "/content/left/outer/*/*/styles/default/outline/indicator/type": 1,
+    "/content/left/outer/*/*/styles/default/outline/indicator/value": 1,
+    "/content/left/outer/*/*/styles/default/outline/opacity": 3,
+    "/content/left/outer/*/*/styles/default/outline/stroke": 1,
+    "/content/left/outer/*/*/styles/default/outline/stroke/color": 1,
+    "/content/left/outer/*/*/styles/default/outline/stroke/type": 1,
+    "/content/left/outer/*/*/styles/default/stroke": 2,
+    "/content/left/outer/*/*/styles/default/stroke/color": 2,
+    "/content/left/outer/*/*/styles/default/stroke/type": 2,
+    "/content/left/outer/*/*/type": 105,
+    "/content/left/outer/*/action": 104,
+    "/content/left/outer/*/action/*/target": 10,
+    "/content/left/outer/*/action/*/type": 10,
+    "/content/left/outer/*/axis": 24,
+    "/content/left/outer/*/axis/*/input": 4,
+    "/content/left/outer/*/axis/*/output": 4,
+    "/content/left/outer/*/axis/*/sensitivity": 2,
+    "/content/left/outer/*/axis/deadzone": 20,
+    "/content/left/outer/*/axis/deadzone/radial": 20,
+    "/content/left/outer/*/axis/deadzone/threshold": 20,
+    "/content/left/outer/*/axis/input": 21,
+    "/content/left/outer/*/axis/output": 21,
+    "/content/left/outer/*/interaction": 2,
+    "/content/left/outer/*/interaction/activationType": 2,
+    "/content/left/outer/*/renderAsButton": 1,
+    "/content/left/outer/*/scale": 3,
+    "/content/left/outer/*/styles": 45,
+    "/content/left/outer/*/styles/activated": 2,
+    "/content/left/outer/*/styles/activated/background": 2,
+    "/content/left/outer/*/styles/activated/background/type": 2,
+    "/content/left/outer/*/styles/activated/background/value": 2,
+    "/content/left/outer/*/styles/default": 38,
+    "/content/left/outer/*/styles/default/background": 5,
+    "/content/left/outer/*/styles/default/background/type": 5,
+    "/content/left/outer/*/styles/default/background/value": 5,
+    "/content/left/outer/*/styles/default/faceImage": 10,
+    "/content/left/outer/*/styles/default/faceImage/type": 10,
+    "/content/left/outer/*/styles/default/faceImage/value": 10,
+    "/content/left/outer/*/styles/default/knob": 23,
+    "/content/left/outer/*/styles/default/knob/background": 10,
+    "/content/left/outer/*/styles/default/knob/background/opacity": 10,
+    "/content/left/outer/*/styles/default/knob/background/type": 10,
+    "/content/left/outer/*/styles/default/knob/background/value": 10,
+    "/content/left/outer/*/styles/default/knob/faceImage": 23,
+    "/content/left/outer/*/styles/default/knob/faceImage/type": 23,
+    "/content/left/outer/*/styles/default/knob/faceImage/value": 23,
+    "/content/left/outer/*/styles/default/knob/stroke": 22,
+    "/content/left/outer/*/styles/default/knob/stroke/opacity": 22,
+    "/content/left/outer/*/styles/default/outline": 1,
+    "/content/left/outer/*/styles/default/outline/indicator": 1,
+    "/content/left/outer/*/styles/default/outline/indicator/type": 1,
+    "/content/left/outer/*/styles/default/outline/indicator/value": 1,
+    "/content/left/outer/*/styles/default/outline/opacity": 1,
+    "/content/left/outer/*/styles/default/outline/stroke": 1,
+    "/content/left/outer/*/styles/default/outline/stroke/color": 1,
+    "/content/left/outer/*/styles/default/outline/stroke/type": 1,
+    "/content/left/outer/*/styles/idle": 5,
+    "/content/left/outer/*/styles/idle/background": 2,
+    "/content/left/outer/*/styles/idle/background/type": 2,
+    "/content/left/outer/*/styles/idle/background/value": 2,
+    "/content/left/outer/*/styles/idle/opacity": 3,
+    "/content/left/outer/*/styles/toggled": 2,
+    "/content/left/outer/*/styles/toggled/background": 2,
+    "/content/left/outer/*/styles/toggled/background/type": 2,
+    "/content/left/outer/*/styles/toggled/background/value": 2,
+    "/content/left/outer/*/toggle": 6,
+    "/content/left/outer/*/type": 107,
+    "/content/lower": 6,
+    "/content/lower/center": 1,
+    "/content/lower/center/action": 1,
+    "/content/lower/center/styles": 1,
+    "/content/lower/center/styles/default": 1,
+    "/content/lower/center/styles/default/faceImage": 1,
+    "/content/lower/center/styles/default/faceImage/type": 1,
+    "/content/lower/center/styles/default/faceImage/value": 1,
+    "/content/lower/center/type": 1,
+    "/content/lower/leftCenter": 5,
+    "/content/lower/leftCenter/*/action": 5,
+    "/content/lower/leftCenter/*/styles": 5,
+    "/content/lower/leftCenter/*/styles/default": 5,
+    "/content/lower/leftCenter/*/styles/default/faceImage": 5,
+    "/content/lower/leftCenter/*/styles/default/faceImage/type": 5,
+    "/content/lower/leftCenter/*/styles/default/faceImage/value": 5,
+    "/content/lower/leftCenter/*/type": 5,
+    "/content/lower/rightCenter": 5,
+    "/content/lower/rightCenter/*/action": 5,
+    "/content/lower/rightCenter/*/type": 5,
+    "/content/right": 84,
+    "/content/right/inner": 84,
+    "/content/right/inner/*/action": 43,
+    "/content/right/inner/*/actionThreshold": 1,
+    "/content/right/inner/*/axis": 60,
+    "/content/right/inner/*/axis/*/input": 2,
+    "/content/right/inner/*/axis/*/output": 2,
+    "/content/right/inner/*/axis/*/sensitivity": 2,
+    "/content/right/inner/*/axis/deadzone": 22,
+    "/content/right/inner/*/axis/deadzone/radial": 22,
+    "/content/right/inner/*/axis/deadzone/threshold": 22,
+    "/content/right/inner/*/axis/input": 59,
+    "/content/right/inner/*/axis/output": 59,
+    "/content/right/inner/*/axis/sensitivity": 10,
+    "/content/right/inner/*/axisDown": 1,
+    "/content/right/inner/*/axisUp": 1,
+    "/content/right/inner/*/expand": 4,
+    "/content/right/inner/*/pullAction": 3,
+    "/content/right/inner/*/pullAction/items": 1,
+    "/content/right/inner/*/pullAction/type": 1,
+    "/content/right/inner/*/relative": 1,
+    "/content/right/inner/*/renderAsButton": 6,
+    "/content/right/inner/*/sticky": 1,
+    "/content/right/inner/*/styles": 38,
+    "/content/right/inner/*/styles/activated": 1,
+    "/content/right/inner/*/styles/activated/knob": 1,
+    "/content/right/inner/*/styles/activated/knob/faceImage": 1,
+    "/content/right/inner/*/styles/activated/knob/faceImage/type": 1,
+    "/content/right/inner/*/styles/activated/knob/faceImage/value": 1,
+    "/content/right/inner/*/styles/activatedDown": 1,
+    "/content/right/inner/*/styles/activatedDown/indicator": 1,
+    "/content/right/inner/*/styles/activatedDown/indicator/color": 1,
+    "/content/right/inner/*/styles/activatedDown/indicator/type": 1,
+    "/content/right/inner/*/styles/activatedDown/knob": 1,
+    "/content/right/inner/*/styles/activatedDown/knob/faceImage": 1,
+    "/content/right/inner/*/styles/activatedDown/knob/faceImage/type": 1,
+    "/content/right/inner/*/styles/activatedDown/knob/faceImage/value": 1,
+    "/content/right/inner/*/styles/activatedUp": 1,
+    "/content/right/inner/*/styles/activatedUp/indicator": 1,
+    "/content/right/inner/*/styles/activatedUp/indicator/color": 1,
+    "/content/right/inner/*/styles/activatedUp/indicator/type": 1,
+    "/content/right/inner/*/styles/default": 38,
+    "/content/right/inner/*/styles/default/axisDown": 1,
+    "/content/right/inner/*/styles/default/axisDown/cap": 1,
+    "/content/right/inner/*/styles/default/axisDown/cap/type": 1,
+    "/content/right/inner/*/styles/default/axisDown/cap/value": 1,
+    "/content/right/inner/*/styles/default/axisDown/stroke": 1,
+    "/content/right/inner/*/styles/default/axisDown/stroke/color": 1,
+    "/content/right/inner/*/styles/default/axisDown/stroke/type": 1,
+    "/content/right/inner/*/styles/default/axisUp": 1,
+    "/content/right/inner/*/styles/default/axisUp/cap": 1,
+    "/content/right/inner/*/styles/default/axisUp/cap/type": 1,
+    "/content/right/inner/*/styles/default/axisUp/cap/value": 1,
+    "/content/right/inner/*/styles/default/axisUp/stroke": 1,
+    "/content/right/inner/*/styles/default/axisUp/stroke/color": 1,
+    "/content/right/inner/*/styles/default/axisUp/stroke/type": 1,
+    "/content/right/inner/*/styles/default/faceImage": 23,
+    "/content/right/inner/*/styles/default/faceImage/type": 23,
+    "/content/right/inner/*/styles/default/faceImage/value": 23,
+    "/content/right/inner/*/styles/default/knob": 15,
+    "/content/right/inner/*/styles/default/knob/faceImage": 15,
+    "/content/right/inner/*/styles/default/knob/faceImage/type": 15,
+    "/content/right/inner/*/styles/default/knob/faceImage/value": 15,
+    "/content/right/inner/*/styles/default/knob/stroke": 1,
+    "/content/right/inner/*/styles/default/knob/stroke/color": 1,
+    "/content/right/inner/*/styles/default/knob/stroke/type": 1,
+    "/content/right/inner/*/styles/default/outline": 4,
+    "/content/right/inner/*/styles/default/outline/indicator": 4,
+    "/content/right/inner/*/styles/default/outline/indicator/type": 4,
+    "/content/right/inner/*/styles/default/outline/indicator/value": 4,
+    "/content/right/inner/*/styles/default/outline/opacity": 3,
+    "/content/right/inner/*/styles/default/outline/stroke": 4,
+    "/content/right/inner/*/styles/default/outline/stroke/color": 4,
+    "/content/right/inner/*/styles/default/outline/stroke/type": 4,
+    "/content/right/inner/*/styles/default/pullIndicator": 1,
+    "/content/right/inner/*/styles/default/pullIndicator/*/faceImage": 1,
+    "/content/right/inner/*/styles/default/pullIndicator/*/faceImage/type": 1,
+    "/content/right/inner/*/styles/default/pullIndicator/*/faceImage/value": 1,
+    "/content/right/inner/*/styles/idle": 2,
+    "/content/right/inner/*/styles/idle/background": 1,
+    "/content/right/inner/*/styles/idle/background/type": 1,
+    "/content/right/inner/*/styles/idle/background/value": 1,
+    "/content/right/inner/*/styles/idle/pullIndicator": 1,
+    "/content/right/inner/*/styles/idle/pullIndicator/*/opacity": 1,
+    "/content/right/inner/*/styles/idleUp": 1,
+    "/content/right/inner/*/styles/idleUp/indicator": 1,
+    "/content/right/inner/*/styles/idleUp/indicator/color": 1,
+    "/content/right/inner/*/styles/idleUp/indicator/type": 1,
+    "/content/right/inner/*/styles/idleUp/knob": 1,
+    "/content/right/inner/*/styles/idleUp/knob/stroke": 1,
+    "/content/right/inner/*/styles/idleUp/knob/stroke/color": 1,
+    "/content/right/inner/*/styles/idleUp/knob/stroke/type": 1,
+    "/content/right/inner/*/styles/pulled": 1,
+    "/content/right/inner/*/styles/pulled/faceImage": 1,
+    "/content/right/inner/*/styles/pulled/faceImage/type": 1,
+    "/content/right/inner/*/styles/pulled/faceImage/value": 1,
+    "/content/right/inner/*/type": 97,
+    "/content/right/outer": 80,
+    "/content/right/outer/*/*/action": 191,
+    "/content/right/outer/*/*/action/*/target": 3,
+    "/content/right/outer/*/*/action/*/type": 3,
+    "/content/right/outer/*/*/action/target": 1,
+    "/content/right/outer/*/*/action/type": 1,
+    "/content/right/outer/*/*/axis": 55,
+    "/content/right/outer/*/*/axis/*/input": 16,
+    "/content/right/outer/*/*/axis/*/output": 16,
+    "/content/right/outer/*/*/axis/*/sensitivity": 16,
+    "/content/right/outer/*/*/axis/deadzone": 30,
+    "/content/right/outer/*/*/axis/deadzone/radial": 24,
+    "/content/right/outer/*/*/axis/deadzone/threshold": 30,
+    "/content/right/outer/*/*/axis/input": 47,
+    "/content/right/outer/*/*/axis/output": 47,
+    "/content/right/outer/*/*/axis/sensitivity": 23,
+    "/content/right/outer/*/*/interaction": 3,
+    "/content/right/outer/*/*/interaction/activationType": 3,
+    "/content/right/outer/*/*/pullAction": 1,
+    "/content/right/outer/*/*/pullAction/items": 1,
+    "/content/right/outer/*/*/pullAction/type": 1,
+    "/content/right/outer/*/*/renderAsButton": 39,
+    "/content/right/outer/*/*/scale": 2,
+    "/content/right/outer/*/*/styles": 137,
+    "/content/right/outer/*/*/styles/activated": 2,
+    "/content/right/outer/*/*/styles/activated/background": 2,
+    "/content/right/outer/*/*/styles/activated/background/type": 2,
+    "/content/right/outer/*/*/styles/activated/background/value": 2,
+    "/content/right/outer/*/*/styles/default": 133,
+    "/content/right/outer/*/*/styles/default/background": 2,
+    "/content/right/outer/*/*/styles/default/background/opacity": 1,
+    "/content/right/outer/*/*/styles/default/background/type": 2,
+    "/content/right/outer/*/*/styles/default/background/value": 2,
+    "/content/right/outer/*/*/styles/default/faceImage": 128,
+    "/content/right/outer/*/*/styles/default/faceImage/opacity": 1,
+    "/content/right/outer/*/*/styles/default/faceImage/type": 128,
+    "/content/right/outer/*/*/styles/default/faceImage/value": 128,
+    "/content/right/outer/*/*/styles/default/knob": 5,
+    "/content/right/outer/*/*/styles/default/knob/background": 3,
+    "/content/right/outer/*/*/styles/default/knob/background/opacity": 1,
+    "/content/right/outer/*/*/styles/default/knob/background/type": 3,
+    "/content/right/outer/*/*/styles/default/knob/background/value": 3,
+    "/content/right/outer/*/*/styles/default/knob/faceImage": 3,
+    "/content/right/outer/*/*/styles/default/knob/faceImage/type": 3,
+    "/content/right/outer/*/*/styles/default/knob/faceImage/value": 3,
+    "/content/right/outer/*/*/styles/default/knob/stroke": 3,
+    "/content/right/outer/*/*/styles/default/knob/stroke/color": 2,
+    "/content/right/outer/*/*/styles/default/knob/stroke/opacity": 2,
+    "/content/right/outer/*/*/styles/default/knob/stroke/type": 2,
+    "/content/right/outer/*/*/styles/default/outline": 3,
+    "/content/right/outer/*/*/styles/default/outline/indicator": 2,
+    "/content/right/outer/*/*/styles/default/outline/indicator/type": 2,
+    "/content/right/outer/*/*/styles/default/outline/indicator/value": 2,
+    "/content/right/outer/*/*/styles/default/outline/opacity": 2,
+    "/content/right/outer/*/*/styles/default/outline/stroke": 3,
+    "/content/right/outer/*/*/styles/default/outline/stroke/color": 3,
+    "/content/right/outer/*/*/styles/default/outline/stroke/type": 3,
+    "/content/right/outer/*/*/styles/default/pullIndicator": 1,
+    "/content/right/outer/*/*/styles/default/pullIndicator/*/faceImage": 2,
+    "/content/right/outer/*/*/styles/default/pullIndicator/*/faceImage/type": 2,
+    "/content/right/outer/*/*/styles/default/pullIndicator/*/faceImage/value": 2,
+    "/content/right/outer/*/*/styles/default/pullIndicator/*/opacity": 2,
+    "/content/right/outer/*/*/styles/idle": 3,
+    "/content/right/outer/*/*/styles/idle/background": 1,
+    "/content/right/outer/*/*/styles/idle/background/type": 1,
+    "/content/right/outer/*/*/styles/idle/background/value": 1,
+    "/content/right/outer/*/*/styles/idle/knob": 1,
+    "/content/right/outer/*/*/styles/idle/knob/opacity": 1,
+    "/content/right/outer/*/*/styles/idle/pullIndicator": 1,
+    "/content/right/outer/*/*/styles/idle/pullIndicator/*/opacity": 1,
+    "/content/right/outer/*/*/toggle": 7,
+    "/content/right/outer/*/*/type": 208,
+    "/content/right/outer/*/action": 235,
+    "/content/right/outer/*/action/*/target": 5,
+    "/content/right/outer/*/action/*/type": 5,
+    "/content/right/outer/*/axis": 35,
+    "/content/right/outer/*/axis/*/input": 34,
+    "/content/right/outer/*/axis/*/output": 34,
+    "/content/right/outer/*/axis/*/sensitivity": 34,
+    "/content/right/outer/*/axis/deadzone": 18,
+    "/content/right/outer/*/axis/deadzone/radial": 17,
+    "/content/right/outer/*/axis/deadzone/threshold": 18,
+    "/content/right/outer/*/axis/input": 18,
+    "/content/right/outer/*/axis/output": 18,
+    "/content/right/outer/*/axis/sensitivity": 14,
+    "/content/right/outer/*/enabled": 5,
+    "/content/right/outer/*/pullAction": 6,
+    "/content/right/outer/*/pullAction/items": 5,
+    "/content/right/outer/*/pullAction/type": 5,
+    "/content/right/outer/*/renderAsButton": 32,
+    "/content/right/outer/*/styles": 176,
+    "/content/right/outer/*/styles/default": 173,
+    "/content/right/outer/*/styles/default/faceImage": 156,
+    "/content/right/outer/*/styles/default/faceImage/type": 156,
+    "/content/right/outer/*/styles/default/faceImage/value": 156,
+    "/content/right/outer/*/styles/default/knob": 9,
+    "/content/right/outer/*/styles/default/knob/faceImage": 9,
+    "/content/right/outer/*/styles/default/knob/faceImage/type": 9,
+    "/content/right/outer/*/styles/default/knob/faceImage/value": 9,
+    "/content/right/outer/*/styles/default/knob/stroke": 8,
+    "/content/right/outer/*/styles/default/knob/stroke/color": 2,
+    "/content/right/outer/*/styles/default/knob/stroke/opacity": 8,
+    "/content/right/outer/*/styles/default/knob/stroke/type": 2,
+    "/content/right/outer/*/styles/default/opacity": 5,
+    "/content/right/outer/*/styles/default/outline": 3,
+    "/content/right/outer/*/styles/default/outline/indicator": 3,
+    "/content/right/outer/*/styles/default/outline/indicator/opacity": 2,
+    "/content/right/outer/*/styles/default/outline/indicator/type": 3,
+    "/content/right/outer/*/styles/default/outline/indicator/value": 3,
+    "/content/right/outer/*/styles/default/outline/opacity": 1,
+    "/content/right/outer/*/styles/default/outline/stroke": 1,
+    "/content/right/outer/*/styles/default/outline/stroke/color": 1,
+    "/content/right/outer/*/styles/default/outline/stroke/type": 1,
+    "/content/right/outer/*/styles/default/pullIndicator": 5,
+    "/content/right/outer/*/styles/default/pullIndicator/*/faceImage": 4,
+    "/content/right/outer/*/styles/default/pullIndicator/*/faceImage/type": 4,
+    "/content/right/outer/*/styles/default/pullIndicator/*/faceImage/value": 4,
+    "/content/right/outer/*/styles/default/pullIndicator/*/opacity": 9,
+    "/content/right/outer/*/styles/idle": 10,
+    "/content/right/outer/*/styles/idle/background": 2,
+    "/content/right/outer/*/styles/idle/background/type": 2,
+    "/content/right/outer/*/styles/idle/background/value": 2,
+    "/content/right/outer/*/styles/idle/opacity": 3,
+    "/content/right/outer/*/styles/idle/pullIndicator": 5,
+    "/content/right/outer/*/styles/idle/pullIndicator/*/opacity": 6,
+    "/content/right/outer/*/styles/pulled": 1,
+    "/content/right/outer/*/styles/pulled/faceImage": 1,
+    "/content/right/outer/*/styles/pulled/faceImage/type": 1,
+    "/content/right/outer/*/styles/pulled/faceImage/value": 1,
+    "/content/right/outer/*/toggle": 13,
+    "/content/right/outer/*/type": 238,
+    "/content/sensors": 4,
+    "/content/sensors/*/axis": 4,
+    "/content/sensors/*/axis/input": 4,
+    "/content/sensors/*/axis/output": 4,
+    "/content/sensors/*/axis/sensitivity": 4,
+    "/content/sensors/*/type": 4,
+    "/content/upper": 82,
+    "/content/upper/right": 82,
+    "/content/upper/right/*/action": 187,
+    "/content/upper/right/*/action/target": 3,
+    "/content/upper/right/*/action/type": 3,
+    "/content/upper/right/*/styles": 46,
+    "/content/upper/right/*/styles/activated": 2,
+    "/content/upper/right/*/styles/activated/background": 2,
+    "/content/upper/right/*/styles/activated/background/type": 2,
+    "/content/upper/right/*/styles/activated/background/value": 2,
+    "/content/upper/right/*/styles/default": 44,
+    "/content/upper/right/*/styles/default/faceImage": 44,
+    "/content/upper/right/*/styles/default/faceImage/type": 44,
+    "/content/upper/right/*/styles/default/faceImage/value": 44,
+    "/content/upper/right/*/styles/toggled": 2,
+    "/content/upper/right/*/styles/toggled/background": 2,
+    "/content/upper/right/*/styles/toggled/background/type": 2,
+    "/content/upper/right/*/styles/toggled/background/value": 2,
+    "/content/upper/right/*/toggle": 3,
+    "/content/upper/right/*/type": 187,
+    "/name": 85
+  },
+  "actionStringCounts": {
+    "dPadDown": 2,
+    "dPadLeft": 1,
+    "dPadRight": 1,
+    "dPadUp": 2,
+    "gamepadA": 90,
+    "gamepadB": 80,
+    "gamepadX": 70,
+    "gamepadY": 71,
+    "leftBumper": 68,
+    "leftThumb": 45,
+    "leftTrigger": 53,
+    "menu": 85,
+    "rightBumper": 67,
+    "rightJoystickDown": 1,
+    "rightThumb": 38,
+    "rightTrigger": 50,
+    "view": 55
+  },
+  "icons": {
+    "ability": [
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/layers/ADS/left/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-rewinder.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      }
+    ],
+    "ability3": [
+      {
+        "file": "touch-layouts/layouts/chants-of-sennaar.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      }
+    ],
+    "accept": [
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      }
+    ],
+    "add": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/upper/right/0/styles/default/faceImage/value"
+      }
+    ],
+    "aim": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/1/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-1993.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "touchpad",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-ii-classic.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/go-mecha-ball.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/layers/AimTouchpad/right/inner/0/styles/default/faceImage/value"
+      }
+    ],
+    "armor": [
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      }
+    ],
+    "book": [
+      {
+        "file": "touch-layouts/layouts/botany-manor.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/close-to-the-sun.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/obra-dinn.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      }
+    ],
+    "brakePedal": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/inner/0/styles/activatedDown/knob/faceImage/value"
+      }
+    ],
+    "brightness": [
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      }
+    ],
+    "capture": [
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      }
+    ],
+    "character": [
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      }
+    ],
+    "close": [
+      {
+        "file": "touch-layouts/layouts/close-to-the-sun.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      }
+    ],
+    "crouch": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/arcade-paradise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/left/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/left/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      }
+    ],
+    "dPad": [
+      {
+        "file": "touch-layouts/layouts/brotato.json",
+        "layout": "one-handed-left",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/brotato.json",
+        "layout": "one-handed-right",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/left/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/left/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      }
+    ],
+    "dash": [
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      }
+    ],
+    "downArrow": [
+      {
+        "file": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/pullIndicator/0/faceImage/value"
+      }
+    ],
+    "emotes": [
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      }
+    ],
+    "enterCar": [
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "enterDoor": [
+      {
+        "file": "touch-layouts/layouts/the-rewinder.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "fire": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/layers/ADS/left/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-1993.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-ii-classic.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/left/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/left/outer/7/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/wolfenstein-3d.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/faceImage/value"
+      }
+    ],
+    "gamepadA": [
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/pulled/faceImage/value"
+      }
+    ],
+    "gamepadB": [
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/pullIndicator/3/faceImage/value"
+      }
+    ],
+    "gamepadX": [
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/pulled/faceImage/value"
+      }
+    ],
+    "gasPedal": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "grenade": [
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      }
+    ],
+    "handbrake2": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      }
+    ],
+    "health": [
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "heavyPunch": [
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      }
+    ],
+    "horn": [
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/1/styles/default/faceImage/value"
+      }
+    ],
+    "interact": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/arcade-paradise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/chants-of-sennaar.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/close-to-the-sun.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-1993.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-ii-classic.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/inside.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/limbo.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/obra-dinn.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-quarry.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-rewinder.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/those-who-remain.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/turnip-boy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/wolfenstein-3d.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      }
+    ],
+    "inventory": [
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/chants-of-sennaar.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/upper/right/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/1/styles/default/faceImage/value"
+      }
+    ],
+    "jump": [
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/close-to-the-sun.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/pullIndicator/0/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/egging-on.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/inside.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/limbo.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/sonic-mania.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      }
+    ],
+    "leftBumper": [
+      {
+        "file": "touch-layouts/layouts/fifa.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/left/outer/0/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/left/outer/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/layers/selectAbility/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/knob/faceImage/value"
+      }
+    ],
+    "leftTrigger": [
+      {
+        "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/go-mecha-ball.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/left/outer/5/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/left/outer/4/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/left/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/1/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/left/outer/6/styles/default/knob/faceImage/value"
+      }
+    ],
+    "lightPunch": [
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      }
+    ],
+    "lightPunch3": [
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/pullIndicator/1/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/pullIndicator/2/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/pullIndicator/2/faceImage/value"
+      }
+    ],
+    "look": [
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/botany-manor.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/egging-on.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "lookBehind": [
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/0/styles/default/faceImage/value"
+      }
+    ],
+    "lookBehind2": [
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/lower/center/styles/default/faceImage/value"
+      }
+    ],
+    "map": [
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-1993.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "joystick",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "touchpad",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "joystick",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-ii-classic.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      }
+    ],
+    "medical": [
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "move": [
+      {
+        "file": "touch-layouts/layouts/egging-on.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "notebook": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/chants-of-sennaar.json",
+        "layout": "custom",
+        "path": "/content/right/outer/7/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      }
+    ],
+    "phone": [
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/upper/right/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/left/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/harold-halibut.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      }
+    ],
+    "punch": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      }
+    ],
+    "radio": [
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-1.json",
+        "layout": "custom",
+        "path": "/content/lower/leftCenter/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+        "layout": "custom",
+        "path": "/content/lower/leftCenter/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/lower/leftCenter/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs2",
+        "path": "/content/lower/leftCenter/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/lower/leftCenter/0/styles/default/faceImage/value"
+      }
+    ],
+    "reload": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      }
+    ],
+    "repeatRefresh": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/outer/4/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/outer/5/0/styles/default/faceImage/value"
+      }
+    ],
+    "reset": [
+      {
+        "file": "touch-layouts/layouts/arcade-paradise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      }
+    ],
+    "rewind": [
+      {
+        "file": "touch-layouts/layouts/obra-dinn.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "rightBumper": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/fifa.json",
+        "layout": "custom",
+        "path": "/content/left/outer/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+      }
+    ],
+    "rightTrigger": [
+      {
+        "file": "touch-layouts/layouts/fifa.json",
+        "layout": "custom",
+        "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/go-mecha-ball.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/outer/1/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/pullIndicator/3/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/knob/faceImage/value"
+      }
+    ],
+    "roll": [
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/turnip-boy.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/0/styles/default/faceImage/value"
+      }
+    ],
+    "run": [
+      {
+        "file": "touch-layouts/layouts/close-to-the-sun.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/harold-halibut.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/poppy-playtime.json",
+        "layout": "custom",
+        "path": "/content/left/outer/4/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-2.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/3/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-3.json",
+        "layout": "type-a",
+        "path": "/content/right/outer/2/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/those-who-remain.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      }
+    ],
+    "sprint": [
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-3.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/left/outer/3/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/left/outer/3/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "alternative",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil.json",
+        "layout": "custom",
+        "path": "/content/layers/selectAbility/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-exit-8.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-quarry.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/activated/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/wolfenstein-3d.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/1/styles/default/faceImage/value"
+      }
+    ],
+    "steering": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "stopwatch": [
+      {
+        "file": "touch-layouts/layouts/007-first-light.json",
+        "layout": "custom",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "subtract": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      }
+    ],
+    "surf": [
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "switchCamera": [
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1",
+        "path": "/content/left/outer/2/1/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/forza.json",
+        "layout": "layout-1-throttle-pedal",
+        "path": "/content/left/outer/2/1/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-4.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-de.json",
+        "layout": "custom",
+        "path": "/content/upper/right/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-v.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gta-vi.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+        "layout": "custom",
+        "path": "/content/upper/right/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+        "layout": "mgs3",
+        "path": "/content/upper/right/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/1/styles/default/faceImage/value"
+      }
+    ],
+    "sword": [
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      }
+    ],
+    "throw": [
+      {
+        "file": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/those-who-remain.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      }
+    ],
+    "undo": [
+      {
+        "file": "touch-layouts/layouts/shredders.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      }
+    ],
+    "walk": [
+      {
+        "file": "touch-layouts/layouts/alan-wake-2.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-1993.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "touchpad",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-64.json",
+        "layout": "joystick",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "touchpad",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-doom-ii.json",
+        "layout": "joystick",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/doom-ii-classic.json",
+        "layout": "custom",
+        "path": "/content/right/outer/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/harold-halibut.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/hogwarts-legacy.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/la-noire.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/little-kitty-big-city.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+        "layout": "type-a-1",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-7.json",
+        "layout": "default",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-requiem.json",
+        "layout": "default",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/resident-evil-village.json",
+        "layout": "default",
+        "path": "/content/left/outer/3/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/roboquest.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/shenmue-1-and-2.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/silent-hill-2.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/south-of-midnight.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-exit-8.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/the-quarry.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-rise.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+        "layout": "custom",
+        "path": "/content/left/inner/0/styles/default/knob/faceImage/value"
+      }
+    ],
+    "waypoint": [
+      {
+        "file": "touch-layouts/layouts/plateup.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      }
+    ],
+    "weaponSelect": [
+      {
+        "file": "touch-layouts/layouts/conker-live-and-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/cyberpunk-2077.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/go-mecha-ball.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+        "layout": "default",
+        "path": "/content/right/outer/3/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "rightstick",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/halo-infinite.json",
+        "layout": "relativemouse",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/high-on-life.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/palworld.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark-zero.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/perfect-dark.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/quake.json",
+        "layout": "custom",
+        "path": "/content/left/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/red-dead-redemption.json",
+        "layout": "custom",
+        "path": "/content/right/outer/5/0/styles/default/knob/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/robocop-rogue-city.json",
+        "layout": "custom",
+        "path": "/content/right/outer/4/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/wolfenstein-3d.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/wolfenstein-3d.json",
+        "layout": "custom",
+        "path": "/content/right/outer/1/styles/default/faceImage/value"
+      }
+    ],
+    "zoomIn": [
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/egging-on.json",
+        "layout": "custom",
+        "path": "/content/right/outer/0/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+        "layout": "custom",
+        "path": "/content/right/outer/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+        "layout": "custom",
+        "path": "/content/upper/right/2/styles/default/faceImage/value"
+      }
+    ],
+    "zoomOut": [
+      {
+        "file": "touch-layouts/layouts/choo-choo-charles.json",
+        "layout": "custom",
+        "path": "/content/upper/right/3/styles/default/faceImage/value"
+      },
+      {
+        "file": "touch-layouts/layouts/egging-on.json",
+        "layout": "custom",
+        "path": "/content/right/outer/6/styles/default/faceImage/value"
+      }
+    ]
+  },
+  "implicitStrokeTypes": [
+    {
+      "file": "touch-layouts/layouts/007-first-light.json",
+      "layout": "custom",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/007-first-light.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/alan-wake-2.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/1/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/fifa.json",
+      "layout": "custom",
+      "path": "/content/left/outer/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/fifa.json",
+      "layout": "custom",
+      "path": "/content/left/outer/1/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/fifa.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/forza.json",
+      "layout": "layout-1",
+      "path": "/content/left/outer/2/1/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/forza.json",
+      "layout": "layout-1-throttle-pedal",
+      "path": "/content/left/outer/2/1/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gears-of-war-reloaded.json",
+      "layout": "custom",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-4.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-4.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-de.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-de.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-v.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-v.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-vi.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/gta-vi.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/halo-campaign-evolved.json",
+      "layout": "default",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/halo-infinite.json",
+      "layout": "rightstick",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/halo-infinite.json",
+      "layout": "relativemouse",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/hogwarts-legacy.json",
+      "layout": "custom",
+      "path": "/content/left/outer/0/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/hogwarts-legacy.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/la-noire.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-2.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-3.json",
+      "layout": "custom",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "layout": "mgs2",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "layout": "mgs3",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/palworld.json",
+      "layout": "custom",
+      "path": "/content/left/outer/1/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/palworld.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/palworld.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/palworld.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/quake.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "layout": "custom",
+      "path": "/content/right/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "layout": "custom",
+      "path": "/content/right/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/red-dead-redemption.json",
+      "layout": "custom",
+      "path": "/content/right/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-2.json",
+      "layout": "type-a",
+      "path": "/content/left/outer/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-2.json",
+      "layout": "type-a",
+      "path": "/content/left/outer/1/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-3.json",
+      "layout": "type-a",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+      "layout": "type-a-1",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-4-remake.json",
+      "layout": "type-a-1",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-7.json",
+      "layout": "default",
+      "path": "/content/left/outer/4/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-7.json",
+      "layout": "alternative",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-requiem.json",
+      "layout": "default",
+      "path": "/content/left/outer/3/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-requiem.json",
+      "layout": "default",
+      "path": "/content/left/outer/4/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-village.json",
+      "layout": "default",
+      "path": "/content/left/outer/4/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil-village.json",
+      "layout": "alternative",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/resident-evil.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/robocop-rogue-city.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/0/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/roboquest.json",
+      "layout": "custom",
+      "path": "/content/left/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/silent-hill-2.json",
+      "layout": "custom",
+      "path": "/content/left/outer/4/1/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-rise.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-rise.json",
+      "layout": "custom",
+      "path": "/content/right/outer/4/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-rise.json",
+      "layout": "custom",
+      "path": "/content/right/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "layout": "custom",
+      "path": "/content/left/outer/6/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "layout": "custom",
+      "path": "/content/right/outer/4/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    },
+    {
+      "file": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "layout": "custom",
+      "path": "/content/right/outer/5/styles/default/knob/stroke",
+      "fields": [
+        "opacity"
+      ]
+    }
+  ],
+  "nonBooleanControlProperties": [
+    {
+      "file": "touch-layouts/layouts/wolfenstein-3d.json",
+      "layout": "custom",
+      "path": "/content/right/outer/2/1/toggle",
+      "value": "true"
+    }
+  ],
+  "invalidSources": [
+    {
+      "file": "touch-layouts/ids.json",
+      "kind": "invalid-json-source",
+      "error": "Expecting ',' delimiter: line 4 column 3 (char 39)"
+    }
+  ]
+}

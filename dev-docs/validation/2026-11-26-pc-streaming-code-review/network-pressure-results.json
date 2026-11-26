@@ -1,0 +1,8 @@
+{
+  "zeroLossRttGrowth": "stable",
+  "lowLossRttGrowth": "stable",
+  "highLossRttGrowth": "congested",
+  "baselineRttMs": 30,
+  "currentRttMs": 180,
+  "assertions": 3
+}

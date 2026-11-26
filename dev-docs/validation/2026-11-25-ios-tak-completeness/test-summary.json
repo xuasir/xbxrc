@@ -1,0 +1,30 @@
+{
+  "result": "Passed",
+  "uniqueTests": 9,
+  "unitTests": 8,
+  "uiTests": 1,
+  "rustTests": 36,
+  "device": {
+    "architecture": "arm64",
+    "deviceId": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "deviceName": "iPhone 18 Pro",
+    "modelName": "iPhone 18 Pro",
+    "osBuildNumber": "24B8117",
+    "osVersion": "27.2",
+    "platform": "iOS Simulator"
+  },
+  "passesFrom": [
+    "final-smoke-summary.json: 8 passed",
+    "icon-smoke-summary.json: 1 passed"
+  ],
+  "failedTestFollowup": "唯一图标失败项补上剑、镐、拳头本地向量后通过；其余8项保持上轮通过证据",
+  "checks": {
+    "cargoFmt": "Passed",
+    "swiftFormatFiles": 15,
+    "swiftFormat": "Passed",
+    "pnpmLintFix": "Passed",
+    "streamingBoundary": "Passed",
+    "gitDiffCheck": "Passed"
+  },
+  "screenshots": 3
+}

@@ -1,0 +1,14 @@
+{
+  "docs/project-task.md": "a4509679a67878f3452d2aa2c039852bb7c6d23ec4c787d47b5ba99fe9086d45",
+  "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift": "c1803fccc7b8ef4bec50cd11075ff26d44521422026bdb3cbfe08af8b923fc5e",
+  "iosapp/XBXRC/App/PCPageUITestFixtures.swift": "f870c440bc88cea45470d0e98119533004b5b8b3a934be0a73c511b19f453595",
+  "iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift": "89d59fd3ac6abe7293e21356c04b4b1cab57a1d06fe11576ca3a215b198701e2",
+  "iosapp/XBXRC/Features/Library/GameDetailView.swift": "13dfc142fa820bd15a622bc629f0667bb4bf923b915b845677e16390258283dd",
+  "iosapp/XBXRC/Features/Profile/PersonalGameViews.swift": "dcdf7f49bd1ac9d53c6095285f6fc8c8d9af2bd2d0fec71d413e6b84da6d2733",
+  "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift": "378b684630c59c529f0c0988ab1d8970c841c477e6e7387e5de5774358932fc3",
+  "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift": "fab8d332c4eb6c92efac077536980541103be2bb4c72e29fad7200680d8904f6",
+  "iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift": "d3290ad2464e52a56991851947b084c20b7fbac7c04e93254df3f46628cf7d77",
+  "iosapp/XBXRC/Shared/Models/CloudLibraryGame.swift": "0da3f149327a0e528c454206e88639103dc55541d6e543d64e85beedba53b4c9",
+  "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift": "ae48efd92c22b51b3a766bc051262e9b5d4b1fd72c94663f938a4018dbfd85d7",
+  "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift": "de627bc7ca23090abe5ec1435cb61c0b7f9db8ff7846ea24c099f2be8a5d43d2"
+}

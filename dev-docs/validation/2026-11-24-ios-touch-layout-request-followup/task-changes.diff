@@ -1,0 +1,749 @@
+diff --git a/docs/project-task.md b/docs/project-task.md
+index 07aafaae..92d736e3 100644
+--- a/docs/project-task.md
++++ b/docs/project-task.md
+@@ -8,6 +8,7 @@
+ 
+ | ID | Task | Status | Started On | Notes |
+ | --- | --- | --- | --- | --- |
++| 2026-11-24-ios-touch-layout-request-followup | 修复布局查询授权阻断并补齐安装游戏详情入口 | Validation Pending | 2026-11-24 | simple接续；官方按需授权、社区查询/下载独立，来源取消与认证失败可见重试；真实商品ID及完整/商品身份两条安装详情共用入口。2项请求回归+1项UI冒烟通过，4图与原始诊断锚点归档；临时清理见证据。真实官方回包/Home实机待验。[证据](../dev-docs/validation/2026-11-24-ios-touch-layout-request-followup/README.md)。 |
+ | 2026-11-24-ios-media-half-panels | 相册保存进度、原生小窗视频与串流局部浮层 | Done | 2026-11-24 | simple；1/3屏下载浮窗、右上取消与手势保护，视频左右贴边/原生全屏及底栏避让；画面调节贴底半屏，诊断2/3屏，窄栏与布局选择半屏上限。相册/串流各1项定向UI冒烟、语法/格式/diff通过；8张最终截图与1张失败诊断归档，4处临时源码恢复，清理1333.97MiB。[证据](../dev-docs/validation/2026-11-24-ios-media-half-panels/README.md)。 |
+ | 2026-11-24-ios-pc-http-behavior-parity | 以 PC 为蓝本对齐 iOS 接口调用、返回与异常处理 P0–P2 | Validation Pending | 2026-11-24 | complex；P0/P1/P2代码与自动验收完成：Query事实、主机容器/预算、Cloud目标401单次恢复、15秒冷却/重新激活、24h/7d/30槽详情缓存、取消与相册校验。Rust200、Swift42唯一场景、iPhoneOS/绑定复现通过，暂存指纹保留；实机主机/Cloud401/相册待用户，原生连接预算保留平台差异。[RFC](rfcs/2026-11-24-ios-pc-http-behavior-parity.md) / [Report](reports/2026-11-24-ios-pc-http-behavior-parity.md) / [证据](../dev-docs/validation/2026-11-24-ios-pc-http-behavior-parity/README.md)。 |
+ | 2026-11-24-ios-stream-quick-autohide | 串流快捷按钮自动隐藏与空白单击唤回 | Done | 2026-11-24 | simple；两个44pt快捷入口沿5秒计时共同隐藏，横竖屏空白单击共同唤回，虚拟手柄触点分流与双指菜单沿用，布局加载暂停计时。Simulator构建、状态/原生命中/UI三项定向冒烟及格式/diff通过，3张最终截图归档；临时探针恢复，清理572.39MiB。[证据](../dev-docs/validation/2026-11-24-ios-stream-quick-autohide/README.md)。 |
+diff --git a/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift b/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift
+index 9dc1a07a..3946ba92 100644
+--- a/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift
++++ b/iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift
+@@ -106,7 +106,10 @@
+             self.empty = empty
+             self.mixedSources = mixedSources
+         }
+-        func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String)
++        func catalog(
++            game: CloudLibraryGame, serverRegion: String,
++            prepareAccess: @escaping TouchLayoutAccessProvider
++        )
+             async throws -> OfficialTouchCatalog
+         {
+             if failOnce {
+@@ -127,15 +130,15 @@
+                         manifestVersion: "1.0", layoutVersion: "4.1")
+                 }
+                 return .init(
+-                    titleID: game.xboxTitleID ?? "1", bundles: choices,
++                    titleID: source.game.xboxTitleID ?? "1", bundles: choices,
+                     sources: [
+                         .init(
+-                            source: .official, bundles: [], failure: .init(kind: .invalidResponse)),
++                            source: .official, bundles: [], failure: .init(kind: .authentication)),
+                         .init(source: .community, bundles: choices, failure: nil),
+                     ])
+             }
+             return .init(
+-                titleID: game.xboxTitleID ?? "1",
++                titleID: source.game.xboxTitleID ?? "1",
+                 bundles: empty
+                     ? []
+                     : [
+@@ -145,8 +148,8 @@
+                     ])
+         }
+         func download(
+-            accessHandle: String, titleID: String, bundleID: String, game: CloudLibraryGame,
+-            locale: String, displayScale: Double
++            titleID: String, bundleID: String, game: CloudLibraryGame,
++            locale: String, displayScale: Double, prepareAccess: @escaping TouchLayoutAccessProvider
+         ) async throws -> any OfficialTouchBundleProviding {
+             guard let bundle = bundles.first(where: { $0.bundleID == bundleID }) else {
+                 throw TouchLayoutError.invalid("夹具包暂缺")
+diff --git a/iosapp/XBXRC/App/PCPageUITestFixtures.swift b/iosapp/XBXRC/App/PCPageUITestFixtures.swift
+index 5c8ddcbf..f4f41a45 100644
+--- a/iosapp/XBXRC/App/PCPageUITestFixtures.swift
++++ b/iosapp/XBXRC/App/PCPageUITestFixtures.swift
+@@ -194,7 +194,12 @@
+                 consoleID: consoleID,
+                 games: PCPageFixtures.games.enumerated().map { index, game in
+                     XboxInstalledGameSummary(
+-                        id: game.id, titleID: game.titleID, productID: game.productID,
++                        id: game.id,
++                        titleID: index == 1
++                            && ProcessInfo.processInfo.arguments.contains(
++                                "--installed-product-only-ui-test")
++                            ? nil : game.titleID,
++                        productID: game.productID,
+                         name: game.name, artworkURL: nil,
+                         storageDeviceID: index == 2 ? "external" : "internal",
+                         sizeBytes: UInt64(100_000_000 * (index + 1)),
+@@ -290,7 +295,7 @@
+                 ?? PCPageFixtures.cloudGames()[0]
+             return CloudProductDetails(
+                 productID: productID, name: game.name, publisherName: game.publisherName,
+-        description: game.description ?? "完整云游戏商品资料",
++                description: game.description ?? "完整云游戏商品资料",
+                 tileURL: nil, posterURL: nil, heroURL: nil, categories: game.categories,
+                 developer: "Xbox Game Studios",
+                 releaseDate: "2025-01-01", rating: "12+", attributes: ["单人游戏", "在线多人"],
+diff --git a/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift b/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift
+index e8224da6..252f2380 100644
+--- a/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift
++++ b/iosapp/XBXRC/Features/Hosts/HostInstalledGamesView.swift
+@@ -157,6 +157,18 @@ struct HostInstalledGamesView: View {
+                     } footer: {
+                         Text("连接后进入主机界面，选择此游戏开始游玩。")
+                     }
++                    if let productID = game.productID {
++                        Section {
++                            GameTouchLayoutsLink(
++                                game: CloudLibraryGame(
++                                    gameSummary: GameSummary(
++                                        id: game.id, titleID: "", name: detail?.name ?? game.name,
++                                        artworkURL: artwork(for: game),
++                                        lastPlayedAt: game.lastPlayedAt, playtimeMinutes: nil,
++                                        achievementProgress: nil, productID: productID)),
++                                identifier: "installed-official-touch-layouts")
++                        }
++                    }
+                     if let description = detail?.description, !description.isEmpty {
+                         Section("游戏简介") {
+                             Text(description).appFont(.body)
+@@ -249,7 +261,7 @@ struct HostInstalledGamesView: View {
+ 
+     private var startButton: some View {
+         HostStreamButton(host: host, action: startHost)
+-        .accessibilityIdentifier("installed-start-stream")
++            .accessibilityIdentifier("installed-start-stream")
+     }
+ 
+     private var storageOverview: some View {
+diff --git a/iosapp/XBXRC/Features/Library/GameDetailView.swift b/iosapp/XBXRC/Features/Library/GameDetailView.swift
+index f41f63d7..7426a15b 100644
+--- a/iosapp/XBXRC/Features/Library/GameDetailView.swift
++++ b/iosapp/XBXRC/Features/Library/GameDetailView.swift
+@@ -7,7 +7,6 @@ struct GameDetailView: View {
+   @EnvironmentObject private var streamingStore: StreamingFeatureStore
+   @EnvironmentObject private var settings: AppSettingsStore
+   @EnvironmentObject private var favorites: CloudFavoritesStore
+-  @EnvironmentObject private var touchLayouts: SavedTouchLayoutsStore
+   @Environment(\.appPageIsActive) private var isActive
+   @Environment(\.locale) private var locale
+   private let initialGame: CloudLibraryGame
+@@ -176,26 +175,7 @@ struct GameDetailView: View {
+   }
+ 
+   private var touchLayoutsSection: some View {
+-    NavigationLink {
+-      OfficialTouchLayoutsView(game: game)
+-    } label: {
+-      HStack(spacing: 12) {
+-        AppIconView(.touch).foregroundStyle(AppThemePalette.brand)
+-        VStack(alignment: .leading, spacing: 4) {
+-          Text("查看游戏布局").appFont(.body, weight: .semibold)
+-          Text("保存游戏适配布局，用于 Home 串流")
+-            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
+-          if touchLayouts.layouts.contains(where: { $0.productId == game.productID }) {
+-            Text("已保存到本机").appFont(.caption).foregroundStyle(AppThemePalette.brand)
+-          }
+-        }
+-        Spacer(minLength: 8)
+-        AppIconView(.chevron, size: 16).foregroundStyle(AppThemePalette.brand)
+-      }
+-      .padding(16).frame(minHeight: 44).contentShape(Rectangle())
+-      .appSurface(radius: AppLayoutPolicy.cardRadius)
+-    }
+-    .buttonStyle(.plain).accessibilityIdentifier("cloud-official-touch-layouts")
++    GameTouchLayoutsLink(game: game, identifier: "cloud-official-touch-layouts")
+   }
+ 
+   private var recordState: XboxSingleDataState<GameSummary> {
+diff --git a/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift b/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
+index 0eb764c9..e3cf3577 100644
+--- a/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
++++ b/iosapp/XBXRC/Features/Profile/PersonalGameViews.swift
+@@ -413,6 +413,13 @@ struct PersonalGameDetailView: View {
+ 
+   private var overview: some View {
+     AppInformationPage {
++      if installedGame != nil {
++        Section {
++          GameTouchLayoutsLink(
++            game: CloudLibraryGame(gameSummary: game),
++            identifier: "installed-official-touch-layouts")
++        }
++      }
+       Section {
+         if let productID {
+           AppSectionRequestState(
+diff --git a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+index cc13da49..2151ea95 100644
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift
+@@ -1,5 +1,34 @@
+ import SwiftUI
+ 
++struct GameTouchLayoutsLink: View {
++    let game: CloudLibraryGame
++    let identifier: String
++    @EnvironmentObject private var library: SavedTouchLayoutsStore
++
++    var body: some View {
++        NavigationLink {
++            OfficialTouchLayoutsView(game: game)
++        } label: {
++            HStack(spacing: 12) {
++                AppIconView(.touch).foregroundStyle(AppThemePalette.brand)
++                VStack(alignment: .leading, spacing: 4) {
++                    Text("查看游戏布局").appFont(.body, weight: .semibold)
++                    Text("保存游戏适配布局，用于 Home 串流")
++                        .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
++                    if library.layouts.contains(where: { $0.productId == game.productID }) {
++                        Text("已保存到本机").appFont(.caption).foregroundStyle(AppThemePalette.brand)
++                    }
++                }
++                Spacer(minLength: 8)
++                AppIconView(.chevron, size: 16).foregroundStyle(AppThemePalette.brand)
++            }
++            .padding(16).frame(minHeight: 44).contentShape(Rectangle())
++            .appSurface(radius: AppLayoutPolicy.cardRadius)
++        }
++        .buttonStyle(.plain).accessibilityIdentifier(identifier)
++    }
++}
++
+ struct OfficialTouchLayoutsView: View {
+     let game: CloudLibraryGame
+     @EnvironmentObject private var auth: AuthStore
+@@ -79,20 +108,18 @@ struct OfficialTouchLayoutsView: View {
+         let game = game
+         let region = settings.mobile.cloudServerRegion
+         do {
+-            let result = try await cloud.withCloudAccess(
++            let result = try await client.catalog(
++                game: game, serverRegion: region,
+                 prepareAccess: {
+-                    try await auth.prepareCloudAccess()
+-                },
+-                operation: {
+-                    try await client.catalog(
+-                        accessHandle: $0.handle, game: game, serverRegion: region)
++                    try await cloud.withCloudAccess(
++                        prepareAccess: { try await auth.prepareCloudAccess() },
++                        operation: { $0 })
+                 })
+             try Task.checkCancellation()
+             guard request == queryIdentity else { return }
+             catalog = result
+         } catch {
+-            guard request == queryIdentity, !SectionRequestFailure.isCancellation(error),
+-                !Task.isCancelled
++            guard request == queryIdentity, !Task.isCancelled
+             else { return }
+             queryError = SectionRequestFailure(error: error)
+         }
+@@ -161,20 +188,20 @@ private struct GameTouchBundleCards: View {
+         let language = locale.identifier.replacingOccurrences(of: "_", with: "-")
+         let scale = Double(displayScale)
+         do {
+-            let result = try await cloud.withCloudAccess(
+-                prepareAccess: { try await auth.prepareCloudAccess() },
+-                operation: {
+-                    try await client.download(
+-                        accessHandle: $0.handle, titleID: titleID, bundleID: bundleID, game: game,
+-                        locale: language, displayScale: scale)
++            let result = try await client.download(
++                titleID: titleID, bundleID: bundleID, game: game,
++                locale: language, displayScale: scale,
++                prepareAccess: {
++                    try await cloud.withCloudAccess(
++                        prepareAccess: { try await auth.prepareCloudAccess() },
++                        operation: { $0 })
+                 })
+             try Task.checkCancellation()
+             guard request == requestIdentity, owner == auth.ownerGeneration else { return }
+             bundle = result
+             bundleOwner = owner
+         } catch {
+-            guard request == requestIdentity, !SectionRequestFailure.isCancellation(error),
+-                !Task.isCancelled
++            guard request == requestIdentity, !Task.isCancelled
+             else { return }
+             self.error = SectionRequestFailure(error: error)
+         }
+@@ -346,7 +373,7 @@ private struct GameTouchRequestFailure: View {
+     var body: some View {
+         AppSectionRequestState(
+             title: title, status: SectionRequestStatus(phase: .failed, failure: error),
+-            identifier: identifier
++            identifier: identifier, showsAuthenticationFailure: true
+         ) { retry() }
+     }
+ }
+diff --git a/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift b/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
+index ddcf4f0a..59c25c55 100644
+--- a/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
++++ b/iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift
+@@ -1,11 +1,16 @@
+ import Foundation
+ 
++typealias TouchLayoutAccessProvider = @MainActor @Sendable () async throws -> PreparedCloudAccess
++
+ protocol XboxTouchLayoutClient: Sendable {
+-    func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String) async throws
++    func catalog(
++        game: CloudLibraryGame, serverRegion: String,
++        prepareAccess: @escaping TouchLayoutAccessProvider
++    ) async throws
+         -> OfficialTouchCatalog
+     func download(
+-        accessHandle: String, titleID: String, bundleID: String, game: CloudLibraryGame,
+-        locale: String, displayScale: Double
++        titleID: String, bundleID: String, game: CloudLibraryGame,
++        locale: String, displayScale: Double, prepareAccess: @escaping TouchLayoutAccessProvider
+     ) async throws -> any OfficialTouchBundleProviding
+     func savedLayouts() async throws -> [XboxSavedTouchLayout]
+     func save(bundle: any OfficialTouchBundleProviding, layoutID: String) async throws
+@@ -24,14 +29,57 @@ struct RustOfficialTouchBundle: OfficialTouchBundleProviding {
+     }
+ }
+ 
++/// 请求继续交给公共 Rust API；来源调度允许公共资源独立于 Cloud 授权完成。
++struct TouchLayoutRemoteRequests: Sendable {
++    var resolveTitle: @Sendable (String, String, String) async throws -> String?
++    var officialCatalog:
++        @Sendable (String, String, String) async throws -> [XboxOfficialTouchBundleChoice]
++    var communityCatalog: @Sendable (String, String) async throws -> [XboxOfficialTouchBundleChoice]
++    var download:
++        @Sendable (String?, String, String, CloudLibraryGame, String, Double) async throws
++            -> any OfficialTouchBundleProviding
++
++    static let rust = Self(
++        resolveTitle: { handle, productID, region in
++            try await resolveCloudGame(
++                accessHandle: handle, productId: productID, serverRegion: region, startup: nil
++            )?.xboxTitleId
++        },
++        officialCatalog: { handle, titleID, productID in
++            try await fetchOfficialTouchBundles(
++                accessHandle: handle, xboxTitleId: titleID, productId: productID)
++        },
++        communityCatalog: { titleID, productID in
++            try await fetchCommunityTouchBundles(xboxTitleId: titleID, productId: productID)
++        },
++        download: { handle, titleID, bundleID, game, locale, scale in
++            let bundle: XboxOfficialTouchBundle
++            if GameTouchLayoutSource.identify(bundleID) == .community {
++                bundle = try await fetchCommunityTouchBundle(
++                    xboxTitleId: titleID, bundleId: bundleID, productId: game.productID,
++                    gameName: game.name, locale: locale, displayScale: scale)
++            } else {
++                guard let handle else { throw AuthStoreError.signedOut }
++                bundle = try await fetchOfficialTouchBundle(
++                    accessHandle: handle, xboxTitleId: titleID, bundleId: bundleID,
++                    productId: game.productID, gameName: game.name, locale: locale,
++                    displayScale: scale)
++            }
++            return RustOfficialTouchBundle(bundle: bundle)
++        })
++}
++
+ actor RustXboxTouchLayoutClient: XboxTouchLayoutClient {
+     private let rootDirectory: URL
++    private let requests: TouchLayoutRemoteRequests
+     private var library: XboxTouchLayoutLibrary?
+ 
+     init(
+-        rootDirectory: URL = URL.applicationSupportDirectory.appendingPathComponent("TouchLayouts")
++        rootDirectory: URL = URL.applicationSupportDirectory.appendingPathComponent("TouchLayouts"),
++        requests: TouchLayoutRemoteRequests = .rust
+     ) {
+         self.rootDirectory = rootDirectory
++        self.requests = requests
+     }
+ 
+     private func openLibrary() throws -> XboxTouchLayoutLibrary {
+@@ -41,7 +89,10 @@ actor RustXboxTouchLayoutClient: XboxTouchLayoutClient {
+         return opened
+     }
+ 
+-    func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String) async throws
++    func catalog(
++        game: CloudLibraryGame, serverRegion: String,
++        prepareAccess: @escaping TouchLayoutAccessProvider
++    ) async throws
+         -> OfficialTouchCatalog
+     {
+         let operationID = UUID().uuidString
+@@ -52,25 +103,37 @@ actor RustXboxTouchLayoutClient: XboxTouchLayoutClient {
+             dimension: .core, importance: .key, operationID: operationID)
+         do {
+             let titleID: String
++            var resolvedAccess: PreparedCloudAccess?
+             if let known = game.xboxTitleID, !known.isEmpty {
+                 titleID = known
+-            } else if let resolved = try await resolveCloudGame(
+-                accessHandle: accessHandle, productId: game.productID, serverRegion: serverRegion,
+-                startup: nil), let identity = resolved.xboxTitleId, !identity.isEmpty
+-            {
+-                titleID = identity
+             } else {
+-                throw TouchLayoutError.invalid("此游戏的 Xbox 身份暂缺")
++                stage = "titleIdentityAccess"
++                let access = try await prepareAccess()
++                resolvedAccess = access
++                stage = "titleIdentity"
++                guard
++                    let identity = try await requests.resolveTitle(
++                        access.handle, game.productID, serverRegion), !identity.isEmpty
++                else { throw TouchLayoutError.invalid("此游戏的 Xbox 身份暂缺") }
++                titleID = identity
+             }
+             try Task.checkCancellation()
+-            stage = "cloudTitleDetails"
+-            async let official = Self.catalogSource(.official) {
+-                try await fetchOfficialTouchBundles(
+-                    accessHandle: accessHandle, xboxTitleId: titleID, productId: game.productID)
+-            }
+-            async let community = Self.catalogSource(.community) {
+-                try await fetchCommunityTouchBundles(
+-                    xboxTitleId: titleID, productId: game.productID)
++            stage = "catalogSources"
++            let requests = requests
++            let initialAccess = resolvedAccess
++            async let official = Self.catalogSource(
++                .official,
++                prepareAccess: {
++                    if let initialAccess { return initialAccess }
++                    return try await prepareAccess()
++                },
++                operation: { handle in
++                    guard let handle else { throw AuthStoreError.signedOut }
++                    return try await requests.officialCatalog(handle, titleID, game.productID)
++                }
++            )
++            async let community = Self.catalogSource(.community, prepareAccess: nil) { _ in
++                try await requests.communityCatalog(titleID, game.productID)
+             }
+             let sources = try await [official, community]
+             let bundles = sources.flatMap(\.bundles)
+@@ -98,15 +161,26 @@ actor RustXboxTouchLayoutClient: XboxTouchLayoutClient {
+ 
+     private static func catalogSource(
+         _ source: GameTouchLayoutSource,
+-        operation: @Sendable () async throws -> [XboxOfficialTouchBundleChoice]
++        prepareAccess: TouchLayoutAccessProvider?,
++        operation: @Sendable (String?) async throws -> [XboxOfficialTouchBundleChoice]
+     ) async throws -> TouchCatalogSourceResult {
+         let operationID = UUID().uuidString
++        var stage = "catalog"
+         IOSRuntimeTrace.event(
+             domain: "touch-layouts", event: "touchCatalogSourceStarted",
+             payload: ["source": .string(source.rawValue)],
+             dimension: .core, importance: .key, operationID: operationID)
+         do {
+-            let bundles = try await operation()
++            let handle: String?
++            if let prepareAccess {
++                stage = "cloudAccess"
++                handle = try await prepareAccess().handle
++            } else {
++                handle = nil
++            }
++            try Task.checkCancellation()
++            stage = "catalog"
++            let bundles = try await operation(handle)
+             try Task.checkCancellation()
+             IOSRuntimeTrace.event(
+                 domain: "touch-layouts", event: "touchCatalogSourceSucceeded",
+@@ -122,29 +196,53 @@ actor RustXboxTouchLayoutClient: XboxTouchLayoutClient {
+                 event: SectionRequestFailure.isCancellation(error)
+                     ? "touchCatalogSourceCancelled" : "touchCatalogSourceFailed",
+                 payload: CloudLibraryDiagnostics.errorPayload(
+-                    error, extra: ["source": .string(source.rawValue)]),
++                    error, extra: ["source": .string(source.rawValue), "stage": .string(stage)]),
+                 dimension: .core, importance: .key, operationID: operationID)
+-            if SectionRequestFailure.isCancellation(error) { throw error }
++            // 页面任务仍有效时，单个授权等待者的取消只影响该来源。
++            if Task.isCancelled { throw error }
+             return .init(source: source, bundles: [], failure: SectionRequestFailure(error: error))
+         }
+     }
+ 
+     func download(
+-        accessHandle: String, titleID: String, bundleID: String, game: CloudLibraryGame,
+-        locale: String, displayScale: Double
++        titleID: String, bundleID: String, game: CloudLibraryGame,
++        locale: String, displayScale: Double, prepareAccess: @escaping TouchLayoutAccessProvider
+     ) async throws -> any OfficialTouchBundleProviding {
+-        let bundle: XboxOfficialTouchBundle
+-        if GameTouchLayoutSource.identify(bundleID) == .community {
+-            bundle = try await fetchCommunityTouchBundle(
+-                xboxTitleId: titleID, bundleId: bundleID, productId: game.productID,
+-                gameName: game.name, locale: locale, displayScale: displayScale)
+-        } else {
+-            bundle = try await fetchOfficialTouchBundle(
+-                accessHandle: accessHandle, xboxTitleId: titleID, bundleId: bundleID,
+-                productId: game.productID, gameName: game.name, locale: locale,
+-                displayScale: displayScale)
++        let source = GameTouchLayoutSource.identify(bundleID)
++        let operationID = UUID().uuidString
++        var stage = "download"
++        IOSRuntimeTrace.event(
++            domain: "touch-layouts", event: "touchBundleDownloadStarted",
++            payload: ["source": .string(source.rawValue)],
++            dimension: .network, importance: .key, operationID: operationID)
++        do {
++            let handle: String?
++            if source == .official {
++                stage = "cloudAccess"
++                handle = try await prepareAccess().handle
++            } else {
++                handle = nil
++            }
++            try Task.checkCancellation()
++            stage = "download"
++            let bundle = try await requests.download(
++                handle, titleID, bundleID, game, locale, displayScale)
++            try Task.checkCancellation()
++            IOSRuntimeTrace.event(
++                domain: "touch-layouts", event: "touchBundleDownloadSucceeded",
++                payload: ["source": .string(source.rawValue)],
++                dimension: .network, importance: .key, operationID: operationID)
++            return bundle
++        } catch {
++            IOSRuntimeTrace.event(
++                domain: "touch-layouts",
++                event: SectionRequestFailure.isCancellation(error)
++                    ? "touchBundleDownloadCancelled" : "touchBundleDownloadFailed",
++                payload: CloudLibraryDiagnostics.errorPayload(
++                    error, extra: ["source": .string(source.rawValue), "stage": .string(stage)]),
++                dimension: .network, importance: .key, operationID: operationID)
++            throw error
+         }
+-        return RustOfficialTouchBundle(bundle: bundle)
+     }
+ 
+     func savedLayouts() async throws -> [XboxSavedTouchLayout] {
+diff --git a/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift b/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
+index eb1f6e4c..c285eef5 100644
+--- a/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
++++ b/iosapp/XBXRC/Shared/Components/AppSectionRequestState.swift
+@@ -7,6 +7,7 @@ struct AppSectionRequestState: View {
+     let title: String
+     let status: SectionRequestStatus
+     var identifier: String = "data"
++    var showsAuthenticationFailure = false
+     var action: (@MainActor () async -> Void)? = nil
+     @State private var running = false
+     @State private var retryClock = Date()
+@@ -14,7 +15,9 @@ struct AppSectionRequestState: View {
+ 
+     var body: some View {
+         Group {
+-            if let failure = status.failure, failure.kind != .authentication {
++            if let failure = status.failure,
++                failure.kind != .authentication || showsAuthenticationFailure
++            {
+                 if let action {
+                     Button {
+                         guard !running && !status.isBusy && !isPullRefreshing else { return }
+diff --git a/iosapp/XBXRC/Shared/Models/CloudLibraryGame.swift b/iosapp/XBXRC/Shared/Models/CloudLibraryGame.swift
+index ff2061c8..75825d31 100644
+--- a/iosapp/XBXRC/Shared/Models/CloudLibraryGame.swift
++++ b/iosapp/XBXRC/Shared/Models/CloudLibraryGame.swift
+@@ -114,7 +114,7 @@ struct CloudLibraryGame: Codable, Hashable, Identifiable, Sendable {
+     }
+ 
+     init(gameSummary game: GameSummary) {
+-        productID = game.id
++        productID = game.productID ?? game.id
+         streamTitleID = nil
+         xboxTitleID = game.titleID
+         name = game.name
+diff --git a/iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift b/iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift
+index d777fdc1..3372a2f9 100644
+--- a/iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift
++++ b/iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift
+@@ -6,6 +6,102 @@ import XCTest
+ 
+ @MainActor
+ final class SavedOfficialTouchLayoutTests: XCTestCase {
++  func testCommunityRequestsSurviveCloudAccessFailureAndCancellation() async throws {
++    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
++    XCTAssertEqual(game.productID, "HALO00000001")
++    let choice = XboxOfficialTouchBundleChoice(
++      id: "community:better-xcloud:fixture", tabVersion: "fixture",
++      manifestVersion: "1.0", layoutVersion: "4.1")
++    let snapshot = try Self.snapshot(id: "public-layout", action: "gamepadA")
++    for failure: any Error in [URLError(.timedOut), CancellationError()] {
++      let calls = TouchLayoutRemoteRequestLog()
++      let requests = TouchLayoutRemoteRequests(
++        resolveTitle: { _, _, _ in
++          await calls.record("resolve")
++          throw TouchLayoutError.invalid("已知标题应直接查询")
++        },
++        officialCatalog: { _, _, _ in
++          await calls.record("official")
++          return []
++        },
++        communityCatalog: { titleID, productID in
++          XCTAssertEqual(titleID, "1")
++          XCTAssertEqual(productID, "HALO00000001")
++          await calls.record("community")
++          return [choice]
++        },
++        download: { handle, _, _, _, _, _ in
++          XCTAssertNil(handle)
++          await calls.record("public-download")
++          return TouchLayoutTestBundle(snapshot: snapshot)
++        })
++      let client = RustXboxTouchLayoutClient(requests: requests)
++      let access: TouchLayoutAccessProvider = {
++        await calls.record("access")
++        throw failure
++      }
++      let catalog = try await client.catalog(
++        game: game, serverRegion: "auto", prepareAccess: access)
++      XCTAssertEqual(catalog.bundles.map(\.id), [choice.id])
++      XCTAssertNotNil(catalog.sources.first { $0.source == .official }?.failure)
++      XCTAssertNil(catalog.sources.first { $0.source == .community }?.failure)
++      let downloaded = try await client.download(
++        titleID: catalog.titleID, bundleID: choice.id, game: game,
++        locale: "zh-CN", displayScale: 2, prepareAccess: access)
++      XCTAssertEqual(downloaded.choices.first?.id, snapshot.id)
++      let events = await calls.values
++      XCTAssertEqual(events.filter { $0 == "access" }.count, 1)
++      XCTAssertEqual(events.filter { $0 == "community" }.count, 1)
++      XCTAssertEqual(events.filter { $0 == "public-download" }.count, 1)
++      XCTAssertFalse(events.contains("resolve"))
++      XCTAssertFalse(events.contains("official"))
++    }
++  }
++
++  func testResolvedTitleReusesPreparedAccessForOfficialCatalog() async throws {
++    let game = CloudLibraryGame(
++      gameSummary: GameSummary(
++        id: "installed", titleID: "", name: "Halo Infinite", artworkURL: nil,
++        lastPlayedAt: nil, playtimeMinutes: nil, achievementProgress: nil,
++        productID: "HALO00000001"))
++    let calls = TouchLayoutRemoteRequestLog()
++    let requests = TouchLayoutRemoteRequests(
++      resolveTitle: { handle, productID, _ in
++        XCTAssertFalse(handle.isEmpty)
++        XCTAssertEqual(productID, "HALO00000001")
++        await calls.record("resolve")
++        return "1"
++      },
++      officialCatalog: { handle, titleID, _ in
++        XCTAssertFalse(handle.isEmpty)
++        XCTAssertEqual(titleID, "1")
++        await calls.record("official")
++        return []
++      },
++      communityCatalog: { _, _ in
++        await calls.record("community")
++        return []
++      },
++      download: { _, _, _, _, _, _ in
++        throw TouchLayoutError.invalid("当前场景只查询目录")
++      })
++    let client = RustXboxTouchLayoutClient(requests: requests)
++    let result = try await client.catalog(
++      game: game, serverRegion: "auto",
++      prepareAccess: {
++        await calls.record("access")
++        return try await PCPageCloudClient().prepareAccess(
++          session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
++          authProvider: nil, startup: nil)
++      })
++    XCTAssertEqual(result.titleID, "1")
++    XCTAssertTrue(result.sources.allSatisfy { $0.failure == nil })
++    let events = await calls.values
++    for event in ["access", "resolve", "official", "community"] {
++      XCTAssertEqual(events.filter { $0 == event }.count, 1)
++    }
++  }
++
+   func testOfficialAssetIsDecodedAndDrawnWithOriginalPixels() async throws {
+     let png = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).pngData { context in
+       UIColor.red.setFill()
+@@ -440,6 +536,11 @@ final class SavedOfficialTouchLayoutTests: XCTestCase {
+   }
+ }
+ 
++private actor TouchLayoutRemoteRequestLog {
++  private(set) var values: [String] = []
++  func record(_ value: String) { values.append(value) }
++}
++
+ private struct TouchLayoutTestBundle: OfficialTouchBundleProviding {
+   let snapshot: XboxTouchLayoutSnapshot
+   var version: String { "1.0.0.0" }
+@@ -463,12 +564,15 @@ private actor TouchLayoutTestClient: XboxTouchLayoutClient {
+     self.items = items
+     self.snapshots = snapshots
+   }
+-  func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String) async throws
++  func catalog(
++    game: CloudLibraryGame, serverRegion: String,
++    prepareAccess: @escaping TouchLayoutAccessProvider
++  ) async throws
+     -> OfficialTouchCatalog
+   { throw TouchLayoutError.invalid("测试未提供目录") }
+   func download(
+-    accessHandle: String, titleID: String, bundleID: String, game: CloudLibraryGame,
+-    locale: String, displayScale: Double
++    titleID: String, bundleID: String, game: CloudLibraryGame,
++    locale: String, displayScale: Double, prepareAccess: @escaping TouchLayoutAccessProvider
+   ) async throws -> any OfficialTouchBundleProviding { throw TouchLayoutError.invalid("测试未提供下载") }
+   func savedLayouts() async throws -> [XboxSavedTouchLayout] {
+     if listingShouldFail { throw TouchLayoutError.invalid("测试读取失败") }
+diff --git a/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift b/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+index 2762bd39..49c508b8 100644
+--- a/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
++++ b/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift
+@@ -3,6 +3,46 @@ import XCTest
+ 
+ @MainActor
+ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
++  func testInstalledGameDetailsOpenCommunityLayoutsWithSourceFailure() {
++    continueAfterFailure = false
++    XCUIDevice.shared.orientation = .portrait
++    let app = XCUIApplication()
++    app.launchArguments = [
++      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-mixed-sources",
++      "--installed-product-only-ui-test", "-AppleLanguages", "(zh-Hans)",
++      "-AppleLocale", "zh_CN",
++    ]
++    app.launch()
++    XCTAssertTrue(app.buttons["primary-navigation-hosts"].waitForExistence(timeout: 10))
++    app.buttons["primary-navigation-hosts"].tap()
++    let installed = app.buttons.matching(identifier: "host-open-installed").firstMatch
++    reveal(installed, in: app)
++    installed.tap()
++    for id in ["1", "2"] {
++      let game = app.buttons["installed-game-" + id]
++      reveal(game, in: app)
++      game.tap()
++      let entry = app.buttons["installed-official-touch-layouts"]
++      reveal(entry, in: app)
++      XCTAssertTrue(entry.label.contains("查看游戏布局"))
++      XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
++      save(app, "installed-touch-entry-" + id)
++      entry.tap()
++      let retry = app.buttons["section-retry-game-touch-source-official"]
++      XCTAssertTrue(retry.waitForExistence(timeout: 5))
++      XCTAssertTrue(retry.label.contains("登录状态需要更新"))
++      let preview = app.buttons[
++        "game-touch-preview-community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74:default"
++      ]
++      reveal(preview, in: app)
++      XCTAssertTrue(preview.label.contains("社区"))
++      save(app, "installed-touch-catalog-" + id)
++      app.buttons["app-navigation-back"].tap()
++      XCTAssertTrue(entry.waitForExistence(timeout: 5))
++      app.buttons["app-navigation-back"].tap()
++    }
++  }
++
+   func testCommunityLayoutRemainsAvailableWhenOfficialSourceFails() {
+     continueAfterFailure = false
+     XCUIDevice.shared.orientation = .portrait

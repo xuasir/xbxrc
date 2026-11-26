@@ -7,7 +7,6 @@ struct GameDetailView: View {
   @EnvironmentObject private var streamingStore: StreamingFeatureStore
   @EnvironmentObject private var settings: AppSettingsStore
   @EnvironmentObject private var favorites: CloudFavoritesStore
-  @EnvironmentObject private var touchLayouts: SavedTouchLayoutsStore
   @Environment(\.appPageIsActive) private var isActive
   @Environment(\.locale) private var locale
   private let initialGame: CloudLibraryGame
@@ -176,26 +175,7 @@ struct GameDetailView: View {
   }
 
   private var touchLayoutsSection: some View {
-    NavigationLink {
-      OfficialTouchLayoutsView(game: game)
-    } label: {
-      HStack(spacing: 12) {
-        AppIconView(.touch).foregroundStyle(AppThemePalette.brand)
-        VStack(alignment: .leading, spacing: 4) {
-          Text("查看游戏布局").appFont(.body, weight: .semibold)
-          Text("保存游戏适配布局，用于 Home 串流")
-            .appFont(.caption).foregroundStyle(AppThemePalette.textSecondary)
-          if touchLayouts.layouts.contains(where: { $0.productId == game.productID }) {
-            Text("已保存到本机").appFont(.caption).foregroundStyle(AppThemePalette.brand)
-          }
-        }
-        Spacer(minLength: 8)
-        AppIconView(.chevron, size: 16).foregroundStyle(AppThemePalette.brand)
-      }
-      .padding(16).frame(minHeight: 44).contentShape(Rectangle())
-      .appSurface(radius: AppLayoutPolicy.cardRadius)
-    }
-    .buttonStyle(.plain).accessibilityIdentifier("cloud-official-touch-layouts")
+    GameTouchLayoutsLink(game: game, identifier: "cloud-official-touch-layouts")
   }
 
   private var recordState: XboxSingleDataState<GameSummary> {

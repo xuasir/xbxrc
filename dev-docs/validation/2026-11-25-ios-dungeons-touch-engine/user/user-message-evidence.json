@@ -1,0 +1,18 @@
+{
+  "attachments": [
+    "IMG_1919.PNG",
+    "IMG_1920.PNG"
+  ],
+  "sourceAvailability": "聊天附件内容已核对；用户提供的 Downloads 源路径在当前文件系统中不可用",
+  "game": "Minecraft Dungeons II",
+  "layouts": [
+    "gameplay_default",
+    "dialogues"
+  ],
+  "bundleVersion": "1.0.0.0",
+  "messages": [
+    "此布局版本等待转换器支持",
+    "此图片位置等待绘制支持"
+  ],
+  "note": "预览可显示，点击保存后卡片提示布局等待适配；重复图片原因来自各样式中的背景素材"
+}

@@ -1,0 +1,88 @@
+{
+  "source": "2871.36f50502.chunk.js",
+  "sha256": "c83ea789fd64ea3fe7fbc4acbc086bf9d2f56beb3f917a939f08298eb2fcbff0",
+  "methodExtraction": "TypeScript AST of frozen release bytes",
+  "functions": {
+    "vo": "function vo(t,e,i,n){const r=i-t,o=n-e;return Math.sqrt(r*r+o*o)}",
+    "_o": "function _o(t){return vo(t.x,t.y,fo.x,fo.y)}",
+    "ju": "function ju(t,e,i){const n=e*i,r=t/i*(i-e);return t>0?r+n:t<0?r-n:t}",
+    "Yu": "function Yu(t,e,i){return t<0?(t+e)*i-e:t>0?(t-e)*i+e:t}"
+  },
+  "method": "checkActionActive(t){const{action:e,actionThreshold:i=0}=this.model.getProps();return!!e&&(t.x>=i||t.y>=i||_o(t)>=i)}",
+  "observations": [
+    {
+      "name": "threshold-above-unit-range",
+      "props": {
+        "action": "gamepadA",
+        "actionThreshold": 2.5
+      },
+      "point": {
+        "x": 0.6,
+        "y": 0.8
+      },
+      "expected": false,
+      "actual": false,
+      "result": "pass"
+    },
+    {
+      "name": "default-threshold-is-zero",
+      "props": {
+        "action": "gamepadA"
+      },
+      "point": {
+        "x": 0,
+        "y": 0
+      },
+      "expected": true,
+      "actual": true,
+      "result": "pass"
+    },
+    {
+      "name": "ordinary-threshold",
+      "props": {
+        "action": "gamepadA",
+        "actionThreshold": 0.5
+      },
+      "point": {
+        "x": 0.6,
+        "y": 0.8
+      },
+      "expected": true,
+      "actual": true,
+      "result": "pass"
+    },
+    {
+      "name": "signed-deadzone",
+      "value": 0.5,
+      "threshold": -0.3,
+      "expected": 0.35,
+      "actual": 0.35000000000000003,
+      "result": "pass"
+    },
+    {
+      "name": "signed-deadzone",
+      "value": -0.5,
+      "threshold": -0.3,
+      "expected": -0.35,
+      "actual": -0.35000000000000003,
+      "result": "pass"
+    },
+    {
+      "name": "signed-deadzone",
+      "value": 0,
+      "threshold": -0.3,
+      "expected": 0,
+      "actual": 0,
+      "result": "pass"
+    },
+    {
+      "name": "positive-sensitivity-above-100",
+      "sensitivity": 200,
+      "actual": 129.7,
+      "clampedOutput": 1,
+      "result": "pass"
+    }
+  ],
+  "passed": 7,
+  "realDeviceMeasured": false
+}

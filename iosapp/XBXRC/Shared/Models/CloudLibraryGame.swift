@@ -114,7 +114,7 @@ struct CloudLibraryGame: Codable, Hashable, Identifiable, Sendable {
     }
 
     init(gameSummary game: GameSummary) {
-        productID = game.id
+        productID = game.productID ?? game.id
         streamTitleID = nil
         xboxTitleID = game.titleID
         name = game.name

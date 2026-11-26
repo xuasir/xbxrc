@@ -1,0 +1,248 @@
+Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput]' started.
+    t =     0.00s Start Test at 2026-11-25 10:58:47.966
+    t =     0.03s Set Up
+    t =     0.03s Setting device orientation to Portrait
+    t =     0.04s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     0.05s Open com.xuasir.xbxrc.ios
+    t =     0.05s     Launch com.xuasir.xbxrc.ios
+    t =     0.05s         Terminate com.xuasir.xbxrc.ios:1502
+    t =     1.31s         Setting up automation session
+    t =     3.67s         Wait for com.xuasir.xbxrc.ios to idle
+    t =     5.17s Waiting 5.0s for "stream-controls-open" Button to exist
+    t =     6.18s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-open" Button`
+    t =     6.18s         Checking existence of `"stream-controls-open" Button`
+    t =     6.24s Tap "stream-controls-open" Button
+    t =     6.24s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     6.24s     Find the "stream-controls-open" Button
+    t =     6.25s     Check for interrupting elements affecting "stream-controls-open" Button
+    t =     6.27s     Synthesize event
+    t =     6.60s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     7.11s Waiting 5.0s for "stream-touch-layout-open" Button to exist
+    t =     8.14s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-open" Button`
+    t =     8.14s         Checking existence of `"stream-touch-layout-open" Button`
+    t =     8.18s Tap "stream-touch-layout-open" Button
+    t =     8.19s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     8.19s     Find the "stream-touch-layout-open" Button
+    t =     8.21s     Check for interrupting elements affecting "stream-touch-layout-open" Button
+    t =     8.23s     Synthesize event
+    t =     8.52s     Wait for com.xuasir.xbxrc.ios to idle
+    t =     8.53s Waiting 5.0s for "stream-touch-layout-panel" Any to exist
+    t =     9.55s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-panel" Any`
+    t =     9.55s         Checking existence of `"stream-touch-layout-panel" Any`
+    t =     9.58s Waiting 5.0s for "stream-touch-layout-choice-official:fixture-1:default" Button to exist
+    t =    10.59s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    10.59s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    10.84s Added attachment named 'official-touch-stream-picker-portrait'
+    t =    10.84s Tap "stream-touch-layout-choice-official:fixture-1:default" Button
+    t =    10.84s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    10.84s     Find the "stream-touch-layout-choice-official:fixture-1:default" Button
+    t =    10.87s     Check for interrupting elements affecting "stream-touch-layout-choice-official:fixture-1:default" Button
+    t =    10.90s     Synthesize event
+    t =    10.91s         Scroll element to visible
+    t =    10.92s         Find the "stream-touch-layout-choice-official:fixture-1:default" Button
+    t =    10.96s         Computed hit point {201, 564.83333333333326} after scrolling to visible
+    t =    11.25s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    11.25s Waiting 5.0s for "stream-controls-close" Button to exist
+    t =    12.28s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-close" Button`
+    t =    12.31s         Checking existence of `"stream-controls-close" Button`
+    t =    12.42s Checking existence of `"stream-touch-layout-panel" Any`
+    t =    12.47s Tap "stream-controls-close" Button
+    t =    12.47s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    12.47s     Find the "stream-controls-close" Button
+    t =    12.49s     Check for interrupting elements affecting "stream-controls-close" Button
+    t =    12.56s     Synthesize event
+    t =    12.86s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    12.87s Get number of matches for: Elements matching predicate 'identifier BEGINSWITH "touch-control-"'
+    t =    12.88s Get all elements bound by index for: Elements matching predicate 'identifier BEGINSWITH "touch-control-"'
+    t =    12.89s Find the Button (Element at index 0)
+    t =    12.90s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    12.92s Find the "touch-control-left/inner/0" Button
+    t =    12.93s Find the "touch-control-left/inner/0" Button
+    t =    12.94s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    12.95s Find the "touch-control-left/inner/0" Button
+    t =    12.97s Find the Button (Element at index 1)
+    t =    12.98s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    12.99s Find the "touch-control-right/inner/1" Button
+    t =    13.00s Find the "touch-control-right/inner/1" Button
+    t =    13.02s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.03s Find the "touch-control-right/inner/1" Button
+    t =    13.04s Find the Button (Element at index 2)
+    t =    13.05s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.06s Find the "touch-control-right/inner/2" Button
+    t =    13.08s Find the "touch-control-right/inner/2" Button
+    t =    13.09s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.10s Find the "touch-control-right/inner/2" Button
+    t =    13.12s Find the Button (Element at index 3)
+    t =    13.13s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.14s Find the "touch-control-right/inner/3" Button
+    t =    13.16s Find the "touch-control-right/inner/3" Button
+    t =    13.17s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.18s Find the "touch-control-right/inner/3" Button
+    t =    13.19s Find the Button (Element at index 4)
+    t =    13.20s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.22s Find the "touch-control-right/outer/0" Button
+    t =    13.23s Find the "touch-control-right/outer/0" Button
+    t =    13.24s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.26s Find the "touch-control-right/outer/0" Button
+    t =    13.27s Find the Button (Element at index 5)
+    t =    13.28s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.29s Find the "touch-control-right/outer/1" Button
+    t =    13.31s Find the "touch-control-right/outer/1" Button
+    t =    13.32s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.33s Find the "touch-control-right/outer/1" Button
+    t =    13.34s Find the Button (Element at index 6)
+    t =    13.36s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.37s Find the "touch-control-upper/right/0" Button
+    t =    13.38s Find the "touch-control-upper/right/0" Button
+    t =    13.40s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.41s Find the "touch-control-upper/right/0" Button
+    t =    13.42s Find the Button (Element at index 7)
+    t =    13.43s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.44s Find the "touch-control-upper/right/1" Button
+    t =    13.46s Find the "touch-control-upper/right/1" Button
+    t =    13.47s Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    13.48s Find the "touch-control-upper/right/1" Button
+    t =    13.50s Press "touch-control-right/inner/1" Button[0.50, 0.50] for 0.3 seconds
+    t =    13.50s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    13.50s     Find the "touch-control-right/inner/1" Button
+    t =    13.51s     Check for interrupting elements affecting "touch-control-right/inner/1" Button
+    t =    13.53s     Synthesize event
+    t =    13.54s         Find the "touch-control-right/inner/1" Button
+    t =    13.56s         Find the "touch-control-right/inner/1" Button
+    t =    13.58s         Find the "touch-control-right/inner/1" Button
+    t =    14.12s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    15.16s Checking `Expect predicate `label == "16"` for object "stream-touch-last-buttons" StaticText`
+    t =    15.16s     Find the "stream-touch-last-buttons" StaticText
+    t =    15.37s Added attachment named 'official-touch-stream-saved-portrait'
+    t =    15.37s Get number of matches for: Elements matching predicate '"stream-touch-quick-switch" IN identifiers'
+    t =    15.39s Find the "stream-touch-quick-switch" Button
+    t =    15.41s Tap "stream-touch-quick-switch" Button
+    t =    15.41s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    15.41s     Find the "stream-touch-quick-switch" Button
+    t =    15.42s     Check for interrupting elements affecting "stream-touch-quick-switch" Button
+    t =    15.44s     Synthesize event
+    t =    15.73s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    16.76s Checking `Expect predicate `label == "standard"` for object "stream-touch-selected-id" StaticText`
+    t =    16.76s     Find the "stream-touch-selected-id" StaticText
+    t =    16.78s Tap "stream-touch-quick-switch" Button
+    t =    16.78s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    16.78s     Find the "stream-touch-quick-switch" Button
+    t =    16.80s     Check for interrupting elements affecting "stream-touch-quick-switch" Button
+    t =    16.82s     Synthesize event
+    t =    17.11s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    18.14s Checking `Expect predicate `label == "official:fixture-1:default"` for object "stream-touch-selected-id" StaticText`
+    t =    18.14s     Find the "stream-touch-selected-id" StaticText
+    t =    18.33s Added attachment named 'official-touch-stream-quick-switch-portrait'
+    t =    18.33s Waiting 5.0s for "stream-controls-open" Button to exist
+    t =    19.35s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-open" Button`
+    t =    19.35s         Checking existence of `"stream-controls-open" Button`
+    t =    19.38s Tap "stream-controls-open" Button
+    t =    19.38s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    19.38s     Find the "stream-controls-open" Button
+    t =    19.40s     Check for interrupting elements affecting "stream-controls-open" Button
+    t =    19.42s     Synthesize event
+    t =    19.72s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    19.72s Waiting 5.0s for "stream-touch-layout-open" Button to exist
+    t =    20.75s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-open" Button`
+    t =    20.75s         Checking existence of `"stream-touch-layout-open" Button`
+    t =    20.79s Tap "stream-touch-layout-open" Button
+    t =    20.79s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    20.79s     Find the "stream-touch-layout-open" Button
+    t =    20.82s     Check for interrupting elements affecting "stream-touch-layout-open" Button
+    t =    20.83s     Synthesize event
+    t =    21.12s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    21.13s Waiting 5.0s for "stream-touch-layout-panel" Any to exist
+    t =    22.16s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-panel" Any`
+    t =    22.16s         Checking existence of `"stream-touch-layout-panel" Any`
+    t =    22.19s Waiting 5.0s for "stream-touch-layout-choice-official:fixture-1:default" Button to exist
+    t =    23.21s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    23.21s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    23.25s Tap "stream-touch-layout-search" TextField
+    t =    23.25s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    23.26s     Find the "stream-touch-layout-search" TextField
+    t =    23.29s     Check for interrupting elements affecting "stream-touch-layout-search" TextField
+    t =    23.32s     Synthesize event
+    t =    23.61s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    24.85s Type 'Forza' into "stream-touch-layout-search" TextField
+    t =    24.86s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    25.14s     Find the "stream-touch-layout-search" TextField
+    t =    25.29s     Check for interrupting elements affecting "stream-touch-layout-search" TextField
+    t =    25.33s     Synthesize event
+    t =    25.63s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    25.63s Waiting 5.0s for "stream-touch-layout-choice-official:fixture-2:default" Button to exist
+    t =    26.66s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-2:default" Button`
+    t =    26.66s         Checking existence of `"stream-touch-layout-choice-official:fixture-2:default" Button`
+    t =    26.70s Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    26.74s Tap "stream-touch-layout-choice-official:fixture-2:default" Button
+    t =    26.74s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    26.74s     Find the "stream-touch-layout-choice-official:fixture-2:default" Button
+    t =    26.78s     Check for interrupting elements affecting "stream-touch-layout-choice-official:fixture-2:default" Button
+    t =    26.82s     Synthesize event
+    t =    27.11s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    27.11s Waiting 5.0s for "stream-controls-close" Button to exist
+    t =    28.14s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-close" Button`
+    t =    28.14s         Checking existence of `"stream-controls-close" Button`
+    t =    28.17s Checking existence of `"stream-touch-layout-panel" Any`
+    t =    28.23s Tap "stream-controls-close" Button
+    t =    28.23s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    28.24s     Find the "stream-controls-close" Button
+    t =    28.26s     Check for interrupting elements affecting "stream-controls-close" Button
+    t =    28.28s     Synthesize event
+    t =    28.57s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    28.57s Setting device orientation to Landscape Left
+    t =    28.59s     Device orientation changed to Landscape Left
+    t =    28.60s     Interface orientation changed to Landscape Right
+    t =    28.67s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    30.02s Checking `Expect predicate `BLOCKPREDICATE(0x113647780)` for object Target Application 'com.xuasir.xbxrc.ios'`
+    t =    30.02s     Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    30.04s     Find the Target Application 'com.xuasir.xbxrc.ios'
+    t =    30.24s Added attachment named 'official-touch-stream-saved-landscape-left'
+    t =    30.24s Waiting 5.0s for "stream-controls-open" Button to exist
+    t =    31.28s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-controls-open" Button`
+    t =    31.28s         Checking existence of `"stream-controls-open" Button`
+    t =    31.31s Tap "stream-controls-open" Button
+    t =    31.31s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    31.31s     Find the "stream-controls-open" Button
+    t =    31.33s     Check for interrupting elements affecting "stream-controls-open" Button
+    t =    31.35s     Synthesize event
+    t =    31.65s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    31.65s Waiting 5.0s for "stream-touch-layout-open" Button to exist
+    t =    32.68s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-open" Button`
+    t =    32.68s         Checking existence of `"stream-touch-layout-open" Button`
+    t =    32.72s Tap "stream-touch-layout-open" Button
+    t =    32.72s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    32.72s     Find the "stream-touch-layout-open" Button
+    t =    32.75s     Check for interrupting elements affecting "stream-touch-layout-open" Button
+    t =    32.77s     Synthesize event
+    t =    33.07s     Wait for com.xuasir.xbxrc.ios to idle
+    t =    33.07s Waiting 5.0s for "stream-touch-layout-panel" Any to exist
+    t =    34.10s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-panel" Any`
+    t =    34.10s         Checking existence of `"stream-touch-layout-panel" Any`
+    t =    34.13s Waiting 5.0s for "stream-touch-layout-choice-official:fixture-1:default" Button to exist
+    t =    35.17s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    35.17s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    35.20s         Capturing element debug description
+    t =    36.13s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    36.13s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    36.16s         Capturing element debug description
+    t =    37.17s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    37.17s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    37.19s         Capturing element debug description
+    t =    38.22s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    38.22s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    38.25s         Capturing element debug description
+    t =    39.13s     Checking `Expect predicate `existsNoRetry == 1` for object "stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    39.14s         Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    39.17s         Capturing element debug description
+    t =    39.17s     Checking existence of `"stream-touch-layout-choice-official:fixture-1:default" Button`
+    t =    39.19s Collecting debug information to assist test failure triage
+    t =    39.19s     Requesting snapshot of accessibility hierarchy for app with pid 1571
+/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift:433: error: -[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput] : XCTAssertTrue failed
+    t =    39.58s Tear Down
+Test Case '-[XBXRCUITests.SavedOfficialTouchLayoutInteractionTests testStreamingSwitchesSavedAndCustomLayoutsAndKeepsSafeTouchInput]' failed (39.852 seconds).
+Test Suite 'SavedOfficialTouchLayoutInteractionTests' failed at 2026-11-25 10:59:27.818.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 138.727 (138.732) seconds
+Test Suite 'XBXRCUITests.xctest' failed at 2026-11-25 10:59:27.823.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 138.727 (138.737) seconds
+Test Suite 'Selected tests' failed at 2026-11-25 10:59:27.823.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 138.727 (138.743) seconds

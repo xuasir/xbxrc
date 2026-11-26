@@ -1,0 +1,173 @@
+{
+  "units": 19,
+  "ui": 1,
+  "rounds": [
+    {
+      "round": "initial",
+      "passed": 15,
+      "failed": 2
+    },
+    {
+      "round": "retry",
+      "passed": 3,
+      "failed": 1
+    },
+    {
+      "round": "ui",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "round": "diagnostics",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "round": "final",
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "latestResults": [
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testCloudKeepsRunnableDefaultWithSourceWarnings",
+      "result": "passed",
+      "seconds": 0.019,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testGameCommandsPatchHideSwitchAndResetState",
+      "result": "passed",
+      "seconds": 0.02,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testMissingImagesAndDeferredActionsKeepRunnableFallback",
+      "result": "passed",
+      "seconds": 0.053,
+      "round": "retry"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testOfficialAssetIsDecodedAndDrawnWithOriginalPixels",
+      "result": "passed",
+      "seconds": 0.062,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testUnknownVisualFieldsAllowSavingRunnableControls",
+      "result": "passed",
+      "seconds": 0.004,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testDeferredInputsMissingColorsAndUnknownStylesKeepCapabilityGate",
+      "result": "passed",
+      "seconds": 0.027,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testDynamicPatchReleasesHiddenControlAndPreservesOtherPointer",
+      "result": "passed",
+      "seconds": 0.005,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testEveryOfficialIconHasNativeArtworkAndCommunityReferencesResolve",
+      "result": "passed",
+      "seconds": 0.119,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testNamedColorsHighContrastAndDirectionalGradientRender",
+      "result": "passed",
+      "seconds": 0.134,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testRealCommunityProtocolUsesCompiledInputsAndReleasesAllContributions",
+      "result": "passed",
+      "seconds": 0.021,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testTurboUsesMillisecondsAndSharedActionsReleaseIndependently",
+      "result": "passed",
+      "seconds": 0.002,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testUnknownVisualAndInputExtensionsKeepKnownButtonRunnable",
+      "result": "passed",
+      "seconds": 0.002,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutTests",
+      "method": "testCapabilityReportIncludesBehaviorsAndUnknownAxisPath",
+      "result": "passed",
+      "seconds": 0.018,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutTests",
+      "method": "testInvalidNewControlFieldsStillBlockSaving",
+      "result": "passed",
+      "seconds": 0.004,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutTests",
+      "method": "testMicrosoftVPrefixedOriginalLayoutsPassCapabilityChecks",
+      "result": "passed",
+      "seconds": 0.015,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutTests",
+      "method": "testRealLayoutsAndCapabilityReports",
+      "result": "passed",
+      "seconds": 0.06,
+      "round": "initial"
+    },
+    {
+      "class": "XBXRCUITests.SavedOfficialTouchLayoutInteractionTests",
+      "method": "testCommunityProtocolLayoutRunsAndSaves",
+      "result": "passed",
+      "seconds": 36.345,
+      "round": "final"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testNewPointerImmediatelyAfterLayoutChangeFollowsOneNeutralFrame",
+      "result": "passed",
+      "seconds": 0.011,
+      "round": "retry"
+    },
+    {
+      "class": "XBXRCTests.SavedOfficialTouchLayoutTests",
+      "method": "testToggleStickyAxesAndLayerContributionsReleaseOnReplacement",
+      "result": "passed",
+      "seconds": 0.007,
+      "round": "retry"
+    },
+    {
+      "class": "XBXRCTests.TouchLayoutCompletenessTests",
+      "method": "testProtocolNumericFieldsPreserveRuntimeBehaviorAndFiniteOutputs",
+      "result": "passed",
+      "seconds": 0.003,
+      "round": "final"
+    }
+  ]
+}

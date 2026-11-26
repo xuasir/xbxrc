@@ -1,0 +1,38 @@
+{
+  "temporaryRoot": "/private/tmp/xbxrc-ios-tak-completeness-20261125-1d4637my",
+  "processesRunning": [],
+  "temporaryItems": [
+    "DerivedData",
+    "FinalSmoke.xcresult",
+    "IconSmoke.xcresult",
+    "Smoke.xcresult",
+    "attachments",
+    "bindings-final.log",
+    "bindings-resume.log",
+    "bindings.log",
+    "diagnostics",
+    "final-smoke.log",
+    "frontend-lint.log",
+    "icon-smoke.log",
+    "icon-test-details.json",
+    "launch-recheck.log",
+    "official-core.js",
+    "official-renderer.js",
+    "rust-resume-tests.log",
+    "rust-tests.log",
+    "smoke.log",
+    "swift-format-4.json"
+  ],
+  "allocatedBytesBefore": 899473408,
+  "freeBytesBefore": 94208000000,
+  "freeBytesAfter": 95027200000,
+  "observedFreeBytesIncrease": 819200000,
+  "rootExistsAfter": false,
+  "startedAtEpoch": 1795601173.4925299,
+  "completedAtEpoch": 1795601174.277494,
+  "retained": [
+    "仓库源码、schema合同、3张最终截图、验收和失败摘要",
+    "现有target/ios、ios-bindgen和WebRTC共享缓存"
+  ],
+  "cleanupResult": "completed"
+}

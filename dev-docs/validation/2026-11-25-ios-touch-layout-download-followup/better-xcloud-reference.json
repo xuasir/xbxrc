@@ -1,0 +1,43 @@
+{
+  "references": [
+    {
+      "url": "https://github.com/redphx/better-xcloud/blob/ea4d19f2800cee9cfa387a0c9c37b3711cf208c7/src/utils/bx-exposed.ts#L160",
+      "commit": "ea4d19f2800cee9cfa387a0c9c37b3711cf208c7",
+      "path": "src/utils/bx-exposed.ts",
+      "sha256": "7177b423518ea5642e86da47f81d68b8f50cbda8bb6df91639bfac90df611d7f",
+      "startLine": 160,
+      "endLine": 169,
+      "excerpt": "            }\n\n            // Use custom touch control for Forza Horizon 6\n            if (titleInfo.titleId === 'FORZAHORIZON6') {\n                titleInfo.details.supportedTabs = [];\n                titleInfo.details.hasTouchSupport = false;\n                supportedInputTypes = [SupportedInputType.CONTROLLER];\n            }\n        }\n"
+    },
+    {
+      "url": "https://github.com/redphx/better-xcloud/blob/ea4d19f2800cee9cfa387a0c9c37b3711cf208c7/src/modules/touch-controller.ts#L130",
+      "commit": "ea4d19f2800cee9cfa387a0c9c37b3711cf208c7",
+      "path": "src/modules/touch-controller.ts",
+      "sha256": "0f14143cab520c1728c3e633e5bc201599d7be37d81d738eb2dacb352eb90fc0",
+      "startLine": 130,
+      "endLine": 190,
+      "excerpt": "    };\n\n    static async requestCustomLayouts(retries: number=1) {\n        const xboxTitleId = TouchController.#xboxTitleId;\n        if (!xboxTitleId) {\n            return;\n        }\n\n        if (xboxTitleId in TouchController.#customLayouts) {\n            TouchController.#dispatchLayouts(TouchController.#customLayouts[xboxTitleId]);\n            return;\n        }\n\n        retries = retries || 1;\n        if (retries > 2) {\n            TouchController.#customLayouts[xboxTitleId] = null;\n            // Wait for BX_EXPOSED.touchLayoutManager\n            window.setTimeout(() => TouchController.#dispatchLayouts(null), 1000);\n            return;\n        }\n\n        // Get layout info\n        try {\n            const resp = await NATIVE_FETCH(GhPagesUtils.getUrl(`touch-layouts/${xboxTitleId}.json`));\n            const json = await resp.json();\n\n            const layouts = {};\n\n            json.layouts.forEach(async (layoutName: string) => {\n                let baseLayouts = {};\n                if (layoutName in TouchController.#baseCustomLayouts) {\n                    baseLayouts = TouchController.#baseCustomLayouts[layoutName];\n                } else {\n                    try {\n                        const layoutUrl = GhPagesUtils.getUrl(`touch-layouts/layouts/${layoutName}.json`);\n                        const resp = await NATIVE_FETCH(layoutUrl);\n                        const json = await resp.json();\n\n                        baseLayouts = json.layouts;\n                        TouchController.#baseCustomLayouts[layoutName] = baseLayouts;\n                    } catch (e) {}\n                }\n\n                Object.assign(layouts, baseLayouts);\n            });\n\n            json.layouts = layouts;\n            TouchController.#customLayouts[xboxTitleId] = json;\n\n            // Wait for BX_EXPOSED.touchLayoutManager\n            window.setTimeout(() => TouchController.#dispatchLayouts(json), 1000);\n        } catch (e) {\n            // Retry\n            TouchController.requestCustomLayouts(retries + 1);\n        }\n    }\n\n    static applyCustomLayout(layoutId: string | null, delay: number=0) {\n        // TODO: fix this\n        if (!window.BX_EXPOSED.touchLayoutManager) {\n            const listener = (e: Event) => {"
+    },
+    {
+      "url": "https://github.com/redphx/better-xcloud/blob/ea4d19f2800cee9cfa387a0c9c37b3711cf208c7/src/utils/gh-pages.ts#L7",
+      "commit": "ea4d19f2800cee9cfa387a0c9c37b3711cf208c7",
+      "path": "src/utils/gh-pages.ts",
+      "sha256": "2608b989623832485a3089c5c49fa48ab482d6a675eecd7278f9a810b6f691b4",
+      "startLine": 7,
+      "endLine": 38,
+      "excerpt": "export class GhPagesUtils {\n    static fetchLatestCommit() {\n        const url = 'https://api.github.com/repos/redphx/better-xcloud/branches/gh-pages';\n\n        NATIVE_FETCH(url, {\n            method: 'GET',\n            headers: {\n                'Accept': 'application/vnd.github.v3+json',\n            },\n        })\n            .then(response => response.json())\n            .then(data => {\n                const latestCommitHash = data.commit.sha;\n                window.localStorage.setItem(StorageKey.GH_PAGES_COMMIT_HASH, latestCommitHash);\n            }).catch(error => {\n                BxLogger.error('GhPagesUtils', 'Error fetching the latest commit:', error);\n            });\n    }\n\n    static getUrl(path: string): string {\n        if (path[0] === '/') {\n            alert('`path` must not starts with \"/\"');\n        }\n\n        const prefix = 'https://raw.githubusercontent.com/redphx/better-xcloud';\n        const latestCommitHash = window.localStorage.getItem(StorageKey.GH_PAGES_COMMIT_HASH);\n        if (latestCommitHash) {\n            return `${prefix}/${latestCommitHash}/${path}`;\n        } else {\n            return `${prefix}/refs/heads/gh-pages/${path}`;\n        }\n    }"
+    },
+    {
+      "url": "https://github.com/redphx/better-xcloud/blob/4416b1ab07588a3244a5c02ce1fa5dfa64d8df74/touch-layouts/2079757188.json#L1",
+      "commit": "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+      "path": "touch-layouts/2079757188.json",
+      "sha256": "6aa9379a1869821c9d67ab18045f1f44ea343f3a96f952b73aff8d15da2d152b",
+      "startLine": 1,
+      "endLine": 8,
+      "excerpt": "{\n  \"name\": \"Forza Horizon 6\",\n  \"product_id\": \"9PFDT5X4RH8B\",\n  \"default_layout\": \"layout-1\",\n  \"layouts\": [\n    \"forza\"\n  ]\n}"
+    }
+  ],
+  "forzaLayoutSemanticMatch": true,
+  "currentForzaLayoutSHA256": "e5c4c5fca0c9c82cc79c0cc0106e353418534fc7cf1d1e1892e2879ac47ff5d1",
+  "embeddedForzaLayoutSHA256": "698988329e3548e73f2336e60eca85df0cd06318301137bb84bc9c2116925e56"
+}

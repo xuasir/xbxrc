@@ -1,0 +1,94 @@
+[
+  {
+    "path": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "ranges": [
+      [
+        7,
+        7
+      ],
+      [
+        76,
+        77
+      ],
+      [
+        95,
+        95
+      ],
+      [
+        104,
+        107
+      ],
+      [
+        127,
+        130
+      ],
+      [
+        133,
+        149
+      ],
+      [
+        152,
+        152
+      ],
+      [
+        154,
+        154
+      ],
+      [
+        159,
+        159
+      ],
+      [
+        182,
+        206
+      ]
+    ],
+    "indentation": 4,
+    "exitCode": 0,
+    "sha256": "42ba4dbf4b34cd3806f6194901c89ffbe6e7d626f1840fa9ce3bb932170e2704"
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "ranges": [
+      [
+        112,
+        112
+      ]
+    ],
+    "indentation": 4,
+    "exitCode": 0,
+    "sha256": "56be6cfc29fb6620f7800846601c73731375c2e7be195d0d1746ecc97045b6f3"
+  },
+  {
+    "path": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "ranges": [
+      [
+        110,
+        110
+      ]
+    ],
+    "indentation": 4,
+    "exitCode": 0,
+    "sha256": "c2fba7aeee3896160de9e374a90a931a14284573e17b6cc58efa27690b107baa"
+  },
+  {
+    "path": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+    "ranges": [
+      [
+        105,
+        319
+      ],
+      [
+        757,
+        788
+      ],
+      [
+        815,
+        815
+      ]
+    ],
+    "indentation": 2,
+    "exitCode": 0,
+    "sha256": "2a551c72e83a244c1463fb869ac4b8d4fe72b2e9dceeacb332630e0826790c79"
+  }
+]

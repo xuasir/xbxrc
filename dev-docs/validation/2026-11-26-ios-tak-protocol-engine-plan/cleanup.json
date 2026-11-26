@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-26",
+  "temporaryPathsCreated": [],
+  "temporaryFilesCreated": 0,
+  "remainingTemporaryPaths": [],
+  "activeBuildTestExportProcesses": [],
+  "allocatedTemporaryBytes": 0,
+  "releasedBytes": 0,
+  "availableDiskBytes": 95846400000,
+  "retained": [
+    "协议结构和社区整库形态清单",
+    "社区公开原件ZIP及逐文件哈希",
+    "两份官方运行时原件ZIP及哈希",
+    "RFC、任务登记及最小验收摘要"
+  ],
+  "method": "网络归档在内存中处理，最终证据直接写入任务证据目录",
+  "atlasFollowup": {
+    "temporaryPathsCreated": [],
+    "temporaryFilesCreated": 0,
+    "duplicateImageDataRemovedFromInventoryBytes": 4256910,
+    "originalImageDataRetainedIn": "official-icon-atlas-source.zip",
+    "availableDiskBytes": 95846400000,
+    "retained": [
+      "官方图集与依赖来源ZIP、哈希及去重形态清单",
+      "更新后的RFC、能力诊断与定向验证摘要"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift",
+    "ranges": [
+      "160:161",
+      "174:175",
+      "192:192",
+      "195:204",
+      "260:260",
+      "267:270",
+      "392:393",
+      "397:397"
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/XBXRCTests.swift",
+    "ranges": [
+      "834:839",
+      "845:845",
+      "3237:3242",
+      "3247:3247"
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  }
+]

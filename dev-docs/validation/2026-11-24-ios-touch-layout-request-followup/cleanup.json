@@ -1,0 +1,27 @@
+{
+  "round": "r1",
+  "removedRoot": "/private/tmp/xbxrc-touch-layout-followup-r1.NEHpwA",
+  "removedRootExists": false,
+  "removedFiles": 4552,
+  "removedLogicalBytes": 666761181,
+  "removedAllocatedBytes": 679952384,
+  "removedAllocatedMiB": 648.45,
+  "freeBeforeBytes": 33095680000,
+  "freeAfterBytes": 33628160000,
+  "freeDeltaBytes": 532480000,
+  "allKnownOperationsCompleted": true,
+  "operationExitCodes": {
+    "xcodebuild": 0,
+    "testSummaryExport": 0,
+    "buildSummaryExport": 0,
+    "attachmentsExport": 0,
+    "communityRevisionProbe": 0
+  },
+  "retainedOriginalExists": true,
+  "retainedEvidenceDirectory": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-24-ios-touch-layout-request-followup",
+  "retainedSharedCaches": [
+    "target/ios",
+    "Xcode shared SourcePackages",
+    "existing simulator application data"
+  ]
+}

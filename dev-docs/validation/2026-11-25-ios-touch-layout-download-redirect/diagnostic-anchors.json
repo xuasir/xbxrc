@@ -1,0 +1,225 @@
+[
+  {
+    "line": 2,
+    "seq": 2,
+    "tsMs": 1795569311461,
+    "domain": "ios-app",
+    "event": "appLaunchStarted",
+    "payload": {
+      "appVersion": "0.1.0",
+      "buildConfiguration": "debug",
+      "buildNumber": "1",
+      "platform": "ios",
+      "sourceMonotonicMs": 946963714.4930835,
+      "writerQueueDelayMs": 42.3897500038147
+    }
+  },
+  {
+    "line": 34,
+    "seq": 34,
+    "tsMs": 1795569313422,
+    "domain": "xbox-data",
+    "event": "sectionQueryFailed",
+    "payload": {
+      "error": "Swift.CancellationError#1: 未能完成操作。（Swift.CancellationError错误1。）",
+      "errorCode": 1,
+      "errorDomain": "Swift.CancellationError",
+      "errorKind": "cancelled",
+      "errorType": "CancellationError",
+      "operationId": "EF087DBE-814B-4818-BCBB-36735B336D83",
+      "platform": "ios",
+      "retriable": false,
+      "sourceMonotonicMs": 946965675.1179583,
+      "timeout": false,
+      "writerQueueDelayMs": 0.26816678047180176
+    }
+  },
+  {
+    "line": 35,
+    "seq": 35,
+    "tsMs": 1795569313422,
+    "domain": "xbox-data",
+    "event": "hostsRefreshFailed",
+    "payload": {
+      "elapsedMs": 1690,
+      "error": "Swift.CancellationError#1: 未能完成操作。（Swift.CancellationError错误1。）",
+      "errorCode": 1,
+      "errorDomain": "Swift.CancellationError",
+      "errorKind": "cancelled",
+      "errorType": "CancellationError",
+      "hadContent": false,
+      "operationId": "90384344-D02B-4B63-8F09-501ABBAE9734",
+      "platform": "ios",
+      "retriable": false,
+      "sourceMonotonicMs": 946965675.2262084,
+      "timeout": false,
+      "writerQueueDelayMs": 0.4224165678024292
+    }
+  },
+  {
+    "line": 36,
+    "seq": 36,
+    "tsMs": 1795569313422,
+    "domain": "cloud-library",
+    "event": "catalogRefreshStarted",
+    "payload": {
+      "cachedGames": 2867,
+      "generation": 2,
+      "language": "zh-CN",
+      "market": "US",
+      "operationId": "E69E136A-7458-4C7C-BE67-9F1A5D95FC68",
+      "platform": "ios",
+      "reason": "initialActivation",
+      "reuseAccess": false,
+      "sourceMonotonicMs": 946965675.4527084,
+      "writerQueueDelayMs": 0.42479169368743896
+    }
+  },
+  {
+    "line": 37,
+    "seq": 37,
+    "tsMs": 1795569313422,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "payload": {
+      "operationId": "64823095-17DF-4724-ACD7-4A285AB44CE9",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 946965675.8065417,
+      "writerQueueDelayMs": 0.1544584035873413
+    }
+  },
+  {
+    "line": 42,
+    "seq": 42,
+    "tsMs": 1795569314227,
+    "domain": "auth",
+    "event": "cloudAccessBoundaryStarted",
+    "payload": {
+      "operationId": "A34A0A42-048B-4C35-881E-67EA96F99683",
+      "ownerGeneration": 1,
+      "platform": "ios",
+      "sourceMonotonicMs": 946966480.4664167,
+      "writerQueueDelayMs": 0.05500006675720215
+    }
+  },
+  {
+    "line": 50,
+    "seq": 50,
+    "tsMs": 1795569316859,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundarySucceeded",
+    "payload": {
+      "appLevel": 2,
+      "elapsedMs": 3413,
+      "leaseExpiresAtMs": 1795570216857,
+      "leaseGeneration": 1,
+      "operationId": "B8CA056B-18CB-4E4B-8978-49B4505152CC",
+      "platform": "ios",
+      "sourceMonotonicMs": 946969112.6028334,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.1849583387374878
+    }
+  },
+  {
+    "line": 51,
+    "seq": 51,
+    "tsMs": 1795569316948,
+    "domain": "auth",
+    "event": "cloudAccessBoundarySucceeded",
+    "payload": {
+      "appLevel": 2,
+      "elapsedMs": 3525,
+      "operationId": "64823095-17DF-4724-ACD7-4A285AB44CE9",
+      "platform": "ios",
+      "sessionPersisted": true,
+      "sourceMonotonicMs": 946969201.3915001,
+      "writerQueueDelayMs": 0.0776665210723877
+    }
+  },
+  {
+    "line": 52,
+    "seq": 52,
+    "tsMs": 1795569316948,
+    "domain": "cloud-library",
+    "event": "catalogRequestBoundaryStarted",
+    "payload": {
+      "language": "zh-CN",
+      "market": "US",
+      "operationId": "5875E30B-208D-4108-A9CB-75CD7780632F",
+      "platform": "ios",
+      "sourceMonotonicMs": 946969201.4135417,
+      "writerQueueDelayMs": 0.19133341312408447
+    }
+  },
+  {
+    "line": 53,
+    "seq": 53,
+    "tsMs": 1795569316948,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundaryStarted",
+    "payload": {
+      "operationId": "088C77FD-72C1-4495-BA2C-338486F32D3B",
+      "platform": "ios",
+      "sourceMonotonicMs": 946969201.5481666,
+      "writerQueueDelayMs": 0.10095846652984619
+    }
+  },
+  {
+    "line": 54,
+    "seq": 54,
+    "tsMs": 1795569316948,
+    "domain": "auth",
+    "event": "credentialFlowStage",
+    "payload": {
+      "operationId": "088C77FD-72C1-4495-BA2C-338486F32D3B",
+      "platform": "ios",
+      "scope": "cloud",
+      "skipCoreRefresh": true,
+      "sourceMonotonicMs": 946969201.890125,
+      "stage": "validCredentialsReused",
+      "writerQueueDelayMs": 0.07987499237060547
+    }
+  },
+  {
+    "line": 55,
+    "seq": 55,
+    "tsMs": 1795569316949,
+    "domain": "auth",
+    "event": "cloudAccessUniFFIBoundarySucceeded",
+    "payload": {
+      "appLevel": 2,
+      "elapsedMs": 0,
+      "leaseExpiresAtMs": 1795570216949,
+      "leaseGeneration": 2,
+      "operationId": "088C77FD-72C1-4495-BA2C-338486F32D3B",
+      "platform": "ios",
+      "sourceMonotonicMs": 946969202.2805835,
+      "target": "cloud",
+      "writerQueueDelayMs": 0.08724987506866455
+    }
+  },
+  {
+    "line": 56,
+    "seq": 56,
+    "tsMs": 1795569316951,
+    "domain": "cloud-library",
+    "event": "catalogRequestBoundaryFailed",
+    "payload": {
+      "elapsedMs": 2,
+      "error": "XBXRC.XboxBridgeError#3: XBXRC.XboxBridgeError.InvalidData(\"streamAccessRevoked\")",
+      "errorCode": 3,
+      "errorDomain": "XBXRC.XboxBridgeError",
+      "errorKind": "requestFailed",
+      "errorType": "XboxBridgeError",
+      "language": "zh-CN",
+      "market": "US",
+      "operationId": "5875E30B-208D-4108-A9CB-75CD7780632F",
+      "platform": "ios",
+      "retriable": false,
+      "sourceMonotonicMs": 946969204.223,
+      "timeout": false,
+      "writerQueueDelayMs": 0.203041672706604
+    }
+  }
+]

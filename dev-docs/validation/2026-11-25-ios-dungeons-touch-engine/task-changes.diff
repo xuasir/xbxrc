@@ -1,0 +1,1510 @@
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayout.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayout.swift
+@@ -61,6 +61,9 @@
+     var behaviors: [String] = []
+     var issues: [TouchCapabilityIssue] = []
+     var isSupported: Bool { issues.allSatisfy { $0.severity != .unsupported } }
++    var unsupportedMessages: [String] {
++        Array(Set(issues.filter { $0.severity == .unsupported }.map(\.message))).sorted()
++    }
+ 
+     mutating func add(_ severity: TouchCapabilityIssue.Severity, _ path: String, _ message: String)
+     {
+@@ -86,7 +89,7 @@
+ }
+ 
+ enum TouchControlKind: String, Sendable {
+-    case button, joystick, directionalPad, throttle, touchpad
++    case button, joystick, directionalPad, throttle, touchpad, arcadeButtons
+ }
+ 
+ indirect enum TouchAction: Equatable, Sendable {
+@@ -118,12 +121,40 @@
+     }
+ }
+ 
++struct TouchResponseCurve: Equatable, Sendable {
++    enum Kind: String, Sendable { case circular, circularInverse = "circular-inverse" }
++    let kind: Kind
++    let lower: Double
++    let upper: Double
++
++    static func parse(_ value: TouchJSON?) -> Self? {
++        guard let type = value?["type"]?.string, let kind = Kind(rawValue: type),
++            let range = value?["range"]?.array, range.count == 2,
++            let lower = range[0].number, let upper = range[1].number,
++            lower.isFinite, upper.isFinite, (-1...1).contains(lower),
++            (-1...1).contains(upper), lower <= upper
++        else { return nil }
++        return .init(kind: kind, lower: lower, upper: upper)
++    }
++
++    func apply(_ value: Double) -> Double {
++        guard value.isFinite else { return 0 }
++        let magnitude = min(1, abs(value))
++        let angle = abs(upper) * .pi / 2
++        // TAK 发布实现以 range 上界控制圆弧；零圆弧取线性极限，确保分母有限。
++        let inverse = angle < 0.000001 ? magnitude : sin(magnitude * angle) / sin(angle)
++        let curved = kind == .circular ? 2 * magnitude - inverse : inverse
++        return (value < 0 ? -1 : 1) * min(1, max(0, curved))
++    }
++}
++
+ struct TouchAxisMapping: Equatable, Sendable {
+     let input: String
+     let output: String
+     let deadzone: Double
+     let radial: Bool
+     let sensitivity: Double
++    var responseCurve: TouchResponseCurve? = nil
+ 
+     static func parse(_ value: TouchJSON?) -> [Self] {
+         guard let value else { return [] }
+@@ -136,7 +167,8 @@
+                 input: input, output: output,
+                 deadzone: min(1, max(0, value["deadzone"]?["threshold"]?.number ?? 0)),
+                 radial: value["deadzone"]?["radial"]?.bool ?? false,
+-                sensitivity: min(100, max(0, value["sensitivity"]?.number ?? 1))
++                sensitivity: min(100, max(0, value["sensitivity"]?.number ?? 1)),
++                responseCurve: TouchResponseCurve.parse(value["responseCurve"])
+             )
+         ]
+     }
+@@ -159,6 +191,14 @@
+     var enabled: Bool { properties["enabled"]?.bool ?? true }
+     var priority: Double { properties["priority"]?.number ?? 0 }
+     var actionThreshold: Double { properties["actionThreshold"]?.number ?? 0.5 }
++    var directionalPadDeadzone: Double { properties["deadzone"]?.number ?? 0.25 }
++    var renderAsButton: Bool { properties["renderAsButton"]?.bool ?? false }
++    var hasHorizontalAxis: Bool {
++        axis.contains { ["axisXY", "axisX", "axisLeft", "axisRight"].contains($0.input) }
++    }
++    var hasVerticalAxis: Bool {
++        axis.contains { ["axisXY", "axisY", "axisUp", "axisDown"].contains($0.input) }
++    }
+     var allowsRollover: Bool { kind == .button && !toggle && pullAction == nil }
+     var icon: String? {
+         let style = properties["styles"]?["default"]
+@@ -172,6 +212,7 @@
+             axis.contains { $0.output.hasPrefix("left") } ? "左摇杆" : "右摇杆"
+         case .throttle: "油门 / 刹车"
+         case .touchpad: "触摸板"
++        case .arcadeButtons: "格斗按键"
+         case .button: action?.title ?? "按键"
+         }
+     }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift
+@@ -77,7 +77,8 @@
+         guard let layout = parts.firstIndex(of: "layout"), parts.count > layout + 1 else {
+             return false
+         }
+-        let version = parts[layout + 1]
++        let component = parts[layout + 1]
++        let version = component.hasPrefix("v") ? String(component.dropFirst()) : component
+         return ["latest", "1.0", "2.0", "3.0", "3.1", "3.2", "3.3", "3.4", "3.5", "4.0", "4.1"]
+             .contains(version)
+     }
+@@ -221,8 +222,24 @@
+             report.add(.unsupported, "\(path)/type", "控件 \(type) 等待支持")
+             return
+         }
+-        if kind == .touchpad {
+-            report.add(.unsupported, path, "触摸板输入等待速度/鼠标映射支持")
++        if kind == .arcadeButtons {
++            scanArcadeButtons(slot, path: path, assets: assets, report: &report)
++            return
++        }
++        if (kind == .joystick || kind == .touchpad), slot["axis"] == nil {
++            report.add(.unsupported, "\(path)/axis", "此控件需要有效的轴映射")
++        }
++        if let deadzone = slot["deadzone"], kind == .directionalPad {
++            if let value = deadzone.number, value.isFinite, (0...1).contains(value) {
++                report.behaviors.append("directionalPadDeadzone")
++            } else {
++                report.add(.unsupported, "\(path)/deadzone", "方向键死区需要在 0 到 1 之间")
++            }
++        }
++        if let renderAsButton = slot["renderAsButton"], kind == .touchpad,
++            renderAsButton.bool == nil
++        {
++            report.add(.unsupported, "\(path)/renderAsButton", "触摸板按钮外观需要为布尔值")
+         }
+         for field in ["toggle", "sticky"] where slot[field]?.bool == true {
+             report.behaviors.append(field)
+@@ -235,9 +252,9 @@
+             for key in (interaction.object ?? [:]).keys.sorted() {
+                 if key != "activationType" || kind != .directionalPad {
+                     report.add(.unsupported, "\(path)/interaction/\(key)", "此交互字段等待支持")
+-                } else if let value = interaction[key]?.string,
+-                    !["exclusive", "allowNeighboring"].contains(value)
+-                {
++                } else if interaction[key]?.string.map({
++                    ["exclusive", "allowNeighboring"].contains($0)
++                }) != true {
+                     report.add(.unsupported, "\(path)/interaction/\(key)", "此方向键激活模式等待支持")
+                 }
+             }
+@@ -257,14 +274,54 @@
+                 scanAxis(axis, path: "\(path)/\(field)", report: &report)
+             }
+         }
+-        scanImages(slot["styles"], path: "\(path)/styles", assets: assets, report: &report)
+-        let fields: Set<String> = [
++        scanImages(
++            slot["styles"], path: "\(path)/styles", kind: kind, assets: assets, report: &report)
++        var fields: Set<String> = [
+             "type", "action", "pullAction", "axis", "axisUp", "axisDown", "relative", "expand",
+             "sticky", "toggle", "scale", "interaction", "styles", "visible", "enabled",
+             "actionThreshold", "priority",
+         ]
++        if kind == .touchpad { fields.insert("renderAsButton") }
++        if kind == .directionalPad { fields.insert("deadzone") }
+         for key in (slot.object ?? [:]).keys.sorted() where !fields.contains(key) {
+             report.add(.unsupported, "\(path)/\(key)", "此控件字段等待支持")
++        }
++    }
++
++    private static func scanArcadeButtons(
++        _ slot: TouchJSON, path: String, assets: Set<String>, report: inout TouchCapabilityReport
++    ) {
++        report.behaviors.append("arcadeCombination")
++        let required = [
++            "lightPunch", "mediumPunch", "heavyPunch", "lightKick", "mediumKick", "heavyKick",
++        ]
++        let names = required + ["specialPunch", "specialKick"]
++        let common: Set<String> = ["type", "scale", "visible", "enabled", "priority"]
++        for key in (slot.object ?? [:]).keys.sorted()
++        where !common.contains(key) && !names.contains(key) {
++            report.add(.unsupported, "\(path)/\(key)", "此格斗控件字段等待支持")
++        }
++        for name in names {
++            guard let button = slot[name], let object = button.object else {
++                if required.contains(name) {
++                    report.add(.unsupported, "\(path)/\(name)", "格斗控件需要完整的六个按键")
++                } else if let value = slot[name], value != .null {
++                    report.add(.unsupported, "\(path)/\(name)", "格斗按键需要为对象")
++                }
++                continue
++            }
++            if let action = button["action"] {
++                scanAction(action, path: "\(path)/\(name)/action", report: &report)
++            } else {
++                report.add(.unsupported, "\(path)/\(name)/action", "格斗按键需要有效动作")
++            }
++            for key in object.keys.sorted()
++            where !["action", "styles", "visible", "enabled"].contains(key) {
++                report.add(.unsupported, "\(path)/\(name)/\(key)", "此格斗按键字段等待支持")
++            }
++            scanImages(
++                button["styles"], path: "\(path)/\(name)/styles", kind: .button,
++                assets: assets, report: &report)
+         }
+     }
+ 
+@@ -312,6 +369,7 @@
+         _ axis: TouchJSON, path: String, report: inout TouchCapabilityReport
+     ) {
+         if let items = axis.array {
++            if items.isEmpty { report.add(.unsupported, path, "轴映射组需要有效映射") }
+             for (index, item) in items.enumerated() {
+                 scanAxis(item, path: "\(path)/\(index)", report: &report)
+             }
+@@ -331,18 +389,31 @@
+         where !["input", "output", "deadzone", "sensitivity", "responseCurve"].contains(key) {
+             report.add(.unsupported, "\(path)/\(key)", "此轴字段等待支持")
+         }
+-        if axis["responseCurve"] != nil {
+-            report.add(.unsupported, "\(path)/responseCurve", "响应曲线等待有限值回归")
++        if let curve = axis["responseCurve"] {
++            if TouchResponseCurve.parse(curve) != nil {
++                report.behaviors.append("responseCurve")
++            } else {
++                report.add(.unsupported, "\(path)/responseCurve", "响应曲线类型或范围无效")
++            }
++            for key in (curve.object ?? [:]).keys.sorted() where !["type", "range"].contains(key) {
++                report.add(.unsupported, "\(path)/responseCurve/\(key)", "此响应曲线字段等待支持")
++            }
++        }
++        if let sensitivity = axis["sensitivity"],
++            sensitivity.number.map({ $0.isFinite && (0...100).contains($0) }) != true
++        {
++            report.add(.unsupported, "\(path)/sensitivity", "轴灵敏度需要在 0 到 100 之间")
+         }
+     }
+ 
+     private static func scanImages(
+-        _ value: TouchJSON?, path: String, assets: Set<String>, report: inout TouchCapabilityReport
++        _ value: TouchJSON?, path: String, kind: TouchControlKind,
++        assets: Set<String>, report: inout TouchCapabilityReport
+     ) {
+         guard let value else { return }
+         if value["type"]?.string == "asset" {
+             if let id = value["value"]?.string, assets.contains(id) {
+-                if !path.hasSuffix("/faceImage") {
++                if !supportsImage(at: path, kind: kind) {
+                     report.add(.unsupported, path, "此图片位置等待绘制支持")
+                 }
+             } else {
+@@ -355,10 +426,41 @@
+             report.add(.warning, path, "图标 \(name) 使用动作符号回退")
+         }
+         for (key, item) in value.object ?? [:] {
+-            scanImages(item, path: "\(path)/\(key)", assets: assets, report: &report)
++            scanImages(item, path: "\(path)/\(key)", kind: kind, assets: assets, report: &report)
+         }
+         for (index, item) in (value.array ?? []).enumerated() {
+-            scanImages(item, path: "\(path)/\(index)", assets: assets, report: &report)
+-        }
++            scanImages(item, path: "\(path)/\(index)", kind: kind, assets: assets, report: &report)
++        }
++    }
++
++    private static func supportsImage(at path: String, kind: TouchControlKind) -> Bool {
++        let components = path.split(separator: "/").map(String.init)
++        guard let styles = components.lastIndex(of: "styles"), components.count > styles + 2 else {
++            return false
++        }
++        let states: Set<String>
++        switch kind {
++        case .button: states = ["default", "idle", "activated", "disabled", "toggled", "pulled"]
++        case .joystick, .touchpad: states = ["default", "idle", "activated", "disabled", "moving"]
++        case .throttle:
++            states = ["default", "idle", "idleUp", "activatedUp", "activatedDown", "disabled"]
++        case .directionalPad: states = ["default", "idle", "activated", "disabled"]
++        case .arcadeButtons: return false
++        }
++        guard states.contains(components[styles + 1]) else { return false }
++        let location = Array(components.dropFirst(styles + 2))
++        if location == ["background"] || location == ["faceImage"] { return true }
++        if (kind == .joystick || kind == .throttle),
++            location == ["knob", "background"] || location == ["knob", "faceImage"]
++        {
++            return true
++        }
++        if kind == .button, location.first == "pullIndicator" {
++            if location == ["pullIndicator", "faceImage"] { return true }
++            if location.count == 3, let index = Int(location[1]), (0..<4).contains(index) {
++                return location[2] == "faceImage"
++            }
++        }
++        return false
+     }
+ }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift
+@@ -73,29 +73,66 @@
+     }
+ }
+ 
++struct TouchPullState {
++    let pointerID: Int
++    let offset: CGPoint
++    let action: TouchAction
++    let segmentIndex: Int?
++}
++
+ struct TouchControlRuntime {
+     var socket: TouchControlSocket
+     private(set) var pointers: [Int: CGPoint] = [:]
+     private var starts: [Int: CGPoint] = [:]
+     private var primaryPointer: Int?
++    private var lastMovementTimestamp: TimeInterval?
+     private(set) var value = CGPoint.zero
+     private(set) var toggled = false
+ 
+     var isActive: Bool { !pointers.isEmpty || toggled || (socket.control.sticky && value.y > 0) }
+-    var hasExclusivePointer: Bool { socket.control.kind != .button && primaryPointer != nil }
+-    var isPulled: Bool {
+-        pointers.contains { id, point in
+-            guard let start = starts[id] else { return false }
+-            return hypot(point.x - start.x, point.y - start.y) >= socket.unitSize / 2
+-        } && socket.control.pullAction != nil
++    var hasExclusivePointer: Bool {
++        ![.button, .arcadeButtons].contains(socket.control.kind) && primaryPointer != nil
++    }
++    var needsTimeUpdate: Bool { socket.control.kind == .touchpad && value != .zero }
++    var activeArcadeButtonIDs: Set<String> {
++        Set(pointers.values.flatMap { TouchArcadeGeometry.activeButtonIDs(at: $0, in: socket) })
++    }
++    var isPulled: Bool { !pullStates.isEmpty }
++    /// 输入和提示图共享拉动方向，保证分段素材与实际动作对应。
++    var pullStates: [TouchPullState] {
++        guard socket.control.kind == .button, let action = socket.control.pullAction else {
++            return []
++        }
++        return pointers.keys.sorted().compactMap { id in
++            guard let point = pointers[id], let start = starts[id] else { return nil }
++            let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
++            guard hypot(delta.x, delta.y) >= socket.unitSize / 2 else { return nil }
++            if case .segmented(let items) = action {
++                guard !items.isEmpty else { return nil }
++                let slice = 2 * Double.pi / Double(items.count)
++                let angle = atan2(Double(delta.y), Double(delta.x))
++                let rawIndex = Int(floor((angle + .pi / 2 + slice / 2) / slice))
++                let index = (rawIndex % items.count + items.count) % items.count
++                return .init(
++                    pointerID: id, offset: delta, action: items[index], segmentIndex: index)
++            }
++            return .init(pointerID: id, offset: delta, action: action, segmentIndex: nil)
++        }
+     }
+ 
+     @discardableResult
+-    mutating func begin(pointerID: Int, position: CGPoint) -> Bool {
++    mutating func begin(
++        pointerID: Int, position: CGPoint,
++        timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
++    ) -> Bool {
+         guard !hasExclusivePointer else { return false }
+         pointers[pointerID] = position
+         starts[pointerID] = position
+         if primaryPointer == nil { primaryPointer = pointerID }
++        if socket.control.kind == .touchpad {
++            lastMovementTimestamp = timestamp
++            value = .zero
++        }
+         if socket.control.kind == .directionalPad
+             || (!socket.control.relative && socket.control.kind != .button)
+         {
+@@ -104,10 +141,23 @@
+         return true
+     }
+ 
+-    mutating func move(pointerID: Int, position: CGPoint) {
++    mutating func move(
++        pointerID: Int, position: CGPoint,
++        timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
++    ) {
+         guard let previous = pointers[pointerID] else { return }
+         pointers[pointerID] = position
+         if primaryPointer == pointerID {
++            if socket.control.kind == .touchpad {
++                // 静止期绘制会暂停；限制速度窗口，保持重新拖动时的即时响应。
++                let elapsed = min(
++                    20, max(1, (timestamp - (lastMovementTimestamp ?? timestamp)) * 1000))
++                value = .init(
++                    x: (position.x - previous.x) / elapsed,
++                    y: (previous.y - position.y) / elapsed)
++                lastMovementTimestamp = timestamp
++                return
++            }
+             updateValue(
+                 position: position,
+                 delta: .init(x: position.x - previous.x, y: position.y - previous.y))
+@@ -119,6 +169,7 @@
+         starts.removeValue(forKey: pointerID)
+         guard pointers.isEmpty else { return }
+         primaryPointer = nil
++        lastMovementTimestamp = nil
+         switch socket.control.kind {
+         case .button:
+             if cancelled { toggled = false } else if socket.control.toggle { toggled.toggle() }
+@@ -132,8 +183,18 @@
+         pointers.removeAll()
+         starts.removeAll()
+         primaryPointer = nil
++        lastMovementTimestamp = nil
+         value = .zero
+         toggled = false
++    }
++
++    @discardableResult
++    mutating func advance(to timestamp: TimeInterval) -> Bool {
++        guard needsTimeUpdate, let lastMovementTimestamp,
++            timestamp - lastMovementTimestamp >= 0.02
++        else { return false }
++        value = .zero
++        return true
+     }
+ 
+     func contribution() -> TouchInputContribution {
+@@ -142,21 +203,8 @@
+         switch control.kind {
+         case .button:
+             if isActive { result.add(control.action, allowsLayers: control.enabled) }
+-            if let pull = control.pullAction {
+-                for (id, point) in pointers {
+-                    guard let start = starts[id] else { continue }
+-                    let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
+-                    guard hypot(delta.x, delta.y) >= socket.unitSize / 2 else { continue }
+-                    if case .segmented(let items) = pull, !items.isEmpty {
+-                        let slice = 2 * Double.pi / Double(items.count)
+-                        let angle = atan2(Double(delta.y), Double(delta.x))
+-                        let rawIndex = Int(floor((angle + .pi / 2 + slice / 2) / slice))
+-                        let index = (rawIndex % items.count + items.count) % items.count
+-                        result.add(items[index], allowsLayers: control.enabled)
+-                    } else {
+-                        result.add(pull, allowsLayers: control.enabled)
+-                    }
+-                }
++            for pull in pullStates {
++                result.add(pull.action, allowsLayers: control.enabled)
+             }
+         case .joystick:
+             if !pointers.isEmpty {
+@@ -167,7 +215,7 @@
+             }
+         case .directionalPad:
+             if !pointers.isEmpty {
+-                let deadzone = socket.collisionRadius * 0.23
++                let deadzone = socket.collisionRadius * control.directionalPadDeadzone
+                 if hypot(value.x, value.y) > deadzone {
+                     let exclusive =
+                         control.properties["interaction"]?["activationType"]?.string == "exclusive"
+@@ -202,7 +250,17 @@
+                     }
+                 }
+             }
+-        case .touchpad: break
++        case .touchpad:
++            if !pointers.isEmpty {
++                result.add(control.action, allowsLayers: control.enabled)
++                for mapping in control.axis { apply(mapping, to: &result) }
++            }
++        case .arcadeButtons:
++            let active = activeArcadeButtonIDs
++            for button in TouchArcadeGeometry.buttons(in: socket) where active.contains(button.id) {
++                result.add(
++                    button.control.action, allowsLayers: control.enabled && button.control.enabled)
++            }
+         }
+         return result
+     }
+@@ -222,8 +280,11 @@
+                 : CGPoint(
+                     x: (position.x - socket.center.x) / radius,
+                     y: (socket.center.y - position.y) / radius)
+-            let scale = max(1, hypot(next.x, next.y))
+-            value = .init(x: next.x / scale, y: next.y / scale)
++            let constrained = CGPoint(
++                x: control.hasHorizontalAxis ? next.x : 0,
++                y: control.hasVerticalAxis ? next.y : 0)
++            let scale = max(1, hypot(constrained.x, constrained.y))
++            value = .init(x: constrained.x / scale, y: constrained.y / scale)
+         case .directionalPad:
+             value = .init(x: position.x - socket.center.x, y: socket.center.y - position.y)
+         case .throttle:
+@@ -232,29 +293,23 @@
+                 ? value.y - delta.y / socket.collisionRadius
+                 : (socket.center.y - position.y) / socket.collisionRadius
+             value = .init(x: 0, y: min(1, max(-1, next)))
+-        case .button, .touchpad: break
++        case .button, .touchpad, .arcadeButtons: break
+         }
+     }
+ 
+     private func apply(_ mapping: TouchAxisMapping, to result: inout TouchInputContribution) {
+         var vector = value
+         let threshold = mapping.deadzone
+-        func transform(_ value: Double) -> Double {
++        func deadzone(_ value: Double) -> Double {
+             guard value != 0 else { return 0 }
+             let sign = value > 0 ? 1.0 : -1.0
+-            let offset = value * (1 - threshold) + sign * threshold
+-            return (offset - sign * threshold) * mapping.sensitivity + sign * threshold
+-        }
+-        if mapping.radial {
+-            let length = Double(hypot(vector.x, vector.y))
+-            if length > 0 {
+-                let nextLength = transform(length)
+-                vector = .init(
+-                    x: Double(vector.x) * nextLength / length,
+-                    y: Double(vector.y) * nextLength / length)
+-            }
+-        } else {
+-            vector = .init(x: transform(Double(vector.x)), y: transform(Double(vector.y)))
++            return value * (1 - threshold) + sign * threshold
++        }
++        func response(_ value: Double) -> Double {
++            let curved = mapping.responseCurve?.apply(value) ?? value
++            guard curved != 0 else { return 0 }
++            let sign = curved > 0 ? 1.0 : -1.0
++            return (curved - sign * threshold) * mapping.sensitivity + sign * threshold
+         }
+         let x = Double(vector.x)
+         let y = Double(vector.y)
+@@ -269,10 +324,19 @@
+         default: scalar = 0
+         }
+         if mapping.input == "axisXY" {
+-            result.axes[mapping.output + "X", default: 0] += x
+-            result.axes[mapping.output + "Y", default: 0] += y
++            if mapping.radial {
++                let length = Double(hypot(vector.x, vector.y))
++                if length > 0 {
++                    let nextLength = deadzone(length)
++                    vector = .init(x: x * nextLength / length, y: y * nextLength / length)
++                }
++            } else {
++                vector = .init(x: deadzone(x), y: deadzone(y))
++            }
++            result.axes[mapping.output + "X", default: 0] += response(Double(vector.x))
++            result.axes[mapping.output + "Y", default: 0] += response(Double(vector.y))
+         } else {
+-            result.axes[mapping.output, default: 0] += scalar
++            result.axes[mapping.output, default: 0] += response(deadzone(scalar))
+         }
+     }
+ }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift
+@@ -23,7 +23,65 @@
+     }
+ 
+     func contains(_ point: CGPoint) -> Bool {
+-        hypot(point.x - center.x, point.y - center.y) <= collisionRadius
++        if control.kind == .touchpad && !control.renderAsButton {
++            let rect = CGRect(
++                x: center.x - collisionRadius, y: center.y - collisionRadius,
++                width: collisionRadius * 2, height: collisionRadius * 2)
++            return CGPath(
++                roundedRect: rect, cornerWidth: collisionRadius * 0.36,
++                cornerHeight: collisionRadius * 0.36, transform: nil
++            ).contains(point)
++        }
++        if control.kind == .arcadeButtons {
++            return hypot(point.x - center.x, point.y - center.y) <= collisionRadius
++                || TouchArcadeGeometry.buttons(in: self).contains { $0.contains(point) }
++        }
++        return hypot(point.x - center.x, point.y - center.y) <= collisionRadius
++    }
++}
++
++/// 格斗按键的绘制与组合命中共用同一组圆形区域。
++enum TouchArcadeGeometry {
++    static func buttons(in socket: TouchControlSocket) -> [TouchControlSocket] {
++        let special =
++            socket.control.properties["specialPunch"]?.object != nil
++            || socket.control.properties["specialKick"]?.object != nil
++        let radius = socket.collisionRadius
++        let columns = special ? 4 : 3
++        let spacing = radius * (special ? 0.42 : 0.6)
++        let diameter = radius * (special ? 0.48 : 0.64)
++        var buttons: [TouchControlSocket] = []
++        for (row, suffix) in ["Punch", "Kick"].enumerated() {
++            for (column, prefix) in ["light", "medium", "heavy", "special"].enumerated() {
++                let name = prefix + suffix
++                guard var properties = socket.control.properties[name]?.object else { continue }
++                properties["type"] = .string("button")
++                let control = TouchControl(
++                    id: socket.id + "/" + name, kind: .button, properties: .object(properties))
++                guard control.visible else { continue }
++                let center = CGPoint(
++                    x: socket.center.x + (CGFloat(column) - CGFloat(columns - 1) / 2) * spacing,
++                    y: socket.center.y + (CGFloat(row) - 0.5) * radius * 0.8)
++                buttons.append(
++                    .init(
++                        control: control, center: center, diameter: diameter,
++                        unitSize: diameter, regionOrder: socket.regionOrder))
++            }
++        }
++        return buttons
++    }
++
++    static func activeButtonIDs(at point: CGPoint, in socket: TouchControlSocket) -> Set<String> {
++        let buttons = buttons(in: socket)
++        let offset = CGPoint(x: point.x - socket.center.x, y: point.y - socket.center.y)
++        if abs(offset.x) <= socket.collisionRadius * 0.75,
++            abs(offset.y) >= socket.collisionRadius * 0.75,
++            hypot(offset.x, offset.y) <= socket.collisionRadius
++        {
++            let suffix = offset.y < 0 ? "Punch" : "Kick"
++            return Set(buttons.filter { $0.id.hasSuffix(suffix) }.map(\.id))
++        }
++        return Set(buttons.filter { $0.contains(point) }.map(\.id))
+     }
+ }
+ 
+@@ -194,8 +252,7 @@
+         _ item: TouchJSON, id: String, center: CGPoint, diameter: CGFloat,
+         unit: CGFloat, order: Int, to result: inout [TouchControlSocket]
+     ) {
+-        guard let type = item["type"]?.string, let kind = TouchControlKind(rawValue: type),
+-            kind != .touchpad
++        guard let type = item["type"]?.string, let kind = TouchControlKind(rawValue: type)
+         else { return }
+         let control = TouchControl(id: id, kind: kind, properties: item)
+         guard control.visible else { return }
+--- a/iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift
+@@ -118,6 +118,28 @@
+     func resetDiagnostics() { diagnostics = .init() }
+ 
+     func didRender(at timestamp: TimeInterval) { diagnostics.rendered(at: timestamp) }
++
++    var needsTimeUpdate: Bool { runtimes.values.contains { $0.needsTimeUpdate } }
++
++    func advance(at timestamp: TimeInterval) {
++        guard timestamp.isFinite else { return }
++        let startedAt = clock()
++        var changed = false
++        for id in orderedRuntimeIDs {
++            if runtimes[id]?.advance(to: timestamp) == true { changed = true }
++        }
++        guard changed else { return }
++        let previousState = gamepad
++        gamepad = aggregate()
++        let completedAt = clock()
++        let transitions: [TouchGamepadSnapshot] = previousState == gamepad ? [] : [.init(gamepad)]
++        if previousState != gamepad { diagnostics.stateChanged(at: completedAt) }
++        publish(
++            events: [], transitions: transitions,
++            transitionTimestamps: transitions.isEmpty ? [] : [completedAt], reason: "pointer",
++            timestamp: timestamp, completedAt: completedAt,
++            processingDuration: completedAt - startedAt)
++    }
+ 
+     func load(_ layout: TouchLayout) {
+         cancelAll(reason: "layoutChanged")
+@@ -219,7 +241,7 @@
+                 return
+             }
+             positions[sample.id] = sample.position
+-            attach(sample.id, at: sample.position)
++            attach(sample.id, at: sample.position, timestamp: source ?? receivedAt)
+             eventControl = attachedControls[sample.id]
+         case .moved:
+             guard positions[sample.id] != nil else {
+@@ -227,7 +249,7 @@
+                 return
+             }
+             positions[sample.id] = sample.position
+-            move(sample.id, to: sample.position)
++            move(sample.id, to: sample.position, timestamp: source ?? receivedAt)
+             eventControl = attachedControls[sample.id]
+         case .ended, .cancelled:
+             guard positions[sample.id] != nil else {
+@@ -291,13 +313,13 @@
+             processingDuration: completedAt - startedAt)
+     }
+ 
+-    private func attach(_ id: Int, at point: CGPoint) {
++    private func attach(_ id: Int, at point: CGPoint, timestamp: TimeInterval) {
+         let candidates = sockets.filter {
+             $0.control.visible && $0.contains(point)
+                 && !(runtimes[$0.id]?.hasExclusivePointer ?? false)
+         }
+         guard let socket = TouchLayoutGeometry.hitTest(point, sockets: candidates),
+-            runtimes[socket.id]?.begin(pointerID: id, position: point) == true
++            runtimes[socket.id]?.begin(pointerID: id, position: point, timestamp: timestamp) == true
+         else { return }
+         attachedControls[id] = socket.id
+     }
+@@ -307,21 +329,21 @@
+         runtimes[control]?.end(pointerID: id, cancelled: cancelled)
+     }
+ 
+-    private func move(_ id: Int, to point: CGPoint) {
++    private func move(_ id: Int, to point: CGPoint, timestamp: TimeInterval) {
+         if let control = attachedControls[id], let runtime = runtimes[control] {
+             if runtime.socket.control.allowsRollover {
+                 let next = TouchLayoutGeometry.hitTest(point, sockets: sockets)
+                 if next?.id != control {
+                     if next == nil || next?.control.allowsRollover == true {
+                         detach(id, cancelled: false)
+-                        attach(id, at: point)
++                        attach(id, at: point, timestamp: timestamp)
+                         return
+                     }
+                 }
+             }
+-            runtimes[control]?.move(pointerID: id, position: point)
++            runtimes[control]?.move(pointerID: id, position: point, timestamp: timestamp)
+         } else {
+-            attach(id, at: point)
++            attach(id, at: point, timestamp: timestamp)
+         }
+     }
+ 
+--- a/iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift
++++ b/iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift
+@@ -89,6 +89,7 @@
+     private var displayLink: CADisplayLink?
+     private var displayTarget: TouchDisplayTarget?
+     private var backgroundObserver: NSObjectProtocol?
++    private var rendering = false
+ 
+     init(input: TouchInputAccumulator) {
+         self.input = input
+@@ -166,7 +167,11 @@
+     }
+ 
+     func requestRender() {
+-        if displayLink == nil { render() } else { displayLink?.isPaused = false }
++        if displayLink == nil {
++            if !rendering { render() }
++        } else {
++            displayLink?.isPaused = false
++        }
+     }
+ 
+     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+@@ -178,7 +183,11 @@
+     }
+ 
+     fileprivate func render() {
++        guard !rendering else { return }
++        rendering = true
++        defer { rendering = false }
+         let now = CACurrentMediaTime()
++        input.advance(at: now)
+         CATransaction.begin()
+         CATransaction.setDisableActions(true)
+         let valid = Set(input.sockets.map(\.id))
+@@ -198,24 +207,33 @@
+                 assets: assets,
+                 highlighted: feedback.isHighlighted(socket.id, now: now)
+                     || (onMoveControl != nil && selectedControlID == socket.id))
+-            let element = UIAccessibilityElement(accessibilityContainer: self)
+-            element.accessibilityIdentifier = "touch-control-\(socket.id)"
+-            element.accessibilityLabel = socket.control.title
+-            element.accessibilityTraits = .button
+-            element.accessibilityValue = appLocalizedString(
+-                onMoveControl != nil
+-                    ? (selectedControlID == socket.id ? "已选中，可拖动" : "可拖动")
+-                    : (input.runtimes[socket.id]?.isActive == true ? "按下" : "释放"), locale: locale)
+-            element.accessibilityFrameInContainerSpace = CGRect(
+-                x: socket.center.x - socket.collisionRadius,
+-                y: socket.center.y - socket.collisionRadius,
+-                width: socket.collisionRadius * 2, height: socket.collisionRadius * 2)
+-            elements.append(element)
++            let arcade = socket.control.kind == .arcadeButtons
++            let accessibleSockets = arcade ? TouchArcadeGeometry.buttons(in: socket) : [socket]
++            let activeButtons = arcade ? input.runtimes[socket.id]?.activeArcadeButtonIDs ?? [] : []
++            for accessible in accessibleSockets {
++                let element = UIAccessibilityElement(accessibilityContainer: self)
++                element.accessibilityIdentifier = "touch-control-\(accessible.id)"
++                element.accessibilityLabel = accessible.control.title
++                element.accessibilityTraits = .button
++                let active =
++                    arcade
++                    ? activeButtons.contains(accessible.id)
++                    : input.runtimes[socket.id]?.isActive == true
++                element.accessibilityValue = appLocalizedString(
++                    onMoveControl != nil
++                        ? (selectedControlID == socket.id ? "已选中，可拖动" : "可拖动")
++                        : (active ? "按下" : "释放"), locale: locale)
++                element.accessibilityFrameInContainerSpace = CGRect(
++                    x: accessible.center.x - accessible.collisionRadius,
++                    y: accessible.center.y - accessible.collisionRadius,
++                    width: accessible.collisionRadius * 2, height: accessible.collisionRadius * 2)
++                elements.append(element)
++            }
+         }
+         accessibilityElements = elements
+         CATransaction.commit()
+         input.didRender(at: now)
+-        displayLink?.isPaused = !feedback.needsDisplayFrame(now: now)
++        displayLink?.isPaused = !feedback.needsDisplayFrame(now: now) && !input.needsTimeUpdate
+     }
+ 
+     func cancel(reason: String) {
+@@ -324,11 +342,35 @@
+     private let knob = CAShapeLayer()
+     private let symbol = CALayer()
+     private let text = CATextLayer()
++    private let background = CALayer()
++    private let knobBackground = CALayer()
++    private let axisUpCap = CALayer()
++    private let axisDownCap = CALayer()
++    private let pullConnector = CAShapeLayer()
+     private var symbolCacheKey: String?
+     private var symbolCache: CGImage?
++    private var arcadeDrawings: [String: TouchControlDrawing] = [:]
++    private var pullDrawings: [Int: TouchControlDrawing] = [:]
++    private var previousArcadeActiveIDs: Set<String> = []
+ 
+     init() {
+         for child in [outline, indicator, knob, symbol, text] { root.addSublayer(child) }
++        // 追加素材层并用深度排序，保持既有控件层和资源复用合同。
++        background.name = "control-background"
++        background.zPosition = -1
++        knobBackground.name = "knob-background"
++        knobBackground.zPosition = 0.5
++        axisUpCap.name = "axis-up-cap"
++        axisDownCap.name = "axis-down-cap"
++        for child in [background, knobBackground, axisUpCap, axisDownCap, pullConnector] {
++            root.addSublayer(child)
++        }
++        knob.zPosition = 1
++        symbol.zPosition = 2
++        text.zPosition = 2
++        pullConnector.zPosition = 1.5
++        pullConnector.lineWidth = 1.3
++        pullConnector.fillColor = UIColor.clear.cgColor
+         for shape in [outline, indicator, knob] {
+             shape.lineWidth = 1.3
+             shape.lineCap = .round
+@@ -342,6 +384,16 @@
+         socket: TouchControlSocket, runtime: TouchControlRuntime?, opacity: Float,
+         traits: UITraitCollection, assets: TouchLayoutAssets, highlighted: Bool
+     ) {
++        if socket.control.kind == .arcadeButtons {
++            updateArcade(
++                socket: socket, runtime: runtime, opacity: opacity, traits: traits,
++                assets: assets, highlighted: highlighted)
++            return
++        }
++        for drawing in arcadeDrawings.values { drawing.root.removeFromSuperlayer() }
++        arcadeDrawings.removeAll()
++        outline.isHidden = false
++        symbol.isHidden = false
+         let diameter = socket.diameter
+         let bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+         let active = runtime?.isActive == true
+@@ -349,24 +401,44 @@
+         root.bounds = bounds
+         root.position = socket.center
+         root.transform = CATransform3DMakeScale(pressed ? 0.94 : 1, pressed ? 0.94 : 1, 1)
+-        root.opacity = pressed ? max(opacity, 0.85) : opacity
+         let foreground = UIColor.white
+         let accent = UIColor(red: 0.31, green: 0.69, blue: 0.48, alpha: 1)
+         let style = socket.control.visualStyle(runtime: runtime)
++        root.opacity = (pressed ? max(opacity, 0.85) : opacity) * styleOpacity(style)
++        if !socket.control.enabled
++            && socket.control.properties["styles"]?["disabled"]?["opacity"] == nil
++        {
++            root.opacity *= 0.5
++        }
+         let stroke = style["knob"]?["stroke"] ?? style["stroke"]
+         let strokeColor = color(stroke?["color"]?.string) ?? (pressed ? accent : foreground)
+         let feedbackColor = buttonColor(socket.control.action, fallback: strokeColor)
+         outline.frame = bounds
+-        outline.path = UIBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).cgPath
++        let isTouchpad = socket.control.kind == .touchpad && !socket.control.renderAsButton
++        updateArtwork(
++            background, component: style["background"], frame: bounds,
++            cornerRadius: diameter * (isTouchpad ? 0.18 : 0.5), traits: traits, assets: assets)
++        outline.path =
++            isTouchpad
++            ? UIBezierPath(
++                roundedRect: bounds.insetBy(dx: 1, dy: 1), cornerRadius: diameter * 0.18
++            ).cgPath
++            : UIBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).cgPath
+         outline.fillColor =
+-            (pressed ? feedbackColor : foreground)
+-            .withAlphaComponent(pressed ? 0.22 : 0.025).cgColor
++            background.isHidden
++            ? (pressed ? feedbackColor : foreground)
++                .withAlphaComponent(pressed ? 0.22 : 0.025).cgColor
++            : UIColor.clear.cgColor
+         outline.strokeColor =
+             (pressed ? feedbackColor : foreground)
+             .withAlphaComponent(pressed ? 0.95 : 0.35).cgColor
+         outline.lineWidth = pressed ? 2.4 : 1.3
+         outline.opacity = pressed ? 1 : Float(style["outline"]?["opacity"]?.number ?? 1)
+         knob.isHidden = true
++        knobBackground.isHidden = true
++        knobBackground.contents = nil
++        axisUpCap.isHidden = true
++        axisDownCap.isHidden = true
+         indicator.isHidden = true
+ 
+         let kind = socket.control.kind
+@@ -377,15 +449,22 @@
+             face = CGRect(
+                 x: diameter * 0.27 + offset.x, y: diameter * 0.27 + offset.y,
+                 width: diameter * 0.46, height: diameter * 0.46)
++            updateArtwork(
++                knobBackground, component: style["knob"]?["background"], frame: face,
++                cornerRadius: face.width / 2, traits: traits, assets: assets)
++            knobBackground.opacity *= styleOpacity(style["knob"])
+             knob.isHidden = false
+             knob.frame = bounds
+             knob.path = UIBezierPath(ovalIn: face).cgPath
+             knob.strokeColor = strokeColor.cgColor
+-            let knobOpacity = Float(stroke?["opacity"]?.number ?? 0.8)
+-            knob.opacity = pressed ? max(knobOpacity, 0.9) : knobOpacity
++            let knobOpacity = styleOpacity(stroke, fallback: 0.8)
++            knob.opacity =
++                (pressed ? max(knobOpacity, 0.9) : knobOpacity) * styleOpacity(style["knob"])
+             knob.fillColor =
+-                (pressed ? feedbackColor : foreground)
+-                .withAlphaComponent(pressed ? 0.18 : 0.045).cgColor
++                knobBackground.isHidden
++                ? (pressed ? feedbackColor : foreground)
++                    .withAlphaComponent(pressed ? 0.18 : 0.045).cgColor
++                : UIColor.clear.cgColor
+             if kind == .throttle {
+                 indicator.isHidden = false
+                 let path = UIBezierPath()
+@@ -396,8 +475,30 @@
+                 indicator.strokeColor =
+                     (color(style["indicator"]?["color"]?.string) ?? accent)
+                     .withAlphaComponent(0.55).cgColor
++                for (cap, key, y) in [(axisUpCap, "axisUp", 0.13), (axisDownCap, "axisDown", 0.87)]
++                {
++                    updateArtwork(
++                        cap, component: style[key]?["cap"],
++                        frame: CGRect(
++                            x: diameter * 0.375, y: diameter * (y - 0.04),
++                            width: diameter * 0.25, height: diameter * 0.08),
++                        cornerRadius: diameter * 0.04, traits: traits, assets: assets)
++                }
+             }
+             face = face.insetBy(dx: face.width * 0.22, dy: face.height * 0.22)
++        }
++        if kind == .directionalPad {
++            let radius = socket.collisionRadius * socket.control.directionalPadDeadzone
++            indicator.isHidden = radius == 0
++            indicator.frame = bounds
++            indicator.path =
++                UIBezierPath(
++                    ovalIn: CGRect(
++                        x: diameter / 2 - radius, y: diameter / 2 - radius,
++                        width: radius * 2, height: radius * 2)
++                ).cgPath
++            indicator.strokeColor = foreground.withAlphaComponent(0.25).cgColor
++            indicator.fillColor = UIColor.clear.cgColor
+         }
+         let faceImage = style["faceImage"] ?? style["knob"]?["faceImage"]
+         let icon = faceImage?["value"]?.string ?? socket.control.icon
+@@ -406,6 +507,8 @@
+         symbol.frame = face
+         symbol.contentsScale = traits.displayScale
+         symbol.contentsGravity = .resizeAspect
++        symbol.opacity = styleOpacity(faceImage)
++        if style["faceImage"] == nil { symbol.opacity *= styleOpacity(style["knob"]) }
+         let isXboxGuide = socket.control.action == .gamepad("guide")
+         let symbolIdentity = isXboxGuide ? "XboxLogo" : systemName ?? ""
+         let cacheKey = "\(symbolIdentity): \(face.size): \(strokeColor): \(traits.displayScale)"
+@@ -450,6 +553,143 @@
+             text.isHidden = true
+             indicator.isHidden = true
+         }
++        updatePullIndicators(
++            socket: socket, runtime: runtime, style: style, traits: traits, assets: assets)
++    }
++
++    private func updateArtwork(
++        _ layer: CALayer, component: TouchJSON?, frame: CGRect, cornerRadius: CGFloat,
++        traits: UITraitCollection, assets: TouchLayoutAssets
++    ) {
++        layer.frame = frame
++        layer.contentsScale = traits.displayScale
++        layer.contentsGravity = .resizeAspect
++        layer.opacity = styleOpacity(component)
++        layer.contents = nil
++        layer.backgroundColor = nil
++        layer.cornerRadius = 0
++        layer.masksToBounds = false
++        if component?["type"]?.string == "asset", let id = component?["value"]?.string {
++            layer.contents = assets.images[id]
++        } else if component?["type"]?.string == "color",
++            let fill = color(component?["value"]?.string)
++        {
++            layer.backgroundColor = fill.cgColor
++            layer.cornerRadius = cornerRadius
++            layer.masksToBounds = true
++        }
++        layer.isHidden = layer.contents == nil && layer.backgroundColor == nil
++    }
++
++    private func updatePullIndicators(
++        socket: TouchControlSocket, runtime: TouchControlRuntime?, style: TouchJSON,
++        traits: UITraitCollection, assets: TouchLayoutAssets
++    ) {
++        let pulls = socket.control.enabled ? runtime?.pullStates ?? [] : []
++        let valid = Set(pulls.map(\.pointerID))
++        for id in pullDrawings.keys where !valid.contains(id) {
++            pullDrawings.removeValue(forKey: id)?.root.removeFromSuperlayer()
++        }
++        pullConnector.isHidden = pulls.isEmpty
++        let path = UIBezierPath()
++        let center = CGPoint(x: socket.diameter / 2, y: socket.diameter / 2)
++        for pull in pulls {
++            let length = hypot(pull.offset.x, pull.offset.y)
++            let distance = socket.diameter * 0.7
++            let position = CGPoint(
++                x: center.x + pull.offset.x / length * distance,
++                y: center.y + pull.offset.y / length * distance)
++            path.move(to: center)
++            path.addLine(to: position)
++            let segment: TouchJSON?
++            let action: TouchJSON?
++            if let index = pull.segmentIndex {
++                let segments = style["pullIndicator"]?.array
++                segment =
++                    segments.flatMap { $0.indices.contains(index) ? $0[index] : nil }
++                    ?? (segments == nil ? style["pullIndicator"] : nil)
++                action = socket.control.properties["pullAction"]?["items"]?.array?[index]
++            } else {
++                segment = style["pullIndicator"]
++                action = socket.control.properties["pullAction"]
++            }
++            let control = TouchControl(
++                id: "\(socket.id)/pull/\(pull.pointerID)", kind: .button,
++                properties: .object([
++                    "action": action ?? .null,
++                    "styles": .object(["default": segment ?? .object([:])]),
++                ]))
++            let local = TouchControlSocket(
++                control: control, center: position, diameter: socket.diameter * 0.42,
++                unitSize: socket.unitSize, regionOrder: socket.regionOrder)
++            let drawing = pullDrawings[pull.pointerID] ?? TouchControlDrawing()
++            if pullDrawings[pull.pointerID] == nil {
++                pullDrawings[pull.pointerID] = drawing
++                drawing.root.name = "pull-indicator-\(pull.pointerID)"
++                drawing.root.zPosition = 3
++                root.addSublayer(drawing.root)
++            }
++            drawing.update(
++                socket: local, runtime: nil, opacity: 1, traits: traits, assets: assets,
++                highlighted: false)
++            drawing.root.isHidden = segment == .null
++        }
++        pullConnector.frame = root.bounds
++        pullConnector.path = path.cgPath
++        pullConnector.strokeColor = UIColor.white.withAlphaComponent(0.45).cgColor
++    }
++
++    private func updateArcade(
++        socket: TouchControlSocket, runtime: TouchControlRuntime?, opacity: Float,
++        traits: UITraitCollection, assets: TouchLayoutAssets, highlighted: Bool
++    ) {
++        let diameter = socket.diameter
++        root.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
++        root.position = socket.center
++        root.transform = CATransform3DIdentity
++        root.opacity = 1
++        for child in [
++            outline, indicator, knob, symbol, text, background, knobBackground, axisUpCap,
++            axisDownCap, pullConnector,
++        ] {
++            child.isHidden = true
++            child.contents = nil
++        }
++        for drawing in pullDrawings.values { drawing.root.removeFromSuperlayer() }
++        pullDrawings.removeAll()
++        let active = runtime?.activeArcadeButtonIDs ?? []
++        if !active.isEmpty || runtime?.pointers.isEmpty == false {
++            previousArcadeActiveIDs = active
++        }
++        let displayed = active.isEmpty && highlighted ? previousArcadeActiveIDs : active
++        let buttons = TouchArcadeGeometry.buttons(in: socket)
++        let valid = Set(buttons.map(\.id))
++        for id in arcadeDrawings.keys where !valid.contains(id) {
++            arcadeDrawings.removeValue(forKey: id)?.root.removeFromSuperlayer()
++        }
++        for button in buttons {
++            let local = TouchControlSocket(
++                control: button.control,
++                center: CGPoint(
++                    x: button.center.x - socket.center.x + diameter / 2,
++                    y: button.center.y - socket.center.y + diameter / 2),
++                diameter: button.diameter, unitSize: button.unitSize,
++                regionOrder: button.regionOrder)
++            let drawing = arcadeDrawings[button.id] ?? TouchControlDrawing()
++            if arcadeDrawings[button.id] == nil {
++                arcadeDrawings[button.id] = drawing
++                root.addSublayer(drawing.root)
++            }
++            var buttonRuntime = TouchControlRuntime(socket: local)
++            if displayed.contains(button.id) {
++                buttonRuntime.begin(pointerID: 0, position: local.center)
++            }
++            drawing.update(
++                socket: local, runtime: buttonRuntime, opacity: opacity, traits: traits,
++                assets: assets,
++                highlighted: displayed.contains(button.id))
++        }
++        if !highlighted && active.isEmpty { previousArcadeActiveIDs.removeAll() }
+     }
+ 
+     private func symbolName(icon: String?, control: TouchControl) -> String? {
+@@ -483,13 +723,25 @@
+     }
+ 
+     private func color(_ hex: String?) -> UIColor? {
+-        guard let hex, hex.hasPrefix("#"), hex.count == 7,
+-            let value = UInt32(hex.dropFirst(), radix: 16)
+-        else { return nil }
++        guard let hex, hex.hasPrefix("#") else { return nil }
++        var digits = String(hex.dropFirst())
++        if digits.count == 3 || digits.count == 4 {
++            digits = String(digits.flatMap { [$0, $0] })
++        }
++        guard (digits.count == 6 || digits.count == 8), let value = UInt32(digits, radix: 16) else {
++            return nil
++        }
++        let rgb = digits.count == 8 ? value >> 8 : value
+         return UIColor(
+-            red: CGFloat((value >> 16) & 255) / 255,
+-            green: CGFloat((value >> 8) & 255) / 255,
+-            blue: CGFloat(value & 255) / 255, alpha: 1)
++            red: CGFloat((rgb >> 16) & 255) / 255,
++            green: CGFloat((rgb >> 8) & 255) / 255,
++            blue: CGFloat(rgb & 255) / 255,
++            alpha: digits.count == 8 ? CGFloat(value & 255) / 255 : 1)
++    }
++
++    private func styleOpacity(_ style: TouchJSON?, fallback: Float = 1) -> Float {
++        guard let opacity = style?["opacity"]?.number, opacity.isFinite else { return fallback }
++        return Float(min(1, max(0, opacity)))
+     }
+ }
+ 
+@@ -497,13 +749,23 @@
+     func visualStyle(runtime: TouchControlRuntime?) -> TouchJSON {
+         let styles = properties["styles"]
+         let state: String
+-        if kind == .throttle, let runtime {
++        if !enabled {
++            state = "disabled"
++        } else if kind == .throttle, let runtime {
+             state =
+                 runtime.pointers.isEmpty
+                 ? (runtime.value.y > 0 ? "idleUp" : "idle")
+                 : (runtime.value.y >= 0 ? "activatedUp" : "activatedDown")
+-        } else if !enabled {
+-            state = "disabled"
++        } else if kind == .button, runtime?.isPulled == true {
++            state = "pulled"
++        } else if kind == .button, runtime?.toggled == true {
++            state = "toggled"
++        } else if kind == .joystick, let runtime, !runtime.pointers.isEmpty {
++            state =
++                action != nil && hypot(runtime.value.x, runtime.value.y) >= actionThreshold
++                ? "activated" : "moving"
++        } else if kind == .touchpad, runtime?.pointers.isEmpty == false {
++            state = action != nil ? "activated" : "moving"
+         } else {
+             state = runtime?.isActive == true ? "activated" : "idle"
+         }
+--- a/iosapp/XBXRCTests/TouchLayoutTests.swift
++++ b/iosapp/XBXRCTests/TouchLayoutTests.swift
+@@ -632,6 +632,318 @@
+         add(attachment)
+     }
+ 
++
++    private static let originalDrivingJSON = #"""
++        {"$schema":"https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.1/layout.json","content":{"left":{"inner":[{"type":"joystick","axis":{"input":"axisX","output":"leftJoystickX","deadzone":{"threshold":0.1}},"styles":{"default":{"knob":{"faceImage":{"type":"icon","value":"steering"}}},"idle":{"outline":{"stroke":{"color":"#fff","opacity":0,"type":"solid"}}}}}]},"right":{"inner":[{"type":"button","action":"rightTrigger","styles":{"default":{"faceImage":{"type":"icon","value":"gasPedal"}}}}],"outer":[[{"type":"button","action":"gamepadA","styles":{"default":{"faceImage":{"type":"icon","value":"handbrake2"}}}},null],{"type":"button","action":"gamepadB","styles":{"default":{"faceImage":{"type":"icon","value":"close"}}}},[{"type":"button","action":"leftTrigger","styles":{"default":{"faceImage":{"type":"icon","value":"brakePedal"}}}},null],{"type":"button","action":"gamepadX","styles":{"default":{"faceImage":{"type":"icon","value":"interact"}}}}]},"upper":{"right":[{"type":"button","action":"menu"}]},"lower":{"center":{"type":"button","action":"rightBumper","styles":{"default":{"faceImage":{"type":"icon","value":"switchCamera"}}}}}}}
++        """#
++    private static let originalFightingJSON = #"""
++        {"$schema":"https://raw.githubusercontent.com/microsoft/xbox-game-streaming-tools/master/touch-adaptation-kit/schemas/layout/v3.1/layout.json","content":{"left":{"inner":[{"type":"directionalPad","scale":2}]},"right":{"inner":[{"type":"arcadeButtons","lightPunch":{"action":"gamepadX","styles":{"default":{"faceImage":{"type":"icon","value":"lightPunch"}}}},"mediumPunch":{"action":"gamepadY","styles":{"default":{"faceImage":{"type":"icon","value":"mediumPunch"}}}},"heavyPunch":{"action":"rightBumper","styles":{"default":{"faceImage":{"type":"icon","value":"heavyPunch"}}}},"lightKick":{"action":"gamepadA","styles":{"default":{"faceImage":{"type":"icon","value":"lightKick"}}}},"mediumKick":{"action":"gamepadB","styles":{"default":{"faceImage":{"type":"icon","value":"mediumKick"}}}},"heavyKick":{"action":"leftBumper","styles":{"default":{"faceImage":{"type":"icon","value":"heavyKick"}}}}}]},"upper":{"right":[{"type":"button","action":"menu"}]}}}
++        """#
++
++    private func customEngine(_ control: [String: Any]) throws -> TouchInputAccumulator {
++        let data = try JSONSerialization.data(withJSONObject: [
++            "$schema": "https://schema.play.xbox.com/layout/v4.1/layout.json",
++            "content": ["right": ["inner": [control]]],
++        ])
++        let layout = try XCTUnwrap(TouchLayoutNormalizer.decode(data).first)
++        XCTAssertTrue(layout.report.isSupported, "\(layout.report.issues)")
++        let input = TouchInputAccumulator()
++        input.setViewport(size: CGSize(width: 800, height: 420))
++        input.load(layout)
++        return input
++    }
++
++    func testMicrosoftVPrefixedOriginalLayoutsPassCapabilityChecks() throws {
++        for original in [Self.originalDrivingJSON, Self.originalFightingJSON] {
++            let layout = try XCTUnwrap(TouchLayoutNormalizer.decode(Data(original.utf8)).first)
++            XCTAssertTrue(layout.report.isSupported, "\(layout.report.issues)")
++            let future = original.replacingOccurrences(of: "/v3.1/", with: "/v5.0/")
++            let unsupported = try XCTUnwrap(TouchLayoutNormalizer.decode(Data(future.utf8)).first)
++            XCTAssertFalse(unsupported.report.isSupported)
++            XCTAssertTrue(unsupported.report.issues.contains { $0.path == "/$schema" })
++        }
++    }
++
++    func testTouchpadVelocityExpiresWhileActionsRemainHeld() throws {
++        let input = try customEngine([
++            "type": "touchpad", "renderAsButton": true,
++            "action": ["gamepadX", "rightTrigger"],
++            "axis": ["input": "axisXY", "output": "rightJoystick", "sensitivity": 2],
++        ])
++        let pad = try XCTUnwrap(input.sockets.first)
++        let moved = CGPoint(x: pad.center.x + 5, y: pad.center.y - 2.5)
++        input.process(
++            [
++                .init(id: 1, phase: .began, position: pad.center, sourceTimestamp: 100),
++                .init(id: 1, phase: .moved, position: moved, sourceTimestamp: 100.01),
++            ], timestamp: 100.01)
++        XCTAssertEqual(input.gamepad.rightThumbX, 1, accuracy: 0.001)
++        XCTAssertEqual(input.gamepad.rightThumbY, 0.5, accuracy: 0.001)
++        XCTAssertEqual(input.gamepad.buttonMask, 64)
++        XCTAssertEqual(input.gamepad.rightTrigger, 1)
++        XCTAssertTrue(input.needsTimeUpdate)
++        input.advance(at: 100.029)
++        XCTAssertGreaterThan(input.gamepad.rightThumbX, 0)
++        input.advance(at: 100.031)
++        XCTAssertEqual(input.gamepad.rightThumbX, 0)
++        XCTAssertEqual(input.gamepad.rightThumbY, 0)
++        XCTAssertEqual(input.gamepad.buttonMask, 64)
++        XCTAssertEqual(input.gamepad.rightTrigger, 1)
++        XCTAssertFalse(input.needsTimeUpdate)
++        let resumed = CGPoint(x: moved.x + 1, y: moved.y)
++        input.process(
++            [.init(id: 1, phase: .moved, position: resumed, sourceTimestamp: 100.11)],
++            timestamp: 100.11)
++        XCTAssertEqual(input.gamepad.rightThumbX, 0.1, accuracy: 0.001)
++        XCTAssertEqual(input.gamepad.rightThumbY, 0)
++        XCTAssertTrue(input.needsTimeUpdate)
++        input.process([sample(1, .ended, resumed)], timestamp: 100.12)
++        XCTAssertEqual(input.gamepad, .neutral)
++    }
++
++    func testTouchpadZeroElapsedTimeAndLayoutReplacementReleaseInput() throws {
++        let input = try customEngine([
++            "type": "touchpad", "action": "gamepadA",
++            "axis": [
++                ["input": "axisX", "output": "rightJoystickX"],
++                ["input": "axisY", "output": "rightJoystickY"],
++            ],
++        ])
++        let pad = try XCTUnwrap(input.sockets.first)
++        let moved = CGPoint(x: pad.center.x + 0.5, y: pad.center.y + 0.25)
++        input.process([sample(1, .began, pad.center), sample(1, .moved, moved)], timestamp: 200)
++        XCTAssertEqual(input.gamepad.rightThumbX, 0.5, accuracy: 0.001)
++        XCTAssertEqual(input.gamepad.rightThumbY, -0.25, accuracy: 0.001)
++        XCTAssertEqual(input.gamepad.buttonMask, 16)
++        input.load(try TouchLayoutCatalog.read("generic")[0])
++        XCTAssertEqual(input.gamepad, .neutral)
++        XCTAssertFalse(input.needsTimeUpdate)
++        input.advance(at: 201)
++        XCTAssertEqual(input.gamepad, .neutral)
++        XCTAssertTrue(input.runtimes.values.allSatisfy { $0.pointers.isEmpty })
++    }
++
++    func testButtonStyleFollowsTogglePullAndDisabledState() throws {
++        let input = try customEngine([
++            "type": "button", "action": "gamepadA", "pullAction": "gamepadX", "toggle": true,
++            "styles": [
++                "default": ["background": ["type": "color", "value": "#fff"]],
++                "activated": ["background": ["value": "#000"]],
++                "toggled": ["background": ["value": "#0f0"]],
++                "pulled": ["background": ["value": "#00f"]],
++                "disabled": ["background": ["value": "#888"]],
++            ],
++        ])
++        let button = try XCTUnwrap(input.sockets.first)
++        func background() -> String? {
++            button.control.visualStyle(runtime: input.runtimes[button.id])["background"]?["value"]?
++                .string
++        }
++        XCTAssertEqual(background(), "#fff")
++        input.process([sample(1, .began, button.center)])
++        XCTAssertEqual(background(), "#000")
++        input.process([sample(1, .ended, button.center)])
++        XCTAssertEqual(background(), "#0f0")
++        input.process([
++            sample(2, .began, button.center),
++            sample(2, .moved, CGPoint(x: button.center.x, y: button.center.y - button.unitSize)),
++        ])
++        XCTAssertEqual(background(), "#00f")
++        var properties = try XCTUnwrap(button.control.properties.object)
++        properties["enabled"] = .bool(false)
++        let disabled = TouchControl(id: button.id, kind: .button, properties: .object(properties))
++        XCTAssertEqual(
++            disabled.visualStyle(runtime: input.runtimes[button.id])["background"]?["value"]?
++                .string,
++            "#888")
++        input.cancelAll()
++        XCTAssertEqual(input.gamepad, .neutral)
++        XCTAssertEqual(background(), "#fff")
++    }
++
++    func testArcadeOriginalSupportsBetweenButtonRowCombosAndIndependentRelease() throws {
++        let layout = try XCTUnwrap(
++            TouchLayoutNormalizer.decode(Data(Self.originalFightingJSON.utf8)).first)
++        let input = TouchInputAccumulator()
++        input.setViewport(size: CGSize(width: 800, height: 420))
++        input.load(layout)
++        let arcade = try XCTUnwrap(input.sockets.first { $0.control.kind == .arcadeButtons })
++        let buttons = TouchArcadeGeometry.buttons(in: arcade)
++        XCTAssertEqual(buttons.count, 6)
++        let x = try XCTUnwrap(buttons.first { $0.id.hasSuffix("lightPunch") })
++        let y = try XCTUnwrap(buttons.first { $0.id.hasSuffix("mediumPunch") })
++        let between = CGPoint(x: (x.center.x + y.center.x) / 2, y: x.center.y)
++        input.process([sample(1, .began, between)])
++        XCTAssertEqual(input.gamepad.buttonMask, 64 | 128)
++        input.process([sample(2, .began, y.center), sample(1, .ended, between)])
++        XCTAssertEqual(input.gamepad.buttonMask, 128)
++        let row = CGPoint(x: arcade.center.x, y: arcade.center.y - arcade.collisionRadius * 0.85)
++        input.process([sample(3, .began, row), sample(2, .ended, y.center)])
++        XCTAssertEqual(input.gamepad.buttonMask, 64 | 128 | 8192)
++        input.process([sample(3, .ended, row)])
++        XCTAssertEqual(input.gamepad, .neutral)
++    }
++
++    func testEightArcadeButtonsKeepHiddenButtonOutOfCombos() throws {
++        let input = try customEngine([
++            "type": "arcadeButtons",
++            "lightPunch": ["action": "gamepadX", "visible": false],
++            "mediumPunch": ["action": "gamepadY"],
++            "heavyPunch": ["action": "rightBumper"],
++            "specialPunch": ["action": ["leftThumb", "rightThumb"]],
++            "lightKick": ["action": "gamepadA"],
++            "mediumKick": ["action": "gamepadB"],
++            "heavyKick": ["action": "leftBumper"],
++            "specialKick": ["action": "leftTrigger"],
++        ])
++        let arcade = try XCTUnwrap(input.sockets.first)
++        XCTAssertEqual(TouchArcadeGeometry.buttons(in: arcade).count, 7)
++        let row = CGPoint(x: arcade.center.x, y: arcade.center.y - arcade.collisionRadius * 0.85)
++        input.process([sample(1, .began, row)])
++        XCTAssertEqual(input.gamepad.buttonMask, 128 | 8192 | 16384 | 32768)
++        input.cancelAll(reason: "background")
++        XCTAssertEqual(input.gamepad, .neutral)
++    }
++
++    func testDirectionalPadUsesDeclaredDeadzoneAndNeighboringDirections() throws {
++        let input = try customEngine([
++            "type": "directionalPad", "deadzone": 0.5,
++            "interaction": ["activationType": "allowNeighboring"],
++        ])
++        let pad = try XCTUnwrap(input.sockets.first)
++        let near = CGPoint(x: pad.center.x + pad.collisionRadius * 0.4, y: pad.center.y)
++        input.process([sample(1, .began, near)])
++        XCTAssertEqual(input.gamepad, .neutral)
++        let diagonal = CGPoint(
++            x: pad.center.x + pad.collisionRadius * 0.45,
++            y: pad.center.y - pad.collisionRadius * 0.45)
++        input.process([sample(1, .moved, diagonal)])
++        XCTAssertEqual(input.gamepad.buttonMask, 256 | 2048)
++        input.process([sample(1, .cancelled, diagonal)])
++        XCTAssertEqual(input.gamepad, .neutral)
++    }
++
++    func testResponseCurvesStayFiniteAndFollowAxisMapping() throws {
++        for kind in ["circular", "circular-inverse"] {
++            let curve = try XCTUnwrap(
++                TouchResponseCurve.parse(
++                    .object([
++                        "type": .string(kind), "range": .array([.number(0), .number(1)]),
++                    ])))
++            XCTAssertEqual(curve.apply(0), 0)
++            XCTAssertEqual(curve.apply(1), 1, accuracy: 0.000001)
++            XCTAssertEqual(curve.apply(-1), -1, accuracy: 0.000001)
++            XCTAssertEqual(curve.apply(-0.5), -curve.apply(0.5), accuracy: 0.000001)
++            let expected = kind == "circular" ? 1 - sqrt(0.5) : sqrt(0.5)
++            XCTAssertEqual(curve.apply(0.5), expected, accuracy: 0.000001)
++            var previous = -1.0
++            for step in -100...100 {
++                let value = curve.apply(Double(step) / 100)
++                XCTAssertTrue(value.isFinite)
++                XCTAssertGreaterThanOrEqual(value, previous - 0.000001)
++                previous = value
++            }
++            let input = try customEngine([
++                "type": "joystick", "relative": false, "expand": false,
++                "axis": [
++                    "input": "axisX", "output": "leftJoystickX",
++                    "responseCurve": ["type": kind, "range": [0, 1]],
++                ],
++            ])
++            let stick = try XCTUnwrap(input.sockets.first)
++            let half = CGPoint(x: stick.center.x + stick.unitSize / 4, y: stick.center.y)
++            input.process([sample(1, .began, half)])
++            XCTAssertEqual(input.gamepad.leftThumbX, Float(expected), accuracy: 0.00001)
++            input.cancelAll()
++            XCTAssertEqual(input.gamepad, .neutral)
++        }
++        let zeroRange = try XCTUnwrap(
++            TouchResponseCurve.parse(
++                .object([
++                    "type": .string("circular-inverse"), "range": .array([.number(0), .number(0)]),
++                ])))
++        XCTAssertEqual(zeroRange.apply(0.5), 0.5)
++        XCTAssertEqual(zeroRange.apply(.infinity), 0)
++    }
++
++    func testHorizontalJoystickIgnoresVerticalMovementForItsActionThreshold() throws {
++        let input = try customEngine([
++            "type": "joystick", "action": "gamepadB",
++            "axis": ["input": "axisX", "output": "leftJoystickX"],
++        ])
++        let stick = try XCTUnwrap(input.sockets.first)
++        let vertical = CGPoint(x: stick.center.x, y: stick.center.y - 100)
++        input.process([sample(1, .began, stick.center), sample(1, .moved, vertical)])
++        XCTAssertEqual(input.gamepad, .neutral)
++        let horizontal = CGPoint(x: stick.center.x + 100, y: vertical.y)
++        input.process([sample(1, .moved, horizontal)])
++        XCTAssertEqual(input.gamepad.leftThumbX, 1)
++        XCTAssertEqual(input.gamepad.leftThumbY, 0)
++        XCTAssertEqual(input.gamepad.buttonMask, 32)
++        input.cancelAll()
++        XCTAssertEqual(input.gamepad, .neutral)
++    }
++
++    func testInvalidNewControlFieldsStillBlockSaving() throws {
++        for control: [String: Any] in [
++            ["type": "directionalPad", "deadzone": 2],
++            ["type": "directionalPad", "interaction": ["activationType": 7]],
++            [
++                "type": "touchpad", "renderAsButton": 1,
++                "axis": ["input": "axisXY", "output": "rightJoystick"],
++            ],
++            [
++                "type": "joystick",
++                "axis": [
++                    "input": "axisXY", "output": "leftJoystick",
++                    "responseCurve": ["type": "circular", "range": [0, 1], "extra": 1],
++                ],
++            ],
++        ] {
++            let data = try JSONSerialization.data(withJSONObject: [
++                "content": ["right": ["inner": [control]]]
++            ])
++            let layout = try XCTUnwrap(TouchLayoutNormalizer.decode(data).first)
++            XCTAssertFalse(layout.report.isSupported, "\(control)")
++        }
++    }
++
++    func testArcadeDrawingsExposeEachRealButtonAndTouchpadCornersHit() throws {
++        let layout = try XCTUnwrap(
++            TouchLayoutNormalizer.decode(Data(Self.originalFightingJSON.utf8)).first)
++        let input = TouchInputAccumulator()
++        input.load(layout)
++        let surface = TouchLayoutSurfaceView(input: input)
++        surface.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
++        surface.layoutIfNeeded()
++        let arcade = try XCTUnwrap(input.sockets.first { $0.control.kind == .arcadeButtons })
++        let buttons = TouchArcadeGeometry.buttons(in: arcade)
++        let elements = (surface.accessibilityElements ?? []).compactMap {
++            $0 as? UIAccessibilityElement
++        }
++        for button in buttons {
++            XCTAssertTrue(
++                elements.contains { $0.accessibilityIdentifier == "touch-control-" + button.id })
++        }
++        let picture = XCTAttachment(image: renderSurface(surface))
++        picture.name = "official-arcade-buttons"
++        picture.lifetime = .keepAlways
++        add(picture)
++        surface.stop()
++
++        let padInput = try customEngine([
++            "type": "touchpad", "axis": ["input": "axisXY", "output": "rightJoystick"],
++        ])
++        let pad = try XCTUnwrap(padInput.sockets.first)
++        let corner = CGPoint(
++            x: pad.center.x + pad.collisionRadius * 0.8,
++            y: pad.center.y + pad.collisionRadius * 0.8)
++        XCTAssertTrue(pad.contains(corner))
++        padInput.process([sample(1, .began, corner)])
++        XCTAssertTrue(try XCTUnwrap(padInput.runtimes[pad.id]).isActive)
++        padInput.cancelAll()
++    }
++
+     private func renderSurface(_ surface: UIView) -> UIImage {
+         let format = UIGraphicsImageRendererFormat()
+         format.opaque = false
+--- a/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift
++++ b/iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift
+@@ -44,10 +44,8 @@
+                     Text("触摸按键体验布局").appFont(.caption)
+                     if !canSave {
+                         Text("布局等待适配").appFont(.bodySmall)
+-                        ForEach(
+-                            prepared.layout.report.issues.filter { $0.severity == .unsupported }
+-                        ) {
+-                            Text(verbatim: $0.message).appFont(.caption)
++                        ForEach(prepared.layout.report.unsupportedMessages, id: \.self) { message in
++                            Text(verbatim: message).appFont(.caption)
+                         }
+                     }
+                 }

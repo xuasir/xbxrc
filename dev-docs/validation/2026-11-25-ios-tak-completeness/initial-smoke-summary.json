@@ -1,0 +1,59 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+        "deviceName" : "iPhone 18 Pro",
+        "modelName" : "iPhone 18 Pro",
+        "osBuildNumber" : "24B8117",
+        "osVersion" : "27.2",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 2,
+      "passedTests" : 0,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.2.1",
+  "expectedFailures" : 0,
+  "failedTests" : 2,
+  "finishTime" : 1795600462.437,
+  "passedTests" : 0,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795600209.208,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "The test runner crashed before establishing connection: XBXRC",
+      "targetName" : "XBXRCTests",
+      "testIdentifier" : 1,
+      "testIdentifierString" : "XBXRC (34465) encountered an error",
+      "testName" : "XBXRC (34465) encountered an error"
+    },
+    {
+      "failureText" : "com.xuasir.xbxrc.ios crashed",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 2,
+      "testIdentifierString" : "SavedOfficialTouchLayoutInteractionTests/testOfficialAndCommunityDynamicStylesSaveThroughGameEntry()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testOfficialAndCommunityDynamicStylesSaveThroughGameEntry",
+      "testName" : "testOfficialAndCommunityDynamicStylesSaveThroughGameEntry()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 2
+}

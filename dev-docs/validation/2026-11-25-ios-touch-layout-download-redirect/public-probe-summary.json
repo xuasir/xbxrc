@@ -1,0 +1,19 @@
+{
+  "checkedAtUTC": "2026-11-25T01:26:15.354069+00:00",
+  "communityRevision": {
+    "statusLines": [
+      "HTTP/1.1 200 Connection established",
+      "HTTP/2 200 "
+    ],
+    "locationPresent": false,
+    "bodyBytes": 3638,
+    "revision": "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+    "scope": "Mac public endpoint, first response"
+  },
+  "officialSDK": {
+    "source": "https://assets.play.xbox.com/playxbox/static/js/8128.1aca8038.chunk.js",
+    "sha256": "b8f69c5f1c14e589eb665b84ad36dcff54f25e82cbac2640998a8766b32e50d2",
+    "contract": "GET /v1/sessions/tabs/{bundleId}/download?noRedirect=true; response.text(); independent binary fetch",
+    "scope": "public SDK contract only"
+  }
+}

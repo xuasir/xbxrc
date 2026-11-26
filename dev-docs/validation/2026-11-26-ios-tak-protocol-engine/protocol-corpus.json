@@ -1,0 +1,2497 @@
+{
+  "items": [
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 20,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/007-first-light.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 6,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/a-short-hike.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/alan-wake-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 12,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/arcade-paradise.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "directionalPad"
+      ],
+      "controls": 16,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad"
+      ],
+      "source": "touch-layouts/layouts/balatro.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "directionalPad"
+      ],
+      "controls": 9,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad"
+      ],
+      "source": "touch-layouts/layouts/bejeweled-3.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 11,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/botany-manor.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 7,
+      "id": "one-handed-left",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/brotato.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 7,
+      "id": "one-handed-right",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/brotato.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 5,
+      "id": "simplified",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/brotato.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 6,
+      "id": "simplified-full",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/brotato.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 12,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/chants-of-sennaar.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/chicory.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 13,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/choo-choo-charles.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 8,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/close-to-the-sun.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 4,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/cocoon.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 9,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/conker-live-and-reloaded.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 17,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/outer/0/axis/0",
+          "severity": "warning"
+        },
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/outer/0/axis/1",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/cyberpunk-2077.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 12,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-1993.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/doom-3.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 10,
+      "id": "joystick",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-64.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 10,
+      "id": "touchpad",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-64.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 12,
+      "id": "joystick",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-doom-ii.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 12,
+      "id": "touchpad",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-doom-ii.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 12,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/doom-ii-classic.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 12,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/egging-on.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/fifa.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 16,
+      "id": "layout-1",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/forza.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "sticky"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "throttle"
+      ],
+      "controls": 15,
+      "id": "layout-1-throttle-pedal",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:throttle",
+        "output:leftJoystick",
+        "output:leftTrigger",
+        "output:rightJoystick",
+        "output:rightTrigger"
+      ],
+      "source": "touch-layouts/layouts/forza.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/gears-of-war-reloaded.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 11,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/go-mecha-ball.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/gta-4.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/gta-de.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/gta-v.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/gta-vi.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "default",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/halo-campaign-evolved.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "relativemouse",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/inner/0/axis/0",
+          "severity": "warning"
+        },
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/inner/0/axis/1",
+          "severity": "warning"
+        },
+        {
+          "capability": "input.control",
+          "message": "此控件缺少可用输入，已保留其余控件",
+          "path": "/content/right/inner/0",
+          "severity": "warning"
+        },
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/outer/3/0/axis/0",
+          "severity": "warning"
+        },
+        {
+          "capability": "input.axis",
+          "message": "此轴输出已隔离，其余已知操作继续运行",
+          "path": "/content/right/outer/3/0/axis/1",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/halo-infinite.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 17,
+      "id": "rightstick",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/halo-infinite.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 9,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/harold-halibut.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/high-on-life.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/hogwarts-legacy.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 5,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/inside.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/la-noire.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 5,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/limbo.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/little-kitty-big-city.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 13,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/metal-gear-solid-1.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/metal-gear-solid-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/metal-gear-solid-3.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "mgs2",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "mgs3",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 9,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/obra-dinn.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 17,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/palworld.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/perfect-dark-zero.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/perfect-dark.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "directionalPad"
+      ],
+      "controls": 7,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad"
+      ],
+      "source": "touch-layouts/layouts/plants-vs-zombies.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 8,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/plateup.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 10,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/poppy-playtime.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 11,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/quake.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/5/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/6/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/red-dead-redemption.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "type-a",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "layout.slot",
+          "message": "超出物理槽位的控件已隔离",
+          "path": "/content/left/outer",
+          "severity": "warning"
+        },
+        {
+          "capability": "layout.slot",
+          "message": "超出物理槽位的控件已隔离",
+          "path": "/content/right/outer",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/EnableGyro/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 16,
+      "id": "type-a",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-3.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "type-a-1",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-4-remake.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "alternative",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-7.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "default",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-7.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "default",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-requiem.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "alternative",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-village.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "default",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil-village.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick"
+      ],
+      "source": "touch-layouts/layouts/resident-evil.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 17,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/robocop-rogue-city.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 17,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/roboquest.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad"
+      ],
+      "controls": 7,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad"
+      ],
+      "source": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/shenmue-1-and-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 18,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/shredders.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/silent-hill-2.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "directionalPad"
+      ],
+      "controls": 6,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad"
+      ],
+      "source": "touch-layouts/layouts/sonic-mania.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "pullAction"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/south-of-midnight.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 5,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/the-exit-8.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 10,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/the-quarry.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick"
+      ],
+      "controls": 14,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/the-rewinder.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 7,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/those-who-remain.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/4/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/5/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/tomb-raider-rise.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "layer"
+      ],
+      "controlTypes": [
+        "button",
+        "directionalPad",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 15,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/4/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "render.field",
+          "message": "此可选样式字段保留在原文，当前绘制使用默认值",
+          "path": "/content/right/outer/5/styles/default/knob",
+          "severity": "warning"
+        },
+        {
+          "capability": "host.sensor",
+          "message": "传感器能力暂缓，手柄控件继续运行",
+          "path": "/content/layers/AimTouchpad/sensors",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:directionalPad",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick",
+        "output:rightJoystickX",
+        "output:rightJoystickY"
+      ],
+      "source": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick"
+      ],
+      "controls": 7,
+      "id": "custom",
+      "isFullyCompatible": true,
+      "isRunnable": true,
+      "issues": [],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/turnip-boy.json",
+      "usesStandardFallback": false
+    },
+    {
+      "behaviors": [
+        "cluster",
+        "toggle"
+      ],
+      "controlTypes": [
+        "button",
+        "joystick",
+        "touchpad"
+      ],
+      "controls": 8,
+      "id": "custom",
+      "isFullyCompatible": false,
+      "isRunnable": true,
+      "issues": [
+        {
+          "capability": "value.boolean",
+          "message": "此状态值已归一为布尔值",
+          "path": "/content/right/outer/2/1/toggle",
+          "severity": "warning"
+        }
+      ],
+      "protocolRevision": "tak-v4.1-1252720f5e3eb604",
+      "requiredCapabilities": [
+        "control:button",
+        "control:joystick",
+        "control:touchpad",
+        "output:leftJoystick",
+        "output:rightJoystick"
+      ],
+      "source": "touch-layouts/layouts/wolfenstein-3d.json",
+      "usesStandardFallback": false
+    }
+  ],
+  "layouts": 85,
+  "templates": 75,
+  "summary": {
+    "runnable": 85,
+    "fullyCompatible": 70,
+    "standardFallback": 0,
+    "gamepadInputGaps": 0,
+    "diagnosticsByCapability": {
+      "input.axis": 6,
+      "host.sensor": 14,
+      "input.control": 1,
+      "render.field": 6,
+      "layout.slot": 2,
+      "value.boolean": 1
+    },
+    "inputIsolation": [
+      {
+        "source": "touch-layouts/layouts/cyberpunk-2077.json",
+        "id": "custom",
+        "path": "/content/right/outer/0/axis/0",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisX",
+          "output": "relativeMouseX",
+          "sensitivity": 20
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/cyberpunk-2077.json",
+        "id": "custom",
+        "path": "/content/right/outer/0/axis/1",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisY",
+          "output": "relativeMouseY",
+          "sensitivity": 20
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/halo-infinite.json",
+        "id": "relativemouse",
+        "path": "/content/right/inner/0/axis/0",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisX",
+          "output": "relativeMouseX",
+          "sensitivity": 10
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/halo-infinite.json",
+        "id": "relativemouse",
+        "path": "/content/right/inner/0/axis/1",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisY",
+          "output": "relativeMouseY",
+          "sensitivity": 10
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/halo-infinite.json",
+        "id": "relativemouse",
+        "path": "/content/right/inner/0",
+        "profile": "relativeMouse",
+        "original": {
+          "type": "touchpad",
+          "axis": [
+            {
+              "input": "axisX",
+              "output": "relativeMouseX",
+              "sensitivity": 10
+            },
+            {
+              "input": "axisY",
+              "output": "relativeMouseY",
+              "sensitivity": 10
+            }
+          ],
+          "styles": {
+            "default": {
+              "faceImage": {
+                "type": "icon",
+                "value": "aim"
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/halo-infinite.json",
+        "id": "relativemouse",
+        "path": "/content/right/outer/3/0/axis/0",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisX",
+          "output": "relativeMouseX",
+          "sensitivity": 10
+        }
+      },
+      {
+        "source": "touch-layouts/layouts/halo-infinite.json",
+        "id": "relativemouse",
+        "path": "/content/right/outer/3/0/axis/1",
+        "profile": "relativeMouse",
+        "original": {
+          "input": "axisY",
+          "output": "relativeMouseY",
+          "sensitivity": 10
+        }
+      }
+    ]
+  }
+}

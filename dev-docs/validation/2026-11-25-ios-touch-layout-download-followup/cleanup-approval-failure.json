@@ -1,0 +1,13 @@
+{
+  "action": "清理本轮登记临时目录",
+  "target": "/private/tmp/xbxrc-touch-download-followup-r1.jwornfpo",
+  "timeUTC": "2026-11-25T03:34:58.108463+00:00",
+  "executed": false,
+  "automaticApprovalReview": "failed",
+  "reason": "Automatic approval review failed: rate limit exceeded for gpt-6.1-sol in eastus2",
+  "unsafeDetermination": false,
+  "nextStep": "按原范围重试自动审批",
+  "resolved": true,
+  "resolvedAtUTC": "2026-11-25T03:37:55.866087+00:00",
+  "resolution": "同范围重新通过自动审批并完成清理"
+}

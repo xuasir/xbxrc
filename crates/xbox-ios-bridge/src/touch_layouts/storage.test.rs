@@ -80,6 +80,109 @@ async fn community_layout_update_reuses_identity_and_survives_restart() {
     );
 }
 
+#[tokio::test]
+async fn horizon_6_community_layout_saves_and_previews_for_the_requested_product() {
+    let directory = TestDirectory::new();
+    let definition: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/forza-horizon-6.json"
+    ))
+    .unwrap();
+    let source: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../../iosapp/XBXRC/Resources/TouchLayouts/forza-layouts.json"
+    ))
+    .unwrap();
+    let (original, decoded) = xbox_touch_layouts::community_bundle(
+        &definition,
+        &[source],
+        "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+        "HORIZON6EDITION",
+        "zh-CN",
+        2.0,
+    )
+    .unwrap();
+    let bundle = Arc::new(XboxOfficialTouchBundle {
+        identity: types::GameIdentity {
+            product_id: "HORIZON6EDITION".into(),
+            title_id: "2079757188".into(),
+            name: "Forza Horizon 6".into(),
+        },
+        bundle_id: "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74".into(),
+        original,
+        decoded,
+    });
+    let snapshot = bundle.preview("layout-1".into()).await.unwrap();
+    assert!(snapshot.issues.is_empty());
+    let saved = directory
+        .library()
+        .save(bundle, "layout-1".into())
+        .await
+        .unwrap();
+    assert_eq!(saved[0].product_id, "HORIZON6EDITION");
+    assert_eq!(saved[0].xbox_title_id, "2079757188");
+    assert!(saved[0].is_default);
+    let reloaded = directory
+        .library()
+        .load_layout(saved[0].id.clone())
+        .await
+        .unwrap();
+    let document: serde_json::Value = serde_json::from_str(&reloaded.document_json).unwrap();
+    assert_eq!(document["author"], "redphx");
+}
+
+#[tokio::test]
+async fn microsoft_sample_packages_preview_save_and_reload_with_original_assets() {
+    let samples: [(&[u8], &str); 2] = [
+        (
+            include_bytes!("../../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/official-sample-layouts.takx"),
+            "standard-controller",
+        ),
+        (
+            include_bytes!("../../../../dev-docs/validation/2026-11-25-ios-touch-layout-download-followup/fixtures/official-custom-assets.takx"),
+            "custom-assets",
+        ),
+    ];
+    for (bytes, layout_id) in samples {
+        let directory = TestDirectory::new();
+        let package = Arc::new(XboxOfficialTouchBundle {
+            identity: types::GameIdentity {
+                product_id: "GAMEPRODUCT".into(),
+                title_id: "10".into(),
+                name: "Microsoft sample".into(),
+            },
+            bundle_id: layout_id.into(),
+            original: bytes.to_vec(),
+            decoded: decode_bundle(bytes, "zh-CN", 2.0).unwrap(),
+        });
+        for choice in package.choices() {
+            let preview = package.preview(choice.id).await.unwrap();
+            assert!(preview.issues.is_empty());
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&preview.document_json).unwrap()
+                    ["content"]
+                    .is_object()
+            );
+        }
+        let preview = package.preview(layout_id.into()).await.unwrap();
+        let saved = directory
+            .library()
+            .save(package, layout_id.into())
+            .await
+            .unwrap();
+        let reloaded = directory
+            .library()
+            .load_layout(saved[0].id.clone())
+            .await
+            .unwrap();
+        assert!(saved[0].is_default);
+        assert_eq!(preview.document_json, reloaded.document_json);
+        assert_eq!(preview.assets.len(), reloaded.assets.len());
+        for (before, after) in preview.assets.iter().zip(&reloaded.assets) {
+            assert_eq!(before.id, after.id);
+            assert_eq!(before.data, after.data);
+        }
+    }
+}
+
 fn bundle(action: &str) -> Arc<XboxOfficialTouchBundle> {
     bundle_with_asset(action, None)
 }
@@ -351,7 +454,7 @@ fn library_requires_absolute_root() {
 }
 
 #[tokio::test]
-async fn corrupted_asset_is_rejected_and_same_version_save_repairs_shared_resources() {
+async fn corrupted_asset_uses_fallback_and_same_version_save_repairs_shared_resources() {
     let directory = TestDirectory::new();
     let library = directory.library();
     let draft = bundle_with_asset("gamepadA", Some(&[1, 2, 3]));
@@ -366,7 +469,9 @@ async fn corrupted_asset_is_rejected_and_same_version_save_repairs_shared_resour
         .join(&records[0].content_hash)
         .join("expanded/assets/neutral/@1.0x/fire.png");
     fs::write(asset, [3, 2, 1]).unwrap();
-    assert!(library.load_layout(records[0].id.clone()).await.is_err());
+    let degraded = library.load_layout(records[0].id.clone()).await.unwrap();
+    assert!(degraded.assets.is_empty());
+    assert!(!degraded.issues.is_empty());
     library.save(draft, "gameplay".into()).await.unwrap();
     for record in records {
         assert_eq!(
@@ -401,4 +506,38 @@ async fn failed_compiled_write_reclaims_new_package_and_preserves_previous_index
         .unwrap()
         .document_json
         .contains("gamepadA"));
+}
+
+#[tokio::test]
+async fn protocol_cache_regenerates_without_changing_saved_identity_or_revision() {
+    let directory = TestDirectory::new();
+    let library = directory.library();
+    let record = library
+        .save(bundle("gamepadA"), "gameplay".into())
+        .await
+        .unwrap()
+        .remove(0);
+    let file = directory
+        .0
+        .join("packages")
+        .join(&record.content_hash)
+        .join("compiled")
+        .join(format!(
+            "{}.{}.ir.json",
+            record.revision,
+            xbox_touch_layouts::protocol_revision()
+        ));
+    assert!(file.exists());
+    fs::write(&file, "old-or-damaged-protocol-cache").unwrap();
+    let loaded = library.load_layout(record.id.clone()).await.unwrap();
+    let ir: serde_json::Value = serde_json::from_str(&loaded.document_json).unwrap();
+    assert_eq!(
+        ir["protocolRevision"],
+        xbox_touch_layouts::protocol_revision()
+    );
+    assert_eq!(ir["isRunnable"], true);
+    let after = library.saved_layouts().await.unwrap().remove(0);
+    assert_eq!(after.id, record.id);
+    assert_eq!(after.revision, record.revision);
+    assert!(serde_json::from_slice::<serde_json::Value>(&fs::read(file).unwrap()).is_ok());
 }

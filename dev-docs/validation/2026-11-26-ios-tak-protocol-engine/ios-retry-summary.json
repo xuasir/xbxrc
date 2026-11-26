@@ -1,0 +1,52 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+        "deviceName" : "iPhone 18 Pro",
+        "modelName" : "iPhone 18 Pro",
+        "osBuildNumber" : "24B8117",
+        "osVersion" : "27.2",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 3,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.2.1",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1795663575.942,
+  "passedTests" : 3,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795663506.83,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertTrue failed",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 4,
+      "testIdentifierString" : "SavedOfficialTouchLayoutInteractionTests/testCommunityProtocolLayoutRunsAndSaves()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCommunityProtocolLayoutRunsAndSaves",
+      "testName" : "testCommunityProtocolLayoutRunsAndSaves()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 4
+}

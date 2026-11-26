@@ -286,6 +286,14 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private currentViewportHeightCss: number | null = null
   private explicitPresentTarget = false
   private textureAllocated = false
+  private uploadedVideoGeneration?: number
+  private uploadedFrameSequence?: number
+  private subImageUploadState: 'unprobed' | 'supported' | 'disabled' = 'unprobed'
+  private videoUploadMethod: NonNullable<RendererResources['videoUploadMethod']> = 'texImage2D'
+  private videoUploadFallbackReason?: RendererResources['videoUploadFallbackReason']
+  private videoTextureFullUploads = 0
+  private videoTextureSubUploads = 0
+  private videoTextureReuseCount = 0
   private uniformOptions?: StreamPlayerOptions
   private uniformSourceWidth = 0
   private uniformSourceHeight = 0
@@ -315,7 +323,25 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private readonly shaders: WebGLShader[] = []
 
   snapshotResources(): RendererResources {
-    return { ...this.drawObservation.snapshot(), ...getVideoFrameSource(this.video).renderSupply, superResolutionActive: this.usesReconstruction(), videoUploadMethod: 'texImage2D', outputWidth: this.canvas.width, outputHeight: this.canvas.height, gpuErrorChecks: this.guard?.errorChecks, gpuTiming: this.guard?.timer.snapshot(), gpuObjects: (this.reconstruction?.gpuObjects ?? 0) + [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, ...this.shaders].filter(Boolean).length, frameRequests: Number(this.animFrameId !== null), animationCallbacks: Number(this.captureRafId !== undefined), captureWaiters: this.frameCaptures.size, domNodes: Number(this.canvas.isConnected) }
+    return {
+      ...this.drawObservation.snapshot(),
+      ...getVideoFrameSource(this.video).renderSupply,
+      superResolutionActive: this.usesReconstruction(),
+      videoUploadMethod: this.videoUploadMethod,
+      videoUploadFallbackReason: this.videoUploadFallbackReason,
+      videoTextureFullUploads: this.videoTextureFullUploads,
+      videoTextureSubUploads: this.videoTextureSubUploads,
+      videoTextureReuseCount: this.videoTextureReuseCount,
+      outputWidth: this.canvas.width,
+      outputHeight: this.canvas.height,
+      gpuErrorChecks: this.guard?.errorChecks,
+      gpuTiming: this.guard?.timer.snapshot(),
+      gpuObjects: (this.reconstruction?.gpuObjects ?? 0) + [this.program, this.presentProgram, this.videoTexture, this.sharpenFramebuffer, this.sharpenTexture, ...this.shaders].filter(Boolean).length,
+      frameRequests: Number(this.animFrameId !== null),
+      animationCallbacks: Number(this.captureRafId !== undefined),
+      captureWaiters: this.frameCaptures.size,
+      domNodes: Number(this.canvas.isConnected),
+    }
   }
 
   snapshotDiagnostics(): RenderSurfaceObservation {
@@ -567,7 +593,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.uniform1i(gl.getUniformLocation(program, 'data'), 0)
-    this.textureAllocated = false
+    this.resetVideoTextureUpload()
     this.refresh()
     this.guard?.check(performance.now(), true)
   }
@@ -747,7 +773,7 @@ void main() {
         this.guard!.assertBacking(this.currentOutputWidth, this.currentOutputHeight)
         gl.viewport(0, 0, this.currentOutputWidth, this.currentOutputHeight)
       }
-      this.textureAllocated = false
+      this.invalidateVideoTexture()
       this.refresh()
     }
     this.guard?.timer.begin(startedAtMs)
@@ -757,11 +783,9 @@ void main() {
       if (this.videoTexture !== null)
         gl.bindTexture(gl.TEXTURE_2D, this.videoTexture)
       if (frame)
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame)
-      if (!this.textureAllocated) {
-        this.guard?.check(performance.now(), true)
-        this.textureAllocated = true
-      }
+        this.uploadVideoFrame(gl, frame, frameSource.lastRenderFrame)
+      else
+        this.videoTextureReuseCount++
       uploadFinishedAtMs = performance.now()
       if (this.usesReconstruction()) {
         this.reconstruction ??= new Fsr1ReconstructionPass(gl)
@@ -786,6 +810,69 @@ void main() {
       this.canvas.style.opacity = '1'
       this.onFrameReady?.()
     }
+  }
+
+  private uploadVideoFrame(gl: WebGL2RenderingContext, frame: VideoFrame, metadata?: ObservedVideoFrameMetadata): void {
+    // 帧源的代际与序号构成身份，截图重绘可以复用同一份纹理内容。
+    if (this.textureAllocated && metadata
+      && metadata.videoGeneration === this.uploadedVideoGeneration
+      && metadata.localSequence === this.uploadedFrameSequence) {
+      this.videoTextureReuseCount++
+      return
+    }
+    if (this.textureAllocated && this.subImageUploadState !== 'disabled') {
+      if (typeof gl.texSubImage2D !== 'function') {
+        this.subImageUploadState = 'disabled'
+        this.videoUploadFallbackReason = 'subImageUnavailable'
+        this.uploadFullVideoFrame(gl, frame)
+      }
+      else {
+        try {
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, frame)
+          // VideoFrame 子上传可能只报告 GL 错误；每个 context 首次确认一次。
+          if (this.subImageUploadState === 'unprobed')
+            this.guard?.check(performance.now(), true)
+          this.subImageUploadState = 'supported'
+          this.videoUploadMethod = 'texSubImage2D'
+          this.videoTextureSubUploads++
+        }
+        catch (error) {
+          if (gl.isContextLost?.() || (error instanceof Error && error.message === `gpuRuntimeError:${gl.CONTEXT_LOST_WEBGL ?? 0x9242}`))
+            throw error
+          this.subImageUploadState = 'disabled'
+          this.videoUploadFallbackReason = 'subImageRejected'
+          // 同一帧补做完整导入，能力回退在当前 context 内保持稳定。
+          this.uploadFullVideoFrame(gl, frame, true)
+        }
+      }
+    }
+    else {
+      this.uploadFullVideoFrame(gl, frame, !this.textureAllocated)
+    }
+    this.textureAllocated = true
+    this.uploadedVideoGeneration = metadata?.videoGeneration
+    this.uploadedFrameSequence = metadata?.localSequence
+  }
+
+  private uploadFullVideoFrame(gl: WebGL2RenderingContext, frame: VideoFrame, verify = false): void {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame)
+    if (verify)
+      this.guard?.check(performance.now(), true)
+    this.videoUploadMethod = 'texImage2D'
+    this.videoTextureFullUploads++
+  }
+
+  private invalidateVideoTexture(): void {
+    this.textureAllocated = false
+    this.uploadedVideoGeneration = undefined
+    this.uploadedFrameSequence = undefined
+  }
+
+  private resetVideoTextureUpload(): void {
+    this.invalidateVideoTexture()
+    this.subImageUploadState = 'unprobed'
+    this.videoUploadMethod = 'texImage2D'
+    this.videoUploadFallbackReason = undefined
   }
 
   /**
@@ -936,6 +1023,7 @@ void main() {
     this.videoTexture = this.program = this.presentProgram = this.gl = null
     this.guard?.timer.dispose()
     this.guard = undefined
+    this.resetVideoTextureUpload()
   }
 
   override destroy(): void {

@@ -1,0 +1,356 @@
+[
+  {
+    "file": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        19,
+        22
+      ],
+      [
+        24,
+        26
+      ],
+      [
+        37,
+        39
+      ],
+      [
+        99,
+        101
+      ],
+      [
+        103,
+        105
+      ],
+      [
+        110,
+        112
+      ],
+      [
+        126,
+        139
+      ],
+      [
+        169,
+        173
+      ],
+      [
+        207,
+        215
+      ],
+      [
+        221,
+        223
+      ],
+      [
+        223,
+        226
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutModels.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        45,
+        57
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        41,
+        43
+      ],
+      [
+        98,
+        109
+      ],
+      [
+        109,
+        113
+      ],
+      [
+        118,
+        120
+      ],
+      [
+        124,
+        126
+      ],
+      [
+        131,
+        133
+      ],
+      [
+        134,
+        136
+      ],
+      [
+        380,
+        382
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        13,
+        16
+      ],
+      [
+        37,
+        40
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        262,
+        268
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        91,
+        96
+      ],
+      [
+        96,
+        98
+      ],
+      [
+        142,
+        150
+      ],
+      [
+        244,
+        247
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+    "indent": 2,
+    "changedLineRanges": [
+      [
+        8,
+        11
+      ],
+      [
+        15,
+        17
+      ],
+      [
+        34,
+        44
+      ],
+      [
+        56,
+        64
+      ],
+      [
+        69,
+        88
+      ],
+      [
+        121,
+        126
+      ],
+      [
+        127,
+        210
+      ],
+      [
+        214,
+        217
+      ],
+      [
+        243,
+        249
+      ],
+      [
+        277,
+        283
+      ],
+      [
+        317,
+        324
+      ],
+      [
+        326,
+        328
+      ],
+      [
+        335,
+        338
+      ],
+      [
+        351,
+        373
+      ],
+      [
+        375,
+        377
+      ],
+      [
+        378,
+        386
+      ],
+      [
+        391,
+        395
+      ],
+      [
+        399,
+        403
+      ],
+      [
+        408,
+        426
+      ],
+      [
+        468,
+        470
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+    "indent": 4,
+    "changedLineRanges": [
+      [
+        7,
+        10
+      ],
+      [
+        10,
+        12
+      ],
+      [
+        13,
+        15
+      ],
+      [
+        47,
+        51
+      ],
+      [
+        87,
+        89
+      ],
+      [
+        95,
+        99
+      ],
+      [
+        109,
+        117
+      ],
+      [
+        117,
+        119
+      ],
+      [
+        120,
+        209
+      ],
+      [
+        222,
+        224
+      ],
+      [
+        252,
+        254
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+    "indent": 2,
+    "changedLineRanges": [
+      [
+        317,
+        429
+      ],
+      [
+        840,
+        891
+      ],
+      [
+        960,
+        996
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+    "indent": 2,
+    "changedLineRanges": [
+      [
+        5,
+        120
+      ],
+      [
+        415,
+        417
+      ],
+      [
+        424,
+        426
+      ],
+      [
+        426,
+        438
+      ],
+      [
+        508,
+        516
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "phase": "landscape-height-and-scroll-followup",
+    "tool": "xcrun swift-format",
+    "files": [
+      "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+      "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift"
+    ],
+    "scope": "修改范围格式化",
+    "exitCode": 0
+  }
+]

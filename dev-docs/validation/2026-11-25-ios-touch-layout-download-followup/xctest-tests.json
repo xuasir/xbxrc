@@ -1,0 +1,150 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+      "deviceName": "iPhone 18 Pro",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24A434",
+      "osVersion": "27.0",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "0.045s",
+                  "durationInSeconds": 0.0450589656829834,
+                  "name": "testCatalogRetriesFailedSourceAndRefreshesCachedCommunityRevision()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCatalogRetriesFailedSourceAndRefreshesCachedCommunityRevision()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCatalogRetriesFailedSourceAndRefreshesCachedCommunityRevision",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0021s",
+                  "durationInSeconds": 0.002104043960571289,
+                  "name": "testCommunityCatalogRetriesFailureAndEmptyLookup()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCommunityCatalogRetriesFailureAndEmptyLookup()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCommunityCatalogRetriesFailureAndEmptyLookup",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0021s",
+                  "durationInSeconds": 0.0020749568939208984,
+                  "name": "testCommunityCatalogReusesSuccessfulTitleLookupAcrossProducts()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCommunityCatalogReusesSuccessfulTitleLookupAcrossProducts()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCommunityCatalogReusesSuccessfulTitleLookupAcrossProducts",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0014s",
+                  "durationInSeconds": 0.0013679265975952148,
+                  "name": "testCommunityRefreshKeepsLatestCacheWhenPreviousLookupFinishesLate()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCommunityRefreshKeepsLatestCacheWhenPreviousLookupFinishesLate()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCommunityRefreshKeepsLatestCacheWhenPreviousLookupFinishesLate",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.012s",
+                  "durationInSeconds": 0.011713981628417969,
+                  "name": "testCommunityRequestsSurviveCloudAccessFailureAndCancellation()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testCommunityRequestsSurviveCloudAccessFailureAndCancellation()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testCommunityRequestsSurviveCloudAccessFailureAndCancellation",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.051s",
+                  "durationInSeconds": 0.051133036613464355,
+                  "name": "testMissingImagesAndUnknownActionsBlockSaving()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testMissingImagesAndUnknownActionsBlockSaving()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testMissingImagesAndUnknownActionsBlockSaving",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.012s",
+                  "durationInSeconds": 0.01173710823059082,
+                  "name": "testOfficialAndCommunityDownloadsRetryAndPreparePreview()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testOfficialAndCommunityDownloadsRetryAndPreparePreview()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testOfficialAndCommunityDownloadsRetryAndPreparePreview",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.055s",
+                  "durationInSeconds": 0.054563045501708984,
+                  "name": "testOfficialAssetIsDecodedAndDrawnWithOriginalPixels()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testOfficialAssetIsDecodedAndDrawnWithOriginalPixels()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testOfficialAssetIsDecodedAndDrawnWithOriginalPixels",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0012s",
+                  "durationInSeconds": 0.0012090206146240234,
+                  "name": "testResolvedTitleReusesPreparedAccessForOfficialCatalog()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutTests/testResolvedTitleReusesPreparedAccessForOfficialCatalog()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testResolvedTitleReusesPreparedAccessForOfficialCatalog",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "SavedOfficialTouchLayoutTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "XBXRCTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "43秒",
+                  "durationInSeconds": 43.215338945388794,
+                  "name": "testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+                  "nodeIdentifier": "SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCommunityLayoutRemainsAvailableWhenOfficialSourceFails",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "SavedOfficialTouchLayoutInteractionTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "XBXRCUITests",
+          "nodeIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests",
+          "nodeType": "UI test bundle",
+          "result": "Passed"
+        }
+      ],
+      "name": "XBXRC",
+      "nodeType": "Test Plan",
+      "result": "Passed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

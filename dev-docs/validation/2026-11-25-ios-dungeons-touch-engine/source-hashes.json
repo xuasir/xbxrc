@@ -1,0 +1,100 @@
+[
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayout.swift",
+    "beforeSHA256": "6af6b49f1e3d1f788ede90c7242f18cd12ba3324244e914bb54aa109e1b67143",
+    "afterSHA256": "628e7896cceb85172785c1c31834772ba89b22c8061d5ad1a4f648f9ef66fcc3",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutNormalizer.swift",
+    "beforeSHA256": "79ef14436c9655a2bf2d9ce2b5015fd2d942167efbce0ebbb202c42012fb0cc6",
+    "afterSHA256": "d77df9cc51d21b3e936813ab98f27bd0fed5bc308854333a08f2de68da9eb822",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchControlRuntime.swift",
+    "beforeSHA256": "34334d038b3361c365211a8c10deeb43d0b70983511fdd5ca0854fe1dd502832",
+    "afterSHA256": "fbdf1be59a467a564c6127942e985fe7dc567041bf1a8957ba879eae39f0cc97",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutGeometry.swift",
+    "beforeSHA256": "f29a2bc2bde747587f32cf68fdfde976d3d77aa54b6da5b38118ba5e88fc2d62",
+    "afterSHA256": "41c91b6e61634340f75369f64edc91816388f6a3eebdb6bd79e236547403d7ee",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchInputAccumulator.swift",
+    "beforeSHA256": "39bbf2ea5738912305877072f689cb8671192a4fdbd28c194566c5337a406ff9",
+    "afterSHA256": "74a3f6aaa2e1295e161ce14c34fd66ceede5654f4ef39b98b3fc1abb9120029b",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/TouchLayoutSurface.swift",
+    "beforeSHA256": "55ee936002ac1cca1c634fab28152b36914220a2f1912d02548b6aede0ff5fc9",
+    "afterSHA256": "15f3b1a08c2175cbff340242854a2b60442f4348ba4293b0c338985744ceb911",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+    "beforeSHA256": "52dbf48bcac9b83c81575e34be06d8ec465ae057800978da3cc5350ba2d07db8",
+    "afterSHA256": "9b87707c872bfeba48d0580ae23af4371af60630a224fe57b25a596b34596c83",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": false
+  },
+  {
+    "path": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+    "beforeSHA256": "b040c6b8f413fb39d9f7e472eebc6b8dd1371a8c1dbc46387837dc36588ec714",
+    "afterSHA256": "271e5a8ab2ad4336d53af379eec1f1749ee40391272b881b25a7f05f5f5e84d3",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": false
+  },
+  {
+    "path": "iosapp/XBXRCTests/TouchLayoutTests.swift",
+    "beforeSHA256": "dcad2ce5d8fc52ec36ae9cd64096caf6b19677ae5b55f5d716daf0c7e6a2b8dc",
+    "afterSHA256": "e305ccb81b0ec6c45add9f58e0f437f1096b8e612088e130d1cae2398f1a880c",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+    "beforeSHA256": "0d99a713e9bf9fc8f0f51848f590c7d3933d8cc0d97133b0bf82d1eed75c4b94",
+    "afterSHA256": "9d5f2c80383e9d75a128ea33fe0d773e32dcb5607a0a2146cb55446f6c9acce1",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": false
+  },
+  {
+    "path": "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+    "beforeSHA256": "3f7e1d6620b1b3ebd3ac8dd07aebf4c99d4646d8e23f52fca3edd54a9df19ad7",
+    "afterSHA256": "357f680153f5a3e7986c21fe87f51d3b891a58444ef8af922d3c43a00cacc1fc",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": false
+  },
+  {
+    "path": "iosapp/XBXRC.xcodeproj/project.pbxproj",
+    "beforeSHA256": "8435f0c44b2ef7914f660efa53761726a05845e7acecd17f0a345f4c9393eedc",
+    "afterSHA256": "8435f0c44b2ef7914f660efa53761726a05845e7acecd17f0a345f4c9393eedc",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  },
+  {
+    "path": "docs/project-task.md",
+    "beforeSHA256": "6d6057d30ffc01e9675d5bbb64ad06338391b8766bd11f41dbef4882e03186ca",
+    "afterSHA256": "f15bacb5dd10427407070ba341af7dcc623ffe0516b24c7a7ab7a84a9caf171a",
+    "matchesBuildSource": null,
+    "originalBaselineRecovered": false
+  },
+  {
+    "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutPreviewView.swift",
+    "beforeSHA256": "8caf1936aa7a9e9a7dbe332a80ae9d6fa8d5ae4f86b9178b170b8d4311845b1a",
+    "afterSHA256": "c2c7bd410267d88c3b7877e36ae5bfc2e9227b23e797f23248632e19da0c73ad",
+    "matchesBuildSource": true,
+    "originalBaselineRecovered": true
+  }
+]

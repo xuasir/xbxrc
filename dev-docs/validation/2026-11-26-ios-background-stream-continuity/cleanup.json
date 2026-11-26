@@ -1,0 +1,20 @@
+{
+  "cleanedAtUTC": "2026-11-26T01:19:44.259120+00:00",
+  "removedRoot": "/private/tmp/xbxrc-ios-background-r1._k_qdmsk",
+  "pathAbsent": true,
+  "xcodeProcessID": 49019,
+  "xcodeExitCode": 0,
+  "associatedBuildTestExportProcesses": [],
+  "allocatedBytesRemoved": 772120576,
+  "logicalBytesRemoved": 756655827,
+  "allocatedMiBRemoved": 736.35,
+  "freeBytesBefore": 92236001280,
+  "freeBytesAfter": 92980846592,
+  "observedFreeBytesDelta": 744845312,
+  "preserved": [
+    "本轮最终验收证据",
+    "用户授权启动的 iOS 27.2 iPhone 18 Pro 模拟器及 App",
+    "共享 WebRTC/Rust/Xcode 缓存",
+    "用户原有工作区改动"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "applicationBuildErrors": 0,
+  "applicationBuildWarnings": 7,
+  "repeatedTestRuns": 0,
+  "toolingRecoveries": [
+    {
+      "action": "public revision probe",
+      "initialResult": "sandbox could not access configured local proxy",
+      "finalResult": "HTTP 200 after approved network execution"
+    },
+    {
+      "action": "test summary export",
+      "initialResult": "report cache write permission",
+      "finalResult": "summary exported after approved execution"
+    }
+  ],
+  "simulatorContainerRead": "sandbox unavailable; no simulator application data used",
+  "formatRepair": {
+    "rule": "OnlyOneTrailingClosureArgument",
+    "file": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+    "finalResult": "strict lint and Swift parse passed"
+  }
+}

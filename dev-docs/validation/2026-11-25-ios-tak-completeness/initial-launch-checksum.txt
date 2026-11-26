@@ -1,0 +1,4 @@
+Standard output and standard error from com.xuasir.xbxrc.ios with process ID 34968 beginning at 2026-11-25 09:53:40 +0000
+
+XBXRC/xbox_ios_bridge.swift:8632: Fatal error: UniFFI API checksum mismatch: try cleaning and rebuilding your project
+2026-11-25 17:53:45.043053+0800 XBXRC[34968:592534] XBXRC/xbox_ios_bridge.swift:8632: Fatal error: UniFFI API checksum mismatch: try cleaning and rebuilding your project

@@ -29,6 +29,8 @@ struct TouchGamepadOverlay: View {
                         orientation: TouchLayoutOrientation(size: geometry.size)),
                     onPress: { MobileInteractionFeedback.play(settings.mobile) }
                 )
+                .opacity(layout.isGameHidden ? 0 : 1)
+                .allowsHitTesting(!layout.isGameHidden)
                 .frame(width: frame.width, height: frame.height)
                 .position(x: frame.midX, y: frame.midY)
             }
@@ -55,4 +57,3 @@ enum StreamingTouchViewportPolicy {
             width: size.width, height: portrait ? size.height / 2 : size.height)
     }
 }
-

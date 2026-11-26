@@ -1,0 +1,12 @@
+{
+  "reviewed": [
+    "screenshots/tak-official-preview.png",
+    "screenshots/tak-community-preview.png",
+    "screenshots/tak-directional-gradient.png"
+  ],
+  "findings": [
+    "官方/社区预览均显示命名颜色背景、inventory图标和动作标签；保存按钮可用并经UI验证保存完成",
+    "定向DPad截图显示fill和自定义stroke，方向gradient层及起止方向由同一测试断言验证"
+  ],
+  "reviewScope": "仅本轮截图和动态/样式/保存用例"
+}

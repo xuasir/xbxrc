@@ -49,10 +49,11 @@ final class XboxStreamDataChannels: NSObject {
         self.frameFeedback = frameFeedback
         self.eventSink = eventSink
         self.failureSink = failureSink
-        postHandshakePayloads = streamPostHandshakePayloads(
-            width: UInt32(clamping: max(targetVideoWidth, 1)),
-            height: UInt32(clamping: max(targetVideoHeight, 1))
-        )
+        postHandshakePayloads =
+            streamPostHandshakePayloads(
+                width: UInt32(clamping: max(targetVideoWidth, 1)),
+                height: UInt32(clamping: max(targetVideoHeight, 1))
+            ) + streamTouchCapabilityPayloads(enabled: true)
         controlBootstrapPayloads = streamControlBootstrapPayloads()
         stateMachine = StreamingDataChannelStateMachine(
             postHandshakeCount: postHandshakePayloads.count,
@@ -242,6 +243,13 @@ final class XboxStreamDataChannels: NSObject {
     }
 
     private func handleMessagePayload(_ data: Data, channel: RTCDataChannel) {
+        if !locallyClosing, data.count <= 128 * 1024,
+            let payload = String(data: data, encoding: .utf8),
+            let command = parseStreamTouchLayoutCommand(payload: payload)
+        {
+            inputSession.onTouchLayoutCommand?(command)
+            eventSink("message", "touchLayoutCommandReceived")
+        }
         let wasAcknowledged = stateMachine.snapshot.handshakeAcknowledged
         if let reason = stateMachine.receiveMessage(data) {
             reportTerminal(reason, channel: channel.label)

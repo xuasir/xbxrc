@@ -6,6 +6,443 @@ import XCTest
 
 @MainActor
 final class SavedOfficialTouchLayoutTests: XCTestCase {
+  func testCommunityRequestsSurviveCloudAccessFailureAndCancellation() async throws {
+    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
+    XCTAssertEqual(game.productID, "HALO00000001")
+    let choice = XboxOfficialTouchBundleChoice(
+      id: "community:better-xcloud:fixture", tabVersion: "fixture",
+      manifestVersion: "1.0", layoutVersion: "4.1")
+    let snapshot = try Self.snapshot(id: "public-layout", action: "gamepadA")
+    for failure: any Error in [URLError(.timedOut), CancellationError()] {
+      let calls = TouchLayoutRemoteRequestLog()
+      let requests = TouchLayoutRemoteRequests(
+        resolveTitle: { _, _, _ in
+          await calls.record("resolve")
+          throw TouchLayoutError.invalid("已知标题应直接查询")
+        },
+        officialCatalog: { _, _, _ in
+          await calls.record("official")
+          return []
+        },
+        communityCatalog: { titleID, productID in
+          XCTAssertEqual(titleID, "1")
+          XCTAssertEqual(productID, "HALO00000001")
+          await calls.record("community")
+          return [choice]
+        },
+        download: { handle, _, _, _, _, _ in
+          XCTAssertNil(handle)
+          await calls.record("public-download")
+          return TouchLayoutTestBundle(snapshot: snapshot)
+        })
+      let client = RustXboxTouchLayoutClient(requests: requests)
+      let access: TouchLayoutAccessProvider = {
+        await calls.record("access")
+        throw failure
+      }
+      let catalog = try await client.catalog(
+        game: game, serverRegion: "auto", prepareAccess: access)
+      XCTAssertEqual(catalog.bundles.map(\.id), [choice.id])
+      XCTAssertNotNil(catalog.sources.first { $0.source == .official }?.failure)
+      XCTAssertNil(catalog.sources.first { $0.source == .community }?.failure)
+      let downloaded = try await client.download(
+        titleID: catalog.titleID, bundleID: choice.id, game: game,
+        locale: "zh-CN", displayScale: 2, prepareAccess: access)
+      XCTAssertEqual(downloaded.choices.first?.id, snapshot.id)
+      let events = await calls.values
+      XCTAssertEqual(events.filter { $0 == "access" }.count, 1)
+      XCTAssertEqual(events.filter { $0 == "community" }.count, 1)
+      XCTAssertEqual(events.filter { $0 == "public-download" }.count, 1)
+      XCTAssertFalse(events.contains("resolve"))
+      XCTAssertFalse(events.contains("official"))
+    }
+  }
+
+  func testResolvedTitleReusesPreparedAccessForOfficialCatalog() async throws {
+    let game = CloudLibraryGame(
+      gameSummary: GameSummary(
+        id: "installed", titleID: "", name: "Halo Infinite", artworkURL: nil,
+        lastPlayedAt: nil, playtimeMinutes: nil, achievementProgress: nil,
+        productID: "HALO00000001"))
+    let calls = TouchLayoutRemoteRequestLog()
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { handle, productID, _ in
+        XCTAssertFalse(handle.isEmpty)
+        XCTAssertEqual(productID, "HALO00000001")
+        await calls.record("resolve")
+        return "1"
+      },
+      officialCatalog: { handle, titleID, _ in
+        XCTAssertFalse(handle.isEmpty)
+        XCTAssertEqual(titleID, "1")
+        await calls.record("official")
+        return []
+      },
+      communityCatalog: { _, _ in
+        await calls.record("community")
+        return []
+      },
+      download: { _, _, _, _, _, _ in
+        throw TouchLayoutError.invalid("当前场景只查询目录")
+      })
+    let client = RustXboxTouchLayoutClient(requests: requests)
+    let result = try await client.catalog(
+      game: game, serverRegion: "auto",
+      prepareAccess: {
+        await calls.record("access")
+        return try await PCPageCloudClient().prepareAccess(
+          session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+          authProvider: nil, startup: nil)
+      })
+    XCTAssertEqual(result.titleID, "1")
+    XCTAssertTrue(result.sources.allSatisfy { $0.failure == nil })
+    let events = await calls.values
+    for event in ["access", "resolve", "official", "community"] {
+      XCTAssertEqual(events.filter { $0 == event }.count, 1)
+    }
+  }
+
+  func testCommunityCatalogReusesSuccessfulTitleLookupAcrossProducts() async throws {
+    let calls = TouchLayoutRemoteRequestLog()
+    let choice = XboxOfficialTouchBundleChoice(
+      id: "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+      tabVersion: "4416b1ab0758", manifestVersion: "1.0", layoutVersion: "4.1")
+    let snapshot = try Self.snapshot(id: "layout-1", action: "gamepadA")
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { _, _, _ in
+        throw TouchLayoutError.invalid("标题身份已由目录提供")
+      },
+      officialCatalog: { _, _, _ in
+        await calls.record("official")
+        return []
+      },
+      communityCatalog: { titleID, _ in
+        XCTAssertEqual(titleID, "2079757188")
+        await calls.record("community")
+        return [choice]
+      },
+      download: { handle, titleID, bundleID, _, _, _ in
+        XCTAssertNil(handle)
+        XCTAssertEqual(titleID, "2079757188")
+        XCTAssertEqual(bundleID, choice.id)
+        return TouchLayoutTestBundle(snapshot: snapshot)
+      })
+    let client = RustXboxTouchLayoutClient(requests: requests)
+    let access: TouchLayoutAccessProvider = {
+      await calls.record("access")
+      throw URLError(.notConnectedToInternet)
+    }
+    for productID in ["HORIZON6BASE", "HORIZON6EDITION"] {
+      let game = CloudLibraryGame(
+        gameSummary: GameSummary(
+          id: productID, titleID: "2079757188", name: "Forza Horizon 6", artworkURL: nil,
+          lastPlayedAt: nil, playtimeMinutes: nil, achievementProgress: nil,
+          productID: productID))
+      let catalog = try await client.catalog(
+        game: game, serverRegion: "auto", prepareAccess: access)
+      XCTAssertEqual(catalog.bundles.map(\.id), [choice.id])
+      XCTAssertTrue(catalog.sources.allSatisfy { $0.failure == nil })
+      let bundle = try await client.download(
+        titleID: catalog.titleID, bundleID: choice.id, game: game, locale: "zh-CN",
+        displayScale: 2, prepareAccess: access)
+      let preview = try await bundle.preview(layoutID: "layout-1")
+      let prepared = try await PreparedTouchLayout.prepare(preview)
+      XCTAssertTrue(prepared.layout.report.isSupported)
+    }
+    let events = await calls.values
+    XCTAssertEqual(events.filter { $0 == "community" }.count, 1)
+    XCTAssertFalse(events.contains("access"))
+    XCTAssertFalse(events.contains("official"))
+  }
+
+  func testCatalogRetriesFailedSourceAndRefreshesCachedCommunityRevision() async throws {
+    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
+    let calls = TouchLayoutRemoteRequestLog()
+    let officialChoice = XboxOfficialTouchBundleChoice(
+      id: "official-fixture", tabVersion: "1.0", manifestVersion: "1.0", layoutVersion: "4.1")
+    let communityChoices = ["first", "refreshed"].map {
+      XboxOfficialTouchBundleChoice(
+        id: "community:better-xcloud:" + $0, tabVersion: $0,
+        manifestVersion: "1.0", layoutVersion: "4.1")
+    }
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { _, _, _ in throw TouchLayoutError.invalid("标题身份已提供") },
+      officialCatalog: { _, titleID, _ in
+        XCTAssertEqual(titleID, "1")
+        if await calls.attempt("official") == 1 { throw URLError(.timedOut) }
+        return [officialChoice]
+      },
+      communityCatalog: { titleID, _ in
+        XCTAssertEqual(titleID, "1")
+        let attempt = await calls.attempt("community")
+        return [communityChoices[min(attempt - 1, 1)]]
+      },
+      download: { _, _, _, _, _, _ in throw TouchLayoutError.invalid("仅查询目录") })
+    let client = RustXboxTouchLayoutClient(requests: requests)
+    let preparedAccess = try await PCPageCloudClient().prepareAccess(
+      session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+      authProvider: nil, startup: nil)
+    let access: TouchLayoutAccessProvider = { preparedAccess }
+    let failed = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertNotNil(failed.sources.first { $0.source == .official }?.failure)
+    XCTAssertEqual(failed.bundles.map(\.id), [communityChoices[0].id])
+    let retried = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertTrue(retried.sources.allSatisfy { $0.failure == nil })
+    XCTAssertEqual(retried.bundles.map(\.id), [officialChoice.id, communityChoices[0].id])
+    let refreshed = try await client.catalog(
+      game: game, serverRegion: "auto", refresh: true, prepareAccess: access)
+    XCTAssertEqual(refreshed.bundles.map(\.id), [officialChoice.id, communityChoices[1].id])
+    let reused = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertEqual(reused.bundles.map(\.id), refreshed.bundles.map(\.id))
+    let events = await calls.values
+    XCTAssertEqual(events.filter { $0 == "official" }.count, 4)
+    XCTAssertEqual(events.filter { $0 == "community" }.count, 2)
+  }
+
+  func testCommunityCatalogRetriesFailureAndEmptyLookup() async throws {
+    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
+    let choice = XboxOfficialTouchBundleChoice(
+      id: "community:better-xcloud:recovered", tabVersion: "recovered",
+      manifestVersion: "1.0", layoutVersion: "4.1")
+    let calls = TouchLayoutRemoteRequestLog()
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { _, _, _ in throw TouchLayoutError.invalid("标题身份已提供") },
+      officialCatalog: { _, _, _ in return [] },
+      communityCatalog: { _, _ in
+        switch await calls.attempt("community") {
+        case 1: throw URLError(.timedOut)
+        case 2: return []
+        default: return [choice]
+        }
+      },
+      download: { _, _, _, _, _, _ in throw TouchLayoutError.invalid("仅查询目录") })
+    let client = RustXboxTouchLayoutClient(requests: requests)
+    let preparedAccess = try await PCPageCloudClient().prepareAccess(
+      session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+      authProvider: nil, startup: nil)
+    let access: TouchLayoutAccessProvider = { preparedAccess }
+    let failed = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertNotNil(failed.sources.first { $0.source == .community }?.failure)
+    let empty = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertTrue(empty.bundles.isEmpty)
+    XCTAssertTrue(empty.sources.allSatisfy { $0.failure == nil })
+    let recovered = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertEqual(recovered.bundles.map(\.id), [choice.id])
+    let reused = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertEqual(reused.bundles.map(\.id), [choice.id])
+    let events = await calls.values
+    XCTAssertEqual(events.filter { $0 == "community" }.count, 3)
+  }
+
+  func testCommunityRefreshKeepsLatestCacheWhenPreviousLookupFinishesLate() async throws {
+    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
+    let fixture = TouchCatalogRefreshFixture()
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { _, _, _ in throw TouchLayoutError.invalid("标题身份已提供") },
+      officialCatalog: { _, _, _ in return [] },
+      communityCatalog: { _, _ in await fixture.catalog() },
+      download: { _, _, _, _, _, _ in throw TouchLayoutError.invalid("仅查询目录") })
+    let client = RustXboxTouchLayoutClient(requests: requests)
+    let preparedAccess = try await PCPageCloudClient().prepareAccess(
+      session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+      authProvider: nil, startup: nil)
+    let access: TouchLayoutAccessProvider = { preparedAccess }
+    let initial = Task {
+      try await client.catalog(game: game, serverRegion: "auto", prepareAccess: access)
+    }
+    await fixture.waitForInitialRequest()
+    let refreshed = try await client.catalog(
+      game: game, serverRegion: "auto", refresh: true, prepareAccess: access)
+    await fixture.completeInitialRequest()
+    let previous = try await initial.value
+    XCTAssertEqual(previous.bundles.first?.tabVersion, "previous")
+    XCTAssertEqual(refreshed.bundles.first?.tabVersion, "latest")
+    let reused = try await client.catalog(
+      game: game, serverRegion: "auto", prepareAccess: access)
+    XCTAssertEqual(reused.bundles.map(\.id), refreshed.bundles.map(\.id))
+    let count = await fixture.requestCount
+    XCTAssertEqual(count, 2)
+  }
+
+  func testOfficialAndCommunityDownloadsRetryAndPreparePreview() async throws {
+    let game = CloudLibraryGame(gameSummary: PCPageFixtures.games[0])
+    let snapshot = try Self.snapshot(id: "recovered", action: "gamepadA")
+    for bundleID in ["official-fixture", "community:better-xcloud:fixture"] {
+      let source = GameTouchLayoutSource.identify(bundleID)
+      let calls = TouchLayoutRemoteRequestLog()
+      let requests = TouchLayoutRemoteRequests(
+        resolveTitle: { _, _, _ in throw TouchLayoutError.invalid("仅下载布局") },
+        officialCatalog: { _, _, _ in return [] },
+        communityCatalog: { _, _ in return [] },
+        download: { handle, titleID, requestedID, _, locale, scale in
+          XCTAssertEqual(handle != nil, source == .official)
+          XCTAssertEqual(titleID, "1")
+          XCTAssertEqual(requestedID, bundleID)
+          XCTAssertEqual(locale, "zh-CN")
+          XCTAssertEqual(scale, 2)
+          if await calls.attempt("download") == 1 { throw URLError(.timedOut) }
+          return TouchLayoutTestBundle(snapshot: snapshot)
+        })
+      let client = RustXboxTouchLayoutClient(requests: requests)
+      let access: TouchLayoutAccessProvider = {
+        await calls.record("access")
+        return try await PCPageCloudClient().prepareAccess(
+          session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+          authProvider: nil, startup: nil)
+      }
+      do {
+        _ = try await client.download(
+          titleID: "1", bundleID: bundleID, game: game, locale: "zh-CN",
+          displayScale: 2, prepareAccess: access)
+        XCTFail("首次超时应交付重试状态")
+      } catch {
+        XCTAssertEqual((error as? URLError)?.code, .timedOut)
+      }
+      let recovered = try await client.download(
+        titleID: "1", bundleID: bundleID, game: game, locale: "zh-CN",
+        displayScale: 2, prepareAccess: access)
+      let preview = try await recovered.preview(layoutID: snapshot.id)
+      let prepared = try await PreparedTouchLayout.prepare(preview)
+      XCTAssertTrue(prepared.layout.report.isSupported)
+      let events = await calls.values
+      XCTAssertEqual(events.filter { $0 == "download" }.count, 2)
+      XCTAssertEqual(events.filter { $0 == "access" }.count, source == .official ? 2 : 0)
+    }
+  }
+
+  func testCloudQueriesOnlyAndReusesSelectedPackageWithoutChangingHomeRecent() async throws {
+    let (controller, session, library, _) = try await setup()
+    await assertSelection(.saved("first"), controller: controller, library: library, expected: true)
+    let homeRecent = controller.recentCustomSelection
+    var persisted: [String?] = []
+    controller.onRecentSelectionChanged = { persisted.append($0) }
+    let calls = TouchLayoutRemoteRequestLog()
+    let (client, access) = try await cloudTestClient(calls: calls)
+    controller.beginSession(generation: 2, target: .cloud)
+    controller.setCloudGame(CloudLibraryGame(gameSummary: PCPageFixtures.games[0]), generation: 2)
+    await controller.loadCloudCatalog(
+      client: client, serverRegion: "auto", locale: "zh-CN", displayScale: 2,
+      prepareAccess: access)
+    XCTAssertEqual(controller.cloudCatalog?.bundles.count, 2)
+    XCTAssertEqual(controller.cloudDownloadedBundleCount, 0)
+    let queried = await calls.values
+    XCTAssertFalse(queried.contains { $0.hasPrefix("download:") })
+    await assertSelection(
+      .saved("second"), controller: controller, library: library, expected: false)
+    XCTAssertEqual(controller.selection, .standard)
+    await assertSelection(
+      .gameBundle("official-cloud"), controller: controller, library: library, expected: true)
+    XCTAssertEqual(
+      controller.selection, .gameLayout(bundleID: "official-cloud", layoutID: "default"))
+    XCTAssertEqual(controller.cloudLayoutChoices.count, 2)
+    _ = session.outputState(now: 1)
+    let a = try XCTUnwrap(
+      controller.input.sockets.first { $0.control.action == .gamepad("gamepadA") })
+    controller.input.process([.init(id: 1, phase: .began, position: a.center)])
+    XCTAssertEqual(session.outputState(now: 2).buttonMask, 16)
+    let alternative = TouchLayoutSelection.gameLayout(
+      bundleID: "official-cloud", layoutID: "alternative")
+    await assertSelection(alternative, controller: controller, library: library, expected: true)
+    XCTAssertEqual(session.outputState(now: 3), .neutral)
+    XCTAssertEqual(controller.input.gamepad, .neutral)
+    let b = try XCTUnwrap(
+      controller.input.sockets.first { $0.control.action == .gamepad("gamepadB") })
+    controller.input.process([.init(id: 2, phase: .began, position: b.center)])
+    XCTAssertEqual(session.outputState(now: 4).buttonMask, 32)
+    XCTAssertEqual(controller.nextQuickSelection(preferences: .init(), library: library), .standard)
+    await assertSelection(.standard, controller: controller, library: library, expected: true)
+    XCTAssertEqual(
+      controller.nextQuickSelection(preferences: .init(), library: library), alternative)
+    await assertSelection(alternative, controller: controller, library: library, expected: true)
+    let downloaded = await calls.values
+    XCTAssertEqual(downloaded.filter { $0 == "download:official-cloud" }.count, 1)
+    XCTAssertEqual(controller.recentCustomSelection, homeRecent)
+    XCTAssertTrue(persisted.isEmpty)
+    controller.beginSession(generation: 3, target: .home)
+    XCTAssertNil(controller.cloudGame)
+    XCTAssertEqual(controller.cloudDownloadedBundleCount, 0)
+    XCTAssertEqual(
+      controller.nextQuickSelection(preferences: .init(), library: library), .saved("first"))
+  }
+
+  func testCloudDownloadFailureKeepsCurrentLayoutAndRetrySwitchesSource() async throws {
+    let (controller, session, library, _) = try await setup()
+    let calls = TouchLayoutRemoteRequestLog()
+    let (client, access) = try await cloudTestClient(calls: calls, failCommunityOnce: true)
+    controller.beginSession(generation: 2, target: .cloud)
+    controller.setCloudGame(CloudLibraryGame(gameSummary: PCPageFixtures.games[0]), generation: 2)
+    await controller.loadCloudCatalog(
+      client: client, serverRegion: "auto", locale: "zh-CN", displayScale: 2,
+      prepareAccess: access)
+    await assertSelection(
+      .gameBundle("official-cloud"), controller: controller, library: library, expected: true)
+    let previous = controller.selection
+    let communityID = "community:better-xcloud:cloud"
+    await assertSelection(
+      .gameBundle(communityID), controller: controller, library: library, expected: false)
+    XCTAssertEqual(controller.selection, previous)
+    XCTAssertNotNil(controller.cloudDownloadFailures[communityID])
+    await assertSelection(
+      .gameBundle(communityID), controller: controller, library: library, expected: true)
+    XCTAssertEqual(controller.selection, .gameLayout(bundleID: communityID, layoutID: "default"))
+    XCTAssertNil(controller.cloudDownloadFailures[communityID])
+    _ = session.outputState(now: 1)
+    let b = try XCTUnwrap(
+      controller.input.sockets.first { $0.control.action == .gamepad("gamepadB") })
+    controller.input.process([.init(id: 3, phase: .began, position: b.center)])
+    XCTAssertEqual(session.outputState(now: 2).buttonMask, 32)
+    let events = await calls.values
+    XCTAssertEqual(events.filter { $0 == "download:" + communityID }.count, 2)
+  }
+
+  func testLateCloudDownloadCannotOverwriteHomeSession() async throws {
+    let (controller, _, library, _) = try await setup()
+    let gate = TouchCloudDownloadGate()
+    let (client, access) = try await cloudTestClient(
+      calls: TouchLayoutRemoteRequestLog(), gate: gate)
+    controller.beginSession(generation: 2, target: .cloud)
+    controller.setCloudGame(CloudLibraryGame(gameSummary: PCPageFixtures.games[0]), generation: 2)
+    await controller.loadCloudCatalog(
+      client: client, serverRegion: "auto", locale: "zh-CN", displayScale: 2,
+      prepareAccess: access)
+    let pending = Task {
+      await controller.select(.gameBundle("official-cloud"), library: library, preferences: .init())
+    }
+    await gate.waitForDownload()
+    controller.beginSession(generation: 3, target: .home)
+    await assertSelection(
+      .saved("second"), controller: controller, library: library, expected: true)
+    await gate.completeDownload()
+    let completed = await pending.value
+    XCTAssertFalse(completed)
+    XCTAssertEqual(controller.selection, .saved("second"))
+    XCTAssertEqual(controller.cloudDownloadedBundleCount, 0)
+    XCTAssertNil(controller.cloudCatalog)
+  }
+
+  func testCloudKeepsRunnableDefaultWithSourceWarnings() async throws {
+    let (controller, _, library, _) = try await setup()
+    let (client, access) = try await cloudTestClient(
+      calls: TouchLayoutRemoteRequestLog(), defaultIssues: ["默认布局等待适配"])
+    controller.beginSession(generation: 2, target: .cloud)
+    controller.setCloudGame(CloudLibraryGame(gameSummary: PCPageFixtures.games[0]), generation: 2)
+    await controller.loadCloudCatalog(
+      client: client, serverRegion: "auto", locale: "zh-CN", displayScale: 2,
+      prepareAccess: access)
+    await assertSelection(
+      .gameBundle("official-cloud"), controller: controller, library: library, expected: true)
+    XCTAssertEqual(
+      controller.selection, .gameLayout(bundleID: "official-cloud", layoutID: "default"))
+    XCTAssertEqual(controller.cloudDownloadedBundleCount, 1)
+  }
+
   func testOfficialAssetIsDecodedAndDrawnWithOriginalPixels() async throws {
     let png = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).pngData { context in
       UIColor.red.setFill()
@@ -47,25 +484,254 @@ final class SavedOfficialTouchLayoutTests: XCTestCase {
     surface.stop()
   }
 
-  func testMissingImagesAndUnknownActionsBlockSaving() async throws {
-    var snapshot = try Self.snapshot(id: "unsupported", action: "mouseLeft")
-    snapshot.issues = ["必需资源缺失"]
+  func testVPrefixedTouchpadPassesSaveCapabilityGate() async throws {
+    var snapshot = try Self.snapshot(id: "second", action: "gamepadB")
+    snapshot.documentJson =
+      #"{"$schema":"https://schema.play.xbox.com/layout/v3.1/layout.json","content":{"right":{"inner":[{"type":"touchpad","action":"gamepadB","renderAsButton":true,"axis":{"input":"axisXY","output":"rightJoystick"}}]}}}"#
     let prepared = try await PreparedTouchLayout.prepare(snapshot)
-    XCTAssertFalse(prepared.layout.report.isSupported)
+    XCTAssertTrue(prepared.layout.report.isSupported, "\(prepared.layout.report.issues)")
     let client = TouchLayoutTestClient(items: [], snapshots: [:])
     let library = SavedTouchLayoutsStore(client: client)
-    do {
-      try await library.save(
-        bundle: TouchLayoutTestBundle(snapshot: snapshot), prepared: prepared)
-      XCTFail("能力诊断需要阻止保存")
-    } catch {}
+    try await library.save(bundle: TouchLayoutTestBundle(snapshot: snapshot), prepared: prepared)
     let writes = await client.saveCalls
-    XCTAssertEqual(writes, 0)
+    XCTAssertEqual(writes, 1)
+  }
+
+  private func prepareArtwork(_ content: [String: Any]) async throws -> PreparedTouchLayout {
+    var snapshot = try Self.snapshot(id: "artwork", action: "gamepadA")
+    snapshot.documentJson = String(
+      decoding: try JSONSerialization.data(withJSONObject: [
+        "$schema": "https://schema.play.xbox.com/layout/v3.1/layout.json", "content": content,
+      ]), as: UTF8.self)
+    snapshot.assets = [("red.png", UIColor.red), ("blue.png", UIColor.blue)].map { id, color in
+      .init(
+        id: id,
+        data: UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).pngData {
+          color.setFill()
+          $0.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        })
+    }
+    return try await PreparedTouchLayout.prepare(snapshot)
+  }
+
+  func testOfficialBackgroundAndMovingKnobReuseDecodedImages() async throws {
+    let redAsset: [String: Any] = ["type": "asset", "value": "red.png"]
+    let blueAsset: [String: Any] = ["type": "asset", "value": "blue.png"]
+    let prepared = try await prepareArtwork([
+      "left": [
+        "inner": [
+          [
+            "type": "joystick", "action": "leftThumb",
+            "axis": ["input": "axisXY", "output": "leftJoystick"],
+            "styles": [
+              "default": [
+                "opacity": 0.5, "background": redAsset,
+                "knob": ["background": redAsset, "faceImage": blueAsset, "opacity": 0.6],
+              ],
+              "moving": ["background": blueAsset, "knob": ["background": blueAsset]],
+              "activated": ["background": redAsset],
+            ],
+          ],
+          ["type": "directionalPad", "styles": ["default": ["background": blueAsset]]],
+        ]
+      ],
+      "right": [
+        "inner": [
+          [
+            "type": "touchpad", "action": "gamepadB", "renderAsButton": true,
+            "axis": ["input": "axisXY", "output": "rightJoystick"],
+            "styles": [
+              "default": ["background": redAsset, "faceImage": blueAsset],
+              "activated": ["background": blueAsset],
+            ],
+          ],
+          [
+            "type": "throttle", "axisUp": "rightTrigger", "axisDown": "leftTrigger",
+            "styles": [
+              "default": [
+                "knob": ["background": redAsset, "faceImage": blueAsset],
+                "axisUp": ["cap": ["type": "color", "value": "#0f08", "opacity": 0.4]],
+                "axisDown": ["cap": ["type": "color", "value": "#ff000080"]],
+              ]
+            ],
+          ],
+        ]
+      ],
+    ])
+    XCTAssertTrue(prepared.layout.report.isSupported, "\(prepared.layout.report.issues)")
+    let red = try XCTUnwrap(prepared.assets.images["red.png"])
+    let blue = try XCTUnwrap(prepared.assets.images["blue.png"])
+    let input = TouchInputAccumulator()
+    input.load(prepared.layout)
+    let surface = TouchLayoutSurfaceView(input: input)
+    defer { surface.stop() }
+    surface.assets = prepared.assets
+    surface.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
+    surface.layoutSubviews()
+    let stick = try XCTUnwrap(input.sockets.first { $0.control.kind == .joystick })
+    let drawing = try XCTUnwrap(surface.layer.sublayers?.first { $0.position == stick.center })
+    let background = try XCTUnwrap(drawing.sublayers?.first { $0.name == "control-background" })
+    let knob = try XCTUnwrap(drawing.sublayers?.first { $0.name == "knob-background" })
+    XCTAssertTrue(try XCTUnwrap(background.contents) as AnyObject === red)
+    XCTAssertTrue(try XCTUnwrap(knob.contents) as AnyObject === red)
+    XCTAssertEqual(knob.opacity, 0.6, accuracy: 0.001)
+    XCTAssertEqual(drawing.opacity, surface.controlOpacity * 0.5, accuracy: 0.001)
+    input.process([.init(id: 1, phase: .began, position: stick.center)])
+    XCTAssertTrue(try XCTUnwrap(background.contents) as AnyObject === blue)
+    XCTAssertTrue(try XCTUnwrap(knob.contents) as AnyObject === blue)
+    input.process([
+      .init(
+        id: 1, phase: .moved,
+        position: CGPoint(
+          x: stick.center.x + stick.diameter, y: stick.center.y))
+    ])
+    XCTAssertTrue(try XCTUnwrap(background.contents) as AnyObject === red)
+    XCTAssertEqual(input.gamepad.buttonMask & 16384, 16384)
+    let pad = try XCTUnwrap(input.sockets.first { $0.control.kind == .touchpad })
+    input.process([.init(id: 2, phase: .began, position: pad.center)])
+    let padDrawing = try XCTUnwrap(surface.layer.sublayers?.first { $0.position == pad.center })
+    XCTAssertTrue(
+      try XCTUnwrap(padDrawing.sublayers?.first { $0.name == "control-background" }?.contents)
+        as AnyObject === blue)
+    let throttle = try XCTUnwrap(input.sockets.first { $0.control.kind == .throttle })
+    let throttleDrawing = try XCTUnwrap(
+      surface.layer.sublayers?.first { $0.position == throttle.center })
+    let cap = try XCTUnwrap(throttleDrawing.sublayers?.first { $0.name == "axis-up-cap" })
+    XCTAssertFalse(cap.isHidden)
+    XCTAssertEqual(cap.opacity, 0.4, accuracy: 0.001)
+    XCTAssertEqual(try XCTUnwrap(cap.backgroundColor?.alpha), 136.0 / 255, accuracy: 0.001)
+    let attachment = XCTAttachment(
+      image: UIGraphicsImageRenderer(size: surface.bounds.size).image {
+        surface.layer.render(in: $0.cgContext)
+      })
+    attachment.name = "official-background-and-knob-assets"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+    input.cancelAll()
+    XCTAssertEqual(input.gamepad, .neutral)
+    XCTAssertTrue(try XCTUnwrap(background.contents) as AnyObject === red)
+    XCTAssertTrue(try XCTUnwrap(knob.contents) as AnyObject === red)
+    input.load(try TouchLayoutCatalog.read("generic")[0])
+    XCTAssertNil(background.contents)
+    XCTAssertTrue(background.isHidden)
+    XCTAssertNil(knob.contents)
+    XCTAssertTrue(knob.isHidden)
+  }
+
+  func testPullIndicatorUsesActiveSegmentAndReleasesItsArtwork() async throws {
+    let prepared = try await prepareArtwork([
+      "right": [
+        "inner": [
+          [
+            "type": "button", "action": "gamepadA",
+            "pullAction": [
+              "type": "segmented", "items": ["gamepadX", "gamepadB", "gamepadY", "leftTrigger"],
+            ],
+            "styles": [
+              "default": [
+                "background": ["type": "asset", "value": "red.png"],
+                "pullIndicator": [
+                  [
+                    "opacity": 0.5, "background": ["type": "color", "value": "#f008"],
+                    "faceImage": ["type": "asset", "value": "red.png", "opacity": 0.4],
+                  ],
+                  NSNull(),
+                  [
+                    "background": ["type": "color", "value": "#0000ff80"],
+                    "faceImage": ["type": "asset", "value": "blue.png"],
+                  ],
+                  NSNull(),
+                ],
+              ],
+              "pulled": ["background": ["type": "asset", "value": "blue.png"]],
+            ],
+          ]
+        ]
+      ]
+    ])
+    XCTAssertTrue(prepared.layout.report.isSupported, "\(prepared.layout.report.issues)")
+    let red = try XCTUnwrap(prepared.assets.images["red.png"])
+    let blue = try XCTUnwrap(prepared.assets.images["blue.png"])
+    let input = TouchInputAccumulator()
+    input.load(prepared.layout)
+    let surface = TouchLayoutSurfaceView(input: input)
+    defer { surface.stop() }
+    surface.assets = prepared.assets
+    surface.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
+    surface.layoutSubviews()
+    let button = try XCTUnwrap(input.sockets.first)
+    let drawing = try XCTUnwrap(surface.layer.sublayers?.first)
+    let up = CGPoint(x: button.center.x, y: button.center.y - button.unitSize)
+    input.process([
+      .init(id: 1, phase: .began, position: button.center),
+      .init(id: 1, phase: .moved, position: up),
+    ])
+    XCTAssertEqual(input.gamepad.buttonMask, 16 | 64)
+    let pull = try XCTUnwrap(drawing.sublayers?.first { $0.name == "pull-indicator-1" })
+    XCTAssertLessThan(pull.position.y, drawing.bounds.midY)
+    XCTAssertEqual(pull.opacity, 0.5, accuracy: 0.001)
+    XCTAssertEqual(try XCTUnwrap(pull.sublayers?[3]).opacity, 0.4, accuracy: 0.001)
+    XCTAssertTrue(try XCTUnwrap(pull.sublayers?[3].contents) as AnyObject === red)
+    let down = CGPoint(x: button.center.x, y: button.center.y + button.unitSize)
+    input.process([.init(id: 1, phase: .moved, position: down)])
+    XCTAssertEqual(input.gamepad.buttonMask, 16 | 128)
+    XCTAssertGreaterThan(pull.position.y, drawing.bounds.midY)
+    XCTAssertTrue(try XCTUnwrap(pull.sublayers?[3].contents) as AnyObject === blue)
+    input.cancelAll()
+    XCTAssertEqual(input.gamepad, .neutral)
+    XCTAssertFalse(drawing.sublayers?.contains { $0.name == "pull-indicator-1" } ?? true)
+  }
+
+  func testUnknownVisualFieldsAllowSavingRunnableControls() async throws {
+    let asset: [String: Any] = ["type": "asset", "value": "red.png"]
+    let prepared = try await prepareArtwork([
+      "right": [
+        "inner": [
+          ["type": "button", "action": "gamepadA", "styles": ["future": ["background": asset]]],
+          [
+            "type": "button", "action": "gamepadB",
+            "styles": ["default": ["knob": ["background": asset]]],
+          ],
+          [
+            "type": "button", "action": "gamepadX", "pullAction": "gamepadY",
+            "styles": ["default": ["pullIndicator": ["background": asset]]],
+          ],
+          [
+            "type": "throttle", "axisUp": "rightTrigger",
+            "styles": ["default": ["axisUp": ["cap": asset]]],
+          ],
+        ]
+      ]
+    ])
+    XCTAssertTrue(prepared.layout.report.isRunnable)
+    XCTAssertFalse(prepared.layout.report.isFullyCompatible)
+    XCTAssertFalse(prepared.layout.report.diagnosticMessages.isEmpty)
+    let client = TouchLayoutTestClient(items: [], snapshots: [:])
+    let library = SavedTouchLayoutsStore(client: client)
+    let snapshot = try Self.snapshot(id: prepared.id, action: "gamepadA")
+    try await library.save(bundle: TouchLayoutTestBundle(snapshot: snapshot), prepared: prepared)
+    let writes = await client.saveCalls
+    XCTAssertEqual(writes, 1)
+  }
+
+  func testMissingImagesAndDeferredActionsKeepRunnableFallback() async throws {
+    var snapshot = try Self.snapshot(id: "unsupported", action: "mouseLeft")
+    snapshot.issues = ["图片资源缺失"]
     snapshot.assets = [.init(id: "broken", data: Data([0, 1, 2]))]
-    do {
-      _ = try await PreparedTouchLayout.prepare(snapshot)
-      XCTFail("损坏图片需要被拒绝")
-    } catch {}
+    let prepared = try await PreparedTouchLayout.prepare(snapshot)
+    XCTAssertTrue(prepared.layout.report.isRunnable)
+    XCTAssertTrue(prepared.layout.report.usesStandardFallback == true)
+    XCTAssertTrue(prepared.assets.images.isEmpty)
+    let item = Self.item(snapshot.id)
+    let client = TouchLayoutTestClient(items: [item], snapshots: [snapshot.id: snapshot])
+    let library = SavedTouchLayoutsStore(client: client)
+    try await library.save(bundle: TouchLayoutTestBundle(snapshot: snapshot), prepared: prepared)
+    let writes = await client.saveCalls
+    XCTAssertEqual(writes, 1)
+    let reloaded = try await library.load(item)
+    XCTAssertEqual(reloaded.id, snapshot.id)
+    XCTAssertTrue(reloaded.layout.report.isRunnable)
+    XCTAssertTrue(reloaded.layout.report.usesStandardFallback == true)
   }
 
   func testNewPointerImmediatelyAfterLayoutChangeFollowsOneNeutralFrame() async throws {
@@ -416,6 +1082,114 @@ final class SavedOfficialTouchLayoutTests: XCTestCase {
     return (controller, session, library, client)
   }
 
+  private func assertSelection(
+    _ choice: TouchLayoutSelection, controller: StreamingTouchLayoutController,
+    library: SavedTouchLayoutsStore, expected: Bool,
+    file: StaticString = #filePath, line: UInt = #line
+  ) async {
+    let applied = await controller.select(choice, library: library, preferences: .init())
+    XCTAssertEqual(applied, expected, file: file, line: line)
+  }
+
+  func testGameCommandsPatchHideSwitchAndResetState() async throws {
+    let (controller, session, _, _) = try await setup()
+    controller.beginSession(generation: 2, target: .cloud)
+    controller.setCloudGame(CloudLibraryGame(gameSummary: PCPageFixtures.games[0]), generation: 2)
+    let (client, access) = try await cloudTestClient(
+      calls: TouchLayoutRemoteRequestLog(), dynamicState: true)
+    await controller.loadCloudCatalog(
+      client: client, serverRegion: "auto", locale: "zh-CN", displayScale: 2, prepareAccess: access)
+    await controller.apply(.init(kind: "showlayout", layoutId: "default", patchBase64: nil))
+    XCTAssertEqual(
+      controller.selection, .gameLayout(bundleID: "official-cloud", layoutID: "default"))
+    let a = try XCTUnwrap(controller.input.sockets.first)
+    controller.input.process([.init(id: 1, phase: .began, position: a.center)])
+    XCTAssertEqual(controller.input.gamepad.buttonMask, 16)
+    let patch = Data(#"[{"op":"replace","path":"/fireVisible","value":false}]"#.utf8)
+      .base64EncodedString()
+    await controller.apply(.init(kind: "patchstate", layoutId: nil, patchBase64: patch))
+    XCTAssertTrue(controller.input.sockets.isEmpty)
+    XCTAssertEqual(controller.input.gamepad, .neutral)
+    await controller.apply(.init(kind: "showlayoutv2", layoutId: "alternative", patchBase64: nil))
+    XCTAssertTrue(controller.input.sockets.isEmpty)
+    XCTAssertEqual(
+      controller.selection, .gameLayout(bundleID: "official-cloud", layoutID: "alternative"))
+    await controller.apply(.init(kind: "patchstate", layoutId: nil, patchBase64: "invalid"))
+    XCTAssertNotNil(controller.loadError)
+    XCTAssertTrue(controller.input.sockets.isEmpty)
+    await controller.apply(.init(kind: "hide", layoutId: nil, patchBase64: nil))
+    XCTAssertTrue(controller.isGameHidden)
+    let visible = Data(#"[{"op":"replace","path":"/fireVisible","value":true}]"#.utf8)
+      .base64EncodedString()
+    await controller.apply(.init(kind: "showlayoutv2", layoutId: "", patchBase64: visible))
+    XCTAssertFalse(controller.isGameHidden)
+    XCTAssertEqual(controller.input.sockets.count, 1)
+    XCTAssertEqual(
+      controller.selection, .gameLayout(bundleID: "official-cloud", layoutID: "default"))
+    await controller.apply(.init(kind: "showtitledefault", layoutId: nil, patchBase64: nil))
+    XCTAssertNil(controller.loadError)
+    controller.endSession()
+    XCTAssertEqual(controller.input.gamepad, .neutral)
+    XCTAssertFalse(controller.isGameHidden)
+    XCTAssertEqual(session.outputState(now: 9), .neutral)
+  }
+
+  private func cloudTestClient(
+    calls: TouchLayoutRemoteRequestLog, failCommunityOnce: Bool = false,
+    gate: TouchCloudDownloadGate? = nil, defaultIssues: [String] = [], dynamicState: Bool = false
+  ) async throws -> (RustXboxTouchLayoutClient, TouchLayoutAccessProvider) {
+    func snapshot(id: String, action: String) throws -> XboxTouchLayoutSnapshot {
+      var snapshot = try Self.snapshot(id: id, action: action)
+      if dynamicState {
+        snapshot.documentJson =
+          #"{"_xbxrcRuntime":{"layout":{"content":{"right":{"inner":[{"type":"button","action":"\#(action)","visible":{"$ref":"runtime-context.json#/state/fireVisible"}}]}}},"context":{"state":{"fireVisible":true}},"assets":{}}}"#
+      }
+      return snapshot
+    }
+    var defaultSnapshot = try snapshot(id: "default", action: "gamepadA")
+    defaultSnapshot.issues = defaultIssues
+    let official = TouchLayoutMultiChoiceTestBundle(snapshots: [
+      defaultSnapshot,
+      try snapshot(id: "alternative", action: "gamepadB"),
+    ])
+    let community = TouchLayoutMultiChoiceTestBundle(snapshots: [
+      try snapshot(id: "default", action: "gamepadB"),
+      try snapshot(id: "alternative", action: "gamepadA"),
+    ])
+    let requests = TouchLayoutRemoteRequests(
+      resolveTitle: { _, _, _ in throw TouchLayoutError.invalid("当前游戏已提供标题身份") },
+      officialCatalog: { _, _, _ in
+        await calls.record("official-catalog")
+        return [
+          .init(
+            id: "official-cloud", tabVersion: "1.0", manifestVersion: "1.0", layoutVersion: "4.1")
+        ]
+      },
+      communityCatalog: { _, _ in
+        await calls.record("community-catalog")
+        return [
+          .init(
+            id: "community:better-xcloud:cloud", tabVersion: "cloud", manifestVersion: "1.0",
+            layoutVersion: "4.1")
+        ]
+      },
+      download: { _, titleID, bundleID, game, _, _ in
+        XCTAssertEqual(titleID, "1")
+        XCTAssertEqual(game.productID, "HALO00000001")
+        let attempt = await calls.attempt("download:" + bundleID)
+        if let gate { await gate.startDownload() }
+        if GameTouchLayoutSource.identify(bundleID) == .community {
+          if failCommunityOnce && attempt == 1 { throw URLError(.timedOut) }
+          return community
+        }
+        return official
+      })
+    let prepared = try await PCPageCloudClient().prepareAccess(
+      session: PCPageFixtures.session, forceRegionIP: "", checkpoint: { _ in },
+      authProvider: nil, startup: nil)
+    return (RustXboxTouchLayoutClient(requests: requests), { prepared })
+  }
+
   nonisolated private static func snapshot(id: String, action: String) throws
     -> XboxTouchLayoutSnapshot
   {
@@ -440,6 +1214,43 @@ final class SavedOfficialTouchLayoutTests: XCTestCase {
   }
 }
 
+private actor TouchLayoutRemoteRequestLog {
+  private(set) var values: [String] = []
+  func record(_ value: String) { values.append(value) }
+  func attempt(_ value: String) -> Int {
+    values.append(value)
+    return values.filter { $0 == value }.count
+  }
+}
+
+private actor TouchCatalogRefreshFixture {
+  private(set) var requestCount = 0
+  private var initial: CheckedContinuation<[XboxOfficialTouchBundleChoice], Never>?
+  private var waiter: CheckedContinuation<Void, Never>?
+
+  func catalog() async -> [XboxOfficialTouchBundleChoice] {
+    requestCount += 1
+    if requestCount > 1 { return [choice("latest")] }
+    return await withCheckedContinuation {
+      initial = $0
+      waiter?.resume()
+      waiter = nil
+    }
+  }
+  func waitForInitialRequest() async {
+    if initial == nil { await withCheckedContinuation { waiter = $0 } }
+  }
+  func completeInitialRequest() {
+    initial?.resume(returning: [choice("previous")])
+    initial = nil
+  }
+  private func choice(_ revision: String) -> XboxOfficialTouchBundleChoice {
+    .init(
+      id: "community:better-xcloud:" + revision, tabVersion: revision,
+      manifestVersion: "1.0", layoutVersion: "4.1")
+  }
+}
+
 private struct TouchLayoutTestBundle: OfficialTouchBundleProviding {
   let snapshot: XboxTouchLayoutSnapshot
   var version: String { "1.0.0.0" }
@@ -447,6 +1258,41 @@ private struct TouchLayoutTestBundle: OfficialTouchBundleProviding {
     [.init(id: snapshot.id, name: snapshot.name, isDefault: true, issues: snapshot.issues)]
   }
   func preview(layoutID: String) async throws -> XboxTouchLayoutSnapshot { snapshot }
+}
+
+private struct TouchLayoutMultiChoiceTestBundle: OfficialTouchBundleProviding {
+  let snapshots: [XboxTouchLayoutSnapshot]
+  var version: String { "1.0" }
+  var choices: [XboxTouchLayoutChoice] {
+    snapshots.enumerated().map { index, snapshot in
+      .init(id: snapshot.id, name: snapshot.name, isDefault: index == 0, issues: snapshot.issues)
+    }
+  }
+  func preview(layoutID: String) async throws -> XboxTouchLayoutSnapshot {
+    guard let snapshot = snapshots.first(where: { $0.id == layoutID }) else {
+      throw TouchLayoutError.invalid("布局身份暂缺")
+    }
+    return snapshot
+  }
+}
+
+private actor TouchCloudDownloadGate {
+  private var download: CheckedContinuation<Void, Never>?
+  private var waiter: CheckedContinuation<Void, Never>?
+  func startDownload() async {
+    await withCheckedContinuation {
+      download = $0
+      waiter?.resume()
+      waiter = nil
+    }
+  }
+  func waitForDownload() async {
+    if download == nil { await withCheckedContinuation { waiter = $0 } }
+  }
+  func completeDownload() {
+    download?.resume()
+    download = nil
+  }
 }
 
 private actor TouchLayoutTestClient: XboxTouchLayoutClient {
@@ -463,12 +1309,15 @@ private actor TouchLayoutTestClient: XboxTouchLayoutClient {
     self.items = items
     self.snapshots = snapshots
   }
-  func catalog(accessHandle: String, game: CloudLibraryGame, serverRegion: String) async throws
+  func catalog(
+    game: CloudLibraryGame, serverRegion: String, refresh: Bool,
+    prepareAccess: @escaping TouchLayoutAccessProvider
+  ) async throws
     -> OfficialTouchCatalog
   { throw TouchLayoutError.invalid("测试未提供目录") }
   func download(
-    accessHandle: String, titleID: String, bundleID: String, game: CloudLibraryGame,
-    locale: String, displayScale: Double
+    titleID: String, bundleID: String, game: CloudLibraryGame,
+    locale: String, displayScale: Double, prepareAccess: @escaping TouchLayoutAccessProvider
   ) async throws -> any OfficialTouchBundleProviding { throw TouchLayoutError.invalid("测试未提供下载") }
   func savedLayouts() async throws -> [XboxSavedTouchLayout] {
     if listingShouldFail { throw TouchLayoutError.invalid("测试读取失败") }

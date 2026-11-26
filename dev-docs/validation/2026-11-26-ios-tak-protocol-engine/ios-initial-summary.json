@@ -1,0 +1,64 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+        "deviceName" : "iPhone 18 Pro",
+        "modelName" : "iPhone 18 Pro",
+        "osBuildNumber" : "24B8117",
+        "osVersion" : "27.2",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 2,
+      "passedTests" : 15,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "XBXRC · Built with macOS 27.2.1",
+  "expectedFailures" : 0,
+  "failedTests" : 2,
+  "finishTime" : 1795662791.462,
+  "passedTests" : 15,
+  "result" : "Failed",
+  "runtimeWarnings" : [
+
+  ],
+  "skippedTests" : 0,
+  "startTime" : 1795662679.503,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "failed: caught error: \"invalid(\"此布局的操作能力等待适配\")\"",
+      "targetName" : "XBXRCTests",
+      "testIdentifier" : 3,
+      "testIdentifierString" : "SavedOfficialTouchLayoutTests/testMissingImagesAndDeferredActionsKeepRunnableFallback()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCTests/SavedOfficialTouchLayoutTests/testMissingImagesAndDeferredActionsKeepRunnableFallback",
+      "testName" : "testMissingImagesAndDeferredActionsKeepRunnableFallback()"
+    },
+    {
+      "failureText" : "XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+      "targetName" : "XBXRCUITests",
+      "testIdentifier" : 17,
+      "testIdentifierString" : "SavedOfficialTouchLayoutInteractionTests/testCommunityProtocolLayoutRunsAndSaves()",
+      "testIdentifierURL" : "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testCommunityProtocolLayoutRunsAndSaves",
+      "testName" : "testCommunityProtocolLayoutRunsAndSaves()"
+    }
+  ],
+  "title" : "Test - XBXRC",
+  "topInsights" : [
+    {
+      "category" : "Longest Test Runs",
+      "impact" : "49% of duration",
+      "text" : "1 longest test run with outlier durations exceeding 0.36s (three standard deviations)"
+    }
+  ],
+  "totalTestCount" : 17
+}

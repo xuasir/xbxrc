@@ -1,0 +1,78 @@
+[
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "scope": "changed Swift lines",
+    "ranges": [
+      [
+        46,
+        54
+      ],
+      [
+        475,
+        475
+      ],
+      [
+        487,
+        496
+      ],
+      [
+        529,
+        614
+      ]
+    ],
+    "changedLineFindings": [],
+    "outsideChangedLineFindings": 59,
+    "rawToolExitCode": 1,
+    "status": "passed"
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "scope": "changed Swift lines",
+    "ranges": [
+      [
+        369,
+        376
+      ],
+      [
+        414,
+        414
+      ],
+      [
+        458,
+        458
+      ]
+    ],
+    "changedLineFindings": [],
+    "outsideChangedLineFindings": 7,
+    "rawToolExitCode": 1,
+    "status": "passed"
+  },
+  {
+    "file": "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift",
+    "scope": "changed Swift lines",
+    "ranges": [
+      [
+        322,
+        383
+      ]
+    ],
+    "changedLineFindings": [],
+    "outsideChangedLineFindings": 48,
+    "rawToolExitCode": 1,
+    "status": "passed"
+  },
+  {
+    "file": "iosapp/XBXRCTests/CloudLibraryStoreConcurrencyTests.swift",
+    "scope": "changed Swift lines",
+    "ranges": [
+      [
+        6,
+        37
+      ]
+    ],
+    "changedLineFindings": [],
+    "outsideChangedLineFindings": 1,
+    "rawToolExitCode": 1,
+    "status": "passed"
+  }
+]

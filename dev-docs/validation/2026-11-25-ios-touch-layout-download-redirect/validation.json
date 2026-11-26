@@ -1,0 +1,12 @@
+{
+  "targetedTestRuns": 1,
+  "targetedTests": 5,
+  "testResult": "passed",
+  "compilerResult": "succeeded",
+  "frontendLintCommand": "pnpm lint:fix",
+  "frontendLintExitCode": 0,
+  "rustChanges": false,
+  "uiEvidence": "previous round: one installed-details smoke test, reused",
+  "latestDiagnosticTouchLayoutEvents": 0,
+  "remaining": "real official and community downloads on new build"
+}

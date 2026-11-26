@@ -149,3 +149,8 @@
 - Update: 复核固定 WebRTC M137 `RTCAudioSession+Configuration` 源码与 Apple category option 合同后，移除 `playback + allowAirPlay` 非法组合、共享配置原地修改和无效的 input channel 清零；配置/激活拆分并覆盖失败 lease 回滚，补齐 xHome 本地网络权限声明及方向配置回归测试。
 - Validation: 固定 WebRTC artifact 下载、checksum 和 Device/Simulator slice 校验通过；真实 WebRTC Device API 与全 App Swift 6 strict typecheck、全量 Swift parse、Info/PBX lint、streaming boundary、Rust 50 项、trace gate 14 项、trace analyzer 3 项和 diff check 通过。完整 Xcode build 受本机 iOS 26.5 destination 判定异常阻断；XCTest 手工 typecheck命中既有 actor/显式 return 诊断。
 - External Gate: fresh Device xCloud/xHome 需覆盖扬声器、有线/蓝牙 route、interruption 恢复、可触发时的 media services reset、主动退出，并验证 terminal 后恢复次数为零及敏感字段扫描为零。
+- Date: 2026-11-25 | Status: validation-pending | Task: `2026-11-25-ios-stream-audio`
+- Decision: 按固定 M137 commit `cec4daea7ed5da94fc38d790bd12694c86865447` 的默认 ADM 合同纠正系统会话配置：`VoiceProcessingAudioUnit` 同时启用输入与输出，`configureWebRTCSession` 在接收播放初始化时检查 `inputAvailable`；接收与上行共用独立的 `playAndRecord/voiceChat` 配置，并采用 `defaultToSpeaker` 与系统外接路由选项。2026-08-05 的 `playback/default` 配置决策由本次兼容性修正替代。
+- Decision: WebRTC 接收方向保持 `recvonly`，上行音轨与显式麦克风授权继续沿现有开关装配；协调器设置 `useManualAudio = true`，使 `isAudioEnabled` 控制原生音频启停。
+- Decision: M137 的 `audioSessionDidStartPlayOrRecord` 在 AudioUnit 配置与初始化前触发，诊断事件修正为 `audioPlayoutRequested`；输入可用性、通道数、输出音量与手动启停状态加入音频 trace。
+- Validation: iPhone 18 Pro / iOS 27 Simulator 的单轮 15 项定向 XCTest 通过，覆盖 12 项音频状态机、方向完整配置、权限边界及真实默认/反馈工厂 offer 创建、系统输入可用性与退出音频关闭。修改范围的 Swift 格式、会话边界与 diff 检查通过，证据与临时清理记录见 [验收记录](../../dev-docs/validation/2026-11-25-ios-stream-audio/README.md)；实际声音、外接输出与重连保持真机验收门。

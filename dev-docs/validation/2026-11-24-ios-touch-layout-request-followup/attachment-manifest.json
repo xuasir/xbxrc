@@ -1,0 +1,44 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "2FEB9048-8F7A-4ABF-B64D-655D74451F4D.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "installed-touch-catalog-2_0_302874E8-5300-458F-ADA6-F49F7E9EF376.png",
+        "timestamp": 1795515568.988
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "822E6EE2-B841-4C3F-A256-314543AC25B5.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "installed-touch-entry-2_0_314375E6-63E2-4079-AE59-3E864526D446.png",
+        "timestamp": 1795515565.217
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "BA81A9C6-9CFA-45BC-B0BD-189EC87DDC15.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "installed-touch-catalog-1_0_A08D2A3F-2E68-4287-BF30-E0C29450E638.png",
+        "timestamp": 1795515558.245
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "00976A08-B6F7-4E59-889C-5054277DB2E6.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "installed-touch-entry-1_0_725A8CA6-1E21-4335-9353-4389D6F4D9E3.png",
+        "timestamp": 1795515554.361
+      }
+    ],
+    "testIdentifier": "SavedOfficialTouchLayoutInteractionTests/testInstalledGameDetailsOpenCommunityLayoutsWithSourceFailure()",
+    "testIdentifierURL": "test://com.apple.xcode/XBXRC/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests/testInstalledGameDetailsOpenCommunityLayoutsWithSourceFailure"
+  }
+]

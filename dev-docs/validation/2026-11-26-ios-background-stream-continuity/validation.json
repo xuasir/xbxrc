@@ -1,0 +1,26 @@
+{
+  "status": "validation-pending",
+  "testRuns": 1,
+  "testCount": 9,
+  "passed": 9,
+  "failed": 0,
+  "platform": "iPhone 18 Pro / iOS 27.2 Simulator",
+  "preflight": {
+    "swiftParse": "passed",
+    "streamingSessionBoundary": "passed",
+    "infoPlistLint": "passed",
+    "changedRangeFormat": "passed",
+    "diffCheck": "passed"
+  },
+  "sourceFinalSHA256": {
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "5b7ff17cbeff66dbde5ce21e06b2392b0b2b323982492ca80e45c3a0dfaeff96",
+    "iosapp/XBXRC/Resources/Info.plist": "bbe16147539e63163f01835fe43f083dcc5011aab65ac4949005f148304a370b",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "b93877b7ddbcc99cd57879ffea6207e2d2417e7bf3e8cad2862745b6dfc4b225",
+    "iosapp/README.md": "653ac79c2a241dfe3fc47782e69566c82459e1ea270d1244b40c5f7df96d27b9"
+  },
+  "deviceGate": "真机 Home / Cloud 各一次播放中进入后台后返回，确认原连接、音频、画面与输入续接；真实 OS 后台保活与媒体供给由实机验证",
+  "exportDiagnostic": {
+    "initialSummaryScriptExitCode": 64,
+    "recovery": "直接 xcresulttool CLI 导出成功，测试仅执行一轮"
+  }
+}

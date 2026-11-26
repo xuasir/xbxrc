@@ -3,6 +3,319 @@ import XCTest
 
 @MainActor
 final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
+  func testCommunityProtocolLayoutRunsAndSaves() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-healthy-sources",
+      "--game-touch-protocol-ui-test", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["primary-navigation-library"].waitForExistence(timeout: 10))
+    app.buttons["primary-navigation-library"].tap()
+    let game = app.buttons.matching(identifier: "cloud-game-HALO00000001").firstMatch
+    reveal(game, in: app)
+    game.tap()
+    let entry = app.buttons["cloud-official-touch-layouts"]
+    reveal(entry, in: app)
+    entry.tap()
+    let id = "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74:default"
+    let preview = app.buttons["game-touch-preview-" + id]
+    reveal(preview, in: app)
+    preview.tap()
+    let close = app.buttons["official-touch-preview-close"]
+    XCTAssertTrue(close.waitForExistence(timeout: 8))
+    XCTAssertTrue(close.label.contains("保存并退出"))
+    waitForPreviewOrientation(app, orientation: "portrait")
+    let pad = app.buttons["touch-control-right/outer/0/2"]
+    XCTAssertTrue(pad.waitForExistence(timeout: 5))
+    let start = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(
+      forDuration: 0.1, thenDragTo: pad.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+    )
+    XCTAssertEqual(pad.value as? String, "释放")
+    save(app, "protocol-community-portrait")
+    XCUIDevice.shared.orientation = .landscapeLeft
+    waitForPreviewOrientation(app, orientation: "landscape")
+    save(app, "protocol-community-landscape")
+    XCUIDevice.shared.orientation = .portrait
+    waitForPreviewOrientation(app, orientation: "portrait")
+    XCTAssertTrue(close.isHittable)
+    close.tap()
+    XCTAssertTrue(close.waitForNonExistence(timeout: 5))
+    reveal(preview, in: app)
+    waitSaved(preview)
+    XCTAssertTrue(app.buttons["game-touch-save-" + id].label.contains("重新保存"))
+    save(app, "protocol-community-saved")
+    XCTAssertFalse(app.staticTexts["布局等待适配"].exists)
+  }
+
+  func testSecondOfficialLayoutWithTouchpadPreviewsAndSaves() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-engine-ui-test",
+      "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["primary-navigation-library"].waitForExistence(timeout: 10))
+    app.buttons["primary-navigation-library"].tap()
+    let game = app.buttons.matching(identifier: "cloud-game-HALO00000001").firstMatch
+    reveal(game, in: app)
+    game.tap()
+    let entry = app.buttons["cloud-official-touch-layouts"]
+    reveal(entry, in: app)
+    entry.tap()
+    let preview = app.buttons["game-touch-preview-fixture-1:alternative"]
+    reveal(preview, in: app)
+    XCTAssertTrue(preview.label.contains("触摸板操作"))
+    let saveButton = app.buttons["game-touch-save-fixture-1:alternative"]
+    waitEnabled(saveButton)
+    saveButton.tap()
+    waitSaved(preview)
+    XCTAssertTrue(saveButton.label.contains("重新保存"))
+    save(app, "second-layout-card-saved")
+    preview.tap()
+    let close = app.buttons["official-touch-preview-close"]
+    XCTAssertTrue(close.waitForExistence(timeout: 8))
+    XCTAssertTrue(close.label.contains("保存并退出"))
+    let pad = app.buttons["touch-control-right/inner/1"]
+    XCTAssertTrue(pad.waitForExistence(timeout: 5))
+    let start = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    let end = pad.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.25))
+    start.press(forDuration: 0.1, thenDragTo: end)
+    XCTAssertEqual(pad.value as? String, "释放")
+    save(app, "second-layout-touchpad-preview")
+    close.tap()
+    XCTAssertTrue(preview.waitForExistence(timeout: 5))
+    waitSaved(preview)
+    XCTAssertFalse(app.staticTexts["布局等待适配"].exists)
+    app.buttons["primary-navigation-controller"].tap()
+    app.buttons["section-touch"].tap()
+    let management = app.buttons["controller-saved-touch-layouts"]
+    reveal(management, in: app)
+    management.tap()
+    let saved = app.descendants(matching: .any)["saved-touch-layout-official:fixture-1:alternative"]
+      .firstMatch
+    XCTAssertTrue(saved.waitForExistence(timeout: 5))
+    save(app, "second-layout-saved-library")
+  }
+
+  func testOfficialAndCommunityDynamicStylesSaveThroughGameEntry() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-healthy-sources",
+      "--game-touch-tak-ui-test", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    let library = app.buttons["primary-navigation-library"]
+    XCTAssertTrue(library.waitForExistence(timeout: 10))
+    library.tap()
+    let game = app.buttons.matching(identifier: "cloud-game-HALO00000001").firstMatch
+    reveal(game, in: app)
+    game.tap()
+    let entry = app.buttons["cloud-official-touch-layouts"]
+    reveal(entry, in: app)
+    entry.tap()
+    for (index, bundleID) in [
+      "fixture-1", "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+    ].enumerated() {
+      let preview = app.buttons["game-touch-preview-" + bundleID + ":default"]
+      reveal(preview, in: app)
+      let saveButton = app.buttons["game-touch-save-" + bundleID + ":default"]
+      waitEnabled(saveButton)
+      preview.tap()
+      let close = app.buttons["official-touch-preview-close"]
+      XCTAssertTrue(close.waitForExistence(timeout: 8))
+      let button = app.buttons["touch-control-right/inner/1"]
+      XCTAssertTrue(button.waitForExistence(timeout: 5))
+      button.press(forDuration: 0.4)
+      XCTAssertEqual(button.value as? String, "释放")
+      save(app, index == 0 ? "tak-official-preview" : "tak-community-preview")
+      close.tap()
+      XCTAssertTrue(preview.waitForExistence(timeout: 5))
+      waitSaved(preview)
+    }
+  }
+
+  func testCloudAndInstalledLayoutEntriesDownloadBothHealthySources() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-healthy-sources",
+      "--installed-product-only-ui-test", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    let library = app.buttons["primary-navigation-library"]
+    XCTAssertTrue(library.waitForExistence(timeout: 10))
+    library.tap()
+    let game = app.buttons.matching(identifier: "cloud-game-HALO00000001").firstMatch
+    reveal(game, in: app)
+    game.tap()
+    let cloudEntry = app.buttons["cloud-official-touch-layouts"]
+    reveal(cloudEntry, in: app)
+    cloudEntry.tap()
+    let bundleIDs = [
+      "fixture-1", "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+    ]
+    for (index, bundleID) in bundleIDs.enumerated() {
+      let preview = app.buttons["game-touch-preview-" + bundleID + ":default"]
+      reveal(preview, in: app)
+      XCTAssertTrue(preview.label.contains(index == 0 ? "官方" : "社区"))
+      XCTAssertFalse(app.buttons["section-retry-game-touch-source-official"].exists)
+      XCTAssertFalse(app.buttons["section-retry-game-touch-source-community"].exists)
+      save(app, index == 0 ? "healthy-cloud-official-download" : "healthy-cloud-community-download")
+      preview.tap()
+      XCTAssertTrue(app.buttons["official-touch-preview-close"].waitForExistence(timeout: 8))
+      app.buttons["official-touch-preview-close"].tap()
+      XCTAssertTrue(preview.waitForExistence(timeout: 5))
+      waitSaved(preview)
+    }
+    app.buttons["app-navigation-back"].tap()
+    app.buttons["primary-navigation-hosts"].tap()
+    let installed = app.buttons.matching(identifier: "host-open-installed").firstMatch
+    reveal(installed, in: app)
+    installed.tap()
+    let installedGame = app.buttons["installed-game-1"]
+    reveal(installedGame, in: app)
+    installedGame.tap()
+    let installedEntry = app.buttons["installed-official-touch-layouts"]
+    reveal(installedEntry, in: app)
+    installedEntry.tap()
+    let refresh = app.buttons["game-touch-catalog-refresh"]
+    XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+    let first = app.buttons["game-touch-preview-fixture-1:default"]
+    reveal(first, in: app)
+    refresh.tap()
+    for (index, bundleID) in bundleIDs.enumerated() {
+      let preview = app.buttons["game-touch-preview-" + bundleID + ":default"]
+      reveal(preview, in: app)
+      XCTAssertTrue(preview.label.contains(index == 0 ? "官方" : "社区"))
+      XCTAssertFalse(app.buttons["section-retry-game-touch-source-official"].exists)
+      XCTAssertFalse(app.buttons["section-retry-game-touch-source-community"].exists)
+      save(
+        app,
+        index == 0 ? "healthy-installed-official-download" : "healthy-installed-community-download")
+      preview.tap()
+      XCTAssertTrue(app.buttons["official-touch-preview-close"].waitForExistence(timeout: 8))
+      app.buttons["official-touch-preview-close"].tap()
+      waitSaved(preview)
+    }
+  }
+
+  func testCloudListsCurrentGameAndDownloadsOnSelection() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--settings-ui-test", "--streaming-panels-ui-test", "--cloud-touch-layouts-ui-test",
+      "--official-touch-layouts-ui-test", "--game-touch-healthy-sources",
+      "--seed-saved-touch-layouts",
+      "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    openPicker(app)
+    XCTAssertEqual(app.staticTexts["stream-touch-current-game"].label, "Halo Infinite")
+    let official = app.buttons["stream-touch-layout-choice-cloud-bundle-fixture-1"]
+    XCTAssertTrue(official.waitForExistence(timeout: 8))
+    XCTAssertEqual(app.staticTexts["stream-touch-downloaded-bundles"].label, "0")
+    XCTAssertFalse(app.buttons["stream-touch-layout-choice-official:fixture-2:default"].exists)
+    XCTAssertFalse(
+      app.buttons["stream-touch-layout-choice-template-00000000-0000-4000-8000-000000000001"].exists
+    )
+    save(app, "cloud-current-game-query-only")
+    official.tap()
+    waitForDock(app)
+    waitForSelection(app, id: "cloud:fixture-1:default")
+    app.buttons["stream-controls-close"].tap()
+    let a = app.buttons["touch-control-right/inner/1"]
+    a.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.3)
+    waitForButtons(app, mask: "16")
+    XCTAssertEqual(app.staticTexts["stream-touch-downloaded-bundles"].label, "1")
+    save(app, "cloud-official-layout-applied")
+    openPicker(app)
+    let alternative = app.buttons["stream-touch-layout-choice-cloud-layout-fixture-1:alternative"]
+    revealInPicker(alternative, in: app)
+    alternative.tap()
+    waitForDock(app)
+    app.buttons["stream-controls-close"].tap()
+    XCTAssertEqual(app.staticTexts["stream-touch-downloaded-bundles"].label, "1")
+    waitForSelection(app, id: "cloud:fixture-1:alternative")
+    openPicker(app)
+    let communityID = "community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74"
+    let community = app.buttons["stream-touch-layout-choice-cloud-bundle-" + communityID]
+    revealInPicker(community, in: app)
+    community.tap()
+    waitForDock(app)
+    app.buttons["stream-controls-close"].tap()
+    XCTAssertEqual(app.staticTexts["stream-touch-downloaded-bundles"].label, "2")
+    waitForSelection(app, id: "cloud:" + communityID + ":default")
+    save(app, "cloud-community-layout-applied")
+    let quick = app.buttons["stream-touch-quick-switch"]
+    quick.tap()
+    waitForSelection(app, id: "standard")
+    quick.tap()
+    waitForSelection(app, id: "cloud:" + communityID + ":default")
+    XCUIDevice.shared.orientation = .landscapeLeft
+    waitForLandscape(app)
+    openPicker(app)
+    let communityAlternative = app.buttons[
+      "stream-touch-layout-choice-cloud-layout-" + communityID + ":alternative"]
+    revealInPicker(communityAlternative, in: app)
+    save(app, "cloud-current-game-picker-landscape")
+    communityAlternative.tap()
+    waitForDock(app)
+    app.buttons["stream-controls-close"].tap()
+    waitForSelection(app, id: "cloud:" + communityID + ":alternative")
+    XCTAssertEqual(app.staticTexts["stream-touch-downloaded-bundles"].label, "2")
+    XCUIDevice.shared.orientation = .portrait
+  }
+
+  func testInstalledGameDetailsOpenCommunityLayoutsWithSourceFailure() {
+    continueAfterFailure = false
+    XCUIDevice.shared.orientation = .portrait
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--pc-pages-ui-test", "--official-touch-layouts-ui-test", "--game-touch-mixed-sources",
+      "--installed-product-only-ui-test", "-AppleLanguages", "(zh-Hans)",
+      "-AppleLocale", "zh_CN",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["primary-navigation-hosts"].waitForExistence(timeout: 10))
+    app.buttons["primary-navigation-hosts"].tap()
+    let installed = app.buttons.matching(identifier: "host-open-installed").firstMatch
+    reveal(installed, in: app)
+    installed.tap()
+    for id in ["1", "2"] {
+      let game = app.buttons["installed-game-" + id]
+      reveal(game, in: app)
+      game.tap()
+      let entry = app.buttons["installed-official-touch-layouts"]
+      reveal(entry, in: app)
+      XCTAssertTrue(entry.label.contains("查看游戏布局"))
+      XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
+      save(app, "installed-touch-entry-" + id)
+      entry.tap()
+      let retry = app.buttons["section-retry-game-touch-source-official"]
+      XCTAssertTrue(retry.waitForExistence(timeout: 5))
+      XCTAssertTrue(retry.label.contains("登录状态需要更新"))
+      let preview = app.buttons[
+        "game-touch-preview-community:better-xcloud:4416b1ab07588a3244a5c02ce1fa5dfa64d8df74:default"
+      ]
+      reveal(preview, in: app)
+      XCTAssertTrue(preview.label.contains("社区"))
+      save(app, "installed-touch-catalog-" + id)
+      app.buttons["app-navigation-back"].tap()
+      XCTAssertTrue(entry.waitForExistence(timeout: 5))
+      app.buttons["app-navigation-back"].tap()
+    }
+  }
+
   func testCommunityLayoutRemainsAvailableWhenOfficialSourceFails() {
     continueAfterFailure = false
     XCUIDevice.shared.orientation = .portrait
@@ -182,7 +495,9 @@ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
     app.launch()
     openPicker(app)
     save(app, "official-touch-stream-picker-portrait")
-    app.buttons["stream-touch-layout-choice-official:fixture-1:default"].tap()
+    let first = app.buttons["stream-touch-layout-choice-official:fixture-1:default"]
+    revealInPicker(first, in: app)
+    first.tap()
     waitForDock(app)
     app.buttons["stream-controls-close"].tap()
     assertControlsInPortraitLowerHalf(app)
@@ -216,8 +531,10 @@ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
     save(app, "official-touch-stream-saved-landscape-left")
     openPicker(app)
     save(app, "official-touch-stream-picker-landscape")
-    app.buttons["stream-touch-layout-choice-template-00000000-0000-4000-8000-000000000001"]
-      .tap()
+    let template = app.buttons[
+      "stream-touch-layout-choice-template-00000000-0000-4000-8000-000000000001"]
+    revealInPicker(template, in: app)
+    template.tap()
     waitForDock(app)
     app.buttons["stream-controls-close"].tap()
     save(app, "official-touch-stream-custom-landscape")
@@ -269,8 +586,17 @@ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
       app.descendants(matching: .any)["stream-touch-layout-panel"].firstMatch
         .waitForExistence(timeout: 5))
     XCTAssertTrue(
-      app.buttons["stream-touch-layout-choice-official:fixture-1:default"].waitForExistence(
-        timeout: 5))
+      app.buttons["stream-touch-layout-choice-standard"].waitForExistence(timeout: 5))
+  }
+
+  private func revealInPicker(_ element: XCUIElement, in app: XCUIApplication) {
+    let scroll = app.scrollViews["stream-touch-layout-scroll"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+    for _ in 0..<6 where !element.exists || !element.isHittable {
+      scroll.swipeUp()
+    }
+    XCTAssertTrue(element.exists)
+    XCTAssertTrue(element.isHittable)
   }
 
   private func waitForDock(_ app: XCUIApplication) {
@@ -340,6 +666,13 @@ final class SavedOfficialTouchLayoutInteractionTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(control.frame.height, 44 - 0.001)
       XCTAssertTrue(app.frame.contains(control.frame))
     }
+  }
+
+  private func waitForButtons(_ app: XCUIApplication, mask: String) {
+    let pressed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "label == %@", mask),
+      object: app.staticTexts["stream-touch-last-buttons"])
+    XCTAssertEqual(XCTWaiter.wait(for: [pressed], timeout: 4), .completed)
   }
 
   private func save(_ app: XCUIApplication, _ name: String) {

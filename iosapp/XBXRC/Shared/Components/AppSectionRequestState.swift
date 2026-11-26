@@ -7,6 +7,7 @@ struct AppSectionRequestState: View {
     let title: String
     let status: SectionRequestStatus
     var identifier: String = "data"
+    var showsAuthenticationFailure = false
     var action: (@MainActor () async -> Void)? = nil
     @State private var running = false
     @State private var retryClock = Date()
@@ -14,7 +15,9 @@ struct AppSectionRequestState: View {
 
     var body: some View {
         Group {
-            if let failure = status.failure, failure.kind != .authentication {
+            if let failure = status.failure,
+                failure.kind != .authentication || showsAuthenticationFailure
+            {
                 if let action {
                     Button {
                         guard !running && !status.isBusy && !isPullRefreshing else { return }

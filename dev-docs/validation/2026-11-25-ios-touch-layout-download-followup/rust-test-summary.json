@@ -1,0 +1,37 @@
+[
+  {
+    "name": "rust-layouts",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "xbox-touch-layouts",
+      "--lib"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 2.569,
+    "log": "/private/tmp/xbxrc-touch-download-followup-r1.jwornfpo/rust-layouts.log",
+    "passed": 23,
+    "failed": 0
+  },
+  {
+    "name": "rust-bridge",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "-p",
+      "xbox-ios-bridge",
+      "--lib",
+      "touch_layouts::"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 9.429,
+    "log": "/private/tmp/xbxrc-touch-download-followup-r1.jwornfpo/rust-bridge.log",
+    "passed": 15,
+    "failed": 0
+  }
+]

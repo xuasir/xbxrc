@@ -1,0 +1,30 @@
+[
+  {
+    "path": "screenshots/official-background-and-knob-assets.png",
+    "testIdentifier": "SavedOfficialTouchLayoutTests/testOfficialBackgroundAndMovingKnobReuseDecodedImages()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795592304.22,
+    "associatedWithFailure": false
+  },
+  {
+    "path": "screenshots/second-layout-saved-library.png",
+    "testIdentifier": "SavedOfficialTouchLayoutInteractionTests/testSecondOfficialLayoutWithTouchpadPreviewsAndSaves()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795592360.837,
+    "associatedWithFailure": false
+  },
+  {
+    "path": "screenshots/second-layout-touchpad-preview.png",
+    "testIdentifier": "SavedOfficialTouchLayoutInteractionTests/testSecondOfficialLayoutWithTouchpadPreviewsAndSaves()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795592352.066,
+    "associatedWithFailure": false
+  },
+  {
+    "path": "screenshots/second-layout-card-saved.png",
+    "testIdentifier": "SavedOfficialTouchLayoutInteractionTests/testSecondOfficialLayoutWithTouchpadPreviewsAndSaves()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795592347.741,
+    "associatedWithFailure": false
+  }
+]

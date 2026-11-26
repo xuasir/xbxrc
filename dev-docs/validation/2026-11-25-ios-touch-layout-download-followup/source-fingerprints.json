@@ -1,0 +1,228 @@
+{
+  "r1": [
+    {
+      "path": "crates/xbox-touch-layouts/src/references.rs",
+      "beforeSHA256": "bcbcd7eef43954d21cdae8ce3c8d164d351c0c195bb5f896e1c40c04a70e2d02",
+      "afterSHA256": "ecd774c3a58a458ee9436af4bb879cacf305221b77edf161cc0f4c1d246184e6",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/community.rs",
+      "beforeSHA256": "6c78c53633ae52e88731c7c3c6a1f96ed882e2a0de0c5aa4d1781abb178b7bb4",
+      "afterSHA256": "fa8eaf6bcaa515bd3ef5a03ba6ce0ed14473dc08c63e9aef3a61d2fe550e9c76",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/bundle.test.rs",
+      "beforeSHA256": "21aff7e24ec5eb1a684169e36d14903406d3d8893d2f8c1cc1acf46a9789ed56",
+      "afterSHA256": "481d4f79bad094fc61945f5ed371b887d8ab8b93c4398a22ea12a8d173a70e03",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/community_service.rs",
+      "beforeSHA256": "748835ba8121290aea1a3ba2d100b5944f8e90d6ba0eda4a0896e2204c137d5b",
+      "afterSHA256": "b01a4589b994c14bd45aebaacf68a11153c652d291a54a3f549e62b8f223f458",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-ios-bridge/src/touch_layouts/storage.test.rs",
+      "beforeSHA256": "3f3a648fedbf572d9fdd78a5497fb8e1b5ebeb0d7d5dd6d6bee9b90098601c7b",
+      "afterSHA256": "5737db812c644bbdbfa2825cb641f87eb78d4faf2bedc7aa709b1b9a9b3b2c06",
+      "changed": true
+    },
+    {
+      "path": "docs/project-task.md",
+      "beforeSHA256": "2a43eee3ea11e6b911477eb06bfc3d98a1539797a134b64b2c90439678299bf5",
+      "afterSHA256": "51014ce938634c136c14520b2c2ab0d6f5e4661465bb6936582d8f34aaabf15f",
+      "changed": true
+    },
+    {
+      "path": "docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md",
+      "beforeSHA256": "fbd0f6a85cd7593523cdacfde48753a3f0b55935bd65180546e96323a36491c7",
+      "afterSHA256": "cebad08cb3800e031f93110dd0631264d3243dda0b2bd9ac8f259cdb19aeebe7",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/catalog.rs",
+      "beforeSHA256": "fc1cc51e1f951eea4f227c682c7aae5484fc59140a54051f3cd0f756ec94652a",
+      "afterSHA256": "2782af81df62b00ae92b717f0bf5c6780060471a92bec164d3908252a7146c2a",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/lib.rs",
+      "beforeSHA256": "caab1cd57fd865ed0b157109be09912851112796a9e8164b5dc616a2ccbad195",
+      "afterSHA256": "23e6483a55b0bb6bcc94b08c018605136955ab4effd0a864c09387265b8fe671",
+      "changed": true
+    },
+    {
+      "path": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+      "beforeSHA256": "fab8d332c4eb6c92efac077536980541103be2bb4c72e29fad7200680d8904f6",
+      "afterSHA256": "42ba4dbf4b34cd3806f6194901c89ffbe6e7d626f1840fa9ce3bb932170e2704",
+      "changed": true
+    },
+    {
+      "path": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+      "beforeSHA256": "ae48efd92c22b51b3a766bc051262e9b5d4b1fd72c94663f938a4018dbfd85d7",
+      "afterSHA256": "2a551c72e83a244c1463fb869ac4b8d4fe72b2e9dceeacb332630e0826790c79",
+      "changed": true
+    },
+    {
+      "path": "crates/xbox-touch-layouts/src/bundle.rs",
+      "beforeSHA256": "4e83d8b0b60d4610b92c5545b4b0605567746b4911f60290b616cc041d673e23",
+      "afterSHA256": "3fd7df244373a7e2020e7ea51f55273ec4da2ac94a3b59c933dcd6291ca291ef",
+      "changed": true
+    },
+    {
+      "path": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+      "beforeSHA256": "378b684630c59c529f0c0988ab1d8970c841c477e6e7387e5de5774358932fc3",
+      "afterSHA256": "56be6cfc29fb6620f7800846601c73731375c2e7be195d0d1746ecc97045b6f3",
+      "changed": true
+    },
+    {
+      "path": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+      "beforeSHA256": "c1803fccc7b8ef4bec50cd11075ff26d44521422026bdb3cbfe08af8b923fc5e",
+      "afterSHA256": "c2fba7aeee3896160de9e374a90a931a14284573e17b6cc58efa27690b107baa",
+      "changed": true
+    }
+  ],
+  "r2Final": [
+    {
+      "file": "crates/xbox-ios-bridge/src/touch_layouts/community_service.rs",
+      "beforeSHA256": "748835ba8121290aea1a3ba2d100b5944f8e90d6ba0eda4a0896e2204c137d5b",
+      "finalSHA256": "b01a4589b994c14bd45aebaacf68a11153c652d291a54a3f549e62b8f223f458",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-ios-bridge/src/touch_layouts/storage.test.rs",
+      "beforeSHA256": "3f3a648fedbf572d9fdd78a5497fb8e1b5ebeb0d7d5dd6d6bee9b90098601c7b",
+      "finalSHA256": "5737db812c644bbdbfa2825cb641f87eb78d4faf2bedc7aa709b1b9a9b3b2c06",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/bundle.rs",
+      "beforeSHA256": "4e83d8b0b60d4610b92c5545b4b0605567746b4911f60290b616cc041d673e23",
+      "finalSHA256": "3fd7df244373a7e2020e7ea51f55273ec4da2ac94a3b59c933dcd6291ca291ef",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/bundle.test.rs",
+      "beforeSHA256": "21aff7e24ec5eb1a684169e36d14903406d3d8893d2f8c1cc1acf46a9789ed56",
+      "finalSHA256": "481d4f79bad094fc61945f5ed371b887d8ab8b93c4398a22ea12a8d173a70e03",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/catalog.rs",
+      "beforeSHA256": "fc1cc51e1f951eea4f227c682c7aae5484fc59140a54051f3cd0f756ec94652a",
+      "finalSHA256": "2782af81df62b00ae92b717f0bf5c6780060471a92bec164d3908252a7146c2a",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/community.rs",
+      "beforeSHA256": "6c78c53633ae52e88731c7c3c6a1f96ed882e2a0de0c5aa4d1781abb178b7bb4",
+      "finalSHA256": "fa8eaf6bcaa515bd3ef5a03ba6ce0ed14473dc08c63e9aef3a61d2fe550e9c76",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/lib.rs",
+      "beforeSHA256": "caab1cd57fd865ed0b157109be09912851112796a9e8164b5dc616a2ccbad195",
+      "finalSHA256": "23e6483a55b0bb6bcc94b08c018605136955ab4effd0a864c09387265b8fe671",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "crates/xbox-touch-layouts/src/references.rs",
+      "beforeSHA256": "bcbcd7eef43954d21cdae8ce3c8d164d351c0c195bb5f896e1c40c04a70e2d02",
+      "finalSHA256": "ecd774c3a58a458ee9436af4bb879cacf305221b77edf161cc0f4c1d246184e6",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "docs/project-task.md",
+      "beforeSHA256": "2a43eee3ea11e6b911477eb06bfc3d98a1539797a134b64b2c90439678299bf5",
+      "finalSHA256": "6d6057d30ffc01e9675d5bbb64ad06338391b8766bd11f41dbef4882e03186ca",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "docs/rfcs/2026-11-23-ios-saved-official-touch-layouts.md",
+      "beforeSHA256": "fbd0f6a85cd7593523cdacfde48753a3f0b55935bd65180546e96323a36491c7",
+      "finalSHA256": "204a71b367763dd2825391993128d97ab0eda6f14bc3312d26017c2381aba0bd",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "iosapp/XBXRC/App/OfficialTouchLayoutsUITestFixtures.swift",
+      "beforeSHA256": "c1803fccc7b8ef4bec50cd11075ff26d44521422026bdb3cbfe08af8b923fc5e",
+      "finalSHA256": "b040c6b8f413fb39d9f7e472eebc6b8dd1371a8c1dbc46387837dc36588ec714",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutModels.swift",
+      "beforeSHA256": "d54ac28cd3623a8da9388795e22fc7661c6ea09a729b45c338ec54eb0d311e7a",
+      "finalSHA256": "80a5c03f70123e1775f38f81e472ca09f4b0c25d1f810632bf0a00456f1fcd76",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Features/TouchControls/OfficialTouchLayoutsView.swift",
+      "beforeSHA256": "378b684630c59c529f0c0988ab1d8970c841c477e6e7387e5de5774358932fc3",
+      "finalSHA256": "52dbf48bcac9b83c81575e34be06d8ec465ae057800978da3cc5350ba2d07db8",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/RustBridge/XboxTouchLayoutClient.swift",
+      "beforeSHA256": "fab8d332c4eb6c92efac077536980541103be2bb4c72e29fad7200680d8904f6",
+      "finalSHA256": "42ba4dbf4b34cd3806f6194901c89ffbe6e7d626f1840fa9ce3bb932170e2704",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingContracts.swift",
+      "beforeSHA256": "fb026199593cbd4884aa43a9c06c9be5b326ad40a316ab1d3dd84f2068a84e55",
+      "finalSHA256": "d5c2b3613a345f651aefdebd324a6f1edcbc5640c922864ff9b5567d1f586588",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingDiagnosticsView.swift",
+      "beforeSHA256": "cd1dea411c1c6edad0c6a913bdf3887c2978164b5424b924d94a9e3a5469709f",
+      "finalSHA256": "402e93331733de067e814262bb888bc7395cc829308f968290ce0c36992b3e80",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingRuntime.swift",
+      "beforeSHA256": "07de5e8a386270ed8b9cbc63f442bfe79640e8e7722c662b3dda224799b149af",
+      "finalSHA256": "005d9a44f9bd70aea1376993530bce22bc09ee68665990d5ca599c69370f44f6",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutController.swift",
+      "beforeSHA256": "33091cf995fd56b69b8b81b0c7840f7e5b2ab59cdd19c0da32a88dc1fe1cbb20",
+      "finalSHA256": "d6c02de05534b19a96eb677304c26268c55a2ceac7234b2ffe457982098129e9",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchLayoutPickerPanel.swift",
+      "beforeSHA256": "0f2aa9644079b263c272392e5abfab0e287cd5cfde396f9f17ef4f57dd9b8b39",
+      "finalSHA256": "8782df6976140c45e7a943f909bea2d50b138474e763807c1b761224b36bfe6a",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Platform/Streaming/StreamingTouchQuickSwitch.swift",
+      "beforeSHA256": "1e1c846c919e24fa8a62f38f6c0febc24312b8a8d775a65222f608d6100993a7",
+      "finalSHA256": "1e1c846c919e24fa8a62f38f6c0febc24312b8a8d775a65222f608d6100993a7",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRC/Resources/Localizable.xcstrings",
+      "beforeSHA256": "cdae1f9dc1c69db8cc7cdfadf76fb978a23d3164d468a0f88a70edaf9630de9e",
+      "finalSHA256": "e8a33f2440b73b5256ae4f6790f53aba3a3b0c3a2da892e0ea33636e2217927a",
+      "baselineRound": "r2"
+    },
+    {
+      "file": "iosapp/XBXRCTests/SavedOfficialTouchLayoutTests.swift",
+      "beforeSHA256": "ae48efd92c22b51b3a766bc051262e9b5d4b1fd72c94663f938a4018dbfd85d7",
+      "finalSHA256": "0d99a713e9bf9fc8f0f51848f590c7d3933d8cc0d97133b0bf82d1eed75c4b94",
+      "baselineRound": "r1"
+    },
+    {
+      "file": "iosapp/XBXRCUITests/SavedOfficialTouchLayoutInteractionTests.swift",
+      "beforeSHA256": "de627bc7ca23090abe5ec1435cb61c0b7f9db8ff7846ea24c099f2be8a5d43d2",
+      "finalSHA256": "3f7e1d6620b1b3ebd3ac8dd07aebf4c99d4646d8e23f52fca3edd54a9df19ad7",
+      "baselineRound": "r2"
+    }
+  ]
+}

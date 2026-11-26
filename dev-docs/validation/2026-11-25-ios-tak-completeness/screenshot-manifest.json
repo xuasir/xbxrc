@@ -1,0 +1,23 @@
+[
+  {
+    "path": "dev-docs/validation/2026-11-25-ios-tak-completeness/screenshots/tak-directional-gradient.png",
+    "test": "TouchLayoutCompletenessTests/testNamedColorsHighContrastAndDirectionalGradientRender()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795600694.173,
+    "sha256": "ced23a6929c20a1d1cee08b57575870f77e6c0a6bcd7abe8331ead285d7d569a"
+  },
+  {
+    "path": "dev-docs/validation/2026-11-25-ios-tak-completeness/screenshots/tak-community-preview.png",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testOfficialAndCommunityDynamicStylesSaveThroughGameEntry()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795600754.097,
+    "sha256": "f32724576d07a18c33fc74eefafb2b12bb10ea723fdc0b85b4b34caa38ed8359"
+  },
+  {
+    "path": "dev-docs/validation/2026-11-25-ios-tak-completeness/screenshots/tak-official-preview.png",
+    "test": "SavedOfficialTouchLayoutInteractionTests/testOfficialAndCommunityDynamicStylesSaveThroughGameEntry()",
+    "device": "iPhone 18 Pro",
+    "timestamp": 1795600742.479,
+    "sha256": "f32724576d07a18c33fc74eefafb2b12bb10ea723fdc0b85b4b34caa38ed8359"
+  }
+]

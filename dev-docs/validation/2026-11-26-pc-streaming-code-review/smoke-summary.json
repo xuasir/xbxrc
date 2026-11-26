@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "numTotalTests": 58,
+  "numPassedTests": 58,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "files": [
+    {
+      "file": "browser-render-policy.test.ts",
+      "status": "passed",
+      "tests": 10
+    },
+    {
+      "file": "AudioEffectsService.test.ts",
+      "status": "passed",
+      "tests": 3
+    },
+    {
+      "file": "InputService.test.ts",
+      "status": "passed",
+      "tests": 22
+    },
+    {
+      "file": "frame-pacer.test.ts",
+      "status": "passed",
+      "tests": 23
+    }
+  ]
+}

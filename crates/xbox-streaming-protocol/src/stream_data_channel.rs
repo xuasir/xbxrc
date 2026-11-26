@@ -150,7 +150,7 @@ pub fn build_xbox_stream_input_metadata_bootstrap_packet(
     packet
 }
 
-fn build_message_payload(target: &str, content: serde_json::Value) -> String {
+pub(crate) fn build_message_payload(target: &str, content: serde_json::Value) -> String {
     serde_json::json!({
         "type": "Message",
         "content": content.to_string(),

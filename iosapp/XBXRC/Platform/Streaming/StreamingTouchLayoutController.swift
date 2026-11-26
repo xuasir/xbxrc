@@ -6,12 +6,14 @@ enum TouchLayoutSelection: Equatable, Sendable {
   case standard
   case template(String)
   case saved(String)
+  case gameBundle(String)
+  case gameLayout(bundleID: String, layoutID: String)
 
   var persistentID: String? {
     switch self {
     case .template(let id): "template:" + id
     case .saved(let id): id
-    case .standard, .preferences: nil
+    case .standard, .preferences, .gameBundle, .gameLayout: nil
     }
   }
 
@@ -30,6 +32,15 @@ enum TouchLayoutSelection: Equatable, Sendable {
     case .standard: "standard"
     case .template: "template"
     case .saved(let id): id.hasPrefix("community:") ? "community" : "official"
+    case .gameBundle(let id), .gameLayout(let id, _):
+      GameTouchLayoutSource.identify(id).rawValue
+    }
+  }
+
+  var isGameSelection: Bool {
+    switch self {
+    case .gameBundle, .gameLayout: true
+    default: false
     }
   }
 }
@@ -42,13 +53,42 @@ final class StreamingTouchLayoutController: ObservableObject {
   @Published private(set) var recentCustomSelection: TouchLayoutSelection?
   var onRecentSelectionChanged: ((String?) -> Void)?
   @Published private(set) var assets = TouchLayoutAssets.empty
+  @Published private(set) var isGameHidden = false
   @Published private(set) var loadError: String?
+  @Published private(set) var streamTarget: StreamingLaunchTarget = .home
+  @Published private(set) var cloudGame: CloudLibraryGame?
+  @Published private(set) var cloudCatalog: OfficialTouchCatalog?
+  @Published private(set) var cloudCatalogLoading = false
+  @Published private(set) var cloudCatalogFailure: SectionRequestFailure?
+  @Published private(set) var cloudDownloadFailures: [String: SectionRequestFailure] = [:]
+  @Published private var cloudDownloadedBundles: [String: any OfficialTouchBundleProviding] = [:]
   private let standard: TouchLayout?
   private var sessionGeneration: UInt64?
   private var selectionRevision: UInt64 = 0
   private var savedRevision: String?
   private weak var session: StreamInputSession?
   private var suppressionSubscription: AnyCancellable?
+  private var cloudCatalogRevision: UInt64 = 0
+  private var cloudCatalogContext: String?
+  private var recentGameSelection: TouchLayoutSelection?
+  private var cloudBundleStates: [String: String] = [:]
+  private var commandTask: Task<Void, Never>?
+  private var pendingCommands: [XboxStreamTouchLayoutCommand] = []
+  private var commandEpoch: UInt64 = 0
+  private var cloudDownload: (@Sendable (String) async throws -> any OfficialTouchBundleProviding)?
+
+  var cloudDownloadedBundleCount: Int { cloudDownloadedBundles.count }
+  var cloudLayoutChoices: [StreamingGameTouchLayoutChoice] {
+    (cloudCatalog?.bundles ?? []).flatMap { descriptor in
+      guard let bundle = cloudDownloadedBundles[descriptor.id] else {
+        return [StreamingGameTouchLayoutChoice]()
+      }
+      return bundle.choices.map {
+        StreamingGameTouchLayoutChoice(
+          bundleID: descriptor.id, version: bundle.version, choice: $0)
+      }
+    }
+  }
 
   init(bundle: Bundle = .main) {
     do {
@@ -65,6 +105,7 @@ final class StreamingTouchLayoutController: ObservableObject {
     guard self.session !== session else { return }
     if let previous = self.session { unbind(from: previous) }
     self.session = session
+    session.onTouchLayoutCommand = { [weak self] command in self?.receive(command) }
     input.onInput = { [weak session] frame in
       session?.setTouchLayoutState(frame.gamepad, active: frame.pointerCount > 0)
     }
@@ -80,24 +121,121 @@ final class StreamingTouchLayoutController: ObservableObject {
     input.onInput = nil
     suppressionSubscription = nil
     session.releaseTouches()
+    session.onTouchLayoutCommand = nil
+    resetCommands()
     self.session = nil
   }
 
-  func beginSession(generation: UInt64, preferences: MobilePreferences = .init()) {
+  func beginSession(
+    generation: UInt64, preferences: MobilePreferences = .init(),
+    target: StreamingLaunchTarget = .home
+  ) {
     sessionGeneration = generation
+    resetCommands()
+    isGameHidden = false
     cancelPendingSelection()
-    if let standard { commit(standard, assets: .empty, selection: .preferences) }
-    rememberCustomSelection(effectiveSelection(preferences: preferences))
+    streamTarget = target
+    cloudGame = nil
+    resetCloudResources()
+    savedRevision = nil
+    if let standard {
+      commit(standard, assets: .empty, selection: target == .cloud ? .standard : .preferences)
+    }
+    if target == .home { rememberCustomSelection(effectiveSelection(preferences: preferences)) }
+  }
+
+  func setCloudGame(_ game: CloudLibraryGame, generation: UInt64) {
+    guard streamTarget == .cloud, sessionGeneration == generation else { return }
+    guard cloudGame?.productID != game.productID || cloudGame?.xboxTitleID != game.xboxTitleID
+    else {
+      return
+    }
+    let hadGame = cloudGame != nil
+    cancelPendingSelection()
+    cloudGame = game
+    resetCloudResources()
+    if hadGame, let standard { commit(standard, assets: .empty, selection: .standard) }
+  }
+
+  /// Cloud 先交付目录，下载闭包留给点选操作；成功包仅在当前会话复用。
+  func loadCloudCatalog(
+    client: any XboxTouchLayoutClient, serverRegion: String, locale: String,
+    displayScale: Double, refresh: Bool = false,
+    prepareAccess: @escaping TouchLayoutAccessProvider
+  ) async {
+    guard streamTarget == .cloud, let game = cloudGame, let generation = sessionGeneration else {
+      return
+    }
+    let context = "\(game.productID):\(serverRegion):\(locale):\(displayScale)"
+    if !refresh, cloudCatalog != nil, cloudCatalogContext == context { return }
+    if pendingSelection?.isGameSelection == true { cancelPendingSelection() }
+    cloudCatalogRevision &+= 1
+    let request = cloudCatalogRevision
+    cloudCatalogLoading = true
+    cloudCatalogFailure = nil
+    defer { if request == cloudCatalogRevision { cloudCatalogLoading = false } }
+    do {
+      let catalog = try await client.catalog(
+        game: game, serverRegion: serverRegion, refresh: refresh, prepareAccess: prepareAccess)
+      try Task.checkCancellation()
+      guard request == cloudCatalogRevision, generation == sessionGeneration,
+        cloudGame?.productID == game.productID
+      else { return }
+      let previous = cloudCatalog?.bundles ?? []
+      cloudDownloadedBundles = cloudDownloadedBundles.filter { id, _ in
+        context == cloudCatalogContext
+          && catalog.bundles.contains { current in
+            current.id == id
+              && previous.contains {
+                $0.id == id && $0.tabVersion == current.tabVersion
+                  && $0.manifestVersion == current.manifestVersion
+                  && $0.layoutVersion == current.layoutVersion
+              }
+          }
+      }
+      cloudBundleStates = cloudBundleStates.filter { cloudDownloadedBundles[$0.key] != nil }
+      cloudCatalog = catalog
+      cloudCatalogContext = context
+      cloudDownloadFailures = [:]
+      cloudDownload = { bundleID in
+        try await client.download(
+          titleID: catalog.titleID, bundleID: bundleID, game: game, locale: locale,
+          displayScale: displayScale, prepareAccess: prepareAccess)
+      }
+      startCommands()
+    } catch {
+      guard request == cloudCatalogRevision, generation == sessionGeneration,
+        !Task.isCancelled
+      else { return }
+      cloudCatalogFailure = SectionRequestFailure(error: error)
+    }
+  }
+
+  private func resetCloudResources() {
+    cloudCatalogRevision &+= 1
+    cloudCatalog = nil
+    cloudCatalogLoading = false
+    cloudCatalogFailure = nil
+    cloudDownloadFailures = [:]
+    cloudDownloadedBundles = [:]
+    cloudCatalogContext = nil
+    cloudDownload = nil
+    recentGameSelection = nil
+    cloudBundleStates = [:]
+    resetCommands()
   }
 
   func endSession() {
     sessionGeneration = nil
     cancelPendingSelection()
+    cloudGame = nil
+    resetCloudResources()
     input.cancelAll(reason: "touchLayoutSessionEnded")
     session?.releaseTouches()
     selection = .preferences
     savedRevision = nil
     assets = .empty
+    isGameHidden = false
   }
 
   func surfaceClosed() {
@@ -120,6 +258,11 @@ final class StreamingTouchLayoutController: ObservableObject {
   func mostRecentCustomSelection(
     preferences: MobilePreferences, library: SavedTouchLayoutsStore
   ) -> TouchLayoutSelection? {
+    if streamTarget == .cloud {
+      return recentGameSelection.flatMap {
+        isAvailable($0, preferences: preferences, library: library) ? $0 : nil
+      }
+    }
     if let recentCustomSelection,
       isAvailable(recentCustomSelection, preferences: preferences, library: library)
     {
@@ -149,6 +292,12 @@ final class StreamingTouchLayoutController: ObservableObject {
     switch choice {
     case .template(let id): preferences.touchLayoutTemplates.contains { $0.id == id }
     case .saved(let id): library.isAvailable(id)
+    case .gameLayout(let bundleID, let layoutID):
+      streamTarget == .cloud
+        && cloudLayoutChoices.contains {
+          $0.bundleID == bundleID && $0.choice.id == layoutID
+        }
+    case .gameBundle: false
     case .standard, .preferences: false
     }
   }
@@ -184,9 +333,17 @@ final class StreamingTouchLayoutController: ObservableObject {
     _ next: TouchLayoutSelection, library: SavedTouchLayoutsStore,
     preferences: MobilePreferences
   ) async -> Bool {
+    guard
+      streamTarget == .cloud
+        ? (next == .standard || next.isGameSelection) : !next.isGameSelection
+    else {
+      loadError = "请选择当前会话的布局"
+      return false
+    }
     selectionRevision &+= 1
     let request = selectionRevision
     let generation = sessionGeneration
+    let catalogRevision = cloudCatalogRevision
     guard generation != nil else { return false }
     pendingSelection = next
     loadError = nil
@@ -195,6 +352,8 @@ final class StreamingTouchLayoutController: ObservableObject {
     do {
       let prepared: PreparedTouchLayout
       var item: XboxSavedTouchLayout?
+      var appliedSelection = next
+      var resourceRevision: String?
       switch next {
       case .saved(let id):
         guard let saved = library.layouts.first(where: { $0.id == id }) else {
@@ -209,32 +368,82 @@ final class StreamingTouchLayoutController: ObservableObject {
         prepared = try standardSnapshot()
       case .standard, .preferences:
         prepared = try standardSnapshot()
+      case .gameBundle(let bundleID), .gameLayout(let bundleID, _):
+        let bundle = try await loadCloudBundle(
+          bundleID, request: request, generation: generation, catalogRevision: catalogRevision)
+        let layoutID: String
+        if case .gameLayout(_, let requestedID) = next {
+          layoutID = requestedID
+        } else {
+          guard
+            let initial = bundle.choices.first(where: { $0.isDefault })
+              ?? bundle.choices.first
+          else {
+            throw TouchLayoutError.invalid("布局包中暂无可用布局")
+          }
+          layoutID = initial.id
+        }
+        let snapshot = try await bundle.preview(layoutID: layoutID)
+        prepared = try applyingState(
+          to: await PreparedTouchLayout.prepare(snapshot), bundleID: bundleID)
+        guard prepared.layout.report.isRunnable else {
+          throw TouchLayoutError.invalid("此布局的操作能力等待适配")
+        }
+        appliedSelection = .gameLayout(bundleID: bundleID, layoutID: layoutID)
+        resourceRevision = bundle.version + ":" + layoutID
       }
       try Task.checkCancellation()
       guard request == selectionRevision, generation == sessionGeneration,
+        !next.isGameSelection || catalogRevision == cloudCatalogRevision,
         item.map({ library.isAvailable($0.id, revision: $0.revision) }) ?? true
       else { return false }
-      savedRevision = item?.revision
-      commit(prepared.layout, assets: prepared.assets, selection: next)
-      rememberCustomSelection(effectiveSelection(preferences: preferences))
+      savedRevision = resourceRevision ?? item?.revision
+      commit(prepared.layout, assets: prepared.assets, selection: appliedSelection)
+      if streamTarget == .cloud {
+        if appliedSelection.isGameSelection { recentGameSelection = appliedSelection }
+      } else {
+        rememberCustomSelection(effectiveSelection(preferences: preferences))
+      }
       pendingSelection = nil
       trace(
         "touchLayoutApplied", source: next.source, revision: request, startedAt: startedAt)
       if let item { await library.markUsed(item.id) }
       return request == selectionRevision && generation == sessionGeneration
     } catch {
-      guard request == selectionRevision, generation == sessionGeneration else {
+      guard request == selectionRevision, generation == sessionGeneration,
+        !next.isGameSelection || catalogRevision == cloudCatalogRevision
+      else {
         return false
       }
       pendingSelection = nil
       if !Task.isCancelled {
         loadError = CloudLibraryDiagnostics.safeError(error)
+        if case .gameBundle(let id) = next, cloudDownloadedBundles[id] == nil {
+          cloudDownloadFailures[id] = SectionRequestFailure(error: error)
+        }
         trace(
           "touchLayoutPrepareFailed", source: next.source, revision: request,
           startedAt: startedAt)
       }
       return false
     }
+  }
+
+  private func loadCloudBundle(
+    _ id: String, request: UInt64, generation: UInt64?, catalogRevision: UInt64
+  ) async throws -> any OfficialTouchBundleProviding {
+    guard streamTarget == .cloud, cloudCatalog?.bundles.contains(where: { $0.id == id }) == true,
+      let download = cloudDownload
+    else { throw TouchLayoutError.invalid("当前游戏的布局来源暂缺") }
+    if let cached = cloudDownloadedBundles[id] { return cached }
+    let bundle = try await download(id)
+    try Task.checkCancellation()
+    guard request == selectionRevision, generation == sessionGeneration,
+      catalogRevision == cloudCatalogRevision
+    else { throw StreamingRuntimeError.superseded }
+    cloudDownloadedBundles[id] = bundle
+    cloudDownloadFailures[id] = nil
+    return bundle
   }
 
   func cancelPendingSelection() {
@@ -278,6 +487,7 @@ final class StreamingTouchLayoutController: ObservableObject {
     switch choice {
     case .saved(let id): library.hasLoadedLayouts && !library.isAvailable(id, revision: revision)
     case .template(let id): !preferences.touchLayoutTemplates.contains { $0.id == id }
+    case .gameBundle, .gameLayout: streamTarget != .cloud
     case .standard, .preferences: false
     }
   }
@@ -303,7 +513,153 @@ final class StreamingTouchLayoutController: ObservableObject {
     self.assets = assets
     input.load(layout)
     self.selection = selection
+    isGameHidden = false
+    rememberState(layout)
     loadError = nil
+  }
+
+  private func resetCommands() {
+    commandEpoch &+= 1
+    commandTask?.cancel()
+    commandTask = nil
+    pendingCommands.removeAll()
+  }
+
+  /// 命令按接收顺序处理，包下载期间的状态补丁也受同一个队列预算约束。
+  func receive(_ command: XboxStreamTouchLayoutCommand) {
+    guard sessionGeneration != nil, streamTarget == .cloud, pendingCommands.count < 32 else {
+      return
+    }
+    pendingCommands.append(command)
+    startCommands()
+  }
+
+  private func startCommands() {
+    guard commandTask == nil, !pendingCommands.isEmpty else { return }
+    // show 可早于目录返回；目录准备好后继续消费。
+    if cloudCatalog == nil, pendingCommands.first?.kind.hasPrefix("show") == true { return }
+    let epoch = commandEpoch
+    commandTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      defer { if epoch == self.commandEpoch { self.commandTask = nil } }
+      while epoch == self.commandEpoch, !Task.isCancelled, !self.pendingCommands.isEmpty {
+        let command = self.pendingCommands.removeFirst()
+        await self.apply(command)
+      }
+    }
+  }
+
+  private func applyingState(to prepared: PreparedTouchLayout, bundleID: String) throws
+    -> PreparedTouchLayout
+  {
+    guard let state = cloudBundleStates[bundleID], let source = prepared.layout.runtimeDocument
+    else { return prepared }
+    let layout = try TouchLayoutNormalizer.decode(
+      Data(source.utf8), defaultID: prepared.id,
+      availableAssets: prepared.layout.availableAssets, stateJSON: state,
+      format: prepared.layout.report.format
+    ).first!
+    return PreparedTouchLayout(layout: layout, assets: prepared.assets)
+  }
+
+  private func rememberState(_ layout: TouchLayout) {
+    guard case .gameLayout(let bundleID, _) = selection, let source = layout.runtimeDocument,
+      let document = try? JSONDecoder().decode(TouchJSON.self, from: Data(source.utf8)),
+      let state = document["_xbxrcRuntime"]?["context"]?["state"]
+    else { return }
+    cloudBundleStates[bundleID] = try? state.encodedJSON()
+  }
+
+  func apply(_ command: XboxStreamTouchLayoutCommand) async {
+    let epoch = commandEpoch
+    let generation = sessionGeneration
+    guard generation != nil, streamTarget == .cloud else { return }
+    do {
+      let patch: String?
+      if let encoded = command.patchBase64 {
+        guard encoded.utf8.count <= 90 * 1024, let data = Data(base64Encoded: encoded),
+          data.count <= 64 * 1024, let text = String(data: data, encoding: .utf8)
+        else {
+          throw TouchLayoutError.invalid("游戏状态补丁格式无效")
+        }
+        patch = text
+      } else {
+        patch = nil
+      }
+      switch command.kind {
+      case "hide":
+        cancelPendingSelection()
+        input.cancelAll(reason: "gameTouchLayoutHidden")
+        session?.releaseTouchesForLayoutChange()
+        isGameHidden = true
+      case "patchstate":
+        guard let layout = input.layout, let source = layout.runtimeDocument, let patch else {
+          return
+        }
+        let updated = try TouchLayoutNormalizer.decode(
+          Data(source.utf8), defaultID: layout.id,
+          availableAssets: layout.availableAssets, patchJSON: patch
+        ).first!
+        guard updated.report.isRunnable else { throw TouchLayoutError.invalid("状态更新后的布局能力等待适配") }
+        input.updateLayout(updated)
+        rememberState(updated)
+      case "showlayout", "showlayoutv2", "showtitledefault":
+        let bundleID: String
+        if case .gameLayout(let id, _) = selection {
+          bundleID = id
+        } else if case .gameLayout(let id, _) = recentGameSelection {
+          bundleID = id
+        } else if let id = cloudCatalog?.bundles.first(where: { $0.source == .official })?.id
+          ?? cloudCatalog?.bundles.first?.id
+        {
+          bundleID = id
+        } else {
+          throw TouchLayoutError.invalid("当前游戏的布局目录暂缺")
+        }
+        cancelPendingSelection()
+        let request = selectionRevision
+        let revision = cloudCatalogRevision
+        let bundle = try await loadCloudBundle(
+          bundleID, request: request, generation: generation, catalogRevision: revision)
+        let requestedID = command.kind == "showtitledefault" ? "" : command.layoutId ?? ""
+        guard
+          let choice = requestedID.isEmpty
+            ? bundle.choices.first(where: { $0.isDefault }) ?? bundle.choices.first
+            : bundle.choices.first(where: { $0.id == requestedID })
+        else {
+          throw TouchLayoutError.invalid("游戏请求的布局暂缺")
+        }
+        let snapshot = try await bundle.preview(layoutID: choice.id)
+        var prepared = try applyingState(
+          to: await PreparedTouchLayout.prepare(snapshot), bundleID: bundleID)
+        if let patch, let source = prepared.layout.runtimeDocument {
+          let updated = try TouchLayoutNormalizer.decode(
+            Data(source.utf8), defaultID: choice.id,
+            availableAssets: prepared.layout.availableAssets, patchJSON: patch
+          ).first!
+          prepared = PreparedTouchLayout(layout: updated, assets: prepared.assets)
+        }
+        guard epoch == commandEpoch, generation == sessionGeneration, request == selectionRevision,
+          revision == cloudCatalogRevision, !Task.isCancelled
+        else { return }
+        guard prepared.layout.report.isRunnable else {
+          throw TouchLayoutError.invalid("游戏请求的布局能力等待适配")
+        }
+        savedRevision = bundle.version + ":" + choice.id
+        let next = TouchLayoutSelection.gameLayout(bundleID: bundleID, layoutID: choice.id)
+        commit(prepared.layout, assets: prepared.assets, selection: next)
+        recentGameSelection = next
+      default: return
+      }
+      loadError = nil
+      trace("touchLayoutCommandApplied", source: command.kind, revision: selectionRevision)
+    } catch {
+      guard epoch == commandEpoch, generation == sessionGeneration, !Task.isCancelled else {
+        return
+      }
+      loadError = CloudLibraryDiagnostics.safeError(error)
+      trace("touchLayoutCommandFailed", source: command.kind, revision: selectionRevision)
+    }
   }
 
   private func trace(_ event: String, source: String, revision: UInt64, startedAt: Date? = nil) {

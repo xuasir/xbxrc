@@ -1,0 +1,23 @@
+{
+  "task": "2026-11-25-ios-touch-layout-download-followup",
+  "completedAtUTC": "2026-11-25T03:37:55.866087+00:00",
+  "removedRoots": [
+    "/private/tmp/xbxrc-touch-download-followup-r1.jwornfpo"
+  ],
+  "removedFileCount": 6697,
+  "removedDirectoryCount": 1467,
+  "logicalBytes": 933650920,
+  "allocatedBytesEstimate": 952061952,
+  "freeBytesBefore": 26619514880,
+  "freeBytesAfter": 27455303680,
+  "observedFreeDeltaBytes": 835788800,
+  "activeTaskBuildTestExportProcesses": [],
+  "allRecordedXcodeRunsEnded": true,
+  "pathMissingAfterCleanup": true,
+  "retained": [
+    "用户 Downloads 原始诊断日志",
+    "仓库证据与用户引用的修复前诊断图",
+    "共享 Rust/WebRTC/Xcode 缓存",
+    "模拟器数据与其他聊天改动"
+  ]
+}

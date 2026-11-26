@@ -320,6 +320,68 @@ final class AuthCredentialCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testConcurrentCloudQueriesShareOnePreparedLease() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let gate = AuthTestGate()
+        let cloud = AuthTestCloudClient(prepareGate: gate)
+        let store = makeStore(keychain: keychain, cloudClient: cloud)
+        await store.restore()
+
+        let first = Task { @MainActor in try await store.prepareCloudAccess() }
+        await gate.waitUntilEntered()
+        let secondStarted = expectation(description: "second cloud query started")
+        let second = Task { @MainActor in
+            secondStarted.fulfill()
+            return try await store.prepareCloudAccess()
+        }
+        await fulfillment(of: [secondStarted], timeout: 1)
+        await gate.open()
+
+        let firstAccess = try await first.value
+        let secondAccess = try await second.value
+        let preparations = await cloud.completedPreparations()
+        XCTAssertEqual(preparations, 1)
+        XCTAssertEqual(firstAccess.handle, secondAccess.handle)
+        XCTAssertEqual(firstAccess.ownerGeneration, secondAccess.ownerGeneration)
+    }
+
+    @MainActor
+    func testCancellingOneCloudWaiterKeepsOtherQueryLease() async throws {
+        let keychain = AuthTestSessionStore(session: Self.storedSession)
+        let gate = AuthTestGate()
+        let cloud = AuthTestCloudClient(prepareGate: gate)
+        let store = makeStore(keychain: keychain, cloudClient: cloud)
+        await store.restore()
+
+        let cancelled = expectation(description: "cancelled query released its waiter")
+        let first = Task { @MainActor in
+            do {
+                _ = try await store.prepareCloudAccess()
+                XCTFail("Cancelled query must finish with cancellation")
+            } catch { XCTAssertTrue(SectionRequestFailure.isCancellation(error)) }
+            cancelled.fulfill()
+        }
+        await gate.waitUntilEntered()
+        let secondStarted = expectation(description: "remaining cloud query started")
+        let second = Task { @MainActor in
+            secondStarted.fulfill()
+            return try await store.prepareCloudAccess()
+        }
+        await fulfillment(of: [secondStarted], timeout: 1)
+        first.cancel()
+        await fulfillment(of: [cancelled], timeout: 1)
+        await gate.open()
+
+        await first.value
+        let access = try await second.value
+        let preparations = await cloud.completedPreparations()
+        let releases = await cloud.releasedHandles()
+        XCTAssertEqual(access.handle, "delayed-access")
+        XCTAssertEqual(preparations, 1)
+        XCTAssertTrue(releases.isEmpty)
+    }
+
+    @MainActor
     func testSignOutInvalidatesDelayedAccessAndReleasesItsHandle() async {
         let keychain = AuthTestSessionStore(session: Self.storedSession)
         let accessGate = AuthTestGate()

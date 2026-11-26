@@ -1,0 +1,496 @@
+diff --git a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+index c8ef816e..48977271 100644
+--- a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
++++ b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift
+@@ -134,7 +134,6 @@ actor StreamSessionActor {
+     private var microphoneTask: Task<Void, Error>?
+     private var microphoneRequested = false
+     private var resumedAtMilliseconds: Double?
+-    private var pendingResumeValidation: (revision: UInt64, peerEpoch: UInt64)?
+     private var supervisionTask: Task<Void, Never>?
+     private var firstFrameGuardTask: Task<Void, Never>?
+     private var supervisionConnectedAtMs: UInt64 = 0
+@@ -489,65 +488,47 @@ actor StreamSessionActor {
+         firstFrameGuardTask?.cancel()
+         firstFrameGuardTask = nil
+         recoveryProbe = nil
+-        pendingResumeValidation = nil
+         if !value {
+             resumedAtMilliseconds = nil
+-            playbackReadiness.remove(.framePresented)
++            // 前后台只切换呈现与输入；当前 peer、接收音频和播放就绪事实持续保留。
++            trace(
++                "presentationPaused", payload: ["logicalSessionRetained": .bool(true)],
++                dimension: .lifecycle)
++            guard microphoneRequested || microphonePeerEpoch != 0 || microphoneTask != nil else {
++                return
++            }
+             microphoneRevision &+= 1
+             microphoneTask?.cancel()
++            microphoneTask = nil
+             microphonePeerEpoch = 0
+             await peerRuntime?.stopMicrophoneCapture()
+             guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+             await microphoneSink?(generation, false, microphoneRequested)
+-            guard isCurrent(generation), !visible, revision == visibilityRevision else { return }
+-            trace(
+-                "sessionSuspended", payload: ["logicalSessionRetained": .bool(true)],
+-                dimension: .lifecycle)
+-            await publish(.suspending, generation: generation)
+             return
+         }
+-        guard let control = controlSession, let peer = peerRuntime else { return }
++        guard peerRuntime != nil else { return }
+         let peerEpoch = activePeerEpoch
+         resumedAtMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+-        pendingResumeValidation = (revision, peerEpoch)
+-        await publish(.waitingForFirstFrame, generation: generation)
++        lastVideoActivityAtMs = Self.nowMs
++        trace(
++            "presentationResumed", payload: ["logicalSessionRetained": .bool(true)],
++            dimension: .lifecycle)
++        switch peerConnectionState {
++        case .connected:
++            armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
++        case .failed, .closed:
++            // 后台期间记录的真实连接故障沿公共恢复合同处理。
++            await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
++        case .new, .checking, .disconnected:
++            break
++        }
+         guard isCurrent(generation), visible, revision == visibilityRevision,
+-            peerEpoch == activePeerEpoch
++            peerEpoch == activePeerEpoch, microphoneRequested
+         else { return }
+         do {
+-            try await control.validateResume()
+-            try ensureCurrent(generation)
+-            guard visible, revision == visibilityRevision, peerEpoch == activePeerEpoch else {
+-                return
+-            }
+-            let snapshot = await peer.debugSnapshot()
+-            guard isCurrent(generation), visible, revision == visibilityRevision,
+-                peerEpoch == activePeerEpoch
+-            else { return }
+-            pendingResumeValidation = nil
+-            trace("sessionResumeValidated", dimension: .lifecycle)
+-            lastVideoActivityAtMs = Self.nowMs
+-            if snapshot.iceConnectionState == "connected"
+-                || snapshot.iceConnectionState == "completed"
+-            {
+-                if resumedAtMilliseconds != nil {
+-                    armFirstFrameGuard(generation: generation, peerEpoch: peerEpoch)
+-                }
+-                // 验证期间已保存的新上屏事实，直接决定恢复后的可见状态。
+-                await publish(
+-                    playbackReady ? .playing : .waitingForFirstFrame, generation: generation)
+-            } else {
+-                await recoverDisconnectedPeer(generation: generation, peerEpoch: peerEpoch)
+-            }
+-            guard isCurrent(generation), visible, revision == visibilityRevision,
+-                peerEpoch == activePeerEpoch
+-            else { return }
+-            if microphoneRequested { try await setMicrophoneEnabled(true, generation: generation) }
++            try await setMicrophoneEnabled(true, generation: generation)
+         } catch {
+-            guard isCurrent(generation), visible, revision == visibilityRevision,
+-                peerEpoch == activePeerEpoch
+-            else { return }
+-            await fail(reason: .sessionFailed, generation: generation, error: error)
++            trace("microphoneRestoreFailed", dimension: .mediaSupply)
+         }
+     }
+ 
+@@ -2057,7 +2038,6 @@ actor StreamSessionActor {
+         visible = true
+         visibilityRevision &+= 1
+         resumedAtMilliseconds = nil
+-        pendingResumeValidation = nil
+         let localIceTask = localIceFlushTask
+         let peer = peerRuntime
+         let retiringPeer = retiringPeerRuntime
+@@ -2409,11 +2389,10 @@ actor StreamSessionActor {
+ 
+     private func publish(_ state: StreamingFeatureState, generation: UInt64) async {
+         guard isCurrent(generation) else { return }
+-        let visibleState = visible ? state : .suspending
+-        guard let stateSink, lastPublishedState != visibleState else { return }
++        guard let stateSink, lastPublishedState != state else { return }
+         // 在跨 MainActor 等待前记住状态，合并重入的健康回报。
+-        lastPublishedState = visibleState
+-        await stateSink(generation, visibleState)
++        lastPublishedState = state
++        await stateSink(generation, state)
+     }
+ 
+     private func ensureCurrent(_ generation: UInt64) throws {
+@@ -2423,10 +2402,7 @@ actor StreamSessionActor {
+     }
+ 
+     private var playbackReady: Bool {
+-        guard playbackReadiness.isPlaybackReady else { return false }
+-        guard let pendingResumeValidation else { return true }
+-        return pendingResumeValidation.revision != visibilityRevision
+-            || pendingResumeValidation.peerEpoch != activePeerEpoch
++        playbackReadiness.isPlaybackReady
+     }
+ 
+     private var connectionStateAfterNegotiation: StreamingFeatureState {
+
+diff --git a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRC/Resources/Info.plist b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Resources/Info.plist
+index 66cd19d5..51a12a4e 100644
+--- a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRC/Resources/Info.plist
++++ b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC/Resources/Info.plist
+@@ -42,6 +42,10 @@
+ 	</dict>
+ 	<key>UIApplicationSupportsIndirectInputEvents</key>
+ 	<true/>
++	<key>UIBackgroundModes</key>
++	<array>
++		<string>audio</string>
++	</array>
+ 	<key>UILaunchScreen</key>
+ 	<dict>
+ 		<key>UIColorName</key>
+
+diff --git a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRCTests/XBXRCTests.swift b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift
+index bcd587d3..4b6063b6 100644
+--- a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/XBXRCTests/XBXRCTests.swift
++++ b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRCTests/XBXRCTests.swift
+@@ -474,8 +474,10 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+     @MainActor
+     private func startReadySession(
+         resumeGate: StreamingAsyncGate? = nil, failResume: Bool = false,
+-        snapshotGate: StreamingAsyncGate? = nil
+-    ) async throws -> (StreamSessionActor, StreamingPublicationRecorder) {
++        snapshotGate: StreamingAsyncGate? = nil, presentsInitialFrame: Bool = true
++    ) async throws -> (
++        StreamSessionActor, StreamingPublicationRecorder, StreamingRuntimeRecorder
++    ) {
+         let recorder = StreamingRuntimeRecorder()
+         let publication = StreamingPublicationRecorder()
+         let session = StreamSessionActor(
+@@ -501,21 +503,13 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+         await session.displayPipelineReady(context: context)
+         await session.firstFrameAcceptedToMailbox(context: context)
+         await session.firstFrameSubmitted(context: context)
+-        await session.firstFramePresented(context: context)
+-        XCTAssertEqual(publication.states.last?.1, .playing)
+-        return (session, publication)
+-    }
+-
+-    @MainActor
+-    private func waitForGate(_ gate: StreamingAsyncGate) async throws {
+-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+-        while await gate.waiterCount() == 0 {
+-            guard ContinuousClock.now < deadline else {
+-                XCTFail("异步恢复操作应到达测试门禁")
+-                throw StreamingRuntimeError.superseded
+-            }
+-            try await Task.sleep(for: .milliseconds(10))
++        if presentsInitialFrame {
++            await session.firstFramePresented(context: context)
++            XCTAssertEqual(publication.states.last?.1, .playing)
++        } else {
++            XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+         }
++        return (session, publication, recorder)
+     }
+ 
+     private func presentSnapshot() -> StreamingDisplayHealthSnapshot {
+@@ -526,83 +520,74 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+     }
+ 
+     @MainActor
+-    func testResumeKeepsFreshPresentUntilValidationCompletes() async throws {
+-        let gate = StreamingAsyncGate()
+-        let (session, publication) = try await startReadySession(resumeGate: gate)
+-        defer {
+-            Task {
+-                await gate.open()
+-                await session.stop(generation: 1)
+-            }
+-        }
++    func testBackgroundPresentationRetainsPlayingOnOriginalPeer() async throws {
++        let (session, publication, recorder) = try await startReadySession(failResume: true)
++        defer { Task { await session.stop(generation: 1) } }
+         let context = try XCTUnwrap(publication.context)
++        let count = publication.states.count
+         await session.setVisible(false, generation: 1)
+-        let resume = Task { await session.setVisible(true, generation: 1) }
+-        try await waitForGate(gate)
+-        let fresh = presentSnapshot()
+-        await session.displayHealthUpdated(context: context, snapshot: fresh)
+-        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+-        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
+-        await gate.open()
+-        await resume.value
+-        XCTAssertEqual(
+-            publication.states.suffix(3).map(\.1), [.suspending, .waitingForFirstFrame, .playing])
+-        await session.displayHealthUpdated(context: context, snapshot: fresh)
+-        XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 2)
++        XCTAssertEqual(publication.states.last?.1, .playing)
++        await session.setVisible(true, generation: 1)
++        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
++        XCTAssertEqual(publication.states.count, count)
++        XCTAssertEqual(publication.context, context)
++        let snapshot = await recorder.snapshot()
++        let validations = await recorder.resumeValidationCount()
++        XCTAssertEqual(validations, 0)
++        XCTAssertEqual(snapshot.offers, ["local-offer"])
++        XCTAssertEqual(snapshot.iceRestartOffers, [false])
++        XCTAssertEqual(snapshot.peerStops, 0)
++        XCTAssertEqual(snapshot.controlCloses, 0)
++        XCTAssertEqual(snapshot.releasedAccessHandles, [])
+         await session.stop(generation: 1)
+     }
+ 
+     @MainActor
+-    func testValidatedResumeWaitsForFreshPresentAndSkipsDuplicateVisibility() async throws {
+-        let (session, publication) = try await startReadySession()
++    func testRepeatedVisibilityChangesKeepPresentationFacts() async throws {
++        let (session, publication, recorder) = try await startReadySession()
+         defer { Task { await session.stop(generation: 1) } }
+         let context = try XCTUnwrap(publication.context)
+         let old = presentSnapshot()
+-        await session.setVisible(false, generation: 1)
+-        await session.setVisible(true, generation: 1)
+-        await session.displayHealthUpdated(context: context, snapshot: old)
+-        XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
+-        await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+-        XCTAssertEqual(publication.states.last?.1, .playing)
+         let count = publication.states.count
+-        await session.setVisible(true, generation: 1)
++        for _ in 0..<3 {
++            await session.setVisible(false, generation: 1)
++            await session.setVisible(false, generation: 1)
++            await session.displayHealthUpdated(context: context, snapshot: old)
++            await session.setVisible(true, generation: 1)
++            await session.setVisible(true, generation: 1)
++            await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
++        }
+         XCTAssertEqual(publication.states.count, count)
++        XCTAssertEqual(publication.states.last?.1, .playing)
++        let snapshot = await recorder.snapshot()
++        XCTAssertEqual(snapshot.offers, ["local-offer"])
+         await session.stop(generation: 1)
+     }
+ 
+     @MainActor
+-    func testLateResumeValidationKeepsNewVisibilityRevisionSuspended() async throws {
+-        let gate = StreamingAsyncGate()
+-        let (session, publication) = try await startReadySession(resumeGate: gate)
+-        defer {
+-            Task {
+-                await gate.open()
+-                await session.stop(generation: 1)
+-            }
+-        }
++    func testBackgroundStartupContinuesOnOriginalPeerUntilFreshPresent() async throws {
++        let (session, publication, recorder) = try await startReadySession(
++            presentsInitialFrame: false)
++        defer { Task { await session.stop(generation: 1) } }
+         let context = try XCTUnwrap(publication.context)
+         await session.setVisible(false, generation: 1)
+-        let resume = Task { await session.setVisible(true, generation: 1) }
+-        try await waitForGate(gate)
++        await session.firstFramePresented(context: context)
+         await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+-        await session.setVisible(false, generation: 1)
+-        let count = publication.states.count
+-        await gate.open()
+-        await resume.value
+-        XCTAssertEqual(publication.states.count, count)
+-        XCTAssertEqual(publication.states.last?.1, .suspending)
+-        await session.setVisible(true, generation: 1)
+         XCTAssertEqual(publication.states.last?.1, .waitingForFirstFrame)
++        await session.setVisible(true, generation: 1)
+         await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+         XCTAssertEqual(publication.states.last?.1, .playing)
++        XCTAssertEqual(publication.context, context)
++        let snapshot = await recorder.snapshot()
++        XCTAssertEqual(snapshot.offers, ["local-offer"])
+         await session.stop(generation: 1)
+     }
+ 
+     @MainActor
+-    func testLateResumePeerSnapshotKeepsNewVisibilityRevisionSuspended() async throws {
++    func testForegroundPresentationContinuesWhilePeerSnapshotIsBusy() async throws {
+         let gate = StreamingAsyncGate()
+         await gate.open()
+-        let (session, publication) = try await startReadySession(snapshotGate: gate)
++        let (session, publication, _) = try await startReadySession(snapshotGate: gate)
+         defer {
+             Task {
+                 await gate.open()
+@@ -611,39 +596,35 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+         }
+         await gate.close()
+         await session.setVisible(false, generation: 1)
+-        let resume = Task { await session.setVisible(true, generation: 1) }
+-        try await waitForGate(gate)
+-        await session.setVisible(false, generation: 1)
+-        let count = publication.states.count
++        let continued = expectation(description: "原连接立即续接呈现")
++        let foreground = Task {
++            await session.setVisible(true, generation: 1)
++            continued.fulfill()
++        }
++        await fulfillment(of: [continued], timeout: 1)
++        XCTAssertEqual(publication.states.last?.1, .playing)
+         await gate.open()
+-        await resume.value
+-        XCTAssertEqual(publication.states.count, count)
+-        XCTAssertEqual(publication.states.last?.1, .suspending)
++        await foreground.value
+         await session.stop(generation: 1)
+     }
+ 
+     @MainActor
+-    func testFailedResumeValidationKeepsFreshPresentFromPublishingPlaying() async throws {
+-        let gate = StreamingAsyncGate()
+-        let (session, publication) = try await startReadySession(resumeGate: gate, failResume: true)
+-        defer {
+-            Task {
+-                await gate.open()
+-                await session.stop(generation: 1)
+-            }
++    func testLateVisibilityAndPresentationAfterStopKeepSessionClosed() async throws {
++        let (session, publication, recorder) = try await startReadySession()
++        let context = try XCTUnwrap(publication.context)
++        await session.stop(generation: 1)
++        let count = publication.states.count
++        for visible in [false, true, false] {
++            await session.setVisible(visible, generation: 1)
++            await session.displayHealthUpdated(context: context, snapshot: presentSnapshot())
+         }
+-        await session.setVisible(false, generation: 1)
+-        let resume = Task { await session.setVisible(true, generation: 1) }
+-        try await waitForGate(gate)
+-        await session.displayHealthUpdated(
+-            context: try XCTUnwrap(publication.context), snapshot: presentSnapshot())
+-        await gate.open()
+-        await resume.value
++        XCTAssertEqual(publication.states.last?.1, .idle)
++        XCTAssertEqual(publication.states.count, count)
+         XCTAssertEqual(publication.states.filter { $0.1 == .playing }.count, 1)
+-        guard let finalState = publication.states.last?.1, case .failed = finalState else {
+-            return XCTFail("恢复验证失败应发布终止状态")
+-        }
+-        await session.stop(generation: 1)
++        let snapshot = await recorder.snapshot()
++        XCTAssertEqual(snapshot.peerStops, 1)
++        XCTAssertEqual(snapshot.controlCloses, 1)
++        XCTAssertEqual(snapshot.offers, ["local-offer"])
+     }
+ 
+     func testSuspensionCancelsPendingTimingWhilePreservingCumulativeCounters() {
+@@ -696,7 +677,7 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+             await session.setVisible(false, generation: generation)
+             await session.setVisible(false, generation: generation)
+             XCTAssertEqual(
+-                publication.states.filter { $0.0 == generation && $0.1 == .suspending }.count, 1)
++                publication.states.filter { $0.0 == generation && $0.1 == .suspending }.count, 0)
+             await session.setVisible(true, generation: generation)
+             let now = StreamingFrameFeedbackClock.nowMilliseconds
+             let telemetry = StreamingDisplayTelemetry()
+@@ -704,7 +685,7 @@ final class StreamingDisplayCallbackTests: XCTestCase {
+             let fresh = telemetry.recordPresent(identifier: 1, timestampMilliseconds: now).snapshot
+             await session.displayHealthUpdated(context: context, snapshot: fresh)
+             XCTAssertEqual(
+-                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 2)
++                publication.states.filter { $0.0 == generation && $0.1 == .playing }.count, 1)
+             await session.stop(generation: generation)
+             XCTAssertEqual(
+                 publication.states.filter { $0.0 == generation && $0.1 == .idle }.count, 1)
+@@ -3216,6 +3197,11 @@ final class XBXRCTests: XCTestCase {
+         XCTAssertEqual(signaling.webRtcPlan.h264Profiles, ["4d", "42e", "420"])
+     }
+ 
++    func testStreamingBackgroundAudioIsDeclared() {
++        XCTAssertEqual(
++            Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String], ["audio"])
++    }
++
+     func testStreamingAudioPermissionOnlyAppliesToSendReceive() {
+         XCTAssertFalse(
+             StreamingAudioPermissionCoordinator.requiresMicrophonePermission(for: .receiveOnly)
+@@ -3677,13 +3663,14 @@ final class XBXRCTests: XCTestCase {
+     }
+ 
+     @MainActor
+-    func testStreamingFeatureStoreBackgroundRetainsSessionAndResumesWithFreshPresentation()
++    func testStreamingFeatureStoreBackgroundKeepsPlayingAndOriginalConnection()
+         async throws
+     {
+         let recorder = StreamingRuntimeRecorder()
+         let store = StreamingFeatureStore(
+             controlFactory: StreamingTestControlFactory(
+-                session: StreamingTestControlSession(recorder: recorder),
++                session: StreamingTestControlSession(
++                    recorder: recorder, failResumeValidation: true),
+                 recorder: recorder
+             ),
+             peerFactory: StreamingTestPeerFactory(recorder: recorder)
+@@ -3695,7 +3682,8 @@ final class XBXRCTests: XCTestCase {
+         try await waitUntil { store.state == .playing }
+ 
+         store.handleScenePhase(.background)
+-        try await waitUntil { store.state == .suspending }
++        try await Task.sleep(for: .milliseconds(100))
++        XCTAssertEqual(store.state, .playing)
+         XCTAssertTrue(store.input.isSuppressed)
+         XCTAssertFalse(store.presentationActive)
+ 
+@@ -3703,9 +3691,16 @@ final class XBXRCTests: XCTestCase {
+         XCTAssertEqual(snapshot.peerStops, 0)
+         XCTAssertEqual(snapshot.controlCloses, 0)
+         XCTAssertEqual(snapshot.releasedAccessHandles, [])
+-        store.handleScenePhase(.active)
+-        try await waitUntil { store.state == .waitingForFirstFrame }
+         let context = try XCTUnwrap(store.videoTrack?.traceContext)
++        store.handleScenePhase(.active)
++        try await Task.sleep(for: .milliseconds(100))
++        XCTAssertEqual(store.state, .playing)
++        XCTAssertEqual(store.videoTrack?.traceContext, context)
++        let validations = await recorder.resumeValidationCount()
++        XCTAssertEqual(validations, 0)
++        let continued = await recorder.snapshot()
++        XCTAssertEqual(continued.offers, ["local-offer"])
++        XCTAssertEqual(continued.iceRestartOffers, [false])
+         let now = ProcessInfo.processInfo.systemUptime * 1_000
+         store.handlePresentationEvent(
+             .displayHealth(
+@@ -4305,6 +4300,10 @@ private actor StreamingRuntimeRecorder {
+     private var peerInputStopStarts = 0
+     private var localCandidateSubmitStarts = 0
+     private var localCandidateSubmitFinishes = 0
++    private var resumeValidationCalls = 0
++
++    func recordResumeValidation() { resumeValidationCalls += 1 }
++    func resumeValidationCount() -> Int { resumeValidationCalls }
+ 
+     func recordTarget(_ value: StreamingLaunchTarget) { targets.append(value) }
+     func recordTitleID(_ value: String) { streamTitleIDs.append(value) }
+@@ -4482,6 +4481,7 @@ private actor StreamingTestControlSession: StreamingControlSession {
+     }
+ 
+     func validateResume() async throws {
++        await recorder.recordResumeValidation()
+         if let resumeValidationGate { await resumeValidationGate.wait() }
+         if failResumeValidation { throw StreamingRuntimeError.peerConnectionFailed }
+     }
+
+diff --git a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/README.md b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/README.md
+index 832ca566..a955efac 100644
+--- a/private/tmp/xbxrc-ios-background-r1._k_qdmsk/baseline/iosapp/README.md
++++ b/Users/guo.xu/Documents/code/games/xbxrc/iosapp/README.md
+@@ -16,6 +16,8 @@ rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+ 
+ 串流固定使用公共 Rust 会话/信令 + libwebrtc 传输与解码 + 自定义 Metal 渲染。WebRTC 与 Metal 为必需构建依赖，播放器直接消费 `RTCVideoTrack -> RTCVideoRenderer -> latest-only mailbox -> Metal presenter`。真机使用 `CVPixelBuffer -> CVMetalTextureCache` 零拷贝导入，模拟器的 I420 三平面上传共用同一渲染链；播放状态以真实首帧 present 为门槛。
+ 
++串流期间使用系统后台音频能力保持当前 Rust 会话、WebRTC 连接与接收音频。进入后台暂停画面提交与控制输入，已启用的麦克风暂停采集；回前台沿原连接续接画面，保留已就绪的播放状态。真实连接故障继续通过公共监督与恢复合同处理；主动结束串流和认证撤销继续执行完整清理。
++
+ 首次构建前解析依赖并校验 XCFramework 架构、module、Privacy Manifest 与二进制指纹：
+ 
+ ```bash

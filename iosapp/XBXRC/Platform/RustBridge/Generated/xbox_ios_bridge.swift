@@ -5331,6 +5331,64 @@ public func FfiConverterTypeXboxStreamSettings_lower(_ value: XboxStreamSettings
 }
 
 
+public struct XboxStreamTouchLayoutCommand: Equatable, Hashable {
+    public var kind: String
+    public var layoutId: String?
+    public var patchBase64: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: String, layoutId: String?, patchBase64: String?) {
+        self.kind = kind
+        self.layoutId = layoutId
+        self.patchBase64 = patchBase64
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension XboxStreamTouchLayoutCommand: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXboxStreamTouchLayoutCommand: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XboxStreamTouchLayoutCommand {
+        return
+            try XboxStreamTouchLayoutCommand(
+                kind: FfiConverterString.read(from: &buf),
+                layoutId: FfiConverterOptionString.read(from: &buf),
+                patchBase64: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XboxStreamTouchLayoutCommand, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterOptionString.write(value.layoutId, into: &buf)
+        FfiConverterOptionString.write(value.patchBase64, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamTouchLayoutCommand_lift(_ buf: RustBuffer) throws -> XboxStreamTouchLayoutCommand {
+    return try FfiConverterTypeXboxStreamTouchLayoutCommand.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXboxStreamTouchLayoutCommand_lower(_ value: XboxStreamTouchLayoutCommand) -> RustBuffer {
+    return FfiConverterTypeXboxStreamTouchLayoutCommand.lower(value)
+}
+
+
 public struct XboxStreamingAuthUpdate: Equatable, Hashable {
     public var revision: UInt64
     public var accountId: String
@@ -6771,6 +6829,30 @@ fileprivate struct FfiConverterOptionTypeXboxStartupProgress: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeXboxStreamTouchLayoutCommand: FfiConverterRustBuffer {
+    typealias SwiftType = XboxStreamTouchLayoutCommand?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeXboxStreamTouchLayoutCommand.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeXboxStreamTouchLayoutCommand.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeXboxStreamingAuthUpdate: FfiConverterRustBuffer {
     typealias SwiftType = XboxStreamingAuthUpdate?
 
@@ -8196,6 +8278,22 @@ public func createStreamStartup(targetType: String)throws  -> XboxStreamStartup 
     )
 })
 }
+public func parseStreamTouchLayoutCommand(payload: String) -> XboxStreamTouchLayoutCommand?  {
+    return try!  FfiConverterOptionTypeXboxStreamTouchLayoutCommand.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_parse_stream_touch_layout_command(
+        FfiConverterString.lower(payload),uniffiCallStatus
+    )
+})
+}
+public func streamTouchCapabilityPayloads(enabled: Bool) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_stream_touch_capability_payloads(
+        FfiConverterBool.lower(enabled),uniffiCallStatus
+    )
+})
+}
 public func fetchOfficialTouchBundle(accessHandle: String, xboxTitleId: String, bundleId: String, productId: String, gameName: String, locale: String, displayScale: Double)async throws  -> XboxOfficialTouchBundle  {
     return
         try  await uniffiRustCallAsync(
@@ -8255,6 +8353,36 @@ public func fetchCommunityTouchBundles(xboxTitleId: String, productId: String)as
             liftFunc: FfiConverterSequenceTypeXboxOfficialTouchBundleChoice.lift,
             errorHandler: FfiConverterTypeXboxBridgeError_lift
         )
+}
+public func compileTouchLayoutJson(documentJson: String, layoutId: String, format: String, availableAssets: [String], stateJson: String?, patchJson: String?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeXboxBridgeError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_compile_touch_layout_json(
+        FfiConverterString.lower(documentJson),
+        FfiConverterString.lower(layoutId),
+        FfiConverterString.lower(format),
+        FfiConverterSequenceString.lower(availableAssets),
+        FfiConverterOptionString.lower(stateJson),
+        FfiConverterOptionString.lower(patchJson),uniffiCallStatus
+    )
+})
+}
+public func resolveTouchLayoutRuntimeJson(documentJson: String, stateJson: String?, patchJson: String?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeXboxBridgeError_lift) {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_resolve_touch_layout_runtime_json(
+        FfiConverterString.lower(documentJson),
+        FfiConverterOptionString.lower(stateJson),
+        FfiConverterOptionString.lower(patchJson),uniffiCallStatus
+    )
+})
+}
+public func touchLayoutProtocolInformationJson() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_xbox_ios_bridge_fn_func_touch_layout_protocol_information_json(uniffiCallStatus
+    )
+})
 }
 
 private enum InitializationResult {
@@ -8398,6 +8526,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_xbox_ios_bridge_checksum_func_create_stream_startup() != 32845) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_xbox_ios_bridge_checksum_func_parse_stream_touch_layout_command() != 47342) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_stream_touch_capability_payloads() != 2673) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_official_touch_bundle() != 35998) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8408,6 +8542,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_func_fetch_community_touch_bundles() != 27572) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_compile_touch_layout_json() != 36977) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_resolve_touch_layout_runtime_json() != 25803) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_xbox_ios_bridge_checksum_func_touch_layout_protocol_information_json() != 11040) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_xbox_ios_bridge_checksum_method_xboxauthobserver_checkpoint() != 9291) {

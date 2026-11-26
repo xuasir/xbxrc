@@ -11,6 +11,8 @@ struct CloudStreamingIdentity: Equatable, Sendable {
     let productID: String
     let streamTitleID: String
     let hasEntitlement: Bool?
+    var xboxTitleID: String? = nil
+    var name: String? = nil
 }
 
 protocol CloudGameLaunchResolving: Sendable {
@@ -33,7 +35,8 @@ struct RustCloudGameLaunchResolver: CloudGameLaunchResolving {
             let title = game.streamTitleId, !title.isEmpty
         else { throw StreamingRuntimeError.cloudGameUnavailable }
         return CloudStreamingIdentity(
-            productID: game.productId, streamTitleID: title, hasEntitlement: game.hasEntitlement)
+            productID: game.productId, streamTitleID: title, hasEntitlement: game.hasEntitlement,
+            xboxTitleID: game.xboxTitleId, name: game.name)
     }
 }
 

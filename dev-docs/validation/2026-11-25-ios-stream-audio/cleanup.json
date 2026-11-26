@@ -1,0 +1,32 @@
+{
+  "round": "r1",
+  "at": "2026-11-25T09:33:28.120192+08:00",
+  "processCompletion": {
+    "xcodebuildSession": 73508,
+    "xcodebuildExitCode": 0,
+    "xcresulttoolExitCode": 0,
+    "exports": "synchronous archive completed"
+  },
+  "temporaryRoots": [
+    {
+      "path": "/private/tmp/xbxrc-ios-stream-audio-r1.3ftfz9lt",
+      "estimatedAllocatedBytesRemoved": 655798272,
+      "verifiedAbsent": true
+    },
+    {
+      "path": "/private/tmp/xbxrc-ios-stream-audio-20261125.2m1AW9",
+      "estimatedAllocatedBytesRemoved": 122880,
+      "verifiedAbsent": true
+    }
+  ],
+  "diskFreeBeforeBytes": 28426240000,
+  "retained": [
+    "shared WebRTC cache: /Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+    "shared Rust cache: /Users/guo.xu/Documents/code/games/xbxrc/target/ios",
+    "existing simulator app/device data",
+    "archived validation evidence"
+  ],
+  "estimatedAllocatedBytesRemoved": 655921152,
+  "diskFreeAfterBytes": 28958720000,
+  "diskFreeDeltaBytes": 532480000
+}

@@ -1,0 +1,11 @@
+{
+  "reviewedScreenshots": 4,
+  "result": "passed",
+  "observations": [
+    "官方格式夹具的第二布局卡片显示已保存到本机与重新保存按钮",
+    "预览画布显示触摸板的原始图片资源，保存按钮可用",
+    "本机列表包含已保存的第二官方布局",
+    "单位测试诊断图显示原始红蓝资源与节流杆彩色cap，资源身份和透明度断言通过"
+  ],
+  "scope": "UI为Halo Infinite入口下的官方格式验收夹具；真实Minecraft Dungeons II包由设备侧验收。"
+}

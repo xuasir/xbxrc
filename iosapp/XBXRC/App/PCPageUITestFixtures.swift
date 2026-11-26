@@ -194,7 +194,12 @@
                 consoleID: consoleID,
                 games: PCPageFixtures.games.enumerated().map { index, game in
                     XboxInstalledGameSummary(
-                        id: game.id, titleID: game.titleID, productID: game.productID,
+                        id: game.id,
+                        titleID: index == 1
+                            && ProcessInfo.processInfo.arguments.contains(
+                                "--installed-product-only-ui-test")
+                            ? nil : game.titleID,
+                        productID: game.productID,
                         name: game.name, artworkURL: nil,
                         storageDeviceID: index == 2 ? "external" : "internal",
                         sizeBytes: UInt64(100_000_000 * (index + 1)),
@@ -290,7 +295,7 @@
                 ?? PCPageFixtures.cloudGames()[0]
             return CloudProductDetails(
                 productID: productID, name: game.name, publisherName: game.publisherName,
-        description: game.description ?? "完整云游戏商品资料",
+                description: game.description ?? "完整云游戏商品资料",
                 tileURL: nil, posterURL: nil, heroURL: nil, categories: game.categories,
                 developer: "Xbox Game Studios",
                 releaseDate: "2025-01-01", rating: "12+", attributes: ["单人游戏", "在线多人"],

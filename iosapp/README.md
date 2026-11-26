@@ -16,6 +16,8 @@ rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 
 串流固定使用公共 Rust 会话/信令 + libwebrtc 传输与解码 + 自定义 Metal 渲染。WebRTC 与 Metal 为必需构建依赖，播放器直接消费 `RTCVideoTrack -> RTCVideoRenderer -> latest-only mailbox -> Metal presenter`。真机使用 `CVPixelBuffer -> CVMetalTextureCache` 零拷贝导入，模拟器的 I420 三平面上传共用同一渲染链；播放状态以真实首帧 present 为门槛。
 
+串流期间使用系统后台音频能力保持当前 Rust 会话、WebRTC 连接与接收音频。进入后台暂停画面提交与控制输入，已启用的麦克风暂停采集；回前台沿原连接续接画面，保留已就绪的播放状态。真实连接故障继续通过公共监督与恢复合同处理；主动结束串流和认证撤销继续执行完整清理。
+
 首次构建前解析依赖并校验 XCFramework 架构、module、Privacy Manifest 与二进制指纹：
 
 ```bash

@@ -26,25 +26,34 @@ pub fn title_bundles(
         .ok()
         .filter(|value| *value > 0)
         .ok_or_else(|| invalid("Xbox 游戏身份无效"))?;
-    let entry = entries
-        .iter()
-        .filter_map(|entry| entry.get("details"))
-        .find(|details| {
-            let identity = match details.get("xboxTitleId") {
-                Some(Value::String(value)) => value.parse::<u64>().ok(),
-                Some(Value::Number(value)) => value.as_u64(),
-                _ => None,
-            };
-            identity == Some(title_id)
-                && details
-                    .get("productId")
-                    .and_then(Value::as_str)
-                    .is_some_and(|value| value.eq_ignore_ascii_case(product_id))
-        });
+    let entry = entries.iter().find(|entry| {
+        let details = &entry["details"];
+        let identity = match details.get("xboxTitleId") {
+            Some(Value::String(value)) => value.parse::<u64>().ok(),
+            Some(Value::Number(value)) => value.as_u64(),
+            _ => None,
+        };
+        identity == Some(title_id)
+            && details
+                .get("productId")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value.eq_ignore_ascii_case(product_id))
+    });
     let Some(entry) = entry else {
         return Ok(Vec::new());
     };
-    let Some(tabs) = entry.get("supportedTabs").filter(|tabs| !tabs.is_null()) else {
+    // 与 better-xcloud 的地平线 6 选源一致：使用社区 forza 布局。
+    if title_id == 2079757188
+        || entry["titleId"]
+            .as_str()
+            .is_some_and(|id| id.eq_ignore_ascii_case("FORZAHORIZON6"))
+    {
+        return Ok(Vec::new());
+    }
+    let Some(tabs) = entry["details"]
+        .get("supportedTabs")
+        .filter(|tabs| !tabs.is_null())
+    else {
         return Ok(Vec::new());
     };
     let tabs = tabs
@@ -66,12 +75,11 @@ pub fn title_bundles(
         {
             return Err(invalid("官方布局包身份无效"));
         }
-        let manifest = version(&bundle.manifest_version)?;
-        let layout = version(&bundle.layout_version)?;
+        version(&bundle.manifest_version)?;
+        version(&bundle.layout_version)?;
         version(&bundle.tab_version)?;
-        if manifest <= [2, 0, 0, 0] && layout <= [4, 1, 0, 0] {
-            bundles.push(bundle);
-        }
+        // 格式版本进入编译诊断；目录按合法身份提供资源，实际字段决定运行范围。
+        bundles.push(bundle);
     }
     bundles.sort_by(|left, right| {
         version(&right.tab_version)
@@ -169,6 +177,27 @@ mod tests {
     }
 
     #[test]
+    fn forza_horizon_6_uses_community_layouts_with_official_tabs_present() {
+        let mut horizon = title(
+            "HORIZON6EDITION",
+            json!(2079757188u64),
+            json!([tab("official", "1.0")]),
+        );
+        horizon["titleId"] = json!("FORZAHORIZON6");
+        assert!(
+            title_bundles(&json!([horizon]), "HORIZON6EDITION", "2079757188")
+                .unwrap()
+                .is_empty()
+        );
+
+        let other = title("GAME", json!(10), json!([tab("official", "1.0")]));
+        assert_eq!(
+            title_bundles(&json!([other]), "GAME", "10").unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
     fn accepts_short_service_versions_and_preserves_display_values() {
         let data = json!([title(
             "GAME",
@@ -188,16 +217,19 @@ mod tests {
     }
 
     #[test]
-    fn unknown_format_version_is_filtered_and_bad_identity_rejected() {
+    fn unknown_format_version_reaches_compiler_and_bad_identity_is_rejected() {
         let mut newer = tab("future", "1.0.0.0");
         newer["layoutVersion"] = json!("5.0.0.0");
-        assert!(title_bundles(
-            &json!([title("GAME", json!(10), json!([newer]))]),
-            "GAME",
-            "10"
-        )
-        .unwrap()
-        .is_empty());
+        assert_eq!(
+            title_bundles(
+                &json!([title("GAME", json!(10), json!([newer]))]),
+                "GAME",
+                "10"
+            )
+            .unwrap()
+            .len(),
+            1
+        );
         assert!(title_bundles(
             &json!([title(
                 "GAME",

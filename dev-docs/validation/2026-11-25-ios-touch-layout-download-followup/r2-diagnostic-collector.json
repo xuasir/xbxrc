@@ -1,0 +1,6 @@
+{
+  "terminatedPID": 1633,
+  "parentPID": 1181,
+  "reason": "测试已结束；停止本轮 --timeout=600 系统诊断收集，保留 XCTest 结果和必要失败诊断",
+  "command": "1181 /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl diagnose -l -b --timeout=600 --log-option=--last --log-option=4m --output=/tmp/xbxrc-touch-download-followup-r1.jwornfpo/r2/Smoke.xcresult/Staging/1_Test/Diagnostics/simctl_diagnostics --no-archive --udid=C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC"
+}

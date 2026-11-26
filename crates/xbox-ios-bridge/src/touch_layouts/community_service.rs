@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{query_failure::query_error, XboxBridgeError};
 use std::{sync::Arc, time::Duration};
-use xbox_touch_layouts::{community_bundle, validate_community_game};
+use xbox_touch_layouts::{community_bundle, validate_community_definition};
 use xbox_webapi::CommunityTouchApi;
 
 const PREFIX: &str = "community:better-xcloud:";
@@ -15,7 +15,7 @@ pub async fn fetch_community_touch_bundles(
     product_id: String,
 ) -> Result<Vec<XboxOfficialTouchBundleChoice>, XboxBridgeError> {
     let title_id = normalize_title(&xbox_title_id)?;
-    let product_id = normalize_product(&product_id)?;
+    normalize_product(&product_id)?;
     tokio::time::timeout(Duration::from_secs(30), async {
         let api = CommunityTouchApi::default();
         let revision = api.latest_revision().await.map_err(query_error)?;
@@ -26,8 +26,7 @@ pub async fn fetch_community_touch_bundles(
         else {
             return Ok(Vec::new());
         };
-        validate_community_game(&definition, &product_id)
-            .map_err(|error| invalid(&error.to_string()))?;
+        validate_community_definition(&definition).map_err(|error| invalid(&error.to_string()))?;
         Ok(vec![XboxOfficialTouchBundleChoice {
             id: format!("{PREFIX}{revision}"),
             tab_version: revision[..12].to_owned(),
@@ -67,8 +66,7 @@ pub async fn fetch_community_touch_bundle(
             .await
             .map_err(query_error)?
             .ok_or_else(|| invalid("此游戏暂无社区触屏布局"))?;
-        validate_community_game(&definition, &product_id)
-            .map_err(|error| invalid(&error.to_string()))?;
+        validate_community_definition(&definition).map_err(|error| invalid(&error.to_string()))?;
         let sources = api
             .layouts(&revision, &definition)
             .await

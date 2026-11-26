@@ -1,0 +1,62 @@
+{
+  "task": "2026-11-26-ios-background-stream-continuity",
+  "round": "r1",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-background-r1._k_qdmsk",
+  "evidenceRoot": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-26-ios-background-stream-continuity",
+  "sourceBefore": {
+    "iosapp/XBXRC/Platform/Streaming/StreamSessionActor.swift": "38f0f5e099e7c23f9f6ddca962a887966936a80d6bb5d67f4ed027fde7f9ac46",
+    "iosapp/XBXRC/Resources/Info.plist": "dd5ac8b112124eb30a052dfc56d6ac800e9a62aabd7460a549c78590c56e37f5",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "3a2f478e790336d2c87af0b29aa2ac9bccb28dc5a536d1b9afa66220172bcddc",
+    "docs/project-task.md": "07f679c35e2d75b9faa2a33105bbf61a1e08c67708a2d60c9d88c69cb1054d7d",
+    "iosapp/README.md": "f28717e3071f3de1c799670ac8ece00de0c99f2f0ed1c8b14b00e5f619a43b8c"
+  },
+  "temporaryArtifacts": [
+    "baseline",
+    "SourcePackages",
+    "DerivedData",
+    "Smoke.xcresult",
+    "smoke.log",
+    "format"
+  ],
+  "sharedCachesPreserved": [
+    "target/ios-webrtc/137.7151.04/SourcePackages",
+    "target/ios"
+  ],
+  "simulator": {
+    "name": "iPhone 18 Pro",
+    "os": "iOS 27.2",
+    "udid": "BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "bootAuthorizedByUser": true
+  },
+  "testCommand": [
+    "xcodebuild",
+    "test",
+    "-project",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-destination",
+    "platform=iOS Simulator,id=BC445E76-02C7-4B6A-997F-8EFE30B15E80",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-background-r1._k_qdmsk/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/private/tmp/xbxrc-ios-background-r1._k_qdmsk/SourcePackages",
+    "-resultBundlePath",
+    "/private/tmp/xbxrc-ios-background-r1._k_qdmsk/Smoke.xcresult",
+    "-disableAutomaticPackageResolution",
+    "-skipPackageUpdates",
+    "-parallel-testing-enabled",
+    "NO",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testBackgroundPresentationRetainsPlayingOnOriginalPeer",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testRepeatedVisibilityChangesKeepPresentationFacts",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testBackgroundStartupContinuesOnOriginalPeerUntilFreshPresent",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testForegroundPresentationContinuesWhilePeerSnapshotIsBusy",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testLateVisibilityAndPresentationAfterStopKeepSessionClosed",
+    "-only-testing:XBXRCTests/StreamingDisplayCallbackTests/testActorPublishesStateChangesAcrossHealthBurstResumeAndNewSession",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingFeatureStoreBackgroundKeepsPlayingAndOriginalConnection",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingBackgroundAudioIsDeclared",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingFailedIceRestartRebuildsPeerWithinSameRemoteSession",
+    "CODE_SIGNING_ALLOWED=NO"
+  ],
+  "validationScope": "单轮9项后台生命周期、原连接保留、首次呈现、重复切换、退出清理、后台音频声明和真实连接故障恢复定向冒烟"
+}

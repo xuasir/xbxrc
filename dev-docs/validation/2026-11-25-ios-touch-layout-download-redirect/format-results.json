@@ -1,0 +1,66 @@
+[
+  {
+    "file": "iosapp/XBXRC/Features/Authentication/AuthStore.swift",
+    "ranges": [
+      [
+        46,
+        54
+      ],
+      [
+        475,
+        475
+      ],
+      [
+        487,
+        496
+      ],
+      [
+        529,
+        612
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift",
+    "ranges": [
+      [
+        369,
+        376
+      ],
+      [
+        414,
+        414
+      ],
+      [
+        458,
+        458
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift",
+    "ranges": [
+      [
+        322,
+        383
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "iosapp/XBXRCTests/CloudLibraryStoreConcurrencyTests.swift",
+    "ranges": [
+      [
+        6,
+        34
+      ]
+    ],
+    "exitCode": 0,
+    "diagnostics": ""
+  }
+]

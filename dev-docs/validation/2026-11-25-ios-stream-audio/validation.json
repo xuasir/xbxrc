@@ -1,0 +1,123 @@
+{
+  "round": "r1",
+  "status": "validation-pending",
+  "preflight": {
+    "streamingBoundary": {
+      "command": "bash iosapp/scripts/check-streaming-session-boundary.sh",
+      "result": "passed"
+    },
+    "diffCheck": {
+      "scope": [
+        "StreamingAudioLifecycleCoordinator.swift",
+        "XBXRCTests.swift",
+        "audio RFC",
+        "project-task"
+      ],
+      "result": "passed"
+    },
+    "format": {
+      "scope": "changed Swift ranges",
+      "result": "passed"
+    }
+  },
+  "actualAudioGate": "用户真机 Home / Cloud 各一次声音与退出重连验收",
+  "xcodeExitCode": 0,
+  "testRuns": 1,
+  "testCount": 15,
+  "passed": 15,
+  "failed": 0,
+  "testCases": [
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testDeactivationFailureStillClosesLifecycle",
+      "seconds": 0.002,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testDuplicateStartAndCompletionEventsAreIdempotent",
+      "seconds": 0.0,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testInterruptionResumesOnceWhenSystemAllowsIt",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testInterruptionWithoutResumePermissionFailsClosed",
+      "seconds": 0.0,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testLateEventsAfterStopCannotRecoverAudio",
+      "seconds": 0.0,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testMediaServicesResetRecoversOnce",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testNewGenerationCanStartWhilePreviousGenerationIsStopping",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testNormalActivationAndStop",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testRecoveryFailureCanRetryWhenOutputReturns",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testRouteLossStartsOneControlledRecovery",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testRouteReasonChangeRemainsObservableWhenOutputStaysAvailable",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.StreamingAudioLifecycleStateTests testStaleGenerationCannotMutateOrRecoverCurrentSession",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.XBXRCTests testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+      "seconds": 0.429,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.XBXRCTests testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+      "seconds": 0.001,
+      "result": "passed"
+    },
+    {
+      "name": "XBXRCTests.XBXRCTests testStreamingAudioPermissionOnlyAppliesToSendReceive",
+      "seconds": 0.0,
+      "result": "passed"
+    }
+  ],
+  "nativeRuntimeAssertions": [
+    "default/feedback factories create audio/video offer",
+    "useManualAudio=true while active",
+    "isAudioEnabled=true while active",
+    "inputAvailable=true",
+    "inputNumberOfChannels>0",
+    "isAudioEnabled=false after close"
+  ],
+  "buildPlatform": "iPhoneSimulator arm64 / iOS 27",
+  "sourceFinalSHA256": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift": "a752b1660ded244328a66941ecb2bca2172eb9d0f56b8af1385c41e9c4c8144c",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "3a2f478e790336d2c87af0b29aa2ac9bccb28dc5a536d1b9afa66220172bcddc",
+    "docs/rfcs/2026-08-05-ios-streaming-audio-lifecycle-hardening.md": "730702710eed5758a2ec6373aa5f36ce4d266ca4e2fb2a4bb641949c07f65f34",
+    "docs/project-task.md": "2a43eee3ea11e6b911477eb06bfc3d98a1539797a134b64b2c90439678299bf5",
+    "dev-docs/validation/2026-11-25-ios-stream-audio/README.md": "20dda45c01d2830f8d963f4c368c7e085bbfa37cefff379cc788459692dba5b7"
+  },
+  "scopeLimit": "实际音频播放、外接路由和重連由真机 Home/Cloud 会话验收"
+}

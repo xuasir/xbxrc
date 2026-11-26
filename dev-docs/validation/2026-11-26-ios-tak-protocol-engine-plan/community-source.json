@@ -1,0 +1,850 @@
+{
+  "date": "2026-11-26",
+  "url": "https://codeload.github.com/redphx/better-xcloud/tar.gz/4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+  "revision": "4416b1ab07588a3244a5c02ce1fa5dfa64d8df74",
+  "downloadSHA256": "56517dcbf700de64b05d46a1d7fbde41a5efc641307e00e59af381f33a66da2b",
+  "downloadBytes": 205621,
+  "archive": "community-source.zip",
+  "files": [
+    {
+      "path": "touch-layouts/1022228933.json",
+      "bytes": 98,
+      "sha256": "c8d9647788fc13f49d58fc638890813c4d4db4a3284923bfc8840d09b0f6724d"
+    },
+    {
+      "path": "touch-layouts/1046363979.json",
+      "bytes": 145,
+      "sha256": "11ba4e8fda10eb9e917089a747900458c13841c330dca137290549a255274e4a"
+    },
+    {
+      "path": "touch-layouts/114172147.json",
+      "bytes": 95,
+      "sha256": "13843fdac2ce0e91d821bb9e0ed7f054fe379daf038aeb255d9e9a295a110236"
+    },
+    {
+      "path": "touch-layouts/1145753246.json",
+      "bytes": 122,
+      "sha256": "c3249cb5decd95c1f00827cc867da1a23dd1f42963367304cea4bbb4fd058943"
+    },
+    {
+      "path": "touch-layouts/1278031123.json",
+      "bytes": 100,
+      "sha256": "780d09798bbc53da8676f12e087230d43e2cdc30655f95b803ee98d7eafd5077"
+    },
+    {
+      "path": "touch-layouts/1610974574.json",
+      "bytes": 118,
+      "sha256": "abad3ddcb19e6e25ca93bc1d638d5901f5541952729853b631e25f871f6f62e9"
+    },
+    {
+      "path": "touch-layouts/1611051325.json",
+      "bytes": 131,
+      "sha256": "d36557cc152502919b66be5cc2d029b7b8066dab4dc95b5bee1efc7fbae20435"
+    },
+    {
+      "path": "touch-layouts/1621285366.json",
+      "bytes": 126,
+      "sha256": "5d7b95748d5f75dedb4e72205a92d40b77c66c125f4694d9159241b7a5bb6368"
+    },
+    {
+      "path": "touch-layouts/1625569842.json",
+      "bytes": 107,
+      "sha256": "8540171da058e1ea8678fee56266063088afd9630668b61e4a0b8525e8792c1c"
+    },
+    {
+      "path": "touch-layouts/1631654404.json",
+      "bytes": 140,
+      "sha256": "ac746c68366c7a4920499b6773f83c725f428cdedc693339b67ce81034b4062a"
+    },
+    {
+      "path": "touch-layouts/1653663875.json",
+      "bytes": 125,
+      "sha256": "354ff0d00f81d6e855ca51c81d4cfcf8bd61e3fe07fcd2ea6a4a07b91dc1635a"
+    },
+    {
+      "path": "touch-layouts/1658810016.json",
+      "bytes": 116,
+      "sha256": "9c5df3fe280a8074d6495e8e0df8588c48a5f2c43f4ac1de8c9976af2632a4e3"
+    },
+    {
+      "path": "touch-layouts/1668285033.json",
+      "bytes": 93,
+      "sha256": "4b818a172a0b35492cc7a94cf79dcf1e3bfba5ef0ef7a09e2489fafcc23ac70d"
+    },
+    {
+      "path": "touch-layouts/1669177732.json",
+      "bytes": 134,
+      "sha256": "a1950059e373ed797e3bf67d2ac947f63174581ced38bfe18bd55596a140f890"
+    },
+    {
+      "path": "touch-layouts/1673618851.json",
+      "bytes": 91,
+      "sha256": "ca79875b9d44585dd97da193c04a40497dde0ad784b96d1e0145d3ef28948da3"
+    },
+    {
+      "path": "touch-layouts/1693340366.json",
+      "bytes": 103,
+      "sha256": "cc204024896da5f533bf032a74b60d8af2850b5aa8598d033374f16789c15b77"
+    },
+    {
+      "path": "touch-layouts/1693830737.json",
+      "bytes": 95,
+      "sha256": "9e1c8c3fbd046e52c9941841659420afe4ba368c0af614e24f5fbb563959ef24"
+    },
+    {
+      "path": "touch-layouts/1704490079.json",
+      "bytes": 108,
+      "sha256": "1fcdda118e54f79a105e056e814163831a21d479091f3c1f0c7f0709d23b8519"
+    },
+    {
+      "path": "touch-layouts/1709856057.json",
+      "bytes": 132,
+      "sha256": "6feffaef75bc0c077aa286a7ac16850865e871884a0052b70c27fc65cc5d5c37"
+    },
+    {
+      "path": "touch-layouts/1714795112.json",
+      "bytes": 102,
+      "sha256": "a7f749ddbfe62d1999beb957a3f5443396bc23c70abe7786fb315f9c88e8a3b3"
+    },
+    {
+      "path": "touch-layouts/1719461807.json",
+      "bytes": 134,
+      "sha256": "936ef6748f0d4312bcfb12f0b05a7aa64f8b601914516d6a9849259aa49dd524"
+    },
+    {
+      "path": "touch-layouts/1731121397.json",
+      "bytes": 145,
+      "sha256": "01c0777ddc3739439adc0c57ff41cc9d9b13d82dfeaa0df17ecc1ea1cc5e6fd8"
+    },
+    {
+      "path": "touch-layouts/1741728886.json",
+      "bytes": 136,
+      "sha256": "775ecc548d54626922281785686992b4ec75750b8cc62eac6456dc6720af3e4c"
+    },
+    {
+      "path": "touch-layouts/1753744295.json",
+      "bytes": 149,
+      "sha256": "dd2250e68c2cff49e5e27d452417583f8873764fc103cf36c02ec24dc3ca8028"
+    },
+    {
+      "path": "touch-layouts/1778348973.json",
+      "bytes": 119,
+      "sha256": "7966d31fc7684db7820aba7b00c6cd8fdb8cc1a0d6d0c6143277b1e3f53a05cf"
+    },
+    {
+      "path": "touch-layouts/1792830437.json",
+      "bytes": 120,
+      "sha256": "d73818f1846be11fd0fca4a3b0a323b863e003167dd069f0190ff71b81d61d10"
+    },
+    {
+      "path": "touch-layouts/1797327516.json",
+      "bytes": 122,
+      "sha256": "396986a363ae4f09cde975bcf2703a4a52e002c918eb6726f3c2b02cdb023853"
+    },
+    {
+      "path": "touch-layouts/1814675537.json",
+      "bytes": 133,
+      "sha256": "6c7e522630a7007ba06de1f87bda736fa3e318a9c8f8a6f82ea43d74311134fe"
+    },
+    {
+      "path": "touch-layouts/1829869520.json",
+      "bytes": 116,
+      "sha256": "ab49337903c3137fd78655f9db6ec9b042a9226df5fef877dc78d1dfa1ec853c"
+    },
+    {
+      "path": "touch-layouts/1842668909.json",
+      "bytes": 129,
+      "sha256": "a5458a14c006e908549289251a9602a17cde439c90c297e0513f28ddeb0d27a9"
+    },
+    {
+      "path": "touch-layouts/1843641391.json",
+      "bytes": 83,
+      "sha256": "00b9dedeb1a0ab0c5f5c8e786e9ba0784c3bcd89e139f64e0754d5d0d84d8712"
+    },
+    {
+      "path": "touch-layouts/1843694822.json",
+      "bytes": 140,
+      "sha256": "7fd6ba27e46bf30f62fbd13561e55ca7ef907502b3ba04e50b18a2fd3e959b37"
+    },
+    {
+      "path": "touch-layouts/1844195280.json",
+      "bytes": 132,
+      "sha256": "eb341167a9677d3ae8f3e0c6f6172e12fd334e7590c1013c654b0694320506d7"
+    },
+    {
+      "path": "touch-layouts/1844418156.json",
+      "bytes": 130,
+      "sha256": "43e082866b8f661a2e64ebcda4280c7a3844e1e31057b8f6d082d4a1266f5355"
+    },
+    {
+      "path": "touch-layouts/1852502655.json",
+      "bytes": 139,
+      "sha256": "d90e28abfd964a2f20b6decb5d7113cf931e53076b9c001481ba4dbb5db067e1"
+    },
+    {
+      "path": "touch-layouts/1852916479.json",
+      "bytes": 119,
+      "sha256": "8f3654ceccba0f0eef3217aeb8086c1deeafe4c7131b9533fd2f733e2b75da23"
+    },
+    {
+      "path": "touch-layouts/1866559372.json",
+      "bytes": 138,
+      "sha256": "e30bf7b9e98fd0d3ec76cad1a529b523db45c89c0b3669ffa2f56ad9548a86bd"
+    },
+    {
+      "path": "touch-layouts/1874191487.json",
+      "bytes": 97,
+      "sha256": "00aa085bfc6d4bf0672a222651473c222de33ce9b640f054f8a5f6843ce39d8f"
+    },
+    {
+      "path": "touch-layouts/1882096658.json",
+      "bytes": 136,
+      "sha256": "0dbc2048a5dd33e45d95ab4a43998023a90be46bf1dfa762c86e0ce0a107d35b"
+    },
+    {
+      "path": "touch-layouts/1884102336.json",
+      "bytes": 138,
+      "sha256": "5dbe5f3dde564e12e394b6b03d05b2c470590cb4f6c4aaf702ac044bde7a39ea"
+    },
+    {
+      "path": "touch-layouts/1911508378.json",
+      "bytes": 110,
+      "sha256": "913554ca1d8f291e2d3b8c9dd468c926371d093eaeaa52af506ed655ec14c7aa"
+    },
+    {
+      "path": "touch-layouts/1922695178.json",
+      "bytes": 129,
+      "sha256": "811c637dfcd521cacec511c155fcee08583d1e476c080123d388e5b7f6161493"
+    },
+    {
+      "path": "touch-layouts/1931911684.json",
+      "bytes": 132,
+      "sha256": "509f19e33b3355cec530ce44364df5b507639aab4900796dd09894aaddde21a9"
+    },
+    {
+      "path": "touch-layouts/1948986948.json",
+      "bytes": 103,
+      "sha256": "39abda5683e5bef8ad1d4d55bc140125a2dc6f81960be1d7b60b3fc26d6337e0"
+    },
+    {
+      "path": "touch-layouts/1949242128.json",
+      "bytes": 99,
+      "sha256": "d485851c4dce32b56c44eb9e5b9029eeb3144fcad1669df3fe9bbefa07bfc4f9"
+    },
+    {
+      "path": "touch-layouts/1953745880.json",
+      "bytes": 132,
+      "sha256": "2c71776dfb31cab6f2ca3085d532253bbf5e37badf5aa5d5c5e5948e89f63157"
+    },
+    {
+      "path": "touch-layouts/1955542194.json",
+      "bytes": 122,
+      "sha256": "203bd9b9be5127e1898e00ad60c3b1c41fc118512d69d62966b0754d913a32f1"
+    },
+    {
+      "path": "touch-layouts/1985701699.json",
+      "bytes": 128,
+      "sha256": "b23ccf022b7744b63ace426e54556147047be3dc4438250df7b5b3c55e29913a"
+    },
+    {
+      "path": "touch-layouts/1994003829.json",
+      "bytes": 128,
+      "sha256": "3bce87755b7a0bd3fe97080030ed7cee9b3b8f16b237aa482c5fabc023f7d15c"
+    },
+    {
+      "path": "touch-layouts/2008576749.json",
+      "bytes": 130,
+      "sha256": "f58e002eda1cc209fbb73ced96692c6ac679df6baa5b34648441e546c8b9289e"
+    },
+    {
+      "path": "touch-layouts/2008767227.json",
+      "bytes": 129,
+      "sha256": "b11e62e15b5f287186342fea66f66a5328d6b31c8ca2918e10a9d6479f22da66"
+    },
+    {
+      "path": "touch-layouts/2017826215.json",
+      "bytes": 109,
+      "sha256": "88d230ecd5699868713cfe14dc346a5d02604e8cca04a889fbca08da87a64a65"
+    },
+    {
+      "path": "touch-layouts/2025840804.json",
+      "bytes": 109,
+      "sha256": "09621317a9b66f1dbf9218698d2eee757cc5019bfe9a3b6dfd4392823dee2113"
+    },
+    {
+      "path": "touch-layouts/2030093255.json",
+      "bytes": 128,
+      "sha256": "5ac62534ce1ab53e70111670bc3f4200850f6e680635b8bf7b85adb9360adf46"
+    },
+    {
+      "path": "touch-layouts/2031804130.json",
+      "bytes": 130,
+      "sha256": "533d79b5826c9010cb9fcf66d5d6748b5cf4f441daf98913a9b7ce0017a17afa"
+    },
+    {
+      "path": "touch-layouts/2035456122.json",
+      "bytes": 99,
+      "sha256": "a48cb3c13acbf063cb807ad674479ef200a535c1faf8479984583aa70c2bf57e"
+    },
+    {
+      "path": "touch-layouts/2043073184.json",
+      "bytes": 144,
+      "sha256": "2de8408506ebb0aa87715802227ba8a2a40760e5a2864d320d5d9063aa540f7e"
+    },
+    {
+      "path": "touch-layouts/2046367994.json",
+      "bytes": 138,
+      "sha256": "9587a4721d0ad7c7613e80742e2828235d55fcdb4f346d56e924e6994a391d98"
+    },
+    {
+      "path": "touch-layouts/2049727100.json",
+      "bytes": 109,
+      "sha256": "706842d7a28c7b75a916f6185d195ddde2b73c0902bd4fe35e467c82fb8006bc"
+    },
+    {
+      "path": "touch-layouts/2071676002.json",
+      "bytes": 131,
+      "sha256": "af4af303004f799d9ed779cc0521a5b62d2a9e10b23c62f70073f1c01f68f05f"
+    },
+    {
+      "path": "touch-layouts/2078926688.json",
+      "bytes": 138,
+      "sha256": "5c9a0b1e5c3531d899a8c28c8515b09b4549188ecefe71d6d21eb6cc91e99962"
+    },
+    {
+      "path": "touch-layouts/2079757188.json",
+      "bytes": 128,
+      "sha256": "6aa9379a1869821c9d67ab18045f1f44ea343f3a96f952b73aff8d15da2d152b"
+    },
+    {
+      "path": "touch-layouts/2082978535.json",
+      "bytes": 117,
+      "sha256": "7e5775b9d79a7f28dbc928ea99633082e0355cc43ca2b8af4c0bde0ade8b4f83"
+    },
+    {
+      "path": "touch-layouts/2090474684.json",
+      "bytes": 112,
+      "sha256": "322cc3f6375c927c496e8fe4777f987a5d71292ff81e0f0eb3d169a0cf8d47fe"
+    },
+    {
+      "path": "touch-layouts/2096821037.json",
+      "bytes": 126,
+      "sha256": "3f141187bdbc63052c8c3a1cb909cc547c8f3cedabc42a018f252cddea91b086"
+    },
+    {
+      "path": "touch-layouts/2098741842.json",
+      "bytes": 136,
+      "sha256": "50ed8b0cfbf802306c4e0c9e9a856f0a4f0ee5bd44d6e02cc310435f05ee3240"
+    },
+    {
+      "path": "touch-layouts/2106826312.json",
+      "bytes": 138,
+      "sha256": "1853e0a3a85b2e800d82cdc013b3be10b34175c2ff620e705228e6ebd4896582"
+    },
+    {
+      "path": "touch-layouts/2108722049.json",
+      "bytes": 117,
+      "sha256": "be27baadb954dc82b7cce53e05ebebecd271eaacb45764429c3755c51a0ab42d"
+    },
+    {
+      "path": "touch-layouts/2122751230.json",
+      "bytes": 130,
+      "sha256": "a67537796c99a1ac6ec0d4d4abc189ba84d493936c1bca8769e6753e3dc983ff"
+    },
+    {
+      "path": "touch-layouts/2136041956.json",
+      "bytes": 122,
+      "sha256": "0669e9973340d78b34370603dc6809f59f7bbd7253ba7600fc1a3852f7b143a9"
+    },
+    {
+      "path": "touch-layouts/2136524032.json",
+      "bytes": 120,
+      "sha256": "755b528debd8e0e0083f14502d097ce650644115bdc84e8a845e46d042762989"
+    },
+    {
+      "path": "touch-layouts/222473492.json",
+      "bytes": 134,
+      "sha256": "04581813e7c645c9e1fe382e5de9754327d433e9cb130bba33aa30a0d5165e43"
+    },
+    {
+      "path": "touch-layouts/342495815.json",
+      "bytes": 130,
+      "sha256": "265666b20de599ff2768baa7b609986884f3fc7b589ca49ca2394e0049d8fc67"
+    },
+    {
+      "path": "touch-layouts/374621264.json",
+      "bytes": 136,
+      "sha256": "c4b9e3ff76efe6eff8507b52dc6a7467da1883ba105bd1b129c0ff4ac0404bdb"
+    },
+    {
+      "path": "touch-layouts/378390466.json",
+      "bytes": 128,
+      "sha256": "f412ff87681b90e1a57ce26b9f062008b1eeb4e652cbd31eb5f00456ec906e15"
+    },
+    {
+      "path": "touch-layouts/379174015.json",
+      "bytes": 97,
+      "sha256": "3e7d46787c4cf92c5fe487a208548e14134d33292e50c3fcdc4da9fc094dbbce"
+    },
+    {
+      "path": "touch-layouts/398011207.json",
+      "bytes": 116,
+      "sha256": "5409fb3608f8f096028f4e48e466160c81d46b9bab6ca2632f4f5e6d06099f9b"
+    },
+    {
+      "path": "touch-layouts/442930574.json",
+      "bytes": 140,
+      "sha256": "d37f54582d6d33d24d974daa4e3cb45a48283a449cf59679e536edebff4279e8"
+    },
+    {
+      "path": "touch-layouts/504518218.json",
+      "bytes": 91,
+      "sha256": "aec09a8a398fbf26bcc88f20f108eff48a109ba05096ca9b8c80b2a87b8a1bfb"
+    },
+    {
+      "path": "touch-layouts/560570291.json",
+      "bytes": 141,
+      "sha256": "857f267f8683dafe96f549cd29cecf63e8921f0f273ce69376ea98eb8185cb63"
+    },
+    {
+      "path": "touch-layouts/591405932.json",
+      "bytes": 148,
+      "sha256": "72640cb9191e62705e166e52d81acb7dd412259df95d2b48df5c9300f23128b4"
+    },
+    {
+      "path": "touch-layouts/651668093.json",
+      "bytes": 105,
+      "sha256": "ccd6cba8fae9c96366dfcd79c73c510ad61996d87bfda1a34e87521873263ba2"
+    },
+    {
+      "path": "touch-layouts/654479291.json",
+      "bytes": 121,
+      "sha256": "a73a3efa07099aa34bfc7ceff188cda20877563bc9a1b5d9f0cd98e0bbc4661b"
+    },
+    {
+      "path": "touch-layouts/656062883.json",
+      "bytes": 121,
+      "sha256": "c3e4989554d6fb7f071ff2f069daee8bc5e33c6f4e7db930abc44b19eeea50ed"
+    },
+    {
+      "path": "touch-layouts/770775860.json",
+      "bytes": 103,
+      "sha256": "825834c494ca7b566d349ba83c78af9fc96fac6afbfa0d42aafd095fe09db3fd"
+    },
+    {
+      "path": "touch-layouts/832645103.json",
+      "bytes": 122,
+      "sha256": "5c70e37ae0576d522ce886625eb828518f5e94dd21286792b4cb5a6d5f117b4e"
+    },
+    {
+      "path": "touch-layouts/884612576.json",
+      "bytes": 95,
+      "sha256": "0654da1962011917f8c5120cf320b74b0e568fe656df151d9e96516a3ea7c0f6"
+    },
+    {
+      "path": "touch-layouts/885488152.json",
+      "bytes": 118,
+      "sha256": "175a2cb67e89eb310dd01dea62de3080c992920d8ee7da034084369fe3ea2974"
+    },
+    {
+      "path": "touch-layouts/913783821.json",
+      "bytes": 149,
+      "sha256": "86023a6c027cca36a291feb03bf2759b9ddedefa820ddaeefa934eb90d3f85cd"
+    },
+    {
+      "path": "touch-layouts/918284490.json",
+      "bytes": 151,
+      "sha256": "2f4decbd27ee5060f32723a3933ab8540efc00e1cdd4cec5ba1d3c3878b9c142"
+    },
+    {
+      "path": "touch-layouts/947714459.json",
+      "bytes": 101,
+      "sha256": "21c2a837e4c1013d45c31d35af5253dd9becc4910354ec5dab976fd67cbedcf1"
+    },
+    {
+      "path": "touch-layouts/972249091.json",
+      "bytes": 107,
+      "sha256": "afb93b1bc2312be5fb1fe8f93409dda08cd0abfeef64cfc0229daf54dd8e69b4"
+    },
+    {
+      "path": "touch-layouts/ids.json",
+      "bytes": 1875,
+      "sha256": "40b5158fe50a229bbc4ba59996a601ebeebf45d8fb1bafaaf5902013658c9a75"
+    },
+    {
+      "path": "touch-layouts/layouts/007-first-light.json",
+      "bytes": 8033,
+      "sha256": "531be8cb77b708fcb44c2756dbb5c6a4feb04776076a1e5b286e347fbf362bd5"
+    },
+    {
+      "path": "touch-layouts/layouts/a-short-hike.json",
+      "bytes": 984,
+      "sha256": "50ed30ad4f2ac04a25e4ed9fd7250d25997670e92d0412eb3a207b8ee95f3fd2"
+    },
+    {
+      "path": "touch-layouts/layouts/alan-wake-2.json",
+      "bytes": 6694,
+      "sha256": "9d86607208bffa3c1fd900f300ac46dfb878a7a5572a49d785b1f12ee61e6e6d"
+    },
+    {
+      "path": "touch-layouts/layouts/arcade-paradise.json",
+      "bytes": 2514,
+      "sha256": "d15f03b5e8273d13913ad543290c81e5456a5e71fe263cf6c3d3f3ceab332a35"
+    },
+    {
+      "path": "touch-layouts/layouts/balatro.json",
+      "bytes": 2895,
+      "sha256": "257e201b2b99ab0383e7cd27c358efeba353e63d304fc983facf42300ced8b3e"
+    },
+    {
+      "path": "touch-layouts/layouts/bejeweled-3.json",
+      "bytes": 1423,
+      "sha256": "8e3debf8cd042ce6d62248d333bf0761be23b35149e15083b583d9fd1e013b25"
+    },
+    {
+      "path": "touch-layouts/layouts/botany-manor.json",
+      "bytes": 2293,
+      "sha256": "b963a8c33e61c77b4a8a240d19f73001a882d11b872822f124bb10f1b91f8609"
+    },
+    {
+      "path": "touch-layouts/layouts/brotato.json",
+      "bytes": 7797,
+      "sha256": "b93ee63720fa53b346de02798c6813ea350b8cf1f199e892ea02811b67274f1b"
+    },
+    {
+      "path": "touch-layouts/layouts/chants-of-sennaar.json",
+      "bytes": 2695,
+      "sha256": "aee29ac3e5195f8566b9db926c9ada65789ac1dd605d6b3ba68c516a003ce73d"
+    },
+    {
+      "path": "touch-layouts/layouts/chicory.json",
+      "bytes": 4908,
+      "sha256": "e58e2a9dcc9398db118594c606c3e0316876b007383e7554dfa50e97db27c2dd"
+    },
+    {
+      "path": "touch-layouts/layouts/choo-choo-charles.json",
+      "bytes": 5850,
+      "sha256": "37773d3eeae39b2a70beed6f6dc27858951bde297aed30cef9f1900634ba7eff"
+    },
+    {
+      "path": "touch-layouts/layouts/close-to-the-sun.json",
+      "bytes": 2596,
+      "sha256": "1599fdbe78aa688c8d077c265f6ec68d363290eb5a2a5e78db9d73114429e010"
+    },
+    {
+      "path": "touch-layouts/layouts/cocoon.json",
+      "bytes": 823,
+      "sha256": "59166dff9e9a6367dd46ed349a5ba8be0a8714b56da9a054ff6393dbe95fe45e"
+    },
+    {
+      "path": "touch-layouts/layouts/conker-live-and-reloaded.json",
+      "bytes": 3591,
+      "sha256": "ffc5851adfdc63ca254234096482c626e939d420cec1e850fb54028b0b4bad71"
+    },
+    {
+      "path": "touch-layouts/layouts/cyberpunk-2077.json",
+      "bytes": 10352,
+      "sha256": "f395b3810603cbd0b3cfac36b05e534a2401519e346e290f6bbb83f9d48474cb"
+    },
+    {
+      "path": "touch-layouts/layouts/doom-1993.json",
+      "bytes": 3764,
+      "sha256": "e17fb442cc91c65bba32411ee5aa9abdb2381818b8d8294feec9c6dad36fe7b7"
+    },
+    {
+      "path": "touch-layouts/layouts/doom-3.json",
+      "bytes": 5463,
+      "sha256": "99319b39f937aacfefb2e3f2d5b1928d472bb1162d11167b00de7d76eed6c439"
+    },
+    {
+      "path": "touch-layouts/layouts/doom-64.json",
+      "bytes": 7044,
+      "sha256": "9a294aa3338d5ea4ecb51b38629dad19ad02d643543c997a90247529eadf0dcb"
+    },
+    {
+      "path": "touch-layouts/layouts/doom-doom-ii.json",
+      "bytes": 7011,
+      "sha256": "308992c8c3cd60dc30e2e4cfef5c27f6f61aa2213e25dd0b0559ec9cc8896faa"
+    },
+    {
+      "path": "touch-layouts/layouts/doom-ii-classic.json",
+      "bytes": 3764,
+      "sha256": "63f71d945c7540c33319f762964da7c9970671d73e317574717f84b40d95c5fc"
+    },
+    {
+      "path": "touch-layouts/layouts/egging-on.json",
+      "bytes": 3976,
+      "sha256": "ca735e15138bf7463d71eef33703c15f8f5680f603293f8935475b2a3e4da8db"
+    },
+    {
+      "path": "touch-layouts/layouts/fifa.json",
+      "bytes": 4291,
+      "sha256": "cd05f3ab0e5962a6127f12a24b48e537ae6974116f0ee67ca668be5eacc28c66"
+    },
+    {
+      "path": "touch-layouts/layouts/forza.json",
+      "bytes": 13971,
+      "sha256": "e5c4c5fca0c9c82cc79c0cc0106e353418534fc7cf1d1e1892e2879ac47ff5d1"
+    },
+    {
+      "path": "touch-layouts/layouts/gears-of-war-reloaded.json",
+      "bytes": 5945,
+      "sha256": "9534da57c24ef5819f9afcd33e36ddd1bc4dd27265695a986c8f9cbb6411f907"
+    },
+    {
+      "path": "touch-layouts/layouts/go-mecha-ball.json",
+      "bytes": 3455,
+      "sha256": "9ec53417d42c7f762732838f7bbf437720bb265dc8c45344ee3375514df81c79"
+    },
+    {
+      "path": "touch-layouts/layouts/gta-4.json",
+      "bytes": 5666,
+      "sha256": "bd27b6df9d8f2635024e980ac37f83d15c7a3160e1d75a5f9a3cd7b82a7972b0"
+    },
+    {
+      "path": "touch-layouts/layouts/gta-de.json",
+      "bytes": 5684,
+      "sha256": "eefd7fbcd9ccc3fc24777c29bad417cc5766946fa8752236d955bf1ffb40211f"
+    },
+    {
+      "path": "touch-layouts/layouts/gta-v.json",
+      "bytes": 5666,
+      "sha256": "af93106174bfba2b8291400883d45ffa73e919c3b8e8c88755c656e4c7e7c90e"
+    },
+    {
+      "path": "touch-layouts/layouts/gta-vi.json",
+      "bytes": 5666,
+      "sha256": "af93106174bfba2b8291400883d45ffa73e919c3b8e8c88755c656e4c7e7c90e"
+    },
+    {
+      "path": "touch-layouts/layouts/halo-campaign-evolved.json",
+      "bytes": 7017,
+      "sha256": "4ae1ba1032a0079d497f68c2fd85c739f2d2f1fe34536b25c7a04c67ed3cbc2a"
+    },
+    {
+      "path": "touch-layouts/layouts/halo-infinite.json",
+      "bytes": 13979,
+      "sha256": "81c9e3abd9f9356144513bd19ccada46a9b6cbea4f2da0f73a43e66ce0f0525a"
+    },
+    {
+      "path": "touch-layouts/layouts/harold-halibut.json",
+      "bytes": 2262,
+      "sha256": "56ee74f30b8f43628d2153b7ef4ed3267477cd312ba07942291141417ad80e5b"
+    },
+    {
+      "path": "touch-layouts/layouts/high-on-life.json",
+      "bytes": 7258,
+      "sha256": "70f1e33c2f1fe9622a06edd4b1e33cde9b79e96ec8445b00ce7bb04eca1de284"
+    },
+    {
+      "path": "touch-layouts/layouts/hogwarts-legacy.json",
+      "bytes": 6763,
+      "sha256": "ffab123399456433660c8b811ee4c99ea953286a53b7cb0c1fa9567903602b8b"
+    },
+    {
+      "path": "touch-layouts/layouts/inside.json",
+      "bytes": 1595,
+      "sha256": "4163811a97f3cff4c5db7af318ebd258e92a9020f84cf4f3849083b59c729e7d"
+    },
+    {
+      "path": "touch-layouts/layouts/la-noire.json",
+      "bytes": 4989,
+      "sha256": "ab957c84becd05d0911bbcb54f8705883e0eedc29ef712b9176ffbfcaf211a98"
+    },
+    {
+      "path": "touch-layouts/layouts/limbo.json",
+      "bytes": 1595,
+      "sha256": "4163811a97f3cff4c5db7af318ebd258e92a9020f84cf4f3849083b59c729e7d"
+    },
+    {
+      "path": "touch-layouts/layouts/little-kitty-big-city.json",
+      "bytes": 4937,
+      "sha256": "5da8d2bf3a60beb12e49c0d638a76deef9d840b57801ca3651735204c5d1959b"
+    },
+    {
+      "path": "touch-layouts/layouts/metal-gear-solid-1.json",
+      "bytes": 4607,
+      "sha256": "42ca08d5c176b245a44c82621460dcff8ea3c69ce3a85730fb3f9c47da40ee05"
+    },
+    {
+      "path": "touch-layouts/layouts/metal-gear-solid-2.json",
+      "bytes": 5541,
+      "sha256": "b4c46a46a46b70602d9d7955875e7e2b5062900a9e16d25bc6706933bc66059f"
+    },
+    {
+      "path": "touch-layouts/layouts/metal-gear-solid-3.json",
+      "bytes": 6120,
+      "sha256": "94c7ed8d03fee95b7807c9b8a7399968794ff4a402c523af15c93473faf842ef"
+    },
+    {
+      "path": "touch-layouts/layouts/metal-gear-solid-hd.json",
+      "bytes": 11611,
+      "sha256": "fa5c6582cc5c0debb283c76d530a5cbd7e20c2b02dbbc4505c5b342d565853f1"
+    },
+    {
+      "path": "touch-layouts/layouts/obra-dinn.json",
+      "bytes": 4483,
+      "sha256": "65586118ace22c0d3beda0b77abe76a09e5b2c1cd714ed5377740ef4caf1e79a"
+    },
+    {
+      "path": "touch-layouts/layouts/palworld.json",
+      "bytes": 9785,
+      "sha256": "f01247163f3890811a87c1a84ed4f71e51a1e2b1a0583481d2e5f907b6872fd0"
+    },
+    {
+      "path": "touch-layouts/layouts/perfect-dark-zero.json",
+      "bytes": 5170,
+      "sha256": "7df8e8406ea3664c1ab29f2e329a35e70cf8e9bbfbcd5ccdc1bd0174a32b5812"
+    },
+    {
+      "path": "touch-layouts/layouts/perfect-dark.json",
+      "bytes": 6018,
+      "sha256": "108863eeae0f1b9424780f2bf56822ff439aa9721920bba577b347a560a097eb"
+    },
+    {
+      "path": "touch-layouts/layouts/plants-vs-zombies.json",
+      "bytes": 1201,
+      "sha256": "7e2b0d3ceaafcb4827fe8dea74c601c8cc1e0fc68d90e780b8d00a8aca44c2eb"
+    },
+    {
+      "path": "touch-layouts/layouts/plateup.json",
+      "bytes": 3001,
+      "sha256": "dfad62873d3e940979050a9765e7f1022a04516fb14aa0d9a227e0404cf2f26c"
+    },
+    {
+      "path": "touch-layouts/layouts/poppy-playtime.json",
+      "bytes": 3719,
+      "sha256": "a6e2692da42a5dfe0ec9d2b648497e50486e9bd899ac2696dd36009a2a78581b"
+    },
+    {
+      "path": "touch-layouts/layouts/quake.json",
+      "bytes": 4980,
+      "sha256": "14921d8e7c0e2e2871abe8c9e072c8167df9c62e12f95a44bf9dd50231127f8a"
+    },
+    {
+      "path": "touch-layouts/layouts/red-dead-redemption-2.json",
+      "bytes": 6987,
+      "sha256": "e69816c272e9e01e8573731e7f73521fd0514114df2e877d39b53329bbbeba37"
+    },
+    {
+      "path": "touch-layouts/layouts/red-dead-redemption.json",
+      "bytes": 5954,
+      "sha256": "ef97f69f1f035e3cfda846eab5b2f610a85c69fd999ace8c3e9487a823b90cdc"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-2.json",
+      "bytes": 6482,
+      "sha256": "bedef75f1cfef5bdc803879abe0502b699d466fcc628e843379ab684cfc2fc40"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-3.json",
+      "bytes": 5251,
+      "sha256": "05ca6bd29bb321119eff8137d9f4e66282b86fb8d64547ffa410d77822d816cd"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-4-remake.json",
+      "bytes": 6195,
+      "sha256": "2a12fd98f2d8ff1a2736c06a867042e6e6eeb2bc73fa9b674144d38e8a67ce62"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-7.json",
+      "bytes": 11628,
+      "sha256": "0dc171e40f63f49e631ecb1a8c50e78e7e50f99d8809af5696249f5cca553e90"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-requiem.json",
+      "bytes": 6919,
+      "sha256": "46caf3f78dc89e8da74deefc8e715fb797a9535b09b6485147fb820b0c16b62a"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil-village.json",
+      "bytes": 11628,
+      "sha256": "0dc171e40f63f49e631ecb1a8c50e78e7e50f99d8809af5696249f5cca553e90"
+    },
+    {
+      "path": "touch-layouts/layouts/resident-evil.json",
+      "bytes": 5672,
+      "sha256": "fa6c0cd3aba38f9fd0211f3b9783e05dfcc64b509d24c167382c54122664ed55"
+    },
+    {
+      "path": "touch-layouts/layouts/robocop-rogue-city.json",
+      "bytes": 7910,
+      "sha256": "f9a6ab3b73427796c411c953cc9b609d525ca3b35b1b29b5bce0a9e09a9a4b63"
+    },
+    {
+      "path": "touch-layouts/layouts/roboquest.json",
+      "bytes": 7527,
+      "sha256": "238ba35486c7c7367c3cf99a1669311f42590396c337852138ed713f04164a8d"
+    },
+    {
+      "path": "touch-layouts/layouts/rugrats-adventures-in-gameland.json",
+      "bytes": 2421,
+      "sha256": "dd2a6175907009c2da223b89dd5dff1ea748003096e11c430af40ed4363f1089"
+    },
+    {
+      "path": "touch-layouts/layouts/shenmue-1-and-2.json",
+      "bytes": 4911,
+      "sha256": "5481b15652788de6d484953db0caf07ee57369e22d2db8d9ce5fc92fc02e2cb3"
+    },
+    {
+      "path": "touch-layouts/layouts/shredders.json",
+      "bytes": 9871,
+      "sha256": "ecd94da641f64ad75d1fb4b4b71d99b1a307df857148a4af787bb2f3dc3d4402"
+    },
+    {
+      "path": "touch-layouts/layouts/silent-hill-2.json",
+      "bytes": 5569,
+      "sha256": "ebf31c66d9d0ccf6db5bd9153b6b273a2a56229f48c13b98fe0997776f332f95"
+    },
+    {
+      "path": "touch-layouts/layouts/sonic-mania.json",
+      "bytes": 1113,
+      "sha256": "be467129b198ed689447c12016b45d1b17fbc0392158ec25ff62fcd64f57a57f"
+    },
+    {
+      "path": "touch-layouts/layouts/south-of-midnight.json",
+      "bytes": 6435,
+      "sha256": "e190eb7a37b211d54819b40e1b3e99fd870c00ddc248b096042ea51834fa8fb4"
+    },
+    {
+      "path": "touch-layouts/layouts/the-exit-8.json",
+      "bytes": 1581,
+      "sha256": "916ad21b56bf741b5d9f858491f5ad1e6def6eff0b05ae08f9622f7b65772a6c"
+    },
+    {
+      "path": "touch-layouts/layouts/the-quarry.json",
+      "bytes": 2615,
+      "sha256": "6fe819dca250c771ebdbc2980e3facd38a5a0fe4500fc351baec3c13406b4ffd"
+    },
+    {
+      "path": "touch-layouts/layouts/the-rewinder.json",
+      "bytes": 2852,
+      "sha256": "3264466f7e5473f8ece7a3cb91add4dcad85f3660e8b2b37db7bab38950dc548"
+    },
+    {
+      "path": "touch-layouts/layouts/those-who-remain.json",
+      "bytes": 2092,
+      "sha256": "2a4baa2c879b85065868e424b33799f641223de2f3c5135115d7e1c82d693f2c"
+    },
+    {
+      "path": "touch-layouts/layouts/tomb-raider-rise.json",
+      "bytes": 7699,
+      "sha256": "9f8a5e73fb6860bbfc15f20674beea69c95f0dd72214635b7d572f3f70821b50"
+    },
+    {
+      "path": "touch-layouts/layouts/tomb-raider-shadow.json",
+      "bytes": 7699,
+      "sha256": "9f8a5e73fb6860bbfc15f20674beea69c95f0dd72214635b7d572f3f70821b50"
+    },
+    {
+      "path": "touch-layouts/layouts/turnip-boy.json",
+      "bytes": 2208,
+      "sha256": "19ff1e00363c6c78b8989f275e73252d3b7b727bf9b5866bf37387e06497768c"
+    },
+    {
+      "path": "touch-layouts/layouts/wolfenstein-3d.json",
+      "bytes": 2960,
+      "sha256": "82cf4c98a4f73ec45702f0dc833e465936d069ea78ad4ee16b2f2e47a209aa69"
+    }
+  ]
+}

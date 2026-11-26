@@ -89,11 +89,13 @@ final class StreamingFeatureStore: ObservableObject {
     }
 
     #if DEBUG
-    func prepareControlsUITestPreview() {
-            touchLayout.beginSession(generation: 1, preferences: input.preferences)
-        state = .playing
-        streamTarget = .home
-        diagnostics = StreamingSessionDiagnostics(
+        func prepareControlsUITestPreview(cloudGame: CloudLibraryGame? = nil) {
+            let target: StreamingLaunchTarget = cloudGame == nil ? .home : .cloud
+            touchLayout.beginSession(generation: 1, preferences: input.preferences, target: target)
+            if let cloudGame { touchLayout.setCloudGame(cloudGame, generation: 1) }
+            state = .playing
+            streamTarget = target
+            diagnostics = StreamingSessionDiagnostics(
             peerStats: nil, displayHealth: nil, peer: nil, audioLifecycleState: nil,
             audioRoute: nil, audioTrackReady: true, updatedAtMilliseconds: 0)
     }
@@ -138,6 +140,13 @@ final class StreamingFeatureStore: ObservableObject {
                 guard entitled else {
                     throw StreamingRuntimeError.cloudEntitlementRequired
                 }
+                let layoutGame = CloudLibraryGame(
+                    gameSummary: GameSummary(
+                        id: identity.productID, titleID: identity.xboxTitleID ?? "",
+                        name: identity.name ?? "当前游戏", artworkURL: nil, lastPlayedAt: nil,
+                        playtimeMinutes: nil, achievementProgress: nil,
+                        productID: identity.productID))
+                self.touchLayout.setCloudGame(layoutGame, generation: resolutionGeneration)
                 return PreparedStreamingAccess(
                     handle: access.handle, accountID: access.accountID,
                     regionHost: access.regionHost,
@@ -233,7 +242,8 @@ final class StreamingFeatureStore: ObservableObject {
         connectedElapsedMilliseconds = nil
         mediaReadyElapsedMilliseconds = nil
         input.reset()
-        touchLayout.beginSession(generation: requestGeneration, preferences: input.preferences)
+        touchLayout.beginSession(
+            generation: requestGeneration, preferences: input.preferences, target: target)
         audioMuted = sessionSettings.startMuted
         enablesAudioControl = sessionSettings.enableAudioControl
         picture =

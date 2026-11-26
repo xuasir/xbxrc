@@ -1,0 +1,27 @@
+[
+  {
+    "test": "XBXRCTests.AuthCredentialCoordinatorTests testCancellingOneCloudWaiterKeepsOtherQueryLease",
+    "status": "passed",
+    "durationSeconds": 0.038
+  },
+  {
+    "test": "XBXRCTests.AuthCredentialCoordinatorTests testConcurrentCloudQueriesShareOnePreparedLease",
+    "status": "passed",
+    "durationSeconds": 0.002
+  },
+  {
+    "test": "XBXRCTests.AuthCredentialCoordinatorTests testSignOutInvalidatesDelayedAccessAndReleasesItsHandle",
+    "status": "passed",
+    "durationSeconds": 0.007
+  },
+  {
+    "test": "XBXRCTests.CloudLibraryStoreConcurrencyTests testClearWaitsForDelayedSaveAndRemovesStaleOverlay",
+    "status": "passed",
+    "durationSeconds": 0.003
+  },
+  {
+    "test": "XBXRCTests.CloudLibraryStoreConcurrencyTests testLayoutQueryReusesAccessBeforeCatalogCommit",
+    "status": "passed",
+    "durationSeconds": 0.005
+  }
+]

@@ -413,6 +413,13 @@ struct PersonalGameDetailView: View {
 
   private var overview: some View {
     AppInformationPage {
+      if installedGame != nil {
+        Section {
+          GameTouchLayoutsLink(
+            game: CloudLibraryGame(gameSummary: game),
+            identifier: "installed-official-touch-layouts")
+        }
+      }
       Section {
         if let productID {
           AppSectionRequestState(

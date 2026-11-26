@@ -49,8 +49,8 @@ final class SavedTouchLayoutsStore: ObservableObject {
   }
 
   func save(bundle: any OfficialTouchBundleProviding, prepared: PreparedTouchLayout) async throws {
-    guard prepared.layout.report.isSupported,
-      bundle.choices.contains(where: { $0.id == prepared.id && $0.issues.isEmpty }), !isSaving
+    guard prepared.layout.report.isRunnable,
+      bundle.choices.contains(where: { $0.id == prepared.id }), !isSaving
     else { throw TouchLayoutError.invalid("此布局的操作能力等待适配") }
     try Task.checkCancellation()
     isSaving = true
@@ -81,7 +81,7 @@ final class SavedTouchLayoutsStore: ObservableObject {
     let result = try await PreparedTouchLayout.prepare(snapshot)
     try Task.checkCancellation()
     guard isAvailable(item.id, revision: item.revision), result.id == item.id,
-      result.layout.report.isSupported
+      result.layout.report.isRunnable
     else { throw TouchLayoutError.invalid("已保存布局需要重新适配") }
     return result
   }

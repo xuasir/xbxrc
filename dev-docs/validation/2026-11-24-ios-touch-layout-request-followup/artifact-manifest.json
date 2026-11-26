@@ -1,0 +1,74 @@
+{
+  "task-changes.diff": {
+    "bytes": 38466,
+    "sha256": "3c138e5e29a487fb3be26c104a4808ce84edaa0d5ce2ab029b4ccd36728b3e52"
+  },
+  "diagnostic-analysis.json": {
+    "bytes": 4578,
+    "sha256": "6550c3f64a68aac3ab1a87ee20ef4c6aab9896547665f998231f09afe06da686"
+  },
+  "source-hashes.json": {
+    "bytes": 1523,
+    "sha256": "3a61b9e2744a3fb098242f3008c3d0dbb0f594670f83351d6c69c416e53c26a1"
+  },
+  "temporary-artifact-plan.json": {
+    "bytes": 463,
+    "sha256": "8822d0fcce5549f98e2532b512052873568befe17a4d33c6d1b9f8fe97e25b63"
+  },
+  "diagnostic-anchors.json": {
+    "bytes": 5662,
+    "sha256": "e44612bc76694995385085e9c0e1273b232c1775b1aeb3e47e57968719a2cc4f"
+  },
+  "attachment-manifest.json": {
+    "bytes": 2045,
+    "sha256": "b346c76d6f3f3f15d6054fce911ef76343047ce50100344e932b628b176af142"
+  },
+  "installed-touch-catalog-1.png": {
+    "bytes": 2898599,
+    "sha256": "f76ab023dfe2aefe1b9ccbab769f1153382c2ed99b4ebb82f7c9ae81b8b947cd"
+  },
+  "installed-touch-catalog-2.png": {
+    "bytes": 2899668,
+    "sha256": "9c0f36bc51a02f43e5d88907e225d1cc903142c1c2f126c1c3f6e854974acac5"
+  },
+  "input-fingerprint.json": {
+    "bytes": 324,
+    "sha256": "855e415b00cdadad51ccdf41fccbb5d9163625c6f900a35b395c28d5c09e60da"
+  },
+  "test-summary.json": {
+    "bytes": 991,
+    "sha256": "3a3e46a8748eb3d645f38adcfbaec3aa4a79838674ddbc8857482fd54ce5eba6"
+  },
+  "installed-touch-entry-2.png": {
+    "bytes": 3096134,
+    "sha256": "3c6822be00cfdcfdcacbc888d605ce664f7c5ca5aefc7b0a8b595de70a6f837c"
+  },
+  "README.md": {
+    "bytes": 3172,
+    "sha256": "16112033620b3a029848280dd20367f0458a6a2ab96f6fa38a6c1073210c0bf9"
+  },
+  "cleanup.json": {
+    "bytes": 860,
+    "sha256": "d874eb5773ea0f23350243e3b6470ca9c84e2862997ecb7e128f238e0e040979"
+  },
+  "installed-touch-entry-1.png": {
+    "bytes": 3003220,
+    "sha256": "8f015df222200e3fb49116234c8a30093571f0c42eab7b90ae3c89e4577c339f"
+  },
+  "validation.json": {
+    "bytes": 1274,
+    "sha256": "73aeb140273555741c13ed4540df4279b958bad7689f34c6c956e6474ebd17c0"
+  },
+  "community-revision-probe.json": {
+    "bytes": 198,
+    "sha256": "6289e2f25556b867c46b68270c5064ebeea8e9d9ca1b08b6cf620256efdc0900"
+  },
+  "build-summary.json": {
+    "bytes": 3685,
+    "sha256": "b2f0464b53445e2ed756642fb302177cd0c26a07923c530914e1cd770bfd8931"
+  },
+  "verification-diagnostics.json": {
+    "bytes": 777,
+    "sha256": "7ddd2a92557f83e3093b951b63d4f4b3b30e5643dc5330bc38e9276bf6868b4f"
+  }
+}

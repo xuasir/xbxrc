@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-26",
+  "archive": "atlas-host-source.zip",
+  "files": [
+    {
+      "file": "game-stream.42236acb.chunk.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/game-stream.42236acb.chunk.js",
+      "bytes": 285280,
+      "sha256": "277ad66491c60c2ceb6efb70615b712f00223de75a05f0f0baeebd76d051615e",
+      "matchesExistingFrozenHash": true
+    },
+    {
+      "file": "client.909e27db.js",
+      "url": "https://assets.play.xbox.com/playxbox/static/js/client.909e27db.js",
+      "bytes": 116190,
+      "sha256": "c5cffc084e8200115494bdfa30926fac038cf1a3690f6e5371a84032f7754000",
+      "matchesExistingFrozenHash": null
+    }
+  ]
+}

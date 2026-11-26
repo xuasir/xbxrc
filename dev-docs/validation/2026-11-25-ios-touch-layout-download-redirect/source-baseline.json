@@ -1,0 +1,6 @@
+{
+  "iosapp/XBXRC/Features/Authentication/AuthStore.swift": "44a9ba6a2bbddcbc451b9e966fdcc77c7869b0014451615dcaec893ce7f0d380",
+  "iosapp/XBXRC/Shared/State/CloudLibraryStore.swift": "23f3e203057c5eb072a81da92387d25b5966ca0ea1e1e9c12ca0d9a1070f7e66",
+  "iosapp/XBXRCTests/AuthCredentialCoordinatorTests.swift": "c5602657bb3c0c0d850665c85c3e8a698d872746023fd5b92b1695bbc02fe040",
+  "iosapp/XBXRCTests/CloudLibraryStoreConcurrencyTests.swift": "6ad5598d8c36ee6c65a0e8236fd76f9f76873ac6b369bbf7a9668c167571c993"
+}

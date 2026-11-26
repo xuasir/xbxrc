@@ -1,0 +1,50 @@
+{
+  "task": "2026-11-25-ios-stream-audio",
+  "round": "r1",
+  "temporaryRoot": "/private/tmp/xbxrc-ios-stream-audio-r1.3ftfz9lt",
+  "resumedResearchRoot": "/private/tmp/xbxrc-ios-stream-audio-20261125.2m1AW9",
+  "evidenceRoot": "/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/validation/2026-11-25-ios-stream-audio",
+  "temporaryArtifacts": [
+    "baseline",
+    "SourcePackages",
+    "DerivedData",
+    "Smoke.xcresult",
+    "smoke.log",
+    "SourcePackages/workspace-state.json"
+  ],
+  "sourceBefore": {
+    "iosapp/XBXRC/Platform/Streaming/StreamingAudioLifecycleCoordinator.swift": "ced7829fb7e10a34e1a46d7d77ec81c25704bad4d5ce94e626f267b6ec3500ff",
+    "iosapp/XBXRCTests/StreamingAudioLifecycleStateTests.swift": "86b744b083234a4f7fc68c32f2283f978a53dad66b0dcc810e81c74be675c345",
+    "iosapp/XBXRCTests/XBXRCTests.swift": "fba6d8fdd94575cbda178f1cfdb7e4bdcaf8c756950b30c524d660232be58b9b",
+    "docs/rfcs/2026-08-05-ios-streaming-audio-lifecycle-hardening.md": "787e0724890bd6c6abd00418d6e4b5dccf2c320d419405ed6dc1bcae3bbcd135",
+    "docs/project-task.md": "e6a51b944bab523367486b9140e4b1781db7eb43b40d8921a34ca71d8a17c28c"
+  },
+  "sharedDependencyCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios-webrtc/137.7151.04/SourcePackages",
+  "sharedRustCache": "/Users/guo.xu/Documents/code/games/xbxrc/target/ios",
+  "testCommand": [
+    "xcodebuild",
+    "test",
+    "-project",
+    "/Users/guo.xu/Documents/code/games/xbxrc/iosapp/XBXRC.xcodeproj",
+    "-scheme",
+    "XBXRC",
+    "-destination",
+    "platform=iOS Simulator,id=C6C8F8A7-5F59-4E0D-B5A3-ECB6930618AC",
+    "-derivedDataPath",
+    "/private/tmp/xbxrc-ios-stream-audio-r1.3ftfz9lt/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/private/tmp/xbxrc-ios-stream-audio-r1.3ftfz9lt/SourcePackages",
+    "-resultBundlePath",
+    "/private/tmp/xbxrc-ios-stream-audio-r1.3ftfz9lt/Smoke.xcresult",
+    "-disableAutomaticPackageResolution",
+    "-skipPackageUpdates",
+    "-parallel-testing-enabled",
+    "NO",
+    "-only-testing:XBXRCTests/StreamingAudioLifecycleStateTests",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingAudioConfigurationsAreIndependentAndDirectionComplete",
+    "-only-testing:XBXRCTests/XBXRCTests/testStreamingAudioPermissionOnlyAppliesToSendReceive",
+    "-only-testing:XBXRCTests/XBXRCTests/testNativeWebRtcInitialOfferUsesFeedbackFactoryInBothModes",
+    "CODE_SIGNING_ALLOWED=NO"
+  ],
+  "validationScope": "15项音频状态/配置/权限与真实默认及反馈factory offer冒烟，一轮执行"
+}

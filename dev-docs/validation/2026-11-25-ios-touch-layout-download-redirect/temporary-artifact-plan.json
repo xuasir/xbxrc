@@ -1,0 +1,8 @@
+{
+  "task": "2026-11-24-ios-touch-layout-request-followup",
+  "round": "download-redirect-r2",
+  "temporaryRoot": "/private/tmp/xbxrc-touch-layout-redirect-r2.LTsG03",
+  "contents": ["public-response-headers", "public-response-bodies", "targeted-test-log", "diagnostic-analysis", "DerivedData", "SourcePackages", "Regression.xcresult"],
+  "retained": ["user-original-diagnostic", "previous-validation-evidence", "shared-rust-cache", "simulator-app-data"],
+  "cleanup": "archive-summary-then-remove-registered-root-after-processes-exit"
+}

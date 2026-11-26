@@ -22,7 +22,11 @@ export interface RendererResources {
   submitDurationTotalMs?: number
   uploadDurationMaxMs?: number
   submitDurationMaxMs?: number
-  videoUploadMethod?: 'texImage2D'
+  videoUploadMethod?: 'texImage2D' | 'texSubImage2D'
+  videoUploadFallbackReason?: 'subImageUnavailable' | 'subImageRejected'
+  videoTextureFullUploads?: number
+  videoTextureSubUploads?: number
+  videoTextureReuseCount?: number
   renderFrameSource?: DecodedFrameMode
   renderFrameFallbackReason?: DecodedFrameFallback
   decodedFramesReceived?: number
